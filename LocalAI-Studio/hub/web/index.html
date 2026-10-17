@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>로컬 AI 스튜디오</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<aside id="rail">
+  <div class="brand">로컬 AI 스튜디오<small id="ver"></small></div>
+  <nav>
+    <button data-v="chat" class="on">대화</button>
+    <i class="sep"></i>
+    <button data-v="edit">이미지 편집</button>
+    <button data-v="gen">이미지 생성</button>
+    <button data-v="up">업스케일</button>
+    <i class="sep"></i>
+    <button data-v="info">이미지 정보</button>
+    <button data-v="feat">기능 모음</button>
+    <button data-v="wf">워크플로</button>
+    <button data-v="guide">ComfyUI 길잡이</button>
+    <i class="sep"></i>
+    <button data-v="dl">다운로드</button>
+    <button data-v="setup">설치와 모델</button>
+  </nav>
+  <div class="grow"></div>
+  <button class="adv" data-open="outputs" type="button">결과 폴더 열기</button>
+  <a class="adv" href="http://127.0.0.1:8188" target="_blank" rel="noopener">ComfyUI 고급 화면 열기</a>
+  <div id="stat">
+    <div><i id="d-ol"></i>대화 엔진</div>
+    <div><i id="d-cu"></i>이미지 엔진</div>
+    <div id="gpu"></div>
+  </div>
+</aside>
+
+<main>
+<!-- 대화 -->
+<section class="view on" id="v-chat">
+  <p class="warn" id="w-chat" hidden>대화 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.</p>
+  <div class="bar">
+    <select id="llm" title="대화 모델"></select>
+    <select id="persona" title="역할"></select>
+    <label>창의성 <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.8"><b id="tv">0.8</b></label>
+    <label>기억 길이 <select id="ctx"><option value="4096">짧게</option><option value="8192" selected>보통</option><option value="16384">길게</option><option value="32768">아주 길게</option></select></label>
+    <button class="ghost" id="newchat" type="button">새 대화</button>
+  </div>
+  <details class="sysd"><summary>역할 지침과 고급 옵션</summary>
+    <textarea id="sys" rows="3"></textarea>
+    <div class="grid4">
+      <label class="f">Top-P<input type="number" id="o-top_p" step="0.05" min="0" max="1" placeholder="0.9"></label>
+      <label class="f">Top-K<input type="number" id="o-top_k" min="0" placeholder="40"></label>
+      <label class="f">Min-P<input type="number" id="o-min_p" step="0.01" min="0" max="1" placeholder="0.05"></label>
+      <label class="f">반복 억제<input type="number" id="o-repeat_penalty" step="0.01" min="0" placeholder="1.1"></label>
+      <label class="f">최대 길이(토큰)<input type="number" id="o-num_predict" min="-1" placeholder="제한 없음"></label>
+      <label class="f">시드<input type="number" id="o-seed" placeholder="무작위"></label>
+      <label class="f wide2">중단 문자열(쉼표로 구분)<input id="o-stop" placeholder="예: User:, ###"></label>
+    </div>
+    <p class="hint">캐릭터 카드(PNG)는 이미지 정보 탭에서 열어 바로 적용할 수 있어요.</p>
+  </details>
+  <div id="log"></div>
+  <p class="st bad" id="cerr" hidden></p>
+  <div class="compose">
+    <textarea id="msg" rows="2" placeholder="메시지를 입력하세요. Enter로 보내고 Shift+Enter로 줄을 바꿔요."></textarea>
+    <button class="go" id="send" type="button">보내기</button>
+  </div>
+</section>
+
+<!-- 이미지 편집 -->
+<section class="view split" id="v-edit">
+  <form id="f-edit" data-e="qwen" autocomplete="off">
+    <div class="presets" data-presets></div>
+    <button class="go">편집 실행</button>
+    <p class="warn" id="w-edit" hidden>이 편집 방식에 필요한 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.</p>
+    <label class="f">편집 방식
+      <select name="engine">
+        <option value="qwen">말로 편집 (Qwen-Image-Edit)</option>
+        <option value="sdxl">칠해서 편집 (SDXL 인페인트)</option>
+      </select></label>
+    <label class="f">원하는 변화<textarea name="prompt" rows="4"></textarea></label>
+    <p class="hint qwen">문장으로 지시하세요. 예: <b>재킷을 붉은 가죽으로 바꿔줘</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 참조 이미지는 <b>이미지 2의 옷을 입혀줘</b>처럼 번호로 불러요.</p>
+    <p class="hint sdxl">칠한 영역에 그릴 내용만 영어 태그로 적어요. 예: <b>black silk robe, natural skin texture</b></p>
+    <div class="exprs" title="[얼굴] 자동 선택으로 얼굴을 고른 뒤 눌러 보세요. 얼굴 생김새는 그대로, 표정만 바뀌어요.">
+      <span>표정 바꾸기</span>
+      <button type="button" class="chip" data-t="smile, happy, open mouth" data-s="환하게 웃는 얼굴로">웃음</button>
+      <button type="button" class="chip" data-t="blush, embarrassed, shy" data-s="얼굴이 붉어진 부끄러운 표정으로">부끄러움</button>
+      <button type="button" class="chip" data-t="angry, frown, furrowed brow" data-s="화난 표정으로">화남</button>
+      <button type="button" class="chip" data-t="crying, tears, sad" data-s="눈물을 흘리며 슬퍼하는 표정으로">울음</button>
+      <button type="button" class="chip" data-t="surprised, wide eyes, open mouth" data-s="깜짝 놀란 표정으로">놀람</button>
+      <button type="button" class="chip" data-t="closed eyes, gentle smile" data-s="눈을 감고 살짝 웃는 표정으로">눈 감음</button>
+      <button type="button" class="chip" data-t="wink, one eye closed, smile" data-s="윙크하는 표정으로">윙크</button>
+      <button type="button" class="chip" data-t="expressionless, neutral face" data-s="무표정한 얼굴로">무표정</button>
+    </div>
+    <label class="f sdxl">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 프로필 기본값을 써요"></textarea></label>
+    <div class="sdxl" data-blk="sd-main"></div>
+    <div class="qwen">
+      <label class="chk"><input type="checkbox" name="fast"> 빠른 모드 (Lightning 4단계)</label>
+      <label class="chk"><input type="checkbox" name="hires"> 원본 해상도로 복원 (Real-ESRGAN)</label>
+      <div class="f">참조 이미지 (선택, 최대 2장)
+        <div class="mini" data-img="ref1"></div>
+        <div class="mini" data-img="ref2"></div>
+      </div>
+    </div>
+    <div class="row">
+      <label class="f sdxl">변화 강도<input type="number" name="denoise" value="0.9" step="0.05" min="0.1" max="1"></label>
+      <label class="f">마스크 확장(px)<input type="number" name="grow" value="8" min="0" max="128"></label>
+    </div>
+    <details><summary>영역 처리 (고급)</summary>
+      <div class="row">
+        <label class="f">처리 해상도(px)<select name="res"><option>768</option><option selected>1024</option><option>1280</option><option>1536</option></select></label>
+        <label class="f">주변 포함(%)<input type="number" name="ctx" value="35" min="5" max="200"></label>
+      </div>
+      <label class="f">경계 부드러움(px, 0=자동)<input type="number" name="feather" value="0" min="0" max="200"></label>
+    </details>
+    <details class="qwen"><summary>Qwen 설정 (고급)</summary>
+      <details><summary>모델 파일 직접 고르기</summary>
+        <label class="f">Qwen 편집 모델<select name="q_unet"></select></label>
+        <label class="f">텍스트 인코더<select name="q_te"></select></label>
+        <label class="f">VAE<select name="q_vae"></select></label>
+        <p class="hint plain">'자동'이면 이름으로 찾아요. 못 찾을 때만 직접 고르세요.</p>
+      </details>
+      <div class="row">
+        <label class="f">처리 해상도(메가픽셀)<select name="q_mp"><option>0.6</option><option selected>1.0</option><option>1.5</option><option>2.0</option></select></label>
+        <label class="f">시프트<input type="number" name="q_shift" value="3" step="0.5" min="0.5" max="10"></label>
+      </div>
+      <div class="row">
+        <label class="f">단계 수<input type="number" name="q_steps" value="20" min="1" max="100"></label>
+        <label class="f">CFG<input type="number" name="q_cfg" value="4" step="0.5" min="0" max="20"></label>
+      </div>
+      <div class="row">
+        <label class="f">샘플러<select name="q_sampler" data-def="euler"></select></label>
+        <label class="f">스케줄러<select name="q_scheduler" data-def="simple"></select></label>
+      </div>
+    </details>
+    <details class="sdxl"><summary>ControlNet (윤곽·포즈 유지)</summary>
+      <label class="f">모델<select name="cn_model"></select></label>
+      <p class="hint plain">제어 이미지를 올리지 않으면 <b>원본 이미지의 윤곽</b>을 따라가요. <button type="button" class="link" data-open="controlnet">ControlNet 폴더 열기</button></p>
+      <div class="mini" data-img="cn_image"></div>
+      <div class="row">
+        <label class="f">전처리<select name="cn_prep"><option value="none">없음 (이미 만든 지도)</option><option value="canny">캐니 윤곽선</option></select></label>
+        <label class="f">강도<input type="number" name="cn_strength" value="0.7" step="0.05" min="0" max="2"></label>
+      </div>
+      <div class="row">
+        <label class="f">적용 시작(0~1)<input type="number" name="cn_start" value="0" step="0.05" min="0" max="1"></label>
+        <label class="f">적용 끝(0~1)<input type="number" name="cn_end" value="1" step="0.05" min="0" max="1"></label>
+      </div>
+    </details>
+    <details class="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
+    <details><summary>LoRA (엔진에 맞는 것만 고르세요)</summary><div data-blk="lora"></div></details>
+    <details><summary>프롬프트와 저장 옵션</summary>
+      <label class="chk"><input type="checkbox" name="translate"> 한국어 프롬프트를 영어로 자동 번역</label>
+      <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
+      <label class="chk sdxl"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label>
+      <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
+      <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
+    </details>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="drop">이미지를 끌어다 놓거나 클릭해서 고르세요. Ctrl+V로 붙여넣을 수도 있어요.<input type="file" accept="image/*" hidden></div>
+    <div class="work" hidden>
+      <div class="pane">
+        <div class="phead">원본 <small>마스크를 칠할 수 있어요</small></div>
+        <div class="stage"><img alt="편집할 이미지"><canvas></canvas><canvas class="pvw"></canvas><div class="ring"></div></div>
+      </div>
+      <div class="pane outp" hidden>
+        <div class="phead">결과</div>
+        <div class="cmpbox"><img class="rimg" alt="결과 이미지"><img class="oimg" alt="원본" hidden><span class="cline" hidden></span></div>
+        <input type="range" class="cmps" min="0" max="100" value="50" hidden aria-label="원본과 결과 비교 위치">
+        <div class="ptools">
+          <button type="button" class="ghost cmpt">겹쳐서 비교</button>
+          <button type="button" class="ghost rzoom">크게 보기</button>
+          <a class="ghost rsave" download>저장</a>
+          <button type="button" class="ghost rcont">이어서 편집</button>
+        </div>
+      </div>
+    </div>
+    <div class="tools" hidden>
+      <label>브러시 <input type="range" class="brush" min="6" max="140" value="44"></label>
+      <label><input type="checkbox" class="erase"> 지우개</label>
+      <button type="button" class="ghost clr">마스크 지우기</button>
+      <span class="autosel"><b>자동 선택</b>
+        <button type="button" class="ghost am-face">얼굴</button>
+        <select class="am-part"><option value="face">얼굴만</option><option value="head">머리카락까지</option></select>
+        <button type="button" class="ghost am-bg">배경</button>
+        <button type="button" class="ghost am-inv">선택 반전</button>
+        <label class="seltool" title="켜고 이미지를 클릭하면 같은 옷·같은 부위가 자동으로 선택돼요. 마우스를 올리면 선택될 영역이 파랗게 미리 보여요."><input type="checkbox" class="wand"> <b>선택 도구</b> (클릭한 옷·부위 자동 선택)</label>
+        <label>허용치 <input type="range" class="tol" min="3" max="80" value="25"></label>
+        <label>경계 민감도 <input type="range" class="edge" min="0" max="100" value="50"></label>
+        <label><input type="checkbox" class="wand-all"> 같은 색 전체</label>
+      </span>
+      <button type="button" class="ghost zoom">원본 크게 보기</button>
+      <button type="button" class="ghost swap">다른 이미지</button>
+    </div>
+    <div class="res"></div>
+  </div>
+</section>
+
+<!-- 이미지 생성 -->
+<section class="view split" id="v-gen">
+  <form id="f-gen" data-g="sdxl" autocomplete="off">
+    <div class="presets" data-presets></div>
+    <button class="go">이미지 생성</button>
+    <p class="warn" id="w-gen" hidden></p>
+    <label class="f">모델 종류
+      <select name="gengine">
+        <option value="sdxl">SD1.5 · SDXL · Illustrious · Pony 계열</option>
+        <option value="flux">FLUX.1 · Krea 계열</option>
+        <option value="chroma">Chroma (무검열 FLUX 계열)</option>
+      </select></label>
+    <div data-for="sdxl" data-blk="sd-main"></div>
+    <div data-for="flux chroma">
+      <label class="f">FLUX 계열 모델<select name="fx_model"></select></label>
+      <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button></p>
+      <details><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
+        <label class="f">VAE<select name="fx_vae"></select></label>
+        <label class="f">T5 텍스트 인코더<select name="fx_t5"></select></label>
+        <label class="f" data-for="flux">CLIP-L 텍스트 인코더<select name="fx_clip"></select></label>
+        <p class="hint plain">'자동'이면 이름으로 알아서 찾아요. 파일 이름이 달라 못 찾을 때만 직접 고르세요. <button type="button" class="link" data-open="vae">VAE 폴더</button> <button type="button" class="link" data-open="text_encoders">텍스트 인코더 폴더</button></p>
+      </details>
+    </div>
+    <label class="f">프롬프트<textarea name="prompt" rows="5"></textarea></label>
+    <details data-for="sdxl"><summary>프롬프트 작성 팁</summary>
+      <p class="hint">NoobAI·Illustrious·Pony는 <b>쉼표로 구분한 태그</b>(1girl, red jacket)로, 사실적 SDXL은 <b>문장</b>으로 써요.<br>(단어:1.2)로 강조해요.<br>성인 캐릭터는 <b>adult</b>, <b>mature female</b>처럼 나이를 분명히 적어요.</p>
+      <p class="hint" id="wcs"></p>
+    </details>
+    <p class="hint" data-for="flux chroma">FLUX 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
+    <label class="f" data-for="sdxl chroma">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <div class="row">
+      <label class="f">가로<input type="number" name="w" value="1024" step="64" min="256" max="2048"></label>
+      <label class="f">세로<input type="number" name="h" value="1024" step="64" min="256" max="2048"></label>
+    </div>
+    <div class="row">
+      <label class="f">크기 프리셋<select id="size-preset"><option value="">선택</option><option value="832x1216">세로 832×1216</option><option value="1216x832">가로 1216×832</option><option value="1024x1024">정사각 1024×1024</option><option value="768x1344">세로 길게 768×1344</option><option value="1344x768">가로 길게 1344×768</option></select></label>
+      <label class="f">장수<input type="number" name="n" value="1" min="1" max="8"></label>
+    </div>
+    <details data-for="sdxl"><summary>하이레스 픽스 (2단계 생성)</summary>
+      <label class="chk"><input type="checkbox" name="hires"> 켜기</label>
+      <div class="row">
+        <label class="f">확대 배율<input type="number" name="hires_scale" value="1.5" step="0.25" min="1" max="3"></label>
+        <label class="f">변화 강도<input type="number" name="hires_denoise" value="0.5" step="0.05" min="0.1" max="1"></label>
+      </div>
+      <label class="f">2단계 단계 수<input type="number" name="hires_steps" value="15" min="1" max="100"></label>
+    </details>
+    <details><summary>이미지로 시작 (이미지→이미지)</summary>
+      <div class="mini" data-img="init"></div>
+      <label class="f">변화 강도 (낮을수록 원본 유지)<input type="number" name="init_denoise" value="0.7" step="0.05" min="0.05" max="1"></label>
+    </details>
+    <details data-for="sdxl"><summary>ControlNet (구도·포즈 고정)</summary>
+      <label class="f">모델<select name="cn_model"></select></label>
+      <p class="hint plain"><button type="button" class="link" data-open="controlnet">ControlNet 폴더 열기</button></p>
+      <div class="mini" data-img="cn_image"></div>
+      <div class="row">
+        <label class="f">전처리<select name="cn_prep"><option value="none">없음 (이미 만든 지도)</option><option value="canny">캐니 윤곽선</option></select></label>
+        <label class="f">강도<input type="number" name="cn_strength" value="0.7" step="0.05" min="0" max="2"></label>
+      </div>
+      <div class="row">
+        <label class="f">적용 시작(0~1)<input type="number" name="cn_start" value="0" step="0.05" min="0" max="1"></label>
+        <label class="f">적용 끝(0~1)<input type="number" name="cn_end" value="1" step="0.05" min="0" max="1"></label>
+      </div>
+    </details>
+    <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
+    <details data-for="flux chroma" open><summary>FLUX 샘플링</summary>
+      <div class="row">
+        <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
+        <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.5" min="0" max="20"></label>
+        <label class="f" data-for="chroma">CFG<input type="number" name="fx_cfg" value="4" step="0.5" min="0" max="20"></label>
+      </div>
+      <div class="row">
+        <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
+        <label class="f">스케줄러<select name="fx_scheduler" data-def="simple"></select></label>
+      </div>
+    </details>
+    <details><summary>LoRA</summary><div data-blk="lora"></div></details>
+    <details><summary>프롬프트와 저장 옵션</summary>
+      <label class="chk"><input type="checkbox" name="translate" checked> 한국어 프롬프트를 영어로 자동 번역</label>
+      <label class="chk"><input type="checkbox" name="dyn" checked> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
+      <label class="chk" data-for="sdxl"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label>
+      <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
+      <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
+    </details>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"></div>
+  </div>
+</section>
+
+<!-- 업스케일 -->
+<section class="view split" id="v-up">
+  <form id="f-up" data-m="esrgan" autocomplete="off">
+    <div class="presets" data-presets></div>
+    <button class="go">업스케일 실행</button>
+    <p class="warn" id="w-up" hidden>업스케일 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 Real-ESRGAN을 설치해 주세요.</p>
+    <label class="f">방식
+      <select name="mode"><option value="esrgan">빠른 업스케일 (Real-ESRGAN)</option><option value="refine">디테일 재생성 (업스케일 + 타일 리파인)</option></select></label>
+    <div class="row">
+      <label class="f">업스케일 모델<select name="upm"></select></label>
+      <label class="f">배율<select name="scale"><option value="2">2배</option><option value="4" selected>4배</option></select></label>
+    </div>
+    <p class="hint plain"><button type="button" class="link" data-open="upscale_models">업스케일 모델 폴더 열기</button></p>
+    <div class="refine" data-blk="up-refine"></div>
+    <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="drop">이미지를 끌어다 놓거나 클릭해서 고르세요.<input type="file" accept="image/*" hidden></div>
+    <div class="work" hidden>
+      <div class="pane">
+        <div class="phead">원본</div>
+        <div class="stage"><img alt="원본"></div>
+      </div>
+      <div class="pane outp" hidden>
+        <div class="phead">결과</div>
+        <div class="cmpbox"><img class="rimg" alt="결과 이미지"><img class="oimg" alt="원본" hidden><span class="cline" hidden></span></div>
+        <input type="range" class="cmps" min="0" max="100" value="50" hidden aria-label="원본과 결과 비교 위치">
+        <div class="ptools">
+          <button type="button" class="ghost cmpt">겹쳐서 비교</button>
+          <button type="button" class="ghost rzoom">크게 보기</button>
+          <a class="ghost rsave" download>저장</a>
+        </div>
+      </div>
+    </div>
+    <div class="tools" hidden>
+      <button type="button" class="ghost zoom">원본 크게 보기</button>
+      <button type="button" class="ghost swap">다른 이미지</button>
+    </div>
+    <div class="res"></div>
+  </div>
+</section>
+
+<!-- 이미지 정보 -->
+<section class="view" id="v-info">
+  <h2>이미지 정보</h2>
+  <p class="mute">PNG, JPEG, WebP 파일을 올리면 프롬프트와 생성 설정(ComfyUI, A1111/Forge, NovelAI), 캐릭터 카드, EXIF를 읽어요. 파일은 이 컴퓨터 밖으로 나가지 않아요.</p>
+  <div class="drop" id="info-drop">이미지를 끌어다 놓거나 클릭해서 고르세요. Ctrl+V로 붙여넣을 수도 있어요.<input type="file" accept="image/*" hidden></div>
+  <div id="info-out" hidden></div>
+</section>
+
+<!-- 기능 모음 -->
+<section class="view split" id="v-feat">
+  <form id="f-feat" autocomplete="off">
+    <p class="mute">ComfyUI의 기능을 노드 없이 쓰는 모음이에요. 하나를 고르고 칸만 채우면 돼요.</p>
+    <div id="feat-pick" class="featpick"></div>
+    <div id="feat-form"></div>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"><p class="empty">결과가 여기에 쌓여요.</p></div>
+  </div>
+</section>
+
+<!-- ComfyUI 길잡이 -->
+<section class="view" id="v-guide">
+  <h2>ComfyUI 길잡이</h2>
+  <p class="mute">ComfyUI를 처음 쓰는 분을 위한 용어 풀이와, 이 프로그램에서 어디서 쓸 수 있는지 정리한 표예요.</p>
+  <h3>자주 나오는 말</h3>
+  <dl class="gloss">
+    <dt>체크포인트 (Checkpoint)</dt><dd>그림을 그리는 '화가' 본체 파일이에요. 이 파일에 따라 그림체가 크게 달라져요. <b>이미지 생성 → 체크포인트</b></dd>
+    <dt>LoRA</dt><dd>화가에게 특정 캐릭터·화풍·옷을 가르치는 작은 추가 파일이에요. 여러 개를 겹쳐 쓸 수 있어요. 체크포인트와 같은 계열만 맞아요.</dd>
+    <dt>VAE</dt><dd>그림을 최종 이미지로 풀어 주는 '현상기'예요. 색이 탁하면 VAE를 바꿔 보세요.</dd>
+    <dt>텍스트 인코더 (CLIP / T5)</dt><dd>프롬프트 글을 모델이 알아듣는 숫자로 바꿔 줘요. FLUX·Qwen 같은 최신 모델은 별도 파일이 필요해요.</dd>
+    <dt>프롬프트 / 제외 프롬프트</dt><dd>그리고 싶은 것 / 그리지 말았으면 하는 것을 적어요.</dd>
+    <dt>시드 (Seed)</dt><dd>무작위 출발점이에요. 같은 시드와 설정이면 같은 그림이 나와요. -1은 매번 새로 뽑기.</dd>
+    <dt>샘플러 · 스케줄러 · 단계 수</dt><dd>노이즈에서 그림을 꺼내는 방식·속도 배분·횟수예요. 모델 추천값(프로필)을 쓰면 안전해요. <b>기능 모음 → 설정 비교표</b>로 직접 비교해 보세요.</dd>
+    <dt>CFG</dt><dd>프롬프트를 얼마나 엄격히 따를지예요. 너무 높으면 색이 진하고 부자연스러워져요.</dd>
+    <dt>변화 강도 (Denoise)</dt><dd>기존 이미지를 얼마나 새로 그릴지예요. 낮으면 원본 유지, 높으면 많이 바뀜.</dd>
+    <dt>인페인트 / 아웃페인트</dt><dd>칠한 영역만 다시 그리기 / 이미지 바깥으로 넓히기. <b>이미지 편집</b>, <b>기능 모음 → 이미지 확장</b></dd>
+    <dt>ControlNet</dt><dd>포즈·윤곽선·깊이를 따라 그리게 해서 구도를 고정해요.</dd>
+    <dt>업스케일</dt><dd>해상도를 키우면서 디테일을 살려요. <b>업스케일 탭</b></dd>
+    <dt>노드 / 워크플로</dt><dd>ComfyUI의 '부품'과 '연결도'예요. 이 프로그램은 자주 쓰는 연결도를 대신 만들어 주고, 직접 만든 것은 <b>워크플로 탭</b>에서 실행할 수 있어요.</dd>
+  </dl>
+  <h3>ComfyUI 기능을 여기서 쓸 수 있나요?</h3>
+  <table class="cov"><thead><tr><th>기능</th><th>상태</th><th>어디서</th></tr></thead><tbody>
+    <tr><td>글로 그림 만들기 (SD1.5·SDXL·Illustrious·Pony·NoobAI)</td><td class="y">지원</td><td>이미지 생성</td></tr>
+    <tr><td>FLUX · Krea · Chroma</td><td class="y">지원</td><td>이미지 생성</td></tr>
+    <tr><td>이미지→이미지, 하이레스 픽스, LoRA 여러 개, 임베딩</td><td class="y">지원</td><td>이미지 생성</td></tr>
+    <tr><td>ControlNet (생성 / 칠해서 편집)</td><td class="y">지원</td><td>이미지 생성, 이미지 편집</td></tr>
+    <tr><td>인페인트 (칠해서 편집), Qwen 말로 편집, 참조 이미지</td><td class="y">지원</td><td>이미지 편집</td></tr>
+    <tr><td>자동 선택 (얼굴·배경·색 영역)</td><td class="y">지원</td><td>이미지 편집</td></tr>
+    <tr><td>업스케일 (모델 / 타일 재생성)</td><td class="y">지원</td><td>업스케일</td></tr>
+    <tr><td>이미지 확장 (아웃페인팅)</td><td class="y">지원</td><td>기능 모음</td></tr>
+    <tr><td>영역별 프롬프트</td><td class="y">지원</td><td>기능 모음</td></tr>
+    <tr><td>설정 비교표 (XY 플롯)</td><td class="y">지원</td><td>기능 모음</td></tr>
+    <tr><td>내가 만든 ComfyUI 워크플로 실행</td><td class="y">지원</td><td>워크플로 (API 형식 JSON)</td></tr>
+    <tr><td>SD3 · HiDream · Lumina · 그 밖의 모델 계열</td><td class="p">준비 중</td><td>—</td></tr>
+    <tr><td>영상 (이미지→영상, 글→영상)</td><td class="p">준비 중</td><td>—</td></tr>
+    <tr><td>IP-Adapter · 얼굴 교체 · SAM 같은 커스텀 노드 기능</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
+    <tr><td>오디오 · 3D 생성</td><td class="n">미지원</td><td>ComfyUI 고급 화면</td></tr>
+  </tbody></table>
+  <p class="hint plain">빠진 기능은 왼쪽 아래 <b>ComfyUI 고급 화면 열기</b>에서 노드를 직접 연결해 쓸 수 있어요. 만든 워크플로는 <b>Save (API Format)</b>으로 저장해 워크플로 탭에서 실행하세요.</p>
+</section>
+
+<!-- 워크플로 -->
+<section class="view split" id="v-wf">
+  <form id="f-wf" autocomplete="off">
+    <button class="go" id="wf-go" disabled>실행</button>
+    <p class="hint">ComfyUI 화면에서 만든 워크플로를 그대로 실행해요. ComfyUI 설정에서 개발자 모드를 켠 뒤 <b>Save (API Format)</b>으로 저장한 JSON을 붙여 넣거나 파일로 여세요. 이미지 정보 탭에서 ComfyUI로 만든 PNG를 열어 바로 보낼 수도 있어요.</p>
+    <label class="f">워크플로 JSON<textarea id="wf-json" rows="9" spellcheck="false" placeholder='{"3": {"class_type": "KSampler", ...}}'></textarea></label>
+    <div class="row">
+      <button type="button" class="ghost" id="wf-file">파일 열기</button>
+      <button type="button" class="ghost" id="wf-an">분석</button>
+    </div>
+    <p class="st" id="wf-st"></p>
+    <input type="file" id="wf-fin" accept=".json,application/json" hidden>
+    <div id="wf-fields"></div>
+    <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 워크플로 기록</label>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"></div>
+  </div>
+</section>
+
+<!-- 다운로드 -->
+<section class="view" id="v-dl">
+  <h2>다운로드</h2>
+  <p class="mute">Civitai와 HuggingFace에서 찾아 바로 받아요. 받은 파일은 알맞은 폴더에 저장되고, 생성·편집 화면 목록에 바로 나와요.</p>
+  <details class="keys">
+    <summary>로그인 · API 키 <span class="badge" id="key-state"></span></summary>
+    <p class="hint plain">키는 이 컴퓨터의 settings.json에만 저장되고 화면으로 다시 보내지 않아요. 로그인이 필요한 모델이나 성인(NSFW) 모델은 키가 있어야 받을 수 있어요.</p>
+    <div class="keyrow"><label class="f">Civitai API 키<input type="password" id="k-civitai" autocomplete="off" placeholder="키를 붙여 넣고 저장"></label><button type="button" class="ghost k-save" data-k="civitai">저장</button><button type="button" class="ghost k-clear" data-k="civitai">지우기</button><a href="https://civitai.com/user/account" target="_blank" rel="noopener">키 만드는 곳</a></div>
+    <div class="keyrow"><label class="f">HuggingFace 토큰<input type="password" id="k-hf" autocomplete="off" placeholder="hf_ 로 시작하는 읽기(Read) 토큰"></label><button type="button" class="ghost k-save" data-k="hf">저장</button><button type="button" class="ghost k-clear" data-k="hf">지우기</button><a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">토큰 만드는 곳</a></div>
+  </details>
+  <form id="f-dl" class="dlbar" autocomplete="off">
+    <label class="f">찾는 곳<select name="source"><option value="civitai">Civitai</option><option value="hf">HuggingFace</option></select></label>
+    <label class="f">종류<select name="dir"><option value="checkpoints">체크포인트</option><option value="loras" selected>LoRA</option><option value="embeddings">임베딩</option><option value="controlnet">ControlNet</option><option value="vae">VAE</option><option value="upscale_models">업스케일 모델</option></select></label>
+    <label class="f grow2">검색어<input name="query" placeholder="예: illustrious, detail, 캐릭터 이름"></label>
+    <label class="f civ">정렬<select name="sort"><option value="popular">다운로드 많은 순</option><option value="rated">평점 높은 순</option><option value="new">최신 순</option></select></label>
+    <label class="f civ">기반 모델<select name="base"><option value="">전체</option><option>SDXL 1.0</option><option>Illustrious</option><option>Pony</option><option>NoobAI</option><option>SD 1.5</option><option>Flux.1 D</option><option>Flux.1 S</option></select></label>
+    <label class="chk civ"><input type="checkbox" name="nsfw"> 성인(NSFW) 포함</label>
+    <label class="chk civ"><input type="checkbox" id="dl-blur" checked> 민감한 미리보기 흐리게</label>
+    <button class="go" id="dl-go">검색</button>
+  </form>
+  <p class="st" id="dl-st" role="status"></p>
+  <div id="dl-res" class="dlgrid"></div>
+  <p><button type="button" class="ghost" id="dl-more" hidden>더 보기</button></p>
+  <h3>주소로 직접 받기</h3>
+  <form id="f-direct" class="dlbar direct" autocomplete="off">
+    <label class="f grow2">다운로드 주소<input name="url" placeholder="https://civitai.com/api/download/models/12345"></label>
+    <label class="f">저장 위치<select name="dir"><option value="checkpoints">체크포인트</option><option value="loras">LoRA</option><option value="embeddings">임베딩</option><option value="controlnet">ControlNet</option><option value="upscale_models">업스케일 모델</option><option value="vae">VAE</option><option value="diffusion_models">디퓨전 모델 (FLUX·Qwen 등)</option><option value="text_encoders">텍스트 인코더</option></select></label>
+    <label class="f grow2">Ollama 모델 이름 (대화 모델)<input name="ollama" placeholder="예: hf.co/사용자/저장소:Q4_K_M"></label>
+    <button class="go" id="direct-go">받기</button>
+  </form>
+  <h3>받는 중</h3><div id="dl-tasks"></div>
+</section>
+
+<!-- 설치와 모델 -->
+<section class="view" id="v-setup">
+  <h2>설치와 모델</h2>
+  <p class="mute" id="gpuinfo"></p>
+  <div class="actions">
+    <button class="ghost" id="rec" type="button">내 GPU에 맞춰 고르기</button>
+    <button class="go" id="inst" type="button">선택한 항목 설치</button>
+  </div>
+  <h3>폴더 열기</h3>
+  <p class="hint plain">모델 파일을 직접 넣을 때 쓰세요. 파일을 넣고 이 창으로 돌아오면 목록이 자동으로 새로고침돼요.</p>
+  <div class="folders">
+    <button type="button" class="ghost" data-open="checkpoints">체크포인트</button>
+    <button type="button" class="ghost" data-open="loras">LoRA</button>
+    <button type="button" class="ghost" data-open="diffusion_models">FLUX·Qwen 모델</button>
+    <button type="button" class="ghost" data-open="text_encoders">텍스트 인코더</button>
+    <button type="button" class="ghost" data-open="vae">VAE</button>
+    <button type="button" class="ghost" data-open="controlnet">ControlNet</button>
+    <button type="button" class="ghost" data-open="upscale_models">업스케일</button>
+    <button type="button" class="ghost" data-open="embeddings">임베딩</button>
+    <button type="button" class="ghost" data-open="llm">대화 모델</button>
+    <button type="button" class="ghost" data-open="wildcards">와일드카드</button>
+    <button type="button" class="ghost" data-open="outputs">결과 이미지</button>
+    <button type="button" class="ghost" data-open="logs">로그</button>
+    <button type="button" class="ghost" data-open="root">설치 폴더</button>
+  </div>
+  <h3>대화 모델</h3><div id="cat-llm"></div>
+  <h3>이미지 모델</h3><div id="cat-img"></div>
+  <h3>설치된 파일 관리</h3>
+  <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>
+  <div id="manage"></div>
+  <h3>진행 상황</h3><div id="tasks"></div>
+</section>
+</main>
+
+<!-- 확대 보기 -->
+<div id="lb" hidden role="dialog" aria-modal="true" aria-label="이미지 확대 보기">
+  <div id="lb-view"><img id="lb-img" alt=""><img id="lb-before" alt="" hidden><div id="lb-line" hidden></div></div>
+  <div id="lb-bar">
+    <span id="lb-info"></span>
+    <input type="range" id="lb-split" min="0" max="100" value="50" hidden aria-label="전후 비교 위치">
+    <button type="button" id="lb-prev">이전</button>
+    <button type="button" id="lb-next">다음</button>
+    <button type="button" id="lb-fit">화면에 맞춤</button>
+    <button type="button" id="lb-one">원본 크기</button>
+    <button type="button" id="lb-cmp" hidden>전후 비교</button>
+    <a id="lb-dl" download>저장</a>
+    <button type="button" id="lb-meta">이미지 정보</button>
+    <button type="button" id="lb-x">닫기</button>
+  </div>
+</div>
+
+<div id="tipbox" role="tooltip" hidden></div>
+
+<dialog id="ack"><form method="dialog">
+  <h3 style="margin-top:0">사용 전에 확인해 주세요</h3>
+  <p>이 도구는 성인이 자기 컴퓨터에서 쓰도록 만들어졌고, 성인 콘텐츠를 제한하는 필터를 두지 않아요. 아래 내용에 동의해야 시작할 수 있어요.</p>
+  <ul>
+    <li>저는 성인이며, 만들거나 편집하는 인물은 모두 성인이거나 성인으로 설정한 가상의 인물이에요.</li>
+    <li>실존 인물의 사진은 본인의 동의가 있을 때만 편집해요. 동의 없는 노출·성적 합성물을 만들거나 퍼뜨리는 일은 불법이에요.</li>
+    <li>미성년자와 관련된 성적 콘텐츠는 만들지 않아요. 이런 요청은 자동으로 차단돼요.</li>
+  </ul>
+  <label class="chk"><input type="checkbox" id="ackc"> 위 내용에 동의합니다</label>
+  <p style="text-align:right;margin-bottom:0"><button class="go" id="ackb" disabled>시작하기</button></p>
+</form></dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

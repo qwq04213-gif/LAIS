@@ -1,0 +1,8 @@
+# 한 줄에 하나씩. 프롬프트에서 __hair_color__ 로 호출하면 무작위로 하나가 들어갑니다.
+black hair
+brown hair
+blonde hair
+silver hair
+red hair
+blue hair
+pink hair

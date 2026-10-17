@@ -1,0 +1,66 @@
+[
+  {
+    "id": "noobai-v",
+    "name": "NoobAI V-Pred (태그형)",
+    "match": "vpred|v-pred|v_pred",
+    "prefix": "masterpiece, best quality, newest, absurdres, highres, ",
+    "negative": "worst quality, old, early, low quality, lowres, signature, username, logo, bad hands, mutated hands, mammal, anthro, furry, ambiguous form, feral, semi-anthro",
+    "fields": {
+      "sampler": "euler",
+      "scheduler": "normal",
+      "steps": 30,
+      "cfg": 4.5,
+      "clip_skip": 2,
+      "vpred": true,
+      "rescale": 0.7
+    }
+  },
+  {
+    "id": "noobai",
+    "name": "NoobAI / Illustrious (태그형)",
+    "match": "noob|illustrious|\\bwai\\b|hassaku|novaanime",
+    "prefix": "masterpiece, best quality, newest, absurdres, highres, ",
+    "negative": "worst quality, old, early, low quality, lowres, signature, username, logo, bad hands, mutated hands, mammal, anthro, furry, ambiguous form, feral, semi-anthro",
+    "fields": {
+      "sampler": "euler_ancestral",
+      "scheduler": "normal",
+      "steps": 28,
+      "cfg": 5,
+      "clip_skip": 2,
+      "vpred": false,
+      "rescale": 0
+    }
+  },
+  {
+    "id": "pony",
+    "name": "Pony Diffusion (score 태그)",
+    "match": "pony",
+    "prefix": "score_9, score_8_up, score_7_up, ",
+    "negative": "score_6, score_5, score_4, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, jpeg artifacts, signature, watermark, username",
+    "fields": {
+      "sampler": "euler_ancestral",
+      "scheduler": "normal",
+      "steps": 30,
+      "cfg": 6,
+      "clip_skip": 2,
+      "vpred": false,
+      "rescale": 0
+    }
+  },
+  {
+    "id": "photo",
+    "name": "사실적 SDXL (자연어 문장)",
+    "match": "real|photo|lustify|biglove|juggernaut|cyber|epic",
+    "prefix": "",
+    "negative": "lowres, bad anatomy, bad hands, deformed, disfigured, extra fingers, worst quality, jpeg artifacts, watermark, text, cartoon, anime, illustration, 3d render, painting",
+    "fields": {
+      "sampler": "dpmpp_2m_sde",
+      "scheduler": "karras",
+      "steps": 30,
+      "cfg": 5,
+      "clip_skip": 1,
+      "vpred": false,
+      "rescale": 0
+    }
+  }
+]

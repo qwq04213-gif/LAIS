@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.ruff_cache/
+/outputs/
+/release-tools/notes_*.txt
+/release-tools/queue-doc.md
+/release-tools/ROADMAP.md
+/test/obsolete/

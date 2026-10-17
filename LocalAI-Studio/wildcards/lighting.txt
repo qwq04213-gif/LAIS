@@ -1,0 +1,7 @@
+# __lighting__ 으로 호출
+soft studio lighting
+warm candlelight
+neon city glow
+golden hour sunlight
+moody low-key lighting
+backlit window light

@@ -1,0 +1,207 @@
+{
+ "llm": [
+  {
+   "id": "qwen3-8b",
+   "name": "Qwen3 8B Abliterated",
+   "gb": 5.2,
+   "desc": "가볍고 빠른 대화 모델. VRAM 6GB 이상. 답변 전에 생각 과정을 출력할 수 있어요(메시지 끝에 /no_think 를 붙이면 생략).",
+   "ollama": "huihui_ai/qwen3-abliterated:8b"
+  },
+  {
+   "id": "qwen3-14b",
+   "name": "Qwen3 14B Abliterated",
+   "gb": 9.3,
+   "desc": "한국어 품질과 속도의 균형. VRAM 10GB 이상 권장. Apache-2.0 기반 모델이에요.",
+   "ollama": "huihui_ai/qwen3-abliterated:14b"
+  },
+  {
+   "id": "qwen3-32b",
+   "name": "Qwen3 32B Abliterated",
+   "gb": 20,
+   "desc": "가장 풍부한 문장력. VRAM 24GB 권장.",
+   "ollama": "huihui_ai/qwen3-abliterated:32b"
+  },
+  {
+   "id": "exaone35-8b",
+   "name": "EXAONE 3.5 7.8B (한국어 특화)",
+   "gb": 4.8,
+   "desc": "LG가 만든 한국어에 강한 모델. 검열 해제 모델은 아니라서 성인 롤플레이에는 거절이 잦을 수 있어요. 일반 대화·번역·프롬프트 작성용. 연구·비상업 라이선스예요. VRAM 6GB 이상.",
+   "ollama": "exaone3.5:7.8b"
+  },
+  {
+   "id": "mistral-small-24b",
+   "name": "Mistral Small 24B Abliterated",
+   "gb": 14.3,
+   "desc": "한국어를 공식 지원하는 다국어 모델의 검열 해제판. 롤플레이·소설에 쓸 만한 표현력. VRAM 16GB 이상 권장. 주소가 바뀌었다면 '직접 추가'를 쓰세요.",
+   "ollama": "huihui_ai/mistral-small-abliterated:24b"
+  }
+ ],
+ "image": [
+  {
+   "id": "qwen-edit",
+   "name": "Qwen-Image-Edit 2509 (fp8)",
+   "gb": 30,
+   "desc": "말로 지시하는 고품질 편집. 인물·질감·글자 일관성이 높아요. VRAM 12GB 이상, RAM 32GB 이상 권장. Apache-2.0.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "qwen-lightning",
+   "name": "Qwen-Edit Lightning 4단계 LoRA",
+   "gb": 1.7,
+   "desc": "편집 속도를 약 5배 높이는 '빠른 모드'용 LoRA.",
+   "files": [
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "noobai",
+   "name": "NoobAI-XL 1.1 (SDXL)",
+   "gb": 7,
+   "desc": "성인 표현 제한이 거의 없는 일러스트/애니 체크포인트. 칠해서 편집(인페인트)과 이미지 생성에 사용해요.",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Laxhar/noobai-XL-1.1/resolve/main/NoobAI-XL-v1.1.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "noobai-vpred",
+   "name": "NoobAI-XL V-Pred 1.0 (SDXL)",
+   "gb": 7,
+   "desc": "색 대비와 디테일이 좋은 V-Prediction 버전. 이름에 vpred 가 있으면 프로필이 V-Pred 옵션을 자동으로 켜요.",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Laxhar/noobai-XL-Vpred-1.0/resolve/main/NoobAI-XL-Vpred-v1.0.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "esrgan",
+   "name": "Real-ESRGAN x4plus",
+   "gb": 0.07,
+   "desc": "실사용 업스케일과 해상도 복원.",
+   "files": [
+    {
+     "dir": "upscale_models",
+     "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
+    }
+   ]
+  },
+  {
+   "id": "esrgan-anime",
+   "name": "Real-ESRGAN x4plus Anime 6B",
+   "gb": 0.02,
+   "desc": "일러스트/애니 전용 업스케일.",
+   "files": [
+    {
+     "dir": "upscale_models",
+     "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
+    }
+   ]
+  },
+  {
+   "id": "controlnet-union",
+   "name": "ControlNet Union SDXL (포즈/캐니/뎁스 등)",
+   "gb": 2.5,
+   "desc": "이미지 생성 탭의 ControlNet 에 사용. 포즈·윤곽·깊이 지도로 구도를 고정해요(참조 이미지는 전처리된 지도를 넣거나 캐니 전처리 선택).",
+   "files": [
+    {
+     "dir": "controlnet",
+     "url": "https://huggingface.co/xinsir/controlnet-union-sdxl-1.0/resolve/main/diffusion_pytorch_model_promax.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "sdxl-vae-fix",
+   "name": "SDXL VAE fp16 fix",
+   "gb": 0.34,
+   "desc": "일부 체크포인트의 회색/검은 이미지(NaN) 문제를 막아 주는 VAE. 샘플링 설정의 VAE 에서 선택.",
+   "files": [
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl.vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "ultrasharp",
+   "name": "4x-UltraSharp (사진용 업스케일)",
+   "gb": 0.07,
+   "desc": "사진/실사 업스케일에 많이 쓰는 모델. 타일 리파인 전처리로도 좋아요.",
+   "files": [
+    {
+     "dir": "upscale_models",
+     "url": "https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth"
+    }
+   ]
+  },
+  {
+   "id": "flux-common",
+   "name": "FLUX 공용 파일 (텍스트 인코더 + VAE)",
+   "gb": 5.5,
+   "desc": "Krea·Flux·Chroma 가 함께 쓰는 T5/CLIP/VAE. 아래 모델을 고르면 자동으로 함께 설치돼요.",
+   "files": [
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "krea-dev",
+   "name": "FLUX.1 Krea [dev] (fp8)",
+   "gb": 11.9,
+   "requires": [
+    "flux-common"
+   ],
+   "desc": "사진 같은 질감과 덜 'AI 같은' 미감이 강점인 FLUX 계열. 문장형 프롬프트. VRAM 12GB 이상 권장. 비상업 라이선스이고 성인 표현은 약해요.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/FLUX.1-Krea-dev_ComfyUI/resolve/main/split_files/diffusion_models/flux1-krea-dev_fp8_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "chroma-hd",
+   "name": "Chroma1-HD (무검열 FLUX 계열)",
+   "gb": 17.8,
+   "requires": [
+    "flux-common"
+   ],
+   "desc": "FLUX 계열을 성인 표현까지 제한 없이 학습시킨 Apache-2.0 모델. 네거티브 프롬프트와 CFG를 써요. VRAM 16GB 이상 또는 RAM 32GB 이상 권장. 실험적이라 ComfyUI를 최신으로 유지하세요.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/lodestones/Chroma1-HD/resolve/main/Chroma1-HD.safetensors"
+    }
+   ]
+  }
+ ]
+}
