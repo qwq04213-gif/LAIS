@@ -131,9 +131,9 @@ def _launch(job, where):
     try:
         argv = job.get("launch")
         if argv:
-            subprocess.Popen(argv, cwd=str(where), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(argv, cwd=str(where), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ, HUB_RESTARTED="1"))
         elif os.name == "nt":
-            subprocess.Popen(["cmd", "/c", "start", "LocalAI Studio", "/D", str(where), str(Path(where) / "start.bat")], cwd=str(where))
+            subprocess.Popen(["cmd", "/c", "start", "LocalAI Studio", "/D", str(where), str(Path(where) / "start.bat")], cwd=str(where), env=dict(os.environ, HUB_RESTARTED="1"))
     except Exception:
         pass
 

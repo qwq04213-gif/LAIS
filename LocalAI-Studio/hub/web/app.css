@@ -470,3 +470,10 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 @media(max-width:760px){.cs{grid-template-columns:1fr}.cs-nav{flex-direction:row;overflow:auto;position:static}.cs-nav button{white-space:nowrap}#v-conf .row{flex-direction:column;align-items:flex-start;gap:10px}#v-conf .rc{max-width:100%}}
 .sw i,.swatch i{pointer-events:none}
 .consent{align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;line-height:1.45}.consent input{margin-top:3px}
+.disktb small.path,p.path{display:block;margin-top:2px;word-break:break-all}
+.disktb small.path code,p.path code{font-size:.82em;user-select:all;color:var(--mute)}
+.disktb .act{white-space:nowrap}.disktb tr.total td{border-top:2px solid var(--line)}
+.ttmodel{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+.ttmodel .f{margin-top:10px}
+
+.partlist{list-style:none;margin:6px 0 14px;padding:0}.partlist li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line)}.partlist li div{display:flex;flex-direction:column;gap:2px;min-width:0}.partlist b{font-weight:600;word-break:break-all}

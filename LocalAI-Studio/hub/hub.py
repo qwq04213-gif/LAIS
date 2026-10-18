@@ -5,7 +5,7 @@
 역할: Ollama / ComfyUI 실행, 웹 UI 제공, 모델 설치, 이미지 작업(마스크 크롭·합성·타일 리파인) 조율,
       이미지 메타데이터 읽기/제거(meta.py), ComfyUI 그래프 생성·사용자 워크플로 실행(flows.py).
 """
-import base64, csv, hashlib, io, json, os, random, re, shutil, subprocess, sys, tempfile, threading, time, uuid, webbrowser, zipfile
+import base64, csv, hashlib, importlib, io, json, os, random, re, shutil, subprocess, sys, tempfile, threading, time, uuid, webbrowser, zipfile
 import urllib.error, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,6 +20,7 @@ import bgremove
 import modelinfo
 import sam
 import tts
+import tts_models
 
 RS = Image.Resampling
 HUB = Path(__file__).resolve().parent
@@ -2055,9 +2056,11 @@ def do_tts(p, J):
     if blocked(text):
         raise ValueError(BLOCK_MSG)
     TTS_DIR.mkdir(parents=True, exist_ok=True)
-    engine = "edge" if p.get("engine") == "edge" else "sapi"
+    engine = p.get("engine") if p.get("engine") in ("edge", "xtts", "chatterbox", "kokoro") else "sapi"
     speed, vol = clamp(num(p, "speed", 0, int), -10, 10), clamp(num(p, "volume", 100, int), 0, 100)
     J["msg"] = "목소리 만드는 중"
+    if engine in tts_models.ENGINES:
+        return do_tts_model(p, J, engine, text, speed)
     if engine == "edge":
         voice = p.get("voice") if p.get("voice") in {n for n, _ in tts.EDGE_VOICES} else "ko-KR-SunHiNeural"
         pitch = clamp(num(p, "pitch", 0, int), -50, 50)
@@ -2072,6 +2075,60 @@ def do_tts(p, J):
         ext = ".wav"
     info = dict(kind="tts", prompt=text[:200], engine=engine, voice=voice, speed=speed, volume=vol)
     return [(data, info, ext)]
+
+
+def tts_ref_upload(p):
+    """목소리 샘플(wav)을 받아 cache/tts/ref 에 둬요."""
+    try:
+        raw = base64.b64decode(str(p.get("data") or "").split(",", 1)[-1], validate=False)
+    except Exception:  # noqa: BLE001
+        return {"error": "파일을 읽지 못했어요."}
+    if len(raw) > 25 << 20:
+        return {"error": "파일이 너무 커요(25MB 이하)."}
+    if raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
+        return {"error": "wav 파일만 쓸 수 있어요. mp3 등은 wav 로 바꿔서 올려 주세요."}
+    if len(raw) < 100_000:
+        return {"error": "너무 짧아요. 5~15초쯤 또렷하게 말한 파일이 좋아요."}
+    rid = uuid.uuid4().hex[:12]
+    (TTS_DIR / "ref").mkdir(parents=True, exist_ok=True)
+    (TTS_DIR / "ref" / (rid + ".wav")).write_bytes(raw)
+    return {"ok": True, "id": rid}
+
+
+def do_tts_model(p, J, engine, text, speed):
+    """XTTS-v2 · Chatterbox · Kokoro (전용 파이썬 환경에서 실행)."""
+    meta = tts_models.ENGINES[engine]
+    if meta["need_license"] and not p.get("license_ok"):
+        raise ValueError(f"{meta['title'].split(' — ')[0]} 는 {meta['license']} 모델이에요. 사용 조건 확인 칸에 체크해 주세요.")
+    lang = p.get("language") if p.get("language") in {c for c, _n in meta["langs"]} else meta["langs"][0][0]
+    ref = None
+    if p.get("ref"):
+        if not meta["clone"]:
+            raise ValueError("이 모델은 목소리 따라 하기를 지원하지 않아요.")
+        if not p.get("clone_ok"):
+            raise ValueError("목소리 샘플을 쓰려면 '이 목소리의 주인은 본인이거나 사용을 허락했어요' 칸에 체크해 주세요.")
+        if not re.fullmatch(r"[0-9a-f]{12}", str(p["ref"])):
+            raise ValueError("목소리 샘플 정보가 올바르지 않아요. 다시 올려 주세요.")
+        ref = TTS_DIR / "ref" / (str(p["ref"]) + ".wav")
+        if not ref.is_file():
+            raise ValueError("올린 목소리 샘플을 찾지 못했어요. 다시 올려 주세요.")
+    speaker = str(p.get("speaker") or "")
+    if speaker and not re.fullmatch(r"[\w .'\-]{1,60}", speaker):
+        speaker = ""
+    (TTS_DIR / "gen").mkdir(parents=True, exist_ok=True)
+    out = TTS_DIR / "gen" / (uuid.uuid4().hex[:12] + ".wav")
+    job = dict(text=text, language=lang, speaker=speaker, ref=str(ref) if ref else "", speed=round(1 + speed * 0.075, 3),
+               exaggeration={"calm": 0.3, "normal": 0.5, "rich": 0.8}.get(p.get("emotion"), 0.5))
+    def say(m):
+        J["msg"] = m
+    try:
+        data = tts_models.generate(ROOT, engine, job, out, say, cancel=lambda: J.get("cancel"))
+    finally:
+        out.unlink(missing_ok=True)
+    if J.get("cancel"):
+        raise Cancelled("중단했어요.")
+    info = dict(kind="tts", prompt=text[:200], engine=engine, voice=speaker or ("내 목소리 샘플" if ref else "기본"), language=lang, speed=speed)
+    return [(data, info, ".wav")]
 
 
 def do_vid(p, J):
@@ -3069,6 +3126,12 @@ def _repo_dir(url):
     return COMFY / "custom_nodes" / Path(urllib.parse.urlparse(url).path).name.removesuffix(".git")
 
 
+def _pack_done(repo):
+    """확장이 폴더로 있고, 자체 설치 단계가 필요한 확장은 그 단계까지 끝났는지."""
+    d = _repo_dir(repo)
+    return d.is_dir() and (not (KNOWN_PACKS.get(repo) or {}).get("install_py") or (d / ".hub-setup-done").exists())
+
+
 def node_sources(missing):
     """없는 노드 이름들 → 설치할 저장소별로 묶어서 돌려줘요."""
     if missing and all(any(n in v["nodes"] for v in KNOWN_PACKS.values()) for n in missing):
@@ -3091,8 +3154,43 @@ def node_sources(missing):
         r = repos[0]
         by.setdefault(r, []).append(n)
     out = [{"repo": r, "title": (KNOWN_PACKS[r]["title"] if r in KNOWN_PACKS else ((m[r][1] or {}).get("title_aux") if len(m[r]) > 1 else "")) or Path(r).name, "nodes": ns,
-            "installed": _repo_dir(r).is_dir(), "state": (NODE_JOBS.get(r) or {}).get("state", "")} for r, ns in by.items()]
+            "installed": _pack_done(r), "incomplete": _repo_dir(r).is_dir() and not _pack_done(r), "state": (NODE_JOBS.get(r) or {}).get("state", "")} for r, ns in by.items()]
     return {"repos": out, "unknown": unknown}
+
+
+def _node_fetch(repo, dest, J):
+    import zipfile
+    J["msg"] = "내려받는 중…"
+    tmp = ROOT / "cache" / "nodes"
+    tmp.mkdir(parents=True, exist_ok=True)
+    zp = tmp / (dest.name + ".zip")
+    ref = (KNOWN_PACKS.get(repo) or {}).get("ref") or "HEAD"      # 확인해 둔 확장은 확인한 커밋 그대로 받아요
+    with urllib.request.urlopen(repo + "/archive/" + ref + ".zip", timeout=120) as r, open(zp, "wb") as f:
+        total = 0
+        while True:
+            c = r.read(1 << 20)
+            if not c:
+                break
+            total += len(c)
+            if total > 300 << 20:
+                raise RuntimeError("파일이 너무 커서 중단했어요.")
+            f.write(c)
+    J["msg"] = "압축 푸는 중…"
+    (COMFY / "custom_nodes").mkdir(exist_ok=True)
+    stage = tmp / (dest.name + "-x")
+    shutil.rmtree(stage, ignore_errors=True)
+    with zipfile.ZipFile(zp) as z:
+        names = z.namelist()
+        top = names[0].split("/")[0] if names else ""
+        for n in names:
+            t = (stage / n).resolve()
+            if not str(t).startswith(str(stage.resolve())):
+                raise RuntimeError("압축 파일 경로가 올바르지 않아요.")
+        z.extractall(stage)
+    src = stage / top if top and (stage / top).is_dir() else stage
+    shutil.move(str(src), str(dest))
+    shutil.rmtree(stage, ignore_errors=True)
+    zp.unlink(missing_ok=True)
 
 
 def _node_install(repo):
@@ -3100,52 +3198,31 @@ def _node_install(repo):
     try:
         import zipfile
         dest = _repo_dir(repo)
-        if dest.exists():
+        kp = KNOWN_PACKS.get(repo) or {}
+        resume = dest.exists() and bool(kp.get("install_py")) and not (dest / ".hub-setup-done").exists()     # 내려받기는 됐는데 부품·모델 설치가 덜 끝난 경우
+        if dest.exists() and not resume:
             raise RuntimeError("이미 설치돼 있어요. ComfyUI 를 다시 시작하면 적용돼요.")
-        J["msg"] = "내려받는 중…"
+        if not resume:
+            _node_fetch(repo, dest, J)
         tmp = ROOT / "cache" / "nodes"
         tmp.mkdir(parents=True, exist_ok=True)
-        zp = tmp / (dest.name + ".zip")
-        ref = (KNOWN_PACKS.get(repo) or {}).get("ref") or "HEAD"      # 확인해 둔 확장은 확인한 커밋 그대로 받아요
-        with urllib.request.urlopen(repo + "/archive/" + ref + ".zip", timeout=120) as r, open(zp, "wb") as f:
-            total = 0
-            while True:
-                c = r.read(1 << 20)
-                if not c:
-                    break
-                total += len(c)
-                if total > 300 << 20:
-                    raise RuntimeError("파일이 너무 커서 중단했어요.")
-                f.write(c)
-        J["msg"] = "압축 푸는 중…"
-        (COMFY / "custom_nodes").mkdir(exist_ok=True)
-        stage = tmp / (dest.name + "-x")
-        shutil.rmtree(stage, ignore_errors=True)
-        with zipfile.ZipFile(zp) as z:
-            names = z.namelist()
-            top = names[0].split("/")[0] if names else ""
-            for n in names:
-                t = (stage / n).resolve()
-                if not str(t).startswith(str(stage.resolve())):
-                    raise RuntimeError("압축 파일 경로가 올바르지 않아요.")
-            z.extractall(stage)
-        src = stage / top if top and (stage / top).is_dir() else stage
-        shutil.move(str(src), str(dest))
-        shutil.rmtree(stage, ignore_errors=True)
-        zp.unlink(missing_ok=True)
         req = dest / "requirements.txt"
         note = ""
-        if (KNOWN_PACKS.get(repo) or {}).get("install_py") and (dest / "install.py").is_file():
+        if kp.get("install_py") and (dest / "install.py").is_file():
             # 이 확장은 자기 설치 스크립트가 부품·모델(inswapper 등)을 받아요 — 확인해 둔 커밋의 스크립트만 실행해요
-            if PY.exists():
-                J["msg"] = "부품과 얼굴 교체 모델을 내려받는 중…(몇 분 걸릴 수 있어요)"
-                r = subprocess.run([str(PY), "-s", "install.py"], cwd=str(dest), capture_output=True, text=True, timeout=2400)
-                if r.returncode:
-                    note = " 다만 부품·모델 설치에 실패했어요(logs\\nodes.log 참고). 인터넷 연결을 확인하고 이 버튼을 다시 눌러 주세요."
-                    LOGS.mkdir(exist_ok=True)
-                    (LOGS / "nodes.log").write_text((r.stdout or "")[-4000:] + (r.stderr or "")[-4000:], encoding="utf-8")
-            else:
-                note = " (python_embeded 를 찾지 못해 부품 설치는 건너뛰었어요.)"
+            if not PY.exists():
+                raise RuntimeError("이미지 엔진(python_embeded)을 찾지 못해서 부품을 설치하지 못했어요.")
+            J["msg"] = "설치 준비 중…"
+            subprocess.run([str(PY), "-s", "-m", "pip", "install", "--no-warn-script-location", "importlib_metadata", "packaging", "tqdm", "setuptools<81"],
+                           cwd=HOME, capture_output=True, text=True, timeout=900)       # install.py 가 쓰는 기본 부품(내장 파이썬엔 빠져 있을 수 있어요)
+            J["msg"] = "부품과 얼굴 교체 모델을 내려받는 중…(몇 분 걸릴 수 있어요)"
+            r = subprocess.run([str(PY), "-s", "install.py"], cwd=str(dest), capture_output=True, text=True, timeout=2400)
+            LOGS.mkdir(exist_ok=True)
+            (LOGS / "nodes.log").write_text((r.stdout or "")[-6000:] + (r.stderr or "")[-6000:], encoding="utf-8")
+            if r.returncode:
+                last = [x for x in (r.stderr or r.stdout or "").strip().splitlines() if x.strip()][-1:] or [""]
+                raise RuntimeError("부품·모델 설치에 실패했어요. 이 버튼을 다시 누르면 이어서 시도해요. 원인: " + last[0][:200] + " (자세한 내용: logs\\nodes.log)")
+            (dest / ".hub-setup-done").write_text("ok", encoding="utf-8")
         elif req.is_file():
             if PY.exists():
                 J["msg"] = "필요한 파이썬 패키지 설치 중…(몇 분 걸릴 수 있어요)"
@@ -3271,6 +3348,117 @@ def restart_comfy():
     start_engines()
     _CAPS["t"] = 0
     return {"ok": True}
+
+
+# ───────────────────────── 설치한 확장·부품 관리 ─────────────────────────
+PART_CORE = {"PIL", "yaml", "einops", "scipy"}          # ComfyUI 자체가 쓰는 부품은 목록에 올리지 않아요(지우면 엔진이 멈춰요)
+PART_MODEL_SKIP = {n.split("/")[0] for n in FOLDERS} | {"configs", "vae_approx"}
+
+
+def _rm_tree(p):
+    def onerr(fn, path, _e):
+        try:
+            os.chmod(path, 0o700)
+            fn(path)
+        except OSError:
+            pass
+    shutil.rmtree(_lp(p), onerror=onerr)
+
+
+def _own_comfy():
+    return [pr for pr in procs if any("main.py" in str(a) for a in (pr.args if isinstance(pr.args, (list, tuple)) else [pr.args]))]
+
+
+def _pip_present():
+    mods = sorted(m for m in PYMODS if m not in PART_CORE)
+    if not PY.exists():
+        return []
+    try:
+        r = subprocess.run([str(PY), "-s", "-c", "import importlib.util as u,json;print(json.dumps([m for m in %r if u.find_spec(m)]))" % mods], cwd=HOME,
+                           capture_output=True, text=True, timeout=60)
+        return json.loads((r.stdout or "[]").strip().splitlines()[-1])
+    except Exception:
+        return []
+
+
+def parts_list():
+    cn = COMFY / "custom_nodes"
+    by_dir = {_repo_dir(r).name: (r, v) for r, v in KNOWN_PACKS.items()}
+    nodes = []
+    if cn.is_dir():
+        for d in sorted(cn.iterdir(), key=lambda x: x.name.lower()):
+            if not d.is_dir() or d.name.startswith((".", "__")):
+                continue
+            r, v = by_dir.get(d.name, (None, None))
+            nodes.append({"name": d.name, "title": (v or {}).get("title") or d.name, "size": dir_size(d), "known": bool(v),
+                          "incomplete": bool(r) and not _pack_done(r), "path": str(d)})
+    models = []
+    if MODELS.is_dir():
+        for d in sorted(MODELS.iterdir(), key=lambda x: x.name.lower()):
+            if d.is_dir() and d.name not in PART_MODEL_SKIP and not d.name.startswith("."):
+                models.append({"name": d.name, "size": dir_size(d), "path": str(d)})
+        seg = MODELS / "ultralytics" / "segm"
+        if seg.is_dir():
+            models.append({"name": "ultralytics/segm", "size": dir_size(seg), "path": str(seg)})
+    pips = [{"module": m, "pip": PYMODS[m]} for m in _pip_present()]
+    return {"nodes": nodes, "models": models, "pips": pips, "edge": tts.edge_ready(), "busy": bool(busy_count()), "mine": bool(_own_comfy())}
+
+
+def part_delete(p):
+    """한 번에 하나씩, 화면에서 확인을 거친 것만 지워요. 이름은 목록에 있는 것과 정확히 같아야 해요."""
+    kind, name = str(p.get("kind") or ""), str(p.get("name") or "")
+    if busy_count():
+        return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
+    if kind == "node":
+        cn = COMFY / "custom_nodes"
+        d = cn / name
+        if not name or name != Path(name).name or name.startswith((".", "__")) or not d.is_dir() or d.parent != cn:
+            return {"error": "그 확장을 찾을 수 없어요."}
+        mine = _own_comfy()
+        if not mine and alive(CUI + "/system_stats"):
+            return {"error": "ComfyUI 가 스튜디오 밖에서 켜져 있어요. ComfyUI 창을 닫은 뒤 다시 눌러 주세요(켜져 있으면 파일이 지워지지 않아요)."}
+        for pr in mine:
+            pr.terminate()
+            try:
+                pr.wait(timeout=20)
+            except Exception:
+                pr.kill()
+            procs.remove(pr)
+        try:
+            _rm_tree(d)
+        except OSError as e:
+            return {"error": f"지우지 못했어요: {e}"}
+        finally:
+            if mine:
+                start_engines()
+                _CAPS["t"] = 0
+        return {"ok": True, "left": d.exists()}
+    if kind == "model":
+        ok = {m["name"]: Path(m["path"]) for m in parts_list()["models"]}
+        d = ok.get(name)
+        if not d or not d.is_dir():
+            return {"error": "그 폴더를 찾을 수 없어요."}
+        try:
+            _rm_tree(d)
+        except OSError as e:
+            return {"error": f"지우지 못했어요: {e}"}
+        _CAPS["t"] = 0
+        return {"ok": True, "left": d.exists()}
+    if kind == "pip":
+        if name not in PYMODS or name in PART_CORE:
+            return {"error": "지울 수 있는 부품이 아니에요."}
+        r = subprocess.run([str(PY), "-s", "-m", "pip", "uninstall", "-y", PYMODS[name]], cwd=HOME, capture_output=True, text=True, timeout=300)
+        if r.returncode:
+            return {"error": "부품을 지우지 못했어요: " + ((r.stderr or r.stdout or "")[-200:])}
+        _CAPS["t"] = 0
+        return {"ok": True}
+    if kind == "edge":
+        r = subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "edge-tts"], capture_output=True, text=True, timeout=300)
+        importlib.invalidate_caches()
+        if r.returncode:
+            return {"error": "부품을 지우지 못했어요: " + ((r.stderr or r.stdout or "")[-200:])}
+        return {"ok": True}
+    return {"error": "알 수 없는 종류예요."}
 
 
 # ───────────────────────── 프로그램 다시 시작 · 위치 옮기기 ─────────────────────────
@@ -3894,7 +4082,7 @@ def save_settings(d):
         pass
 
 
-PREF_DEF = {"chat_keep_alive": "5m", "speed_boost": True}
+PREF_DEF = {"chat_keep_alive": "5m", "speed_boost": True, "ack": False}
 PREF_KEEP = ("0", "5m", "30m", "2h", "-1")
 
 
@@ -3904,6 +4092,7 @@ def prefs():
     if d.get("chat_keep_alive") in PREF_KEEP:
         out["chat_keep_alive"] = d["chat_keep_alive"]
     out["speed_boost"] = bool(d.get("speed_boost", True))
+    out["ack"] = bool(d.get("ack"))
     return out
 
 
@@ -3915,6 +4104,8 @@ def set_prefs(p):
         d["chat_keep_alive"] = p["chat_keep_alive"]
     if "speed_boost" in p:
         d["speed_boost"] = bool(p["speed_boost"])
+    if p.get("ack") is True:
+        d["ack"] = True
     save_settings(d)
     return {"ok": True, "prefs": prefs()}
 
@@ -4195,10 +4386,27 @@ def delete_item(p):
 
 
 # ───────────────────────── 저장 공간 점검 / 정리 ─────────────────────────
+def _lp(p):
+    """윈도우의 260자 경로 제한을 넘는 깊은 폴더도 읽도록 \\\\?\\ 접두를 붙여요(안 그러면 그런 파일이 조용히 빠져서 용량이 적게 나와요)."""
+    p = os.path.abspath(str(p))
+    if os.name == "nt" and not p.startswith("\\\\?\\"):
+        p = "\\\\?\\UNC\\" + p[2:] if p.startswith("\\\\") else "\\\\?\\" + p
+    return p
+
+
+def _plain(p):
+    p = str(p)
+    if p.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + p[8:]
+    return p[4:] if p.startswith("\\\\?\\") else p
+
+
 def dir_size(p, skip=()):
-    """폴더 전체 크기. 심볼릭 링크는 따라가지 않아요."""
+    """폴더 전체 크기(파일 속성의 '크기'와 같은 기준 — 디스크에서 차지하는 크기가 아니에요).
+    심볼릭 링크·정션은 따라가지 않아요(탐색기도 그래요). skip 에 든 폴더는 빼요."""
+    sk = {os.path.normcase(os.path.abspath(str(x))) for x in skip}
     total = 0
-    stack = [p]
+    stack = [_lp(p)]
     while stack:
         d = stack.pop()
         try:
@@ -4208,8 +4416,11 @@ def dir_size(p, skip=()):
                         if e.is_symlink():
                             continue
                         if e.is_dir(follow_symlinks=False):
-                            if e.path not in skip:
-                                stack.append(e.path)
+                            if os.path.normcase(_plain(e.path)) in sk:
+                                continue
+                            if getattr(e.stat(follow_symlinks=False), "st_file_attributes", 0) & 0x400:      # 정션 등 재분석 지점
+                                continue
+                            stack.append(e.path)
                         else:
                             total += e.stat(follow_symlinks=False).st_size
                     except OSError:
@@ -4233,30 +4444,69 @@ def quick_sig(f):
     return f"{fsize(f)}:{h.hexdigest()}"
 
 
+def _ext_cache_dirs():
+    """프로그램 폴더 밖에 있는 큰 캐시들의 실제 위치(환경 변수와 윈도우 기본 위치를 따라가요)."""
+    home, env = Path.home(), os.environ
+    la = Path(env["LOCALAPPDATA"]) if env.get("LOCALAPPDATA") else None
+    hf = Path(env["HF_HUB_CACHE"]) if env.get("HF_HUB_CACHE") else (Path(env["HF_HOME"]) / "hub" if env.get("HF_HOME") else home / ".cache" / "huggingface" / "hub")
+    out = [("o_default", "별도로 설치한 Ollama의 모델 폴더", home / ".ollama", "이 프로그램과 따로 설치한 Ollama가 같은 모델을 한 번 더 받아 둔 경우예요. 쓰지 않으면 직접 지워도 돼요.", None),
+           ("x_hf", "HuggingFace 모델 캐시", hf, "다른 프로그램(확장 노드 등)이 받아 둔 모델이에요. 지워도 다음에 필요할 때 다시 받아요. 로그인 정보는 지우지 않아요.", "x_hf"),
+           ("x_torch", "PyTorch 캐시", home / ".cache" / "torch", "지워도 다음에 필요할 때 다시 받아요.", "x_torch")]
+    pips = [(la / "pip" / "Cache") if la else None, home / ".cache" / "pip"]
+    for i, pp in enumerate(x for x in pips if x):
+        out.append(("x_pip" if i == 0 else "x_pip2", "pip 설치 캐시", pp, "파이썬 부품을 받을 때 쌓인 캐시예요. 지워도 안전해요.", "x_pip" if i == 0 else "x_pip2"))
+    if la:
+        out.append(("x_uv", "uv 캐시", la / "uv" / "cache", "음성 모델 환경을 만들 때 쌓인 캐시예요. 지워도 안전해요.", "x_uv"))
+    return out
+
+
+def disk_paths():
+    """항목 key → (이름, 폴더, 설명, 정리 방법, 건너뛸 폴더, 프로그램 폴더 안인지). 용량 점검과 [폴더 열기]가 같은 목록을 써요."""
+    rows = []
+    mf = [str(MODELS / d) for d in sorted(FOLDERS)]
+    for d in sorted(FOLDERS):
+        rows.append(("m_" + d, "모델: " + d, MODELS / d, "필요 없는 파일은 아래 목록이나 '설치와 모델'의 설치된 파일에서 지울 수 있어요.", None, ()))
+    rows.append(("m_other", "모델: 그 밖의 폴더 (얼굴 교체·감지 모델 등)", MODELS, "위 목록에 없는 모델 폴더예요(insightface, facerestore_models 등). 확장을 지우면 함께 정리할 수 있어요.", None, tuple(mf)))
+    rows += [("llm", "대화 모델 (Ollama)", ROOT / "models" / "llm", "쓰지 않는 대화 모델을 지우면 가장 크게 줄어요.", None, ()),
+             ("outputs", "결과물 (outputs)", OUT, "직접 만든 결과물이라 자동으로 지우지 않아요. 필요 없는 건 폴더에서 직접 지워 주세요.", None, ()),
+             ("temp", "임시 미리보기 (ComfyUI temp)", COMFY / "temp", "지워도 안전해요.", "temp", ()),
+             ("input", "임시 입력 이미지 (ComfyUI input)", COMFY / "input", "이 프로그램이 만든 hub_*.png 만 지워요.", "input", ()),
+             ("backup", "업데이트 되돌리기용 백업", ROOT / "backup", "가장 최근 1개만 남기고 지워요.", "backup", ()),
+             ("logs", "로그", LOGS, "지워도 안전해요.", "logs", ()),
+             ("cache", "작업용 캐시 (이 프로그램 폴더의 cache)", ROOT / "cache", "갤러리 미리보기, 내려받다 만 확장, 음성 임시 파일이에요. 지워도 다시 만들어져요.", "cache", ()),
+             ("tts_env", "음성 모델 환경 (TTS)", ROOT / "engine" / "tts", "음성 만들기용 모델 엔진이에요. [설치한 확장·부품 관리]에서 지울 수 있어요.", None, ()),
+             ("comfy_engine", "ComfyUI 엔진 (python_embeded)", HOME / "python_embeded", "엔진 본체라 지우면 안 돼요.", None, ()),
+             ("comfy_app", "ComfyUI 프로그램·확장 (custom_nodes 포함)", COMFY, "엔진 본체예요. 확장은 [설치한 확장·부품 관리]에서 하나씩 지울 수 있어요.", None,
+              (str(MODELS), str(COMFY / "temp"), str(COMFY / "input"), str(COMFY / "output"))),
+             ("comfy_out", "ComfyUI 자체 output 폴더", COMFY / "output", "이 프로그램은 쓰지 않는 폴더예요. 비어 있지 않다면 ComfyUI 화면을 따로 쓰고 계신 거예요.", None, ()),
+             ("ollama_eng", "Ollama 프로그램", ROOT / "engine" / "ollama", "엔진 본체라 지우면 안 돼요.", None, ())]
+    return rows
+
+
+def _under(p, root):
+    try:
+        Path(os.path.abspath(str(p))).relative_to(Path(os.path.abspath(str(root))))
+        return True
+    except ValueError:
+        return False
+
+
 def disk_report():
-    import shutil
-    items, skip_models = [], str(MODELS)
-    def add(key, label, path, note="", clean=None, skip=()):
+    items = []
+    for key, label, path, note, clean, skip in disk_paths():
         path = Path(path)
         if path.exists():
-            items.append(dict(key=key, label=label, bytes=dir_size(str(path), skip), note=note, clean=clean))
-    for d in sorted(FOLDERS):
-        add("m_" + d, "모델: " + d, MODELS / d, "필요 없는 파일은 아래 목록이나 '설치와 모델'의 설치된 파일에서 지울 수 있어요.")
-    add("llm", "대화 모델 (Ollama)", ROOT / "models" / "llm", "쓰지 않는 대화 모델을 지우면 가장 크게 줄어요.")
-    add("outputs", "결과 이미지 (outputs)", OUT, "직접 만든 결과물이라 자동으로 지우지 않아요. 필요 없는 건 폴더에서 직접 지워 주세요.")
-    add("temp", "임시 미리보기 (ComfyUI temp)", COMFY / "temp", "지워도 안전해요.", "temp")
-    add("input", "임시 입력 이미지 (ComfyUI input)", COMFY / "input", "이 프로그램이 만든 hub_*.png 만 지워요.", "input")
-    add("backup", "업데이트 되돌리기용 백업", ROOT / "backup", "가장 최근 1개만 남기고 지워요.", "backup")
-    add("logs", "로그", LOGS, "지워도 안전해요.", "logs")
-    add("comfy_engine", "ComfyUI 엔진 (python_embeded)", HOME / "python_embeded", "엔진 본체라 지우면 안 돼요.")
-    add("comfy_app", "ComfyUI 프로그램·확장", COMFY, "엔진 본체라 지우면 안 돼요.", skip=(str(MODELS), str(COMFY / "temp"), str(COMFY / "input"), str(COMFY / "output")))
-    add("comfy_out", "ComfyUI 자체 output 폴더", COMFY / "output", "이 프로그램은 쓰지 않는 폴더예요. 비어 있지 않다면 ComfyUI 화면을 따로 쓰고 계신 거예요.")
-    add("ollama_eng", "Ollama 프로그램", ROOT / "engine" / "ollama", "엔진 본체라 지우면 안 돼요.")
-    home = Path.home()
-    for k, label, pth, note in (("o_default", "별도로 설치한 Ollama의 모델 폴더 (~/.ollama)", home / ".ollama", "이 프로그램과 따로 설치한 Ollama가 같은 모델을 한 번 더 받아 둔 경우예요. 쓰지 않으면 직접 지워도 돼요."),
-                                ("hf", "HuggingFace 캐시 (~/.cache/huggingface)", home / ".cache" / "huggingface", "다른 프로그램이 받은 캐시예요. 필요 없으면 직접 지워도 돼요."),
-                                ("pip", "pip 캐시", home / ".cache" / "pip", "필요 없으면 직접 지워도 돼요.")):
-        add(k, label, pth, note)
+            items.append(dict(key=key, label=label, bytes=dir_size(path, skip), note=note, clean=clean, path=str(path), inside=_under(path, ROOT)))
+    root_total = dir_size(ROOT)
+    inside = sum(i["bytes"] for i in items if i["inside"])
+    rest = max(0, root_total - inside)
+    items.append(dict(key="rest", label="그 밖의 파일", bytes=rest, note="엔진 폴더의 나머지(설치 스크립트, 압축 파일, 설정 등)예요.", clean=None, path=str(ROOT), inside=True))
+    outside_in_root = [i for i in items if not i["inside"]]      # 프로그램 폴더 밖으로 옮겨 둔 모델 폴더 등
+    ext = []
+    for key, label, pth, note, clean in _ext_cache_dirs():
+        pth = Path(pth)
+        if pth.exists():
+            ext.append(dict(key=key, label=label, bytes=dir_size(pth), note=note, clean=clean, path=str(pth)))
     parts = [dict(dir=d, name=f.name, size=fsize(f)) for d in sorted(FOLDERS) if (MODELS / d).is_dir()
              for f in (MODELS / d).iterdir() if f.is_file() and f.suffix == ".part"]
     # 가장 큰 파일 15개 + 중복 의심 파일
@@ -4279,14 +4529,26 @@ def disk_report():
             for d, f in fs:
                 g.setdefault(quick_sig(f), []).append(dict(dir=d, name=f.name, size=sz))
             dups += [v for k, v in g.items() if k and len(v) > 1]
-    items.sort(key=lambda x: -x["bytes"])
+    items.sort(key=lambda x: (x["key"] == "rest", -x["bytes"]))
     try:
         du = shutil.disk_usage(ROOT)
         free, total = du.free, du.total
     except OSError:
         free = total = 0
-    return dict(items=items, big=big[:15], dups=dups, parts=parts, free=free, total=total,
-                used=sum(i["bytes"] for i in items if i["key"] not in ("o_default", "hf", "pip")))
+    return dict(items=items, ext=ext, big=big[:15], dups=dups, parts=parts, free=free, total=total, root=str(ROOT),
+                used=root_total, listed=sum(i["bytes"] for i in items if i["inside"]), outside=[i["key"] for i in outside_in_root],
+                ext_total=sum(i["bytes"] for i in ext))
+
+
+def disk_open(key):
+    ok = {k: p for k, _l, p, _n, _c, _s in disk_paths()}
+    ok.update({k: p for k, _l, p, _n, _c in _ext_cache_dirs()})
+    ok["rest"] = ROOT
+    p = ok.get(key)
+    if not p or not Path(p).exists():
+        return {"error": "폴더를 찾을 수 없어요."}
+    open_folder(Path(p), None)
+    return {"ok": True, "path": str(p)}
 
 
 TIDY_DAYS = 60
@@ -4371,10 +4633,31 @@ def clean_item(what):
     elif what == "backup":
         bk = ROOT / "backup"
         olds = sorted((d for d in bk.iterdir() if d.is_dir() and (d / "_restore.json").is_file()), reverse=True) if bk.is_dir() else []
-        import shutil
         for d in olds[1:]:
             freed += dir_size(str(d))
             shutil.rmtree(d, ignore_errors=True)
+    elif what == "cache":
+        if any(t.get("state") in ("running", "queued") for t in TASKS) or busy_count():
+            return {"error": "작업이 진행 중일 때는 캐시를 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
+        for sub in ("thumbs", "nodes", "tts"):
+            d = ROOT / "cache" / sub
+            for f in (d.rglob("*") if d.is_dir() else []):
+                if f.is_file():
+                    rm(f)
+        rm(ROOT / "cache" / "extension-node-map.json")
+    elif what in ("x_hf", "x_torch", "x_pip", "x_pip2", "x_uv"):
+        if any(t.get("state") in ("running", "queued") for t in TASKS) or busy_count():
+            return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
+        tgt = next((Path(p) for k, _l, p, _n, _c in _ext_cache_dirs() if k == what), None)
+        if not tgt or not tgt.is_dir():
+            return {"error": "폴더를 찾을 수 없어요."}
+        freed += dir_size(tgt)
+        for ch in list(tgt.iterdir()):
+            try:
+                shutil.rmtree(ch) if ch.is_dir() and not ch.is_symlink() else ch.unlink()
+            except OSError:
+                pass
+        freed -= dir_size(tgt)
     elif what == "parts":
         if any(t.get("state") in ("running", "queued") for t in TASKS):
             return {"error": "설치·다운로드가 진행 중일 때는 받다 만 파일을 지우지 않아요."}
@@ -4589,6 +4872,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.guard():
             return
+        CLIENT_SEEN.set()
         u = urllib.parse.urlparse(self.path).path
         if u in STATIC:
             return self.send_file(WEB / STATIC[u][0], STATIC[u][1])
@@ -4611,10 +4895,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(prefs())
         if u == "/api/tts/voices":
             return self.send_json(tts_voices())
+        if u == "/api/tts/models":
+            return self.send_json(tts_models.status(ROOT))
         if u == "/api/model-tidy":
             return self.send_json(model_tidy())
         if u == "/api/disk":
             return self.send_json(disk_report())
+        if u == "/api/parts":
+            return self.send_json(parts_list())
         if u == "/api/gallery":
             return self.send_json(gallery(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)))
         if u.startswith("/thumb/"):
@@ -4727,6 +5015,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(set_token(p.get("name"), p.get("value")))
         if u == "/api/prefs":
             return self.send_json(set_prefs(p))
+        if u == "/api/tts/model/install":
+            return self.send_json(tts_models.install(ROOT, str(p.get("id"))))
+        if u == "/api/tts/model/remove":
+            if busy_count():
+                return self.send_json({"error": "작업이 진행 중일 때는 지우지 않아요."})
+            return self.send_json(tts_models.uninstall(ROOT, str(p.get("id"))))
+        if u == "/api/tts/ref":
+            return self.send_json(tts_ref_upload(p))
         if u == "/api/tts/install":
             ok_, tail = tts.install_edge()
             if not ok_:
@@ -4779,6 +5075,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(describe_image(p))
         if u == "/api/gallery/fav":
             return self.send_json(gal_fav(p))
+        if u == "/api/parts/delete":
+            return self.send_json(part_delete(p))
+        if u == "/api/disk/open":
+            return self.send_json(disk_open(p.get("key")))
         if u == "/api/clean":
             return self.send_json(clean_item(str(p.get("what", ""))))
         if u == "/api/delete":
@@ -4877,6 +5177,9 @@ class Handler(BaseHTTPRequestHandler):
             err("대화 엔진(Ollama)에 연결할 수 없습니다. 잠시 후 다시 시도하거나 logs\\ollama.log 를 확인하세요.")
 
 
+CLIENT_SEEN = threading.Event()      # 화면(브라우저)이 한 번이라도 연결했는지
+
+
 def main():
     global GPU
     sys.stdout.reconfigure(errors="replace")
@@ -4891,7 +5194,10 @@ def main():
         sys.exit(f"포트 {PORT} 를 이미 사용 중입니다. 이미 실행 중인 스튜디오가 있는지 확인하세요.")
     url = f"http://127.0.0.1:{PORT}"
     log(f"로컬 AI 스튜디오: {url}  (종료하려면 이 창을 닫으세요)")
-    if not os.environ.get("HUB_NOBROWSER"):
+    if os.environ.get("HUB_RESTARTED"):
+        # 다시 시작했을 때는 열려 있던 화면이 스스로 새로고침해요. 8초 안에 화면이 다시 연결되지 않았을 때만 브라우저를 새로 열어요.
+        threading.Timer(8.0, lambda: None if CLIENT_SEEN.is_set() else webbrowser.open(url)).start()
+    elif not os.environ.get("HUB_NOBROWSER"):
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()

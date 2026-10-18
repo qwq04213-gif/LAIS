@@ -510,10 +510,27 @@
     <p class="hint plain">읽어 줄 글을 적고 목소리를 고르면 음성 파일(소리)이 나와요. 영상이나 설명에 목소리를 입힐 때 쓰세요.</p>
     <label class="f">읽을 글<textarea name="text" rows="9" maxlength="5000" placeholder="예: 안녕하세요, 오늘은 로컬 AI 스튜디오를 소개해 드릴게요."></textarea></label>
     <p class="hint plain note"><span id="tt-count">0</span> / 5000자</p>
-    <label class="f">만드는 방법<select name="engine" id="tt-engine"><option value="sapi">윈도우 내장 음성 (내 PC 안에서만, 인터넷 불필요)</option><option value="edge">Edge 읽어 주기 (더 자연스러움, 글이 마이크로소프트 서버로 전송돼요)</option></select></label>
+    <label class="f">만드는 방법<select name="engine" id="tt-engine">
+      <optgroup label="간단하게 (모델 설치 없이)"><option value="sapi">윈도우 내장 음성 (내 PC 안에서만, 인터넷 불필요)</option><option value="edge">Edge 읽어 주기 (더 자연스러움, 글이 마이크로소프트 서버로 전송돼요)</option></optgroup>
+      <optgroup label="AI 음성 모델 (설치 필요, 내 PC 안에서만 동작)"><option value="xtts">XTTS-v2 — 한국어 포함 17개 언어, 목소리 따라 하기</option><option value="chatterbox">Chatterbox 다국어 — 한국어 포함 23개 언어</option><option value="kokoro">Kokoro — 영어, 가볍고 빠름</option></optgroup>
+    </select></label>
+    <div id="tt-model" class="ttmodel" hidden>
+      <p class="hint plain" id="tt-mdesc"></p>
+      <p class="mute" id="tt-minfo"></p>
+      <div id="tt-minst"><label class="chk" id="tt-lic-row" hidden><input type="checkbox" name="license_ok" id="tt-lic"> <span>이 모델의 사용 조건(<a id="tt-lic-a" href="#" target="_blank" rel="noopener">CPML</a>)을 확인했고, 비상업 용도로만 써요.</span></label>
+        <div class="actions"><button type="button" class="ghost" id="tt-minstall">이 모델 설치</button><button type="button" class="ghost" id="tt-mremove" hidden>이 모델 지우기</button></div>
+        <p class="mute" id="tt-mst"></p></div>
+      <div id="tt-mopts" hidden>
+        <label class="f">언어<select name="language" id="tt-lang"></select></label>
+        <label class="f" id="tt-spk-row">목소리<select name="speaker" id="tt-spk"></select></label>
+        <label class="f" id="tt-emo-row">감정<select name="emotion"><option value="calm">차분하게</option><option value="normal" selected>보통</option><option value="rich">풍부하게</option></select></label>
+        <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><input type="file" id="tt-ref-file" accept=".wav,audio/wav"><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
+          <label class="chk" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok"> <span>이 목소리의 주인은 본인이거나 사용을 허락했어요. 다른 사람을 속이거나 흉내 내는 데 쓰지 않아요.</span></label></div>
+      </div>
+    </div>
     <p class="warn" id="tt-edge-warn" hidden>Edge 읽어 주기 부품이 아직 없어요. <button type="button" class="ghost sm" id="tt-install">부품 설치</button> <span class="mute" id="tt-inst-st"></span></p>
     <p class="warn" id="tt-sapi-warn" hidden></p>
-    <label class="f">목소리<select name="voice" id="tt-voice"></select></label>
+    <label class="f" id="tt-voice-row">목소리<select name="voice" id="tt-voice"></select></label>
     <div class="row">
       <label class="f">속도<select name="speed"><option value="-4">많이 느리게</option><option value="-2">조금 느리게</option><option value="0" selected>보통</option><option value="2">조금 빠르게</option><option value="4">많이 빠르게</option></select></label>
       <label class="f">음량<select name="volume"><option value="100" selected>보통</option><option value="70">작게</option><option value="40">아주 작게</option></select></label>
@@ -840,6 +857,11 @@
     <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button> <button type="button" class="ghost" id="tidy-scan" title="받다 만 파일, 같은 파일이 두 곳에 있는 경우, 오래된 큰 모델을 찾아 줘요">정리할 모델 찾기</button><span class="mute" id="disk-st"></span></div>
     <div id="tidy"></div>
     <div id="disk"></div>
+  </details>
+  <details class="fold" id="fold-parts"><summary>설치한 확장·부품 관리</summary>
+    <p class="hint plain">기능을 쓰려고 따로 받은 ComfyUI 확장, 확장이 내려받은 모델 폴더, 파이썬 부품을 하나씩 지울 수 있어요. 지우면 그 확장을 쓰는 기능은 다시 설치하기 전까지 안 돼요. 자동으로 지우지 않고, 누를 때마다 확인을 한 번 더 물어봐요. (AI 음성 모델은 [음성 만들기] 탭에서 지워요.)</p>
+    <div class="diskbar"><button type="button" class="ghost" id="parts-scan">목록 불러오기</button><span class="mute" id="parts-st"></span></div>
+    <div id="parts"></div>
   </details>
   <details class="fold" id="fold-manage"><summary>설치된 모델</summary>
     <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>

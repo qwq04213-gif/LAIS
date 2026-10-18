@@ -1089,7 +1089,7 @@ async function nodeHelp(missing,box){
   box=box||$('#nodelist');if(!box)return;
   let r;try{r=await api('/api/nodes/sources',{missing})}catch{box.textContent='목록을 불러오지 못했어요.';return}
   if(r.error){box.textContent=r.error;return}
-  const rows=r.repos.map(x=>`<div class="nrow" data-repo="${esc(x.repo)}"><div><b>${esc(x.title)}</b> <span class="mute">(${x.nodes.map(esc).join(', ')})</span><br><a href="${esc(x.repo)}" target="_blank" rel="noopener">${esc(x.repo)}</a><div class="nst mute"></div></div>${x.installed?'<span class="badge">설치됨</span>':'<button type="button" class="ghost ninst">설치</button>'}</div>`).join('');
+  const rows=r.repos.map(x=>`<div class="nrow" data-repo="${esc(x.repo)}"><div><b>${esc(x.title)}</b> <span class="mute">(${x.nodes.map(esc).join(', ')})</span><br><a href="${esc(x.repo)}" target="_blank" rel="noopener">${esc(x.repo)}</a><div class="nst mute"></div></div>${x.installed?'<span class="badge">설치됨</span>':`<button type="button" class="ghost ninst">${x.incomplete?'이어서 설치':'설치'}</button>`}</div>`).join('');
   box.className='';box.innerHTML=(rows||'<p class="mute">설치할 곳을 찾지 못했어요.</p>')+(r.unknown.length?`<p class="mute">찾지 못한 노드: ${r.unknown.map(esc).join(', ')} — ComfyUI 화면의 Manager에서 검색해 보세요.</p>`:'')+
     (r.repos.length?'<div class="actions"><button type="button" class="ghost node-restart'+(box.id==='nodelist'?'" id="node-restart':'')+'">이미지 엔진 다시 시작</button><span class="mute">설치한 노드는 엔진을 다시 시작해야 적용돼요. 그 뒤 [분석]을 다시 눌러 확인하세요.</span></div>':'');
 }
@@ -1250,15 +1250,23 @@ async function loadManage(){
 }
 /* ── 저장 공간 점검 ── */
 async function diskScan(){
-  const st=$('#disk-st');st.textContent='폴더를 훑는 중이에요… (몇 초 걸려요)';$('#disk-scan').disabled=true;
+  const st=$('#disk-st');st.textContent='폴더를 훑는 중이에요… (몇 초에서 1분쯤 걸려요)';$('#disk-scan').disabled=true;
   let r;try{r=await api('/api/disk')}catch{st.textContent='확인하지 못했어요.';$('#disk-scan').disabled=false;return}
   $('#disk-scan').disabled=false;st.textContent='';
-  const tot=r.used||1,gb=fmtSize,CL={temp:'임시 미리보기 지우기',input:'임시 입력 이미지 지우기',backup:'오래된 백업 지우기',logs:'로그 줄이기'};
-  const rows=r.items.filter(i=>i.bytes>1e6||i.clean).map(i=>`<tr><td>${esc(i.key.startsWith('m_')?'모델: '+(DIRN[i.key.slice(2)]||i.key.slice(2)):i.label)}<small class="mute">${esc(i.note||'')}</small></td><td class="num">${gb(i.bytes)}</td><td class="bar"><i style="width:${Math.max(1,Math.round(i.bytes/tot*100))}%"></i></td><td>${i.clean?`<button type="button" class="ghost cl" data-w="${i.clean}">${CL[i.clean]}</button>`:''}</td></tr>`).join('');
+  const gb=fmtSize,CL={temp:'임시 미리보기 지우기',input:'임시 입력 이미지 지우기',backup:'오래된 백업 지우기',logs:'로그 줄이기',cache:'작업용 캐시 지우기',x_hf:'캐시 지우기',x_torch:'캐시 지우기',x_pip:'캐시 지우기',x_pip2:'캐시 지우기',x_uv:'캐시 지우기'};
+  const inside=r.items.filter(i=>i.inside),tot=r.used||1,big1=inside.filter(i=>i.bytes>=1e6||i.clean||i.key==='rest'),small=inside.filter(i=>!(i.bytes>=1e6||i.clean||i.key==='rest'));
+  const nm=i=>i.key.startsWith('m_')&&DIRN[i.key.slice(2)]?'모델: '+DIRN[i.key.slice(2)]:i.label;
+  const row=i=>`<tr><td>${esc(nm(i))}<small class="mute">${esc(i.note||'')}</small><small class="path"><code>${esc(i.path)}</code></small></td><td class="num">${gb(i.bytes)}</td><td class="bar"><i style="width:${Math.max(1,Math.round(i.bytes/tot*100))}%"></i></td><td class="act"><button type="button" class="ghost sm op" data-k="${esc(i.key)}">폴더 열기</button>${i.clean?` <button type="button" class="ghost sm cl" data-w="${i.clean}"${i.key.startsWith('x_')?' data-ext="1"':''}>${CL[i.clean]}</button>`:''}</td></tr>`;
+  const smallRow=small.length?`<tr><td>작은 항목 ${small.length}개 <small class="mute">${esc(small.map(nm).join(', '))}</small></td><td class="num">${gb(small.reduce((a,i)=>a+i.bytes,0))}</td><td></td><td></td></tr>`:'';
+  const ext=(r.ext||[]).map(row).join(''),outs=r.items.filter(i=>!i.inside).map(row).join('');
   const big=r.big.map(f=>`<tr><td>${esc(DIRN[f.dir]||f.dir)} / ${esc(f.name)}</td><td class="num">${gb(f.size)}</td><td></td><td><button type="button" class="ghost del" data-kind="file" data-dir="${esc(f.dir)}" data-name="${esc(f.name)}">삭제</button></td></tr>`).join('');
   const dup=r.dups.map(g=>`<li>${g.map(f=>`${esc(DIRN[f.dir]||f.dir)} / <b>${esc(f.name)}</b>`).join(' = ')} <small class="mute">(${gb(g[0].size)}씩)</small></li>`).join('');
-  $('#disk').innerHTML=`<p class="diskhead">디스크 여유 <b>${gb(r.free)}</b> / 전체 ${gb(r.total)} · 이 프로그램이 쓰는 용량 <b>${gb(r.used)}</b></p>
-   <table class="disktb"><tbody>${rows}</tbody></table>
+  $('#disk').innerHTML=`<p class="diskhead">디스크 여유 <b>${gb(r.free)}</b> / 전체 ${gb(r.total)}</p>
+   <p class="diskhead">이 프로그램 폴더 <b>${gb(r.used)}</b> <small class="mute">— 아래 표의 합계와 같아요. 윈도우 파일 속성의 '크기'와 같은 기준이고, '디스크 할당 크기'는 조금 더 커요.</small></p>
+   <p class="path"><code>${esc(r.root)}</code> <button type="button" class="ghost sm op" data-k="rest">폴더 열기</button></p>
+   <table class="disktb"><tbody>${big1.map(row).join('')}${smallRow}<tr class="total"><td><b>합계</b></td><td class="num"><b>${gb(r.listed)}</b></td><td></td><td></td></tr></tbody></table>
+   ${outs?`<h4>프로그램 폴더 밖에 있는 모델 폴더</h4><table class="disktb"><tbody>${outs}</tbody></table>`:''}
+   ${ext?`<h4>프로그램 폴더 밖의 캐시 <small class="mute">합계 ${gb(r.ext_total)} · 위 합계에는 들어 있지 않아요</small></h4><p class="hint plain">다른 프로그램이나 파이썬이 컴퓨터 곳곳에 만들어 둔 캐시예요. 폴더가 안 보이면 [폴더 열기]를 누르세요(숨김·점(.)으로 시작하는 폴더는 윈도우 검색에 안 나와요).</p><table class="disktb"><tbody>${ext}</tbody></table>`:''}
    ${r.parts.length?`<p class="warn">받다 만 파일이 ${r.parts.length}개(${gb(r.parts.reduce((a,f)=>a+f.size,0))}) 있어요. <button type="button" class="ghost cl" data-w="parts">받다 만 파일 지우기</button></p>`:''}
    ${dup?`<h4>같은 내용으로 보이는 파일 (둘 중 하나만 있어도 돼요)</h4><ul class="duplist">${dup}</ul>`:''}
    <h4>용량이 큰 모델 파일 순서</h4><table class="disktb"><tbody>${big}</tbody></table>`;
@@ -1277,7 +1285,8 @@ $('#tidy').onclick=async e=>{if(e.target.id!=='tidy-go')return;const ck=[...$$('
   e.target.disabled=true;let ok=0,bad=0;for(const f of ck){const r=await api('/api/delete',{kind:'file',dir:f.dir,name:f.name});r.error?bad++:ok++}
   toast(`${ok}개를 지웠어요.`+(bad?` (${bad}개는 다른 프로그램이 쓰고 있어서 못 지웠어요)`:''));$('#tidy-scan').click();diskScan();loadManage();loadLists(true)};
 $('#disk').onclick=async e=>{
-  const c=e.target.closest('.cl');if(c){c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
+  const op=e.target.closest('.op');if(op){const r=await api('/api/disk/open',{key:op.dataset.k});toast(r.error||'폴더를 열었어요: '+r.path,5000);return}
+  const c=e.target.closest('.cl');if(c){if(c.dataset.ext&&!confirm('이 캐시를 모두 지울까요?\n다른 프로그램이 다시 받아야 할 수 있어서 처음 쓸 때 시간이 걸려요. 되돌릴 수 없어요.'))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
   const b=e.target.closest('.del');if(!b)return;
   if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;
   const r=await api('/api/delete',{kind:b.dataset.kind,dir:b.dataset.dir,name:b.dataset.name});
@@ -1392,9 +1401,12 @@ let dlBusy=false;
   restoreForms();
 })();
 if(!localStorage.ack){
-  const d=$('#ack');d.showModal();d.oncancel=e=>e.preventDefault();
-  $('#ackc').onchange=e=>{$('#ackb').disabled=!e.target.checked};
-  $('#ackb').onclick=()=>{localStorage.ack='1'};
+  /* 동의 기록은 브라우저가 아니라 이 컴퓨터(settings.json)에도 남겨요 — 다시 시작하면서 다른 브라우저가 열려도 또 묻지 않아요 */
+  (async()=>{let done=false;try{done=!!(await api('/api/prefs')).ack}catch{}
+   if(done){try{localStorage.ack='1'}catch{}return}
+   const d=$('#ack');d.showModal();d.oncancel=e=>e.preventDefault();
+   $('#ackc').onchange=e=>{$('#ackb').disabled=!e.target.checked};
+   $('#ackb').onclick=()=>{try{localStorage.ack='1'}catch{}api('/api/prefs',{ack:true}).catch(()=>{})}})();
 }
 
 /* ══════════ 프롬프트 보관함 · 와일드카드 · 이미지→프롬프트 ══════════ */
@@ -1926,21 +1938,62 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
 }
 
 /* ══════════ 음성 만들기 ══════════ */
-(()=>{const f=$('#f-tts');if(!f)return;let V=null;
- const save=()=>ls.set('form:f-tts',formVals(f)),vsel=$('#tt-voice');
- const fill=()=>{if(!V)return;const e=f.elements.engine.value==='edge';
+(()=>{const f=$('#f-tts');if(!f)return;let V=null,M=[],poll=null;
+ const save=()=>ls.set('form:f-tts',formVals(f,['ref','license_ok','clone_ok'])),vsel=$('#tt-voice'),eng=()=>f.elements.engine.value,isM=()=>['xtts','chatterbox','kokoro'].includes(eng());
+ const mi=()=>M.find(x=>x.id===eng());
+ const fillMain=()=>{if(!V)return;const e=eng()==='edge';
   vsel.innerHTML=(e?V.edge.map(x=>`<option value="${esc(x.name)}">${esc(x.label)}</option>`):V.sapi.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} (${esc(x.culture)})</option>`)).join('')||'<option value="">(없음)</option>';
   const sv=ls.get('tts:voice:'+(e?'edge':'sapi'),'');if(sv&&[...vsel.options].some(x=>x.value===sv))vsel.value=sv;
   $('#tt-edge-warn').hidden=!e||V.edge_ok;
-  const sw=$('#tt-sapi-warn');sw.hidden=e||V.sapi_ok;sw.textContent=!V.windows?'윈도우 내장 음성은 윈도우에서만 쓸 수 있어요. Edge 읽어 주기를 골라 주세요.':'설치된 윈도우 음성을 찾지 못했어요. 윈도우 설정 > 시간 및 언어 > 음성 에서 한국어 음성을 추가해 보세요.';
-  $('#tt-pitch-row').hidden=!e};
- const load=async()=>{try{V=await api('/api/tts/voices')}catch{return}fill()};
- const o=ls.get('form:f-tts',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e||k==='voice')continue;e.value=v}
- f.elements.engine.onchange=()=>{fill();save()};
- vsel.onchange=()=>ls.set('tts:voice:'+f.elements.engine.value,vsel.value);
+  const sw=$('#tt-sapi-warn');sw.hidden=e||eng()!=='sapi'||V.sapi_ok;sw.textContent=!V.windows?'윈도우 내장 음성은 윈도우에서만 쓸 수 있어요. 다른 방법을 골라 주세요.':'설치된 윈도우 음성을 찾지 못했어요. 윈도우 설정 > 시간 및 언어 > 음성 에서 한국어 음성을 추가해 보세요.'};
+ const fillModel=()=>{const m=mi();if(!isM()||!m)return;
+  $('#tt-mdesc').textContent=m.desc;$('#tt-minfo').textContent=`용량: ${m.size} · 라이선스: ${m.license}`;
+  $('#tt-lic-row').hidden=!m.need_license||!!m.installed&&false;if(m.license_url)$('#tt-lic-a').href=m.license_url;
+  const run_=m.state==='running';$('#tt-minstall').hidden=m.installed;$('#tt-minstall').disabled=run_;$('#tt-minstall').textContent=m.partial?'이어서 설치':'이 모델 설치';
+  $('#tt-mremove').hidden=!m.installed;$('#tt-mst').textContent=run_||m.state==='error'||m.state==='done'?m.msg:(m.partial?'설치가 덜 끝났어요. 같은 버튼으로 이어서 해요.':'');
+  $('#tt-mopts').hidden=!m.installed;
+  $('#tt-lang').innerHTML=m.langs.map(l=>`<option value="${esc(l.code)}">${esc(l.name)}</option>`).join('');const lv=ls.get('tts:lang:'+m.id,'');if(lv&&[...$('#tt-lang').options].some(o=>o.value===lv))$('#tt-lang').value=lv;
+  $('#tt-spk-row').hidden=!m.has_speakers;$('#tt-spk').innerHTML=(m.speakers.length?m.speakers:['Claribel Dervla']).map(s=>`<option>${esc(s)}</option>`).join('');const sv=ls.get('tts:spk:'+m.id,'');if(sv&&[...$('#tt-spk').options].some(o=>o.value===sv))$('#tt-spk').value=sv;
+  $('#tt-emo-row').hidden=m.id!=='chatterbox';$('#tt-clone-row').hidden=!m.clone;
+  if(run_&&!poll)poll=setInterval(loadModels,2500);if(!run_&&poll){clearInterval(poll);poll=null}};
+ const sync=()=>{const m=isM();$('#tt-model').hidden=!m;$('#tt-voice-row').hidden=m;$('#tt-pitch-row').hidden=eng()!=='edge';$('#tt-edge-warn').hidden=eng()!=='edge'||!V||V.edge_ok;if(!m)$('#tt-sapi-warn').hidden=eng()!=='sapi'||!V||V.sapi_ok;else{$('#tt-sapi-warn').hidden=true;$('#tt-edge-warn').hidden=true;fillModel()}};
+ const loadModels=async()=>{try{M=await api('/api/tts/models')}catch{return}fillModel()};
+ const load=async()=>{try{V=await api('/api/tts/voices')}catch{}await loadModels();fillMain();sync()};
+ const o=ls.get('form:f-tts',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e||['voice','speaker','language'].includes(k))continue;e.value=v}
+ f.elements.engine.onchange=()=>{fillMain();sync();save()};
+ vsel.onchange=()=>ls.set('tts:voice:'+eng(),vsel.value);
+ $('#tt-lang').onchange=e=>ls.set('tts:lang:'+eng(),e.target.value);$('#tt-spk').onchange=e=>ls.set('tts:spk:'+eng(),e.target.value);
  const cnt=()=>{$('#tt-count').textContent=f.elements.text.value.length};
  f.addEventListener('input',()=>{cnt();debounce(save,400)()});f.addEventListener('change',save);cnt();
  $('#tt-install').onclick=async()=>{const b=$('#tt-install'),st=$('#tt-inst-st');b.disabled=true;st.textContent='설치하는 중…(1분쯤 걸려요)';
   try{const r=await api('/api/tts/install',{});st.textContent=r.ok?'설치했어요.':(r.error||'실패했어요.');if(r.ok)await load()}catch{st.textContent='실패했어요.'}b.disabled=false};
- f.onsubmit=e=>{e.preventDefault();if(!f.elements.text.value.trim())return setBar($('#v-tts'),'읽을 글을 적어 주세요.','bad');save();run('tts',f)};
+ $('#tt-minstall').onclick=async()=>{const m=mi();if(!m)return;
+  if(!confirm(`${m.title}\n\n받는 용량: ${m.size}\n라이선스: ${m.license}\n설치에 10~30분이 걸릴 수 있어요(인터넷 속도에 따라). 이 모델 전용 공간(engine\\tts)에만 설치되고 ComfyUI에는 영향이 없어요.\n\n설치할까요?`))return;
+  const r=await api('/api/tts/model/install',{id:m.id});if(r.error){$('#tt-mst').textContent=r.error;return}await loadModels();if(!poll)poll=setInterval(loadModels,2500)};
+ $('#tt-mremove').onclick=async()=>{const m=mi();if(!m)return;if(!confirm(`'${m.title.split(' — ')[0]}' 모델과 그 전용 환경을 컴퓨터에서 지울까요?\n받은 모델 파일도 함께 지워지고, 다시 쓰려면 새로 설치해야 해요.`))return;
+  const r=await api('/api/tts/model/remove',{id:m.id});toast(r.error||'지웠어요.');await loadModels()};
+ $('#tt-ref-file').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;const st=$('#tt-mst');
+  const rd=new FileReader();rd.onload=async()=>{try{const r=await api('/api/tts/ref',{data:rd.result});if(r.error){toast(r.error,6000);e.target.value='';return}$('#tt-ref').value=r.id;$('#tt-ref-clear').hidden=false;$('#tt-clone-ok-row').hidden=false;toast('목소리 샘플을 올렸어요.')}catch{toast('올리지 못했어요.')}};rd.readAsDataURL(fl)};
+ $('#tt-ref-clear').onclick=()=>{$('#tt-ref').value='';$('#tt-ref-file').value='';$('#tt-ref-clear').hidden=true;$('#tt-clone-ok-row').hidden=true;f.elements.clone_ok.checked=false};
+ f.onsubmit=e=>{e.preventDefault();if(!f.elements.text.value.trim())return setBar($('#v-tts'),'읽을 글을 적어 주세요.','bad');
+  if(isM()){const m=mi();if(!m||!m.installed)return setBar($('#v-tts'),'먼저 위의 [이 모델 설치]를 눌러 주세요.','bad');
+   if(m.need_license&&!f.elements.license_ok.checked)return setBar($('#v-tts'),'모델 사용 조건 확인 칸에 체크해 주세요.','bad');
+   if($('#tt-ref').value&&!f.elements.clone_ok.checked)return setBar($('#v-tts'),'목소리 샘플 사용 확인 칸에 체크해 주세요.','bad')}
+  save();run('tts',f)};
  document.querySelector('#rail nav button[data-v="tts"]').addEventListener('click',load);load()})();
+
+/* ── 설치한 확장·부품 관리 ── */
+async function partsScan(){const st=$('#parts-st'),P=$('#parts');st.textContent='불러오는 중이에요…';let r;try{r=await api('/api/parts')}catch{st.textContent='불러오지 못했어요.';return}st.textContent='';
+  const row=(kind,name,title,sub,btn)=>`<li><div><b>${esc(title)}</b><small class="mute">${sub}</small></div><button type="button" class="ghost pdel" data-kind="${kind}" data-name="${esc(name)}" data-title="${esc(title)}">${btn||'지우기'}</button></li>`;
+  const sec=(t,items,empty)=>`<h4>${t}</h4>`+(items.length?`<ul class="partlist">${items.join('')}</ul>`:`<p class="hint plain">${empty}</p>`);
+  P.innerHTML=(r.busy?'<p class="hint plain">지금 작업이 진행 중이라 끝난 뒤에 지울 수 있어요.</p>':'')+
+   sec('ComfyUI 확장(custom_nodes)',r.nodes.map(n=>row('node',n.name,n.title,`${fmtSize(n.size)} · 폴더 ${esc(n.name)}`+(n.incomplete?' · 설치가 덜 끝났어요':''))),'설치한 확장이 없어요.')+
+   sec('확장이 내려받은 모델 폴더',r.models.map(m=>row('model',m.name,m.name,`${fmtSize(m.size)} · 얼굴 교체·감지 등 확장이 쓰는 모델`)),'따로 내려받은 모델 폴더가 없어요.')+
+   sec('파이썬 부품(ComfyUI 안)',r.pips.map(p=>row('pip',p.module,p.pip,'다른 확장이 쓰고 있을 수 있어요. 지운 뒤 오류가 나면 화면의 [설치] 안내로 다시 받을 수 있어요.')),'따로 설치한 부품이 없어요.')+
+   sec('음성 읽기 부품',r.edge?[row('edge','edge-tts','edge-tts','Edge 목소리로 읽어 주는 데 쓰는 부품')]:[],'설치돼 있지 않아요.')+
+   (r.nodes.length&&!r.mine?'<p class="hint plain">ComfyUI 가 스튜디오 밖에서 켜져 있으면 확장을 지울 수 없어요(그 창을 닫고 눌러 주세요).</p>':'')}
+$('#parts-scan').onclick=partsScan;
+$('#parts').onclick=async e=>{const b=e.target.closest('.pdel');if(!b)return;const k=b.dataset.kind,t=b.dataset.title;
+  const msg={node:`확장 '${t}' 을(를) 지울까요?\nComfyUI 가 잠깐 다시 시작돼요. 이 확장을 쓰는 기능은 다시 설치하기 전까지 안 돼요. 되돌릴 수 없어요.`,model:`모델 폴더 '${t}' 을(를) 통째로 지울까요?\n그 안의 파일을 쓰는 확장은 다시 내려받아야 해요. 되돌릴 수 없어요.`,pip:`파이썬 부품 '${t}' 을(를) 지울까요?\n이 부품을 쓰는 확장이 있으면 오류가 날 수 있어요.`,edge:`음성 읽기 부품 '${t}' 을(를) 지울까요?\nEdge 목소리는 다시 [부품 설치]를 눌러야 써요.`}[k];
+  if(!confirm(msg))return;b.disabled=true;b.textContent='지우는 중…';
+  const r=await api('/api/parts/delete',{kind:k,name:b.dataset.name});toast(r.error||(r.left?'일부 파일이 남았어요(다른 프로그램이 쓰는 중일 수 있어요).':'지웠어요.'),5000);partsScan();diskScan();loadLists(true)};
