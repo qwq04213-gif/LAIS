@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
-<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190))}catch(e){}</script>
+<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','left')}catch(e){}</script>
 <script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}try{var z=parseFloat(localStorage.getItem('ui:scale'));if(z>=0.8&&z<=1.6)document.documentElement.style.setProperty('--ui',z)}catch(e){}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
@@ -890,6 +890,8 @@
 </div>
 <div class="card"><h3>시작과 목록</h3>
 <div class="row"><div class="rl"><b>시작할 때 열 화면</b><span>스튜디오를 열 때 맨 처음 보이는 화면이에요.</span></div><div class="rc"><select id="opt-home"><option value="">대화 (기본)</option><option value="start">시작하기</option><option value="gen">이미지 생성</option><option value="edit">이미지 편집</option><option value="vid">영상 만들기</option><option value="music">음악 만들기</option><option value="gal">기록 갤러리</option><option value="feat">기능 모음</option></select></div></div>
+<div class="row"><div class="rl"><b>생성 결과 그림 크기</b><span>이미지 생성·편집 화면에서 결과 그림이 보이는 크기예요. 누르면 크게 볼 수 있어요.</span></div><div class="rc"><select id="opt-ressz"><option value="300">작게</option><option value="420">보통</option><option value="640">크게</option><option value="900">아주 크게</option></select></div></div>
+<div class="row"><div class="rl"><b>작업 대기열 위치</b><span>화면에 떠 있는 작업 대기열 버튼과 목록이 놓이는 쪽이에요.</span></div><div class="rc"><select id="opt-qpos"><option value="left">왼쪽</option><option value="right">오른쪽</option></select></div></div>
 <div class="row"><div class="rl"><b>갤러리 미리보기 크기</b><span>기록 갤러리의 그림 크기예요.</span></div><div class="rc"><select id="opt-galsz"><option value="150">작게</option><option value="190">보통</option><option value="250">크게</option><option value="340">아주 크게</option></select></div></div>
 </div></div>
   <div class="cpane" id="fold-input"><div class="card"><h3>프롬프트 입력</h3>
@@ -938,10 +940,13 @@
 </section>
 </main>
 
+<button id="qfloat" type="button" class="qfloat" aria-haspopup="dialog" title="작업 대기열 — 스크롤해도 항상 떠 있어요. 누르면 목록을 열고 닫아요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span id="qftext">작업 대기열</span><em id="qfcount" hidden>0</em><i class="qfbar" id="qfbar" hidden></i></button>
 <div id="qpanel" hidden role="dialog" aria-label="작업 대기열">
   <div class="qh"><b>작업 대기열</b><button type="button" class="qx" aria-label="닫기">×</button></div>
   <div id="qlist"><p class="mute">불러오는 중…</p></div>
+  <p class="mute qhint">작업을 누르면 그 작업을 만든 화면으로 이동해요.</p>
   <div class="qn">
+    <label class="chk"><input type="checkbox" id="q-pin"> 📌 작업이 있으면 목록을 화면에 계속 띄워 두기(스크롤해도 따라와요)</label>
     <label class="chk"><input type="checkbox" id="q-sound"> 🔔 작업이 끝나면 소리로 알려주기</label>
     <label class="chk"><input type="checkbox" id="q-desk"> 🖥 다른 창을 보는 중이면 바탕화면 알림도 받기</label>
     <button type="button" class="ghost sm" id="q-test">알림 시험해 보기</button>

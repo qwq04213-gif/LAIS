@@ -1154,6 +1154,7 @@ const fieldHTML=f=>{
   const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'';
   if(f.type==='image')return `<div class="f"><span>${esc(f.label)}${req}</span><div class="mini" data-img="${n}"></div>${hint}</div>`;
   if(f.type==='textarea')return `<label class="f"><span>${esc(f.label)}${req}</span><textarea name="${n}" rows="${f.rows||3}"></textarea>${hint}</label>`;
+  if(f.type==='lora')return `<div class="f"><span>${esc(f.label)}</span>${T.lora()}${hint}</div>`;
   if(f.type==='check')return `<label class="chk consent"><input type="checkbox" name="${n}"> <span>${esc(f.label)}</span></label>`;
   if(f.type==='text')return `<label class="f">${esc(f.label)}<input name="${n}" value="${esc(f.default??'')}">${hint}</label>`;
   if(f.type==='number')return `<label class="f">${esc(f.label)}<input type="number" name="${n}" value="${esc(f.default??'')}" min="${f.min??''}" max="${f.max??''}" step="${f.step??1}">${hint}</label>`;
@@ -1185,6 +1186,7 @@ function featForm(id,keep){
   $$('#feat-form .mini[data-img]').forEach(b=>{mini(b);if(keepImgs[b.dataset.img])b.set(keepImgs[b.dataset.img])});
   {const fl=$('#feat-form .fn-list');if(fl)nodeHelp(f.missing_nodes,fl)}
   if($('#swapm'))swapPanel();
+  {const lb=$('#feat-form .loras');if(lb){if(keep&&Object.keys(keepVals).some(k=>/^lora\d+$/.test(k)))setLoras($('#f-feat'),keepVals);else addLora(lb)}}
   if(keep)for(const [k,v] of Object.entries(keepVals)){const el=$('#f-feat').elements[k];if(el&&el.type!=='file'&&v!=='')el.value=v}
 }
 $('#feat-pick').onclick=e=>{const b=e.target.closest('.fcard');if(b)featForm(b.dataset.f)};
@@ -1632,7 +1634,9 @@ $('#bk-go').onclick=async()=>{if(!BK)return;const mode=$('input[name=bkmode]:che
 /* ══════════ 작업 대기열 · 완료 알림 ══════════ */
 const QST={running:'진행 중',queued:'대기',done:'완료',error:'실패',cancelled:'중단'};
 const qSound=()=>ls.get('q:sound',true),qDesk=()=>ls.get('q:desk',false);
-let QSEEN=new Map(),QINIT=false,QLAST=null;
+let QSEEN=new Map(),QINIT=false,QLAST=null,QUSER=null;     // QUSER: 사용자가 직접 연 'open' / 닫은 'closed' / 아직 안 건드림 null
+const qPin=()=>ls.get('q:pin',true);
+const QVIEW={gen:'gen',edit:'edit',up:'up',wf:'wf',feat:'feat',vid:'vid',vpost:'vid',music:'music',tts:'tts',batch:'batch'};
 function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
   try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=window.QCTX||(window.QCTX=new A());if(c.state==='suspended')c.resume();
     [[880,0],[1175,.16]].forEach(([f,t])=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);
@@ -1644,18 +1648,31 @@ function qRender(q){const L=$('#qlist');if(!L)return;
   if(!q.items.length){L.innerHTML='<p class="mute">지금 진행 중이거나 기다리는 작업이 없어요.</p>';return}
   L.innerHTML=q.items.map(r=>{const act=r.state==='running'||r.state==='queued',pc=typeof r.progress==='number'&&r.state==='running'?Math.round(r.progress*100):null,
     ic={running:'▶',queued:r.pos+'',done:'✔',error:'⚠',cancelled:'■'}[r.state];
-    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
+    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}" data-view="${esc(QVIEW[r.kind]||'')}" data-feature="${esc(r.feature||'')}" title="누르면 이 작업의 화면으로 이동해요"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
     <div class="qb">${r.state==='queued'?`<button type="button" data-q="top" title="맨 앞으로">⤒</button><button type="button" data-q="up" title="한 칸 앞으로">▲</button><button type="button" data-q="down" title="한 칸 뒤로">▼</button>`:''}${act?`<button type="button" data-q="cancel" title="${r.state==='running'?'중단':'대기열에서 빼기'}">✕</button>`:''}</div></div>`}).join('')}
 async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
   const n=q.running+q.queued,c=$('#qcount');c.hidden=!n;c.textContent=n;$('#qbtn').classList.toggle('busy',n>0);
+  {const run=q.items.find(r=>r.state==='running'),pc=run&&typeof run.progress==='number'?Math.round(run.progress*100):null,F=$('#qfloat');
+   F.classList.toggle('busy',n>0);$('#qftext').textContent=run?`${run.label}${pc!==null?' · '+pc+'%':''}`:n?`대기 ${q.queued}개`:'작업 대기열';
+   $('#qfcount').hidden=n<2;$('#qfcount').textContent=n;$('#qfbar').hidden=pc===null;$('#qfbar').style.width=(pc||0)+'%'}
   for(const r of q.items){const was=QSEEN.get(r.id);
     if(QINIT&&(r.state==='done'||r.state==='error')&&was!=='done'&&was!=='error')qNotify(r);
+    if(was===undefined&&(r.state==='running'||r.state==='queued'))QUSER=null;     // 새 작업이 생기면 직접 닫아 둔 것도 다시 보여 줘요
     QSEEN.set(r.id,r.state)}
-  QINIT=true;if(!$('#qpanel').hidden)qRender(q)}
-$('#qbtn').onclick=()=>{const p=$('#qpanel');p.hidden=!p.hidden;if(!p.hidden){$('#q-sound').checked=qSound();$('#q-desk').checked=qDesk();if(QLAST)qRender(QLAST);qPoll()}};
-$('#qpanel .qx').onclick=()=>{$('#qpanel').hidden=true};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#qpanel').hidden)$('#qpanel').hidden=true});
-$('#qlist').addEventListener('click',async e=>{const b=e.target.closest('[data-q]');if(!b)return;const id=b.closest('.qrow').dataset.id;
+  QINIT=true;qApply(q)}
+function qApply(q){const p=$('#qpanel');if(!p)return;q=q||QLAST;
+  const want=QUSER==='open'?true:QUSER==='closed'?false:!!(qPin()&&q&&q.items.some(r=>r.state==='running'||r.state==='queued'));
+  const was=!p.hidden;p.hidden=!want;p.classList.toggle('pinned',qPin());
+  if(want){$('#q-sound').checked=qSound();$('#q-desk').checked=qDesk();$('#q-pin').checked=qPin();if(q)qRender(q)}
+  $('#qfloat').classList.toggle('open',want)}
+const qToggle=()=>{QUSER=$('#qpanel').hidden?'open':'closed';qApply();if(QUSER==='open')qPoll()};
+$('#qbtn').onclick=qToggle;$('#qfloat').onclick=qToggle;
+$('#qpanel .qx').onclick=()=>{QUSER='closed';qApply()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#qpanel').hidden){QUSER='closed';qApply()}});
+$('#q-pin').onchange=e=>{ls.set('q:pin',e.target.checked);QUSER=e.target.checked?null:'open';qApply()};
+$('#qlist').addEventListener('click',async e=>{const row=e.target.closest('.qrow');
+  if(row&&!e.target.closest('[data-q]')){const v=row.dataset.view;if(v){show(v);if(v==='feat'&&row.dataset.feature&&typeof featForm==='function')setTimeout(()=>featForm(row.dataset.feature,true),400);if(!qPin()){QUSER='closed';qApply()}}return}
+  const b=e.target.closest('[data-q]');if(!b)return;const id=b.closest('.qrow').dataset.id;
   try{const r=b.dataset.q==='cancel'?await api('/api/job/cancel',{id}):await api('/api/queue/move',{id,to:b.dataset.q});if(r.error)toast(r.error)}catch{}qPoll()});
 $('#q-sound').onchange=e=>{ls.set('q:sound',e.target.checked);if(e.target.checked)qBeep()};
 $('#q-desk').onchange=async e=>{if(!e.target.checked){ls.set('q:desk',false);return}
@@ -1913,6 +1930,8 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
   el.onchange=()=>{const v=isNaN(+el.value)||el.value===''?el.value:+el.value;ls.set(key,v);fn&&fn(v)}};
  pick('opt-chatfs','opt:chatfs',1,v=>D.style.setProperty('--chatfs',v));
  pick('opt-galsz','opt:galsz',190,v=>D.style.setProperty('--galmin',v));
+ pick('opt-ressz','opt:ressz',420,v=>D.style.setProperty('--resh',v));
+ pick('opt-qpos','opt:qpos','left',v=>{D.dataset.qpos=v});
  pick('opt-home','opt:home','');
  /* 강조 색 */
  {const cur=ls.get('opt:accent','');$$('#accent-pick input').forEach(i=>{i.checked=i.value===cur});
@@ -2003,6 +2022,8 @@ $('#parts').onclick=async e=>{const b=e.target.closest('.pdel');if(!b)return;con
 /* ── 얼굴 교체 모델(inswapper) 상태·받기 ── */
 let swapT=null;
 async function swapPanel(){const box=$('#swapm');clearTimeout(swapT);if(!box)return;let r;try{r=await api('/api/faceswap/model')}catch{return}
+  if((r.deps_missing||[]).length){box.className='swapm warn';box.innerHTML=`<b>얼굴 교체에 필요한 파이썬 부품이 빠져 있어요:</b> ${r.deps_missing.map(d=>esc(d.pip)).join(', ')}. 설치한 뒤 [이미지 엔진 다시 시작]을 눌러야 적용돼요. ${r.deps_missing.map(()=>'<div class="dep"></div>').join('')}`;
+    r.deps_missing.forEach((d,i)=>pymodHelp($$('.dep',box)[i],d));return}
   if(r.state==='running'){box.className='swapm warn';box.innerHTML=`<b>얼굴 교체 모델 받는 중</b> <span class="mute">${esc(r.msg)}</span>`;swapT=setTimeout(swapPanel,2000);return}
   if(r.listed){box.className='swapm';box.innerHTML='';return}
   const err=r.state==='error'?`<div class="mute">${esc(r.msg)}</div>`:'';
@@ -2014,15 +2035,16 @@ async function swapPanel(){const box=$('#swapm');clearTimeout(swapT);if(!box)ret
 /* ── 바깥 캐시를 프로그램 폴더 안으로 ── */
 let cacheT=null;
 async function cachePanel(){const box=$('#cachein');clearTimeout(cacheT);if(!box)return;let r;try{r=await api('/api/cachein')}catch{return}
+  if(window.CACHE_RUN&&r.state!=='running'){window.CACHE_RUN=false;diskScan()}      // 옮기기가 끝나면 용량 표도 새로 읽어요
   const run=r.state==='running',tot=r.items.reduce((a,i)=>a+i.src_size,0);
   const rows=r.items.filter(i=>i.src_size).map(i=>`<li><b>${esc(i.label)}</b> <small class="mute">${fmtSize(i.src_size)} · 지금: <code>${esc(i.src)}</code></small></li>`).join('');
   box.innerHTML=`<h4>바깥 캐시를 프로그램 폴더 안으로 모으기 ${r.on?'<small class="mute">켜져 있어요</small>':''}</h4>
-   <p class="hint plain">HuggingFace·PyTorch·pip 캐시는 보통 <code>C:\\Users\\내이름\\.cache</code> 같은 곳에 쌓여요. 켜면 이 프로그램이 띄우는 ComfyUI·부품 설치가 <code>${esc(r.root)}</code> 안에 쌓고, 이미 있는 파일은 옮겨 줘요(복사가 맞는지 확인한 뒤 원래 폴더를 지워요). 프로그램 폴더를 옮기면 같이 따라가요. 직접 따로 실행하는 프로그램은 예전 위치를 계속 써요. ※ 실제 PC 확인 전이에요(미검증).</p>
+   <p class="hint plain">HuggingFace·PyTorch·pip 캐시는 보통 <code>C:\\Users\\내이름\\.cache</code> 같은 곳에 쌓여요. 켜면 이 프로그램이 띄우는 ComfyUI·부품 설치가 <code>${esc(r.root)}</code> 안에 쌓고, 이미 있는 파일은 옮겨 줘요(복사가 맞는지 확인한 뒤 원래 폴더를 지워요). 프로그램 폴더를 옮기면 같이 따라가요. 직접 따로 실행하는 프로그램은 예전 위치를 계속 써요.</p>
    ${tot?`<ul class="partlist cachelist">${rows}</ul>`:''}
    <div class="diskbar">${run?`<span class="mute">${esc(r.msg)}</span>`:`<button type="button" class="ghost" id="cache-move"${tot?'':' disabled'}>${tot?`지금 있는 캐시 ${fmtSize(tot)} 옮기고 켜기`:'옮길 캐시가 없어요'}</button>
      <button type="button" class="ghost" id="cache-tog">${r.on?'끄기(원래 위치로 되돌리기)':'옮기지 않고 앞으로만 켜기'}</button>`}</div>
    ${r.state==='done'||r.state==='error'?`<p class="${r.state==='error'?'warn':'hint plain'}">${esc(r.msg)}</p>`:''}`;
-  if(run){cacheT=setTimeout(cachePanel,2000);return}
+  if(run){window.CACHE_RUN=true;cacheT=setTimeout(cachePanel,2000);return}
   const mv=$('#cache-move');if(mv)mv.onclick=async()=>{if(!confirm(`위 캐시 ${fmtSize(tot)} 를 프로그램 폴더 안으로 옮길까요?\n복사가 끝나고 크기가 맞으면 원래 폴더를 지워요. 몇 분 걸릴 수 있고, 끝난 뒤 프로그램을 다시 시작해야 적용돼요.`))return;
     const x=await api('/api/cachein/move',{});if(x.error)return toast(x.error,6000);cachePanel()};
   const tg=$('#cache-tog');if(tg)tg.onclick=async()=>{const x=await api('/api/cachein',{on:!r.on});toast(x.error||'바꿨어요. 적용하려면 프로그램을 다시 시작해 주세요.',6000);cachePanel();diskScan()}}

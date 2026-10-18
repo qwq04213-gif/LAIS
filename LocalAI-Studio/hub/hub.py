@@ -1104,10 +1104,19 @@ def feat_regional(p, J):
             raise ValueError(BLOCK_MSG)
     boxes = {"lr": [(0, 0, .5, 1), (.5, 0, .5, 1)], "tb": [(0, 0, 1, .5), (0, .5, 1, .5)],
              "lcr": [(0, 0, 1 / 3, 1), (1 / 3, 0, 1 / 3, 1), (2 / 3, 0, 1 / 3, 1)]}[layout]
+    tags = []        # 칸마다 적은 <lora:이름:강도> 태그도 읽어서(그림 전체에) 적용해요. 칸 글에는 태그가 남지 않게 지워요.
+
+    def grab(m):
+        tags.append((m.group(1).strip(), float(m.group(2) or 1)))
+        return ""
+    texts = [re.sub(r"[ \t]{2,}", " ", LORA_TAG.sub(grab, t)).strip(" ,\n") for t in texts]
+    if not all(texts[:n]):
+        raise ValueError(f"{n}개 칸에 그릴 내용을 적어 주세요(LoRA 태그만 있으면 안 돼요).")
     regs = [dict(text=t, x=b[0], y=b[1], w=b[2], h=b[3]) for t, b in zip(texts[:n], boxes)]
     rng = random.Random(num(p, "seed", -1, int))
     p2 = dict(p, prompt=(p.get("common") or "").strip() or "best quality")
-    q = sd(p2, *prep(p2, J, "tags", rng), J)
+    ctext, ctags = prep(p2, J, "tags", rng)
+    q = sd(p2, ctext, ctags + tags, J)
     w, h = _dim8(p.get("w") or 1216, 512, 2048), _dim8(p.get("h") or 832, 512, 2048)
     J["msg"] = "칸을 나눠 그리는 중"
     g = flows.wf_regional(q, regs, w, h)
@@ -1309,7 +1318,8 @@ def swap_status():
         listed = bool(combo_opts("ReActorFaceSwap", "swap_model"))
     except Exception:
         listed = False
-    return {"file": have, "listed": listed, "size": f.stat().st_size if have else 0, "state": SWAP_JOB["state"], "msg": SWAP_JOB["msg"],
+    deps = [{"module": m, "pip": REACTOR_MODS[m]} for m in mods_missing(REACTOR_MODS)] if _repo_dir(REACTOR_REPO).is_dir() else []
+    return {"deps_missing": deps, "file": have, "listed": listed, "size": f.stat().st_size if have else 0, "state": SWAP_JOB["state"], "msg": SWAP_JOB["msg"],
             "pack": _pack_done(REACTOR_REPO), "path": str(f)}
 
 
@@ -1370,6 +1380,11 @@ def feat_faceswap(p, J):
         raise ValueError("얼굴 교체는 아래 [확인] 칸에 체크해야 쓸 수 있어요. 본인이거나 허락받은 사람, 또는 성인 가상 인물의 사진만 쓰세요.")
     if not p.get("image") or not p.get("source"):
         raise ValueError("얼굴을 바꿀 사진과, 가져올 얼굴 사진을 둘 다 올려 주세요.")
+    if mods_missing(REACTOR_MODS):      # 설치 때 pip 가 조용히 실패한 부품(예: onnx)이 있으면 지금 채워 넣어요
+        J["msg"] = "빠진 부품을 설치하는 중…(처음 한 번, 몇 분 걸릴 수 있어요)"
+        bad = ensure_mods(REACTOR_MODS, J)
+        if bad:
+            raise RuntimeError("얼굴 교체에 필요한 파이썬 부품을 설치하지 못했어요 — " + " / ".join(f"{p}: {e}" for p, e in bad)[:400] + " (자세한 내용: logs\\nodes.log). 인터넷 연결을 확인하고 다시 시도해 주세요.")
     swaps = combo_opts("ReActorFaceSwap", "swap_model")
     if not swaps:
         if swap_file().is_file() and swap_file().stat().st_size >= SWAP_MIN:
@@ -2431,7 +2446,7 @@ def queue_move(p):
 def _qrow(J, pos=0):
     return {"id": J["id"], "kind": J.get("kind"), "label": J.get("label") or "작업", "state": J["state"], "pos": pos,
             "msg": J.get("msg", ""), "progress": J.get("progress"), "error": str(J.get("error") or "")[:200],
-            "images": len(J.get("images") or []), "t_end": J.get("t_end")}
+            "images": len(J.get("images") or []), "t_end": J.get("t_end"), "feature": J.get("feature") or ""}
 
 
 def queue_view():
@@ -3267,6 +3282,40 @@ def _node_fetch(repo, dest, J):
     zp.unlink(missing_ok=True)
 
 
+# ReActor 가 실행 중에 불러오는 파이썬 부품(자체 설치 스크립트가 조용히 실패해도 여기서 확인하고 다시 설치해요)
+REACTOR_MODS = {"onnx": "onnx", "onnxruntime": "onnxruntime", "cv2": "opencv-python-headless", "scipy": "scipy", "segment_anything": "segment_anything",
+                "albumentations": "albumentations", "colour": "colour-science", "ultralytics": "ultralytics"}
+
+
+def mods_missing(mods):
+    """내장 파이썬에서 불러올 수 없는 모듈 이름 목록."""
+    if not PY.exists():
+        return []
+    try:
+        r = subprocess.run([str(PY), "-s", "-c", "import importlib.util as u,json;print(json.dumps([m for m in %r if u.find_spec(m) is None]))" % sorted(mods)], cwd=HOME,
+                           capture_output=True, text=True, timeout=60)
+        return json.loads((r.stdout or "[]").strip().splitlines()[-1])
+    except Exception:
+        return []
+
+
+def ensure_mods(mods, J=None):
+    """빠진 부품을 하나씩 설치하고, 끝까지 안 되는 것은 (이름, 마지막 오류 줄)로 돌려줘요."""
+    bad = []
+    for m in mods_missing(mods):
+        pip = mods[m]
+        if J is not None:
+            J["msg"] = f"{pip} 설치 중…"
+        rc, out, note = pip_install_one(pip)
+        LOGS.mkdir(exist_ok=True)
+        with open(LOGS / "nodes.log", "a", encoding="utf-8") as f:
+            f.write(f"\n[부품 확인] {pip} → 종료 코드 {rc}\n" + out[-3000:])
+        if rc or m in mods_missing({m: pip}):
+            last = [x for x in out.strip().splitlines() if x.strip()][-1:] or [""]
+            bad.append((pip, note or last[0][:160]))
+    return bad
+
+
 def _node_install(repo):
     J = NODE_JOBS[repo]
     try:
@@ -3296,6 +3345,10 @@ def _node_install(repo):
             if r.returncode:
                 last = [x for x in (r.stderr or r.stdout or "").strip().splitlines() if x.strip()][-1:] or [""]
                 raise RuntimeError("부품·모델 설치에 실패했어요. 이 버튼을 다시 누르면 이어서 시도해요. 원인: " + last[0][:200] + " (자세한 내용: logs\\nodes.log)")
+            if repo == REACTOR_REPO:
+                bad = ensure_mods(REACTOR_MODS, J)
+                if bad:
+                    raise RuntimeError("필요한 부품을 설치하지 못했어요: " + ", ".join(f"{p}({e})" for p, e in bad) + ". 이 버튼을 다시 누르면 이어서 시도해요. (자세한 내용: logs\\nodes.log)")
             (dest / ".hub-setup-done").write_text("ok", encoding="utf-8")
         elif req.is_file():
             if PY.exists():
@@ -3321,7 +3374,8 @@ def _node_install(repo):
 PYMODS = {"matplotlib": "matplotlib", "scipy": "scipy", "cv2": "opencv-python-headless", "skimage": "scikit-image", "sklearn": "scikit-learn",
           "yaml": "pyyaml", "PIL": "pillow", "einops": "einops", "timm": "timm", "addict": "addict", "yapf": "yapf", "mediapipe": "mediapipe",
           "onnxruntime": "onnxruntime", "ultralytics": "ultralytics", "trimesh": "trimesh", "omegaconf": "omegaconf", "fvcore": "fvcore",
-          "svglib": "svglib", "reportlab": "reportlab", "numba": "numba"}
+          "svglib": "svglib", "reportlab": "reportlab", "numba": "numba",
+          "onnx": "onnx", "albumentations": "albumentations", "segment_anything": "segment_anything", "colour": "colour-science"}
 PYMOD_JOBS = {}
 
 
@@ -3363,19 +3417,65 @@ def pymod_missing(msg):
     return {"module": m.group(1), "pip": PYMODS[m.group(1)]} if m and m.group(1) in PYMODS else None
 
 
+LOCK_PAT = re.compile(r"WinError 5|WinError 32|액세스가 거부|Access is denied|being used by another process|다른 프로세스가 사용", re.I)
+
+
+def _pip_cmds(pipname):
+    """설치 명령 묶음. albumentations 는 opencv-python-headless 를 끌어와서 이미 쓰는 cv2 파일을 덮어쓰려다 막히므로(WinError 5),
+    cv2 가 이미 있으면 opencv 는 건드리지 않고 필요한 나머지만 설치해요."""
+    base = [str(PY), "-s", "-m", "pip", "install"]
+    if pipname == "albumentations" and not mods_missing({"cv2": "x"}):
+        return [base + ["pydantic", "stringzilla", "simsimd", "--no-warn-script-location"], base + ["--no-deps", "albumentations", "albucore", "--no-warn-script-location"]]
+    return [base + [pipname, "--no-warn-script-location"]]
+
+
+def pip_install_one(pipname, timeout=1500):
+    """부품 하나를 설치해요. 돌려주는 값: (종료 코드, 출력 합친 글, 안내문). 파일이 잠겨서 막히면 스튜디오가 켠 ComfyUI 를 잠시 끄고 한 번 더 해 봐요."""
+    def go():
+        out, rc = "", 0
+        for cmd in _pip_cmds(pipname):
+            r = subprocess.run(cmd, cwd=HOME, capture_output=True, text=True, timeout=timeout)
+            out += (r.stdout or "")[-3000:] + (r.stderr or "")[-3000:]
+            rc = r.returncode
+            if rc:
+                break
+        return rc, out
+    rc, out = go()
+    note = ""
+    if rc and LOCK_PAT.search(out):
+        mine = _own_comfy()
+        if mine:
+            for pr in mine:
+                pr.terminate()
+                try:
+                    pr.wait(timeout=20)
+                except Exception:
+                    pr.kill()
+                procs.remove(pr)
+            try:
+                rc, out = go()
+            finally:
+                start_engines()
+                _CAPS["t"] = 0
+            if not rc:
+                note = " (ComfyUI 를 잠시 껐다 켰어요)"
+        elif rc:
+            note = "ComfyUI 가 스튜디오 밖에서 켜져 있어서 파일을 바꿀 수 없어요. ComfyUI 창을 닫은 뒤 다시 눌러 주세요."
+    return rc, out, note
+
+
 def pymod_run(mod):
     J = PYMOD_JOBS[mod]
     try:
         if not PY.exists():
             raise RuntimeError("python_embeded 를 찾지 못했어요. ComfyUI 포터블이 설치돼 있는지 확인해 주세요.")
         J["msg"] = f"{PYMODS[mod]} 설치 중…(1~3분 걸릴 수 있어요)"
-        r = subprocess.run([str(PY), "-s", "-m", "pip", "install", PYMODS[mod], "--no-warn-script-location"], cwd=HOME,
-                           capture_output=True, text=True, timeout=1500)
-        if r.returncode:
+        rc, out, note = pip_install_one(PYMODS[mod])
+        if rc:
             LOGS.mkdir(exist_ok=True)
-            (LOGS / "pymod.log").write_text((r.stdout or "")[-4000:] + (r.stderr or "")[-4000:], encoding="utf-8")
-            raise RuntimeError("설치에 실패했어요(인터넷 연결을 확인해 주세요. 자세한 내용은 logs\\pymod.log).")
-        J["state"], J["msg"] = "done", "설치했어요. 같은 작업을 다시 해 보세요. (그래도 안 되면 [이미지 엔진 다시 시작])"
+            (LOGS / "pymod.log").write_text(out[-8000:], encoding="utf-8")
+            raise RuntimeError(note or "설치에 실패했어요(인터넷 연결을 확인해 주세요. 자세한 내용은 logs\\pymod.log).")
+        J["state"], J["msg"] = "done", "설치했어요." + note + " 같은 작업을 다시 해 보세요. (그래도 안 되면 [이미지 엔진 다시 시작])"
     except Exception as e:  # noqa: BLE001
         J["state"], J["msg"] = "error", str(e) or e.__class__.__name__
         log("[파이썬 부품 설치 오류]", repr(e))
@@ -4521,7 +4621,9 @@ def quick_sig(f):
 # ───────────────────────── 바깥 캐시를 프로그램 폴더 안으로 ─────────────────────────
 CACHE_IN = ROOT / "engine" / "cache"
 CACHE_ENV = ("HF_HUB_CACHE", "TORCH_HOME", "PIP_CACHE_DIR")
-ORIG_ENV = {k: os.environ.get(k) for k in CACHE_ENV + ("HF_HOME",)}     # 스튜디오가 바꾸기 전 값
+_OURS = {"HF_HUB_CACHE": str(CACHE_IN / "huggingface" / "hub"), "TORCH_HOME": str(CACHE_IN / "torch"), "PIP_CACHE_DIR": str(CACHE_IN / "pip")}
+# 스튜디오가 바꾸기 전 값. 다시 시작하면 이전 스튜디오가 정한 값이 환경에 그대로 넘어오므로, 우리 위치와 같으면 '원래 없던 것'으로 봐요
+ORIG_ENV = {k: (None if os.environ.get(k) == _OURS.get(k) else os.environ.get(k)) for k in CACHE_ENV + ("HF_HOME",)}
 CACHE_JOB = {"state": "", "msg": ""}
 
 
@@ -4675,8 +4777,12 @@ def disk_report():
     ext = []
     for key, label, pth, note, clean in _ext_cache_dirs():
         pth = Path(pth)
+        if _under(pth, ROOT):           # 프로그램 폴더 안은 위 표에 이미 들어 있어요(두 번 세지 않아요)
+            continue
         if pth.exists():
-            ext.append(dict(key=key, label=label, bytes=dir_size(pth), note=note, clean=clean, path=str(pth)))
+            sz = dir_size(pth)
+            if sz or key == "o_default":        # 옮기거나 지워서 빈 폴더만 남은 캐시는 목록에서 빼요
+                ext.append(dict(key=key, label=label, bytes=sz, note=note, clean=clean, path=str(pth)))
     parts = [dict(dir=d, name=f.name, size=fsize(f)) for d in sorted(FOLDERS) if (MODELS / d).is_dir()
              for f in (MODELS / d).iterdir() if f.is_file() and f.suffix == ".part"]
     # 가장 큰 파일 15개 + 중복 의심 파일
@@ -5180,6 +5286,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"error": "처리할 이미지가 없어요. (png · jpg · webp · bmp)"})
             J = {"id": uuid.uuid4().hex[:10], "state": "queued", "msg": "대기 중", "elapsed": 0, "images": [], "tmp": []}
             JOBS[J["id"]] = J
+            J["feature"] = str(p.get("feature") or "")[:40]
             enqueue(J, p)
             return self.send_json({"id": J["id"]})
         if u == "/api/install":

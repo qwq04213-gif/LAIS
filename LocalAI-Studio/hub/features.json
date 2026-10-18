@@ -191,6 +191,12 @@
     "label": "체크포인트"
    },
    {
+    "name": "loras",
+    "type": "lora",
+    "label": "LoRA (선택)",
+    "hint": "칸에 <lora:이름:0.8> 태그를 적어도 돼요. LoRA는 그림 전체에 적용돼요(칸별로 따로 걸 수는 없어요)."
+   },
+   {
     "name": "w",
     "type": "number",
     "label": "가로 (px)",

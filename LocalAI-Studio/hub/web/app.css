@@ -110,8 +110,8 @@ div[data-for]{display:grid;gap:14px}
 .batch details{border:0;padding:0}.batch summary{margin:0;font-size:calc(12.5px*var(--ui,1))}
 .batch pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:calc(12.5px*var(--ui,1));color:var(--mute)}
 figure{margin:0;display:grid;gap:6px;justify-items:start}
-#v-edit .res figure img,#v-up .res figure img{max-height:200px}
-figure img{max-width:100%;max-height:420px;border-radius:4px;border:1px solid var(--line);cursor:zoom-in}
+#v-edit .res figure img,#v-up .res figure img{max-height:calc(var(--resh,420)*.48px)}
+figure img{max-width:100%;max-height:calc(var(--resh,420)*1px);border-radius:4px;border:1px solid var(--line);cursor:zoom-in}
 figcaption{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:calc(13px*var(--ui,1))}
 figcaption button,figcaption a{background:none;border:0;color:var(--acc);cursor:pointer;padding:0;font-size:calc(13px*var(--ui,1))}
 
@@ -361,14 +361,14 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 /* 작업 대기열 */
 .qbtn{display:flex;align-items:center;gap:10px;background:none;border:0;border-radius:8px;padding:9px 12px;color:var(--mute);cursor:pointer;text-align:left;position:relative}.qbtn:hover{color:var(--tx)}
 .qbtn #qcount{font-style:normal;background:var(--acc);color:#10131a;border-radius:10px;font-size:calc(11px*var(--ui,1));font-weight:700;padding:0 7px;margin-left:auto}.qbtn.busy .ico{stroke:var(--acc)}
-#qpanel{position:fixed;left:calc(228px*var(--ui,1));bottom:16px;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:var(--raised);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);z-index:90;padding:12px 14px}
+#qpanel{position:fixed;right:16px;bottom:64px;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:var(--raised);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);z-index:90;padding:12px 14px}
 #qpanel[hidden]{display:none}.qh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.qx{background:none;border:0;color:var(--mute);font-size:calc(20px*var(--ui,1));cursor:pointer;line-height:1}
 .qrow{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.qrow:first-child{border-top:0}.qs{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:calc(12px*var(--ui,1));background:var(--chrome);flex:none}
 .qm{min-width:0;flex:1}.qm b{display:block;font-weight:600;font-size:calc(13.5px*var(--ui,1));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qm small{color:var(--mute);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qm progress{width:100%;height:5px;margin-top:3px}
 .qb{display:flex;gap:2px}.qb button{background:none;border:1px solid var(--line);border-radius:6px;color:var(--tx);cursor:pointer;padding:1px 7px;font-size:calc(12px*var(--ui,1))}.qb button:hover{background:var(--chrome)}
 .s-running .qs{background:var(--acc);color:#10131a}.s-done .qs{color:#4cc38a}.s-error .qs{color:#e5736a}.s-done,.s-cancelled,.s-error{opacity:.75}
 .qn{display:grid;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:calc(13px*var(--ui,1))}
-@media(max-width:860px){#qpanel{left:16px;bottom:16px}.qbtn span{display:none}.qbtn{padding:8px 10px}}
+@media(max-width:860px){#qpanel{left:16px;right:16px;bottom:64px;width:auto}.qbtn span{display:none}.qbtn{padding:8px 10px}}
 
 .galgrid.sel .gt{cursor:pointer}.galgrid .gt.picked{outline:3px solid var(--acc);outline-offset:-3px}.galgrid.sel .gt img{pointer-events:none}.gb2 button[data-del]:hover{color:#e5736a}
 
@@ -481,3 +481,16 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 .swapm:empty{display:none}.swapm{margin:10px 0}.swapm button{margin-left:8px}
 
 .cachein{margin:12px 0}.cachelist li{display:block}.cachelist code,.cachein code{word-break:break-all}
+
+.qfloat{position:fixed;right:16px;bottom:16px;z-index:91;display:flex;align-items:center;gap:8px;max-width:min(320px,calc(100vw - 32px));background:var(--raised);color:var(--tx);border:1px solid var(--line);border-radius:999px;padding:9px 14px;box-shadow:0 6px 24px rgba(0,0,0,.4);cursor:pointer;font-size:calc(13px*var(--ui,1));overflow:hidden}
+.qfloat:hover{background:var(--chrome)}.qfloat .ico{flex:none}.qfloat span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.qfloat em{font-style:normal;flex:none;background:var(--acc);color:#10131a;border-radius:10px;font-size:calc(11px*var(--ui,1));font-weight:700;padding:0 7px}
+.qfloat.busy{border-color:var(--acc)}.qfloat.busy .ico{stroke:var(--acc)}
+.qfloat .qfbar{position:absolute;left:0;bottom:0;height:3px;background:var(--acc);width:0;transition:width .4s}
+.qrow[data-view]{cursor:pointer}.qrow[data-view]:hover .qm b{text-decoration:underline}.qhint{font-size:calc(12px*var(--ui,1));margin:8px 0 0}
+
+#qpanel.pinned{max-height:46vh;width:min(360px,calc(100vw - 32px));bottom:64px}.qfloat.open{background:var(--chrome)}
+body:has(#lb:not([hidden])) .qfloat,body:has(#lb:not([hidden])) #qpanel,body:has(#restarting:not([hidden])) .qfloat,body:has(#restarting:not([hidden])) #qpanel{display:none}
+
+html[data-qpos=left] .qfloat,html[data-qpos=left] #qpanel{right:auto;left:calc(208px*var(--ui,1) + 16px)}
+@media(max-width:860px){html[data-qpos=left] .qfloat,html[data-qpos=left] #qpanel{left:16px}}
