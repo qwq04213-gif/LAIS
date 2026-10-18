@@ -14,9 +14,10 @@ const IV={},COMPARE={};
 const FB_S=['euler','euler_ancestral','dpmpp_2m','dpmpp_2m_sde','dpmpp_3m_sde','uni_pc','heun','lms'];
 const FB_C=['normal','karras','simple','sgm_uniform','exponential','beta'];
 /* FLUX 계열 기본값: FLUX/Krea는 가이던스 방식(CFG 1), Chroma는 일반 CFG와 beta 스케줄러 */
-const FX_DEF={flux:{fx_steps:20,fx_guidance:3.5,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
-              chroma:{fx_steps:26,fx_guidance:0,fx_cfg:4,fx_sampler:'euler',fx_scheduler:'beta'},
-              krea2:{fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'}};   // Krea 2 Turbo 기준(8단계, CFG 1)
+const FX_DEF={sdxl:{rdenoise:0.3},flux:{rdenoise:0.3,fx_steps:20,fx_guidance:3.5,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
+              chroma:{rdenoise:0.3,fx_steps:26,fx_guidance:0,fx_cfg:4,fx_sampler:'euler',fx_scheduler:'beta'},
+              krea2:{rdenoise:0.3,fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
+              qwen:{rdenoise:0.45}};   // Krea 2 Turbo 기준(8단계, CFG 1)
 const LORA_NOTE='프롬프트에 &lt;lora:이름:0.8&gt; 태그를 쓰면 설치된 LoRA 중 이름이 맞는 파일을 자동으로 찾아 적용해요. 개수 제한은 없어요.';
 
 /* ══════════ 공통 폼 블록 (여러 화면에서 같은 고급 설정을 재사용) ══════════ */
@@ -31,9 +32,11 @@ const T={
  lora:()=>`<div class="loras"></div><div class="lora-acts"><button type="button" class="ghost lora-add">+ LoRA 추가</button><button type="button" class="link" data-open="loras">LoRA 폴더 열기</button></div><p class="hint">${LORA_NOTE}</p>`,
 };
 T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
-  <select name="rengine"><option value="sdxl">SD·SDXL 체크포인트 (일러스트 · 실사 SDXL 모두)</option><option value="flux">FLUX · Krea(FLUX.1)</option><option value="krea2">Krea 2</option><option value="chroma">Chroma</option></select></label>
+  <select name="rengine"><option value="sdxl">SD·SDXL 체크포인트 (일러스트 · 실사 SDXL 모두)</option><option value="flux">FLUX · Krea(FLUX.1)</option><option value="krea2">Krea 2</option><option value="chroma">Chroma</option><option value="qwen">Qwen-Image-Edit (이미지 편집에 쓰는 모델)</option></select></label>
  <label class="f">프롬프트 (선택)<textarea name="prompt" rows="3" placeholder="비워 두면 일반적인 고화질 지시만 써요"></textarea></label>
- <label class="f">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 프로필 기본값을 써요"></textarea></label>
+ <label class="f re-noq">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 프로필 기본값을 써요"></textarea></label>
+ <div class="re-q"><p class="hint plain">Qwen-Image-Edit 이 각 조각을 지시문대로 다시 그려요. 프롬프트는 <b>더 선명하고 자연스러운 질감으로</b>처럼 문장으로 적고, 비워 두면 '구도·얼굴은 그대로 두고 선명하게' 지시를 써요. 변화 강도는 0.3~0.5가 무난해요.</p>
+  <label class="chk"><input type="checkbox" name="fast"> 빠른 모드 (Lightning 4단계 LoRA가 설치되어 있을 때)</label></div>
  <div class="re-fx">
   <label class="f">모델 파일<select name="fx_model"></select></label>
   <div class="row"><label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
@@ -45,18 +48,48 @@ T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
  <div class="row"><label class="f">변화 강도<input type="number" name="rdenoise" value="0.3" step="0.05" min="0.05" max="0.8"></label><label class="f">타일 크기(px)<select name="tile"><option>768</option><option selected>1024</option><option>1280</option></select></label></div>
  <label class="f">타일 겹침(px)<input type="number" name="overlap" value="128" min="32" max="512"></label>
  <details class="re-sd"><summary>샘플링 (고급)</summary>${T.sdSampling()}</details>
+ <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
  <details><summary>LoRA</summary>${T.lora()}</details>
  <details><summary>프롬프트 옵션</summary>
   <label class="chk"><input type="checkbox" name="translate" checked> 한국어 프롬프트를 영어로 자동 번역</label>
-  <label class="chk"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label>
-  <label class="f">시드 (-1은 무작위)<input type="number" name="seed" value="-1"></label></details>`;
+  <label class="chk"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label></details>`;
 $$('[data-blk]').forEach(e=>{e.innerHTML=T[e.dataset.blk.replace(/-(\w)/g,(_,c)=>c.toUpperCase())]()});
 
 /* ══════════ LoRA 줄 (개수 제한 없이 추가/삭제) ══════════ */
+const LFAM={sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image-Edit',unknown:'판별 불가'};
+/* 지금 이 폼이 쓰려는 모델의 계열 (LoRA 가 맞는지 비교하는 기준) */
+function formFam(f){
+  const e=f?.elements||{};
+  if(e.engine&&e.engine.value==='flux'&&e.fengine)return e.fengine.value;
+  const eng=(e.gengine&&e.gengine.value)||(e.rengine&&e.rengine.value)||(e.engine&&e.engine.value);
+  if(['flux','chroma','krea2','qwen'].includes(eng))return eng;
+  const ck=e.ckpt&&e.ckpt.value;
+  const fam=ck&&LISTS.families&&LISTS.families['checkpoints/'+ck];
+  return fam&&fam.family==='sd15'?'sd15':'sdxl'}
+const loraOk=(lf,ff)=>!lf||lf==='unknown'||lf===ff||(ff==='chroma'&&lf==='flux');
 function loraOptions(sel,val){
-  sel.innerHTML='<option value="">사용 안 함</option>'+LISTS.loras.map(x=>`<option>${esc(x)}</option>`).join('');
+  const f=sel.form,ff=f?formFam(f):null,inf=LISTS.lora_info||{};
+  const opt=x=>`<option>${esc(x)}</option>`;
+  const good=LISTS.loras.filter(x=>loraOk(inf[x],ff)),bad=LISTS.loras.filter(x=>!loraOk(inf[x],ff));
+  let h='<option value="">사용 안 함</option>';
+  if(bad.length){
+    h+=`<optgroup label="이 모델(${LFAM[ff]||ff})에 맞는 LoRA">${good.map(opt).join('')}</optgroup>`;
+    const by={};bad.forEach(x=>(by[inf[x]]=by[inf[x]]||[]).push(x));
+    for(const[k,a]of Object.entries(by))h+=`<optgroup label="다른 모델용 — ${LFAM[k]||k}">${a.map(opt).join('')}</optgroup>`;
+  }else h+=good.map(opt).join('');
+  sel.innerHTML=h;
   if(val&&LISTS.loras.includes(val))sel.value=val;
-}
+  loraNote(sel)}
+/* 고른 LoRA 아래에 '어느 모델용인지'와 맞지 않을 때의 경고 */
+function loraNote(sel){
+  const row=sel.closest('.lora-row');if(!row)return;
+  let n=$('.lnote',row);if(!n){n=document.createElement('small');n.className='lnote';row.append(n)}
+  const v=sel.value;if(!v){n.textContent='';n.className='lnote';return}
+  const lf=(LISTS.lora_info||{})[v]||'unknown',ff=formFam(sel.form);
+  if(lf==='unknown'){n.className='lnote';n.textContent='어느 모델용인지 파일에서 알 수 없어요. 이름을 보고 직접 확인해 주세요.'}
+  else if(loraOk(lf,ff)){n.className='lnote ok';n.textContent=`✓ ${LFAM[lf]}용 — 지금 모델과 맞아요.`+(lf!==ff?' (일부만 맞을 수 있어요)':'')}
+  else{n.className='lnote bad';n.textContent=`⚠ ${LFAM[lf]}용이에요. 지금 모델(${LFAM[ff]||ff})에는 효과가 없거나 오류가 날 수 있어요.`}}
+function refreshLoras(f){$$('.lora-row select',f).forEach(s=>loraOptions(s,s.value))}
 function addLora(box,name,w){
   const i=(+box.dataset.n||0)+1;box.dataset.n=i;
   const row=document.createElement('div');row.className='lora-row';
@@ -74,7 +107,9 @@ function setLoras(f,o){
 
 /* ══════════ ? 도움말 (어려운 설정 옆에 붙는 짧은 설명) ══════════ */
 const TIPS={
- engine:'말로 편집은 "재킷을 빨간색으로 바꿔줘"처럼 문장으로 지시해요. 칠해서 편집은 바꿀 영역을 직접 칠하고 그 부분만 새로 그려요. 칠하지 않은 곳은 원본 그대로예요.',
+ engine:'말로 편집(Qwen)은 "재킷을 빨간색으로 바꿔줘"처럼 문장으로 지시해요. 칠해서 편집(SDXL 또는 FLUX·Krea·Chroma)은 바꿀 영역을 직접 칠하고 그 부분만 새로 그려요. 칠하지 않은 곳은 원본 그대로예요.',
+ fengine:'칠해서 고칠 때 쓸 모델 계열이에요. 모델 파일 목록은 이 계열에 맞는 것만 나와요. 파일 이름에 kontext가 들어 있는 FLUX 모델은 칠하지 않고 말로 지시해서 고칠 수 있어요.',
+ fx_denoise:'칠한 곳을 얼마나 새로 그릴지예요. 1이면 완전히 새로, 낮추면 원래 모습을 더 남겨요. FLUX 계열은 1 근처가 자연스러워요.',
  gengine:'어떤 계열의 모델로 그릴지 정해요. 체크포인트 파일을 쓰는 SD1.5·SDXL·Illustrious·Pony·NoobAI는 태그형, FLUX·Krea(FLUX.1)·Krea 2·Chroma는 문장형 프롬프트에 강해요. Chroma는 성인 표현 제한이 없고, Krea 2는 ComfyUI 0.26.0 이상이 필요해요.',
  mode:'빠른 업스케일은 모델로 크기만 키워서 빠르고 원본에 충실해요. 디테일 재생성은 키운 뒤 조각마다 다시 그려 질감을 더해요. 오래 걸리고 모양이 조금 바뀔 수 있어요.',
  fast:'Lightning LoRA로 4단계만에 만들어요. 훨씬 빠르지만 디테일이 조금 덜해요. 켜면 아래 Qwen 설정의 단계 수와 CFG는 무시돼요.',
@@ -136,7 +171,7 @@ const TIPS={
  fx_scheduler:'노이즈를 줄이는 속도 배분이에요. FLUX·Krea·Krea 2는 simple, Chroma는 beta를 추천해요.',
  upm:'확대에 쓸 모델이에요. Real-ESRGAN은 실사·일반 이미지, UltraSharp 계열은 선명한 그림에 잘 맞아요.',
  scale:'가로세로를 몇 배로 키울지예요. 4배는 결과 파일이 매우 커질 수 있어요.',
- rdenoise:'확대 뒤 다시 그릴 정도예요. 0.25~0.35가 무난하고, 높이면 디테일이 늘지만 모양이 바뀔 수 있어요.',
+ rdenoise:'확대 뒤 다시 그릴 정도예요. 0.25~0.35가 무난하고, 높이면 디테일이 늘지만 모양이 바뀔 수 있어요. Qwen-Image-Edit 은 0.3~0.5가 무난해요.',
  tile:'큰 이미지를 이 크기의 조각으로 나눠 한 장씩 다시 그려요. VRAM이 부족하면 줄이세요.',
  overlap:'조각 사이를 얼마나 겹쳐서 이음새를 감출지예요. 128 정도면 대부분 충분해요.',
  lora:'LoRA는 특정 캐릭터·화풍·옷 등을 더해 주는 작은 추가 파일이에요. 체크포인트와 같은 계열의 것만 맞아요(SDXL용은 SDXL 모델에).',
@@ -260,15 +295,16 @@ async function loadCaps(){try{CAPS=await api('/api/caps');fillCaps()}catch{}}
 const fxModels=g=>(g==='chroma'?LISTS.chromamodels:g==='krea2'?LISTS.krea2models:LISTS.fluxmodels)||[];
 const fxLabel=x=>x.startsWith('ckpt::')?x.slice(6)+' (올인원 체크포인트)':x;
 function fillFx(){
-  for(const[f,g] of [[$('#f-gen'),['chroma','krea2'].includes($('#f-gen').dataset.g)?$('#f-gen').dataset.g:'flux'],[$('#f-up'),$('#f-up').dataset.re||'sdxl']]){
+  const ge=$('#f-gen').dataset.g,fe=$('#f-edit').elements.fengine;
+  for(const[f,g] of [[$('#f-gen'),['chroma','krea2'].includes(ge)?ge:'flux'],[$('#f-up'),['flux','chroma','krea2'].includes($('#f-up').dataset.re)?$('#f-up').dataset.re:'flux'],[$('#f-edit'),fe?fe.value:'flux']]){
     const s=f.elements.fx_model;if(!s)continue;const arr=fxModels(g),cur=s.value;
     s.innerHTML=arr.length?arr.map(x=>`<option value="${esc(x)}">${esc(fxLabel(x))}</option>`).join(''):'<option value="">(설치된 모델 없음)</option>';
     if(arr.includes(cur))s.value=cur}
 }
 /* Krea 2: Turbo 는 8단계·CFG 1, Raw(증류 전)는 단계를 늘리고 CFG 를 올려요 */
-function k2tune(f){if((f.dataset.g||f.dataset.re)!=='krea2')return;const raw=/raw/i.test(f.elements.fx_model.value);setv(f,'fx_steps',raw?30:8);setv(f,'fx_cfg',raw?4:1)}
+function k2tune(f){if((f.dataset.g||f.dataset.re||f.dataset.fe)!=='krea2')return;const raw=/raw/i.test(f.elements.fx_model.value);setv(f,'fx_steps',raw?30:8);setv(f,'fx_cfg',raw?4:1)}
 function warn(){
-  const fe=$('#f-edit');$('#w-edit').hidden=fe.dataset.e==='qwen'?(LISTS.qwen||!!(fe.q_unet.value&&fe.q_te.value&&fe.q_vae.value)):LISTS.checkpoints.length>0;
+  const fe=$('#f-edit');$('#w-edit').hidden=fe.dataset.e==='qwen'?(LISTS.qwen||!!(fe.q_unet.value&&fe.q_te.value&&fe.q_vae.value)):fe.dataset.e==='flux'?fxModels(fe.elements.fengine.value).length>0:LISTS.checkpoints.length>0;
   const g=$('#f-gen').dataset.g||'sdxl',w=$('#w-gen');
   const parts=g==='flux'?LISTS.flux_ready:g==='krea2'?LISTS.krea2_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
   w.hidden=ok;
@@ -280,7 +316,7 @@ async function loadLists(force){
   if(!force&&Date.now()-listsAt<8000&&LISTS.llm)return;   // 탭을 오갈 때마다 서버를 다시 훑지 않아요(파일을 넣고 돌아오면 focus 로 새로고침)
   try{LISTS=await api('/api/lists');listsAt=Date.now()}catch{return}
   fill('#llm',LISTS.llm);fill('select[name=ckpt]',LISTS.checkpoints);fill('select[name=vae]',LISTS.vaes,'체크포인트 내장');
-  fill('select[name^=lora]',LISTS.loras,'사용 안 함');fill('select[name=upm]',LISTS.upscalers);fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');
+  $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');
   fill('select[name=fx_vae],select[name=q_vae],select[name=k2_vae]',LISTS.vaes,'자동');fill('select[name=fx_t5],select[name=fx_clip],select[name=q_te],select[name=k2_te]',LISTS.text_encoders||[],'자동');fill('select[name=q_unet]',LISTS.diffusion||[],'자동');
   fillFx();
   if(LISTS.llm.includes(localStorage.llm))$('#llm').value=localStorage.llm;
@@ -309,13 +345,14 @@ const formVals=(f,skip=[])=>{const o={};new FormData(f).forEach((v,k)=>{if(!skip
 function applyFields(f,o){
   for(const k of ['engine','mode','gengine'])if(k in o)setv(f,k,o[k]);   // 다른 항목의 선택지가 이 값에 따라 달라지므로 먼저 적용
   if(f.elements.rengine&&'rengine' in o)setv(f,'rengine',o.rengine);
+  if(f.elements.fengine&&'fengine' in o){setv(f,'fengine',o.fengine);f.dataset.fe=f.elements.fengine.value;fillFx()}
   if(f.elements.gengine){f.dataset.g=f.elements.gengine.value;fillFx()}
   if(f.elements.rengine){f.dataset.re=f.elements.rengine.value;fillFx()}
   if($('.loras',f))setLoras(f,o);   // LoRA 칸도 프리셋 그대로(없으면 비움)
   for(const[k,v]of Object.entries(o)){if(/^lora\d+(_w)?$/.test(k))continue;setv(f,k,v)}
   sync(f)}
 function sync(f){if(f.elements.engine)f.dataset.e=f.elements.engine.value;if(f.elements.mode)f.dataset.m=f.elements.mode.value;
-  if(f.elements.gengine)f.dataset.g=f.elements.gengine.value;if(f.elements.rengine)f.dataset.re=f.elements.rengine.value;warn()}
+  if(f.elements.gengine)f.dataset.g=f.elements.gengine.value;if(f.elements.rengine)f.dataset.re=f.elements.rengine.value;if(f.elements.fengine)f.dataset.fe=f.elements.fengine.value;warn()}
 function presetsUI(f){
   const box=$('[data-presets]',f);if(!box)return;
   box.innerHTML='<select class="pre-sel"></select><button type="button" class="ghost pre-save">현재 설정 저장</button><button type="button" class="ghost pre-del">삭제</button>';
@@ -337,11 +374,15 @@ FORMS().forEach(f=>{
     const n=e.target.name;
     if(n==='profile'||(n==='ckpt'&&f.elements.profile?.value==='auto'))applyProfile(f);
     if(n==='vpred'&&f.elements.rescale){const r=f.elements.rescale;if(e.target.checked&&+r.value===0)r.value=0.7;if(!e.target.checked&&+r.value===0.7)r.value=0}
-    if(n==='engine'||n==='mode'||n==='gengine')sync(f);
-    if(n==='engine'&&f.elements.translate)f.elements.translate.checked=e.target.value==='sdxl';
+    if(n==='engine'||n==='mode'||n==='gengine'||n==='fengine')sync(f);
+    if(n==='engine'&&e.target.value==='flux'){fillFx();const d=FX_DEF[f.elements.fengine.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}
+    if(n==='fengine'){fillFx();const d=FX_DEF[e.target.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}
+    if(n==='engine'&&f.elements.translate)f.elements.translate.checked=e.target.value!=='qwen';
     if(n==='gengine'){fillFx();const d=FX_DEF[e.target.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}
     if(n==='fx_model')k2tune(f);
     if(n==='rengine'){f.dataset.re=e.target.value;fillFx();const d=FX_DEF[e.target.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}
+    if(n==='engine'||n==='gengine'||n==='rengine'||n==='fengine'||n==='ckpt')refreshLoras(f);
+    if(/^lora\d+$/.test(n||''))loraNote(e.target);
     saveForm(f);
   });
   f.addEventListener('input',debounce(()=>saveForm(f),400));
@@ -633,6 +674,18 @@ function imgView(id){
   $('.swap',sec).onclick=v.reset;
   $('.zoom',sec).onclick=()=>v.img&&lbOpen([{url:v.img,name:'input.png'}],0);
   if(cv)painter(v);
+  const bs=$('.bigsel',sec);
+  if(bs){
+    const st=$('.stage',sec),sim=$('img',st);
+    const fit=()=>{if(!sec.classList.contains('bigedit')){st.style.width='';sim.style.width='';sim.style.maxHeight='';return}   // 화면 크기에 맞춰 최대한 크게(원본보다 커져도 돼요)
+      const r=(sim.naturalWidth||4)/(sim.naturalHeight||3),w=Math.max(200,Math.min(sec.clientWidth-44,(innerHeight-$('.tools',sec).offsetHeight-80)*r));st.style.width=w+'px';sim.style.width='100%';sim.style.maxHeight='none'};
+    const big=on=>{sec.classList.toggle('bigedit',on);bs.textContent=on?'작게 돌아가기 (Esc)':'크게 보며 선택';if(on)sec.scrollTop=0;fit()};
+    addEventListener('resize',fit);
+    bs.onclick=()=>{if(!v.img)return toast('먼저 이미지를 올려 주세요.');big(!sec.classList.contains('bigedit'))};
+    $('.bigrun',sec).onclick=()=>{big(false);$('form .go',sec).click()};
+    addEventListener('keydown',e=>{if(e.key==='Escape'&&sec.classList.contains('bigedit')&&$('#lb').hidden)big(false)});
+    v.bigOff=()=>big(false);
+  }
 }
 ['edit','up'].forEach(imgView);
 addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])][0],on=$('.view.on');if(!f||!on)return;
@@ -644,7 +697,7 @@ function addResults(sec,j,kind){
   const used=(j.used||[]).filter(Boolean);
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
     j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="edit">${first}</button>${
-    kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}<button type="button" data-u="${u}" data-to="info">정보</button><button type="button" data-u="${u}" data-to="folder" title="이 사진이 저장된 폴더를 열어요">출력 폴더 열기</button>${
+    kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}${kind==='gen'?`<button type="button" data-u="${u}" data-to="regen" title="이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요">같은 설정으로 생성</button>`:''}<button type="button" data-u="${u}" data-to="info">정보</button><button type="button" data-u="${u}" data-to="folder" title="이 사진이 저장된 폴더를 열어요">출력 폴더 열기</button>${
     COMPARE[u]?`<button type="button" data-u="${u}" data-to="cmp">전후 비교</button>`:''}</figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
@@ -659,6 +712,7 @@ function setBar(view,text,mode){
 }
 function setProg(view,j){
   const pg=$('.pg',$('.jobbar',view));
+  if(j.phase==='load'||j.phase==='wait'){pg.hidden=false;pg.removeAttribute('value');pg.title='모델을 불러오는 중이라 진행률을 알 수 없어요';return}   // 불러오는 동안은 빙글빙글 움직이는 바
   if(typeof j.progress!=='number'){pg.hidden=true;return}
   pg.hidden=false;pg.value=Math.round(j.progress*100);
   pg.title=Math.round(j.progress*100)+'%'+(j.pest?' (예상)':'');
@@ -682,8 +736,9 @@ async function run(kind,form,extra={}){
         if(extra.image&&(kind==='edit'||kind==='up')){j.images.forEach(u=>COMPARE[u]=extra.image);IV[kind].showResult(j.images[0],extra.image)}
         addResults(view,j,kind);
         setBar(view,'완료'+(j.warn&&j.warn.length?'. 참고: '+j.warn.join(' '):''),'ok');break}
-      const pc=typeof j.progress==='number'?Math.round(j.progress*100)+'%'+(j.pest?' 쯤':'')+'  ':'';
-      setBar(view,wantStop?'중단하는 중이에요…':`${pc}${j.msg||'처리 중'}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');
+      const idle=j.phase==='load'||j.phase==='wait',pc=!idle&&typeof j.progress==='number'?Math.round(j.progress*100)+'%'+(j.pest?' 쯤':'')+'  ':'';
+      const label=j.phase==='load'?'모델 불러오는 중… (처음 한 번은 오래 걸려요)':j.phase==='wait'?'준비 중…':(j.msg||'처리 중');
+      setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');
       if(!wantStop)setProg(view,j);
     }
   }catch(e){setBar(view,e.message,'bad')}
@@ -692,11 +747,11 @@ async function run(kind,form,extra={}){
 const need=(f,t)=>setBar(f.closest('.view'),t,'bad');
 document.addEventListener('click',e=>{const b=e.target.closest('.seed-rand,.seed-pick');if(!b)return;const i=b.parentElement.querySelector('input');
   i.value=b.classList.contains('seed-rand')?-1:Math.floor(Math.random()*2147483647);i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}))});
-$('.exprs').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const f=$('#f-edit'),sd=f.engine.value==='sdxl';
+$('.exprs').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const f=$('#f-edit'),sd=f.engine.value==='sdxl'||(f.engine.value==='flux'&&!/kontext/i.test(f.fx_model.value));
   const add=sd?b.dataset.t:'얼굴 생김새와 머리 모양은 그대로 두고 표정만 '+b.dataset.s+' 바꿔줘.';
   let cur=f.prompt.value;if(f.dataset.expr&&cur.includes(f.dataset.expr))cur=cur.replace(f.dataset.expr,'').replace(/^[,\s]+|[,\s]+$/g,'');
   f.dataset.expr=add;f.prompt.value=sd?(cur?cur+', ':'')+add:add;
-  if(sd&&+f.denoise.value>0.65)f.denoise.value=0.55};
+  if(f.engine.value==='sdxl'&&+f.denoise.value>0.65)f.denoise.value=0.55};
 $('#ratios').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const f=$('#f-gen'),W=f.elements.w,H=f.elements.h;
   if(b.dataset.r==='swap'){[W.value,H.value]=[H.value,W.value];return}
   const[a,c]=b.dataset.r.split(':').map(Number),area=Math.max(500000,Math.min(1.2e6,(+W.value||1024)*(+H.value||1024))),k=Math.sqrt(area/(a*c)),q=f.dataset.g==='sdxl'?8:16;
@@ -705,6 +760,7 @@ $('#f-edit').onsubmit=e=>{e.preventDefault();const f=e.target,v=IV.edit;
   if(!v.img)return need(f,'먼저 이미지를 올려 주세요.');
   const m=v.hasMask()?v.maskData():null;
   if(f.engine.value==='sdxl'&&!m)return need(f,'칠해서 편집하려면 바꿀 영역을 이미지 위에 칠해 주세요.');
+  if(f.engine.value==='flux'&&!m&&!/kontext/i.test(f.fx_model.value))return need(f,'칠해서 편집하려면 바꿀 영역을 칠하거나 [선택 도구]로 골라 주세요. (칠하지 않고 말로 고치려면 FLUX Kontext 모델이나 Qwen-Image-Edit 을 쓰세요.)');
   run('edit',f,{image:v.img,mask:m})};
 $('#f-gen').onsubmit=e=>{e.preventDefault();run('gen',e.target,{})};
 $('#f-up').onsubmit=e=>{e.preventDefault();const v=IV.up;if(!v.img)return need(e.target,'먼저 이미지를 올려 주세요.');run('up',e.target,{image:v.img})};
@@ -719,6 +775,10 @@ document.addEventListener('click',async e=>{
   const to=b.dataset.to,u=b.dataset.u;
   if(to==='folder'){try{const r=await api('/api/open',{file:u});toast(r.error?r.error:'폴더를 열었어요: '+r.path)}catch{toast('폴더를 열지 못했어요.')}return}
   if(to==='info'){show('info');infoLoad(await urlToDataURL(u),u.split('/').pop());return}
+  if(to==='regen'){
+    try{const r=await api('/api/meta',{image:await urlToDataURL(u)});
+      if(r.error||!r.gen||!r.gen.prompt){toast('이 이미지에는 생성 정보가 없어요. (설정의 "결과 PNG에 생성 정보 기록"이 꺼져 있었을 수 있어요.)');return}
+      INFO={r,dataUrl:u,name:u.split('/').pop()};sendToGen()}catch{toast('설정을 읽지 못했어요.')}return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
   IV[to].set(await urlToDataURL(u));show(to);
 });
@@ -877,7 +937,7 @@ let FEATS=[],featId=null;
 async function loadFeat(){
   try{LISTS=await api('/api/lists')}catch{}
   try{FEATS=await api('/api/features')}catch{FEATS=[]}
-  const sig=JSON.stringify([FEATS,LISTS.checkpoints]);if(sig===loadFeat.sig&&$('#feat-form').children.length)return; // 바뀐 게 없으면 다시 그리지 않아요
+  const sig=JSON.stringify([FEATS,LISTS.checkpoints,LISTS.fluxmodels,LISTS.krea2models,LISTS.chromamodels]);if(sig===loadFeat.sig&&$('#feat-form').children.length)return; // 바뀐 게 없으면 다시 그리지 않아요
   loadFeat.sig=sig;
   $('#feat-pick').innerHTML=FEATS.map(f=>`<button type="button" class="fcard${f.id===featId?' on':''}" data-f="${esc(f.id)}"><span>${esc(f.icon||'')}</span><b>${esc(f.title)}</b></button>`).join('');
   if(featId)featForm(featId,true);else if(FEATS[0])featForm(FEATS[0].id);
@@ -890,6 +950,10 @@ const fieldHTML=f=>{
   if(f.type==='number')return `<label class="f">${esc(f.label)}<input type="number" name="${n}" value="${esc(f.default??'')}" min="${f.min??''}" max="${f.max??''}" step="${f.step??1}">${hint}</label>`;
   if(f.type==='seed')return `<label class="f">${esc(f.label)}<span class="seedrow"><input type="number" name="${n}" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>`;
   if(f.type==='select')return `<label class="f">${esc(f.label)}<select name="${n}">${f.options.map(([v,t])=>`<option value="${esc(v)}"${v===f.default?' selected':''}>${esc(t)}</option>`).join('')}</select>${hint}</label>`;
+  if(f.type==='list'&&f.list==='models'){
+    const o=(arr,pre)=>arr.map(x=>`<option value="${esc(pre+x)}">${esc(fxLabel(x))}</option>`).join('');
+    const gs=[['SD·SDXL 체크포인트',LISTS.checkpoints||[],''],['FLUX·Krea(FLUX.1)',LISTS.fluxmodels||[],'fx:flux:'],['Krea 2',LISTS.krea2models||[],'fx:krea2:'],['Chroma',LISTS.chromamodels||[],'fx:chroma:']].filter(g=>g[1].length);
+    return `<label class="f">${esc(f.label)}<select name="${n}">${gs.length?gs.map(g=>`<optgroup label="${g[0]}">${o(g[1],g[2])}</optgroup>`).join(''):'<option value="">(없음)</option>'}</select>${hint}</label>`}
   if(f.type==='list'){const arr=LISTS[f.list]||[];return `<label class="f">${esc(f.label)}<select name="${n}">${arr.length?arr.map(x=>`<option>${esc(x)}</option>`).join(''):'<option value="">(없음)</option>'}</select></label>`}
   return '';
 };
@@ -898,7 +962,7 @@ function featForm(id,keep){
   $$('#feat-pick .fcard').forEach(b=>b.classList.toggle('on',b.dataset.f===id));
   const keepVals=keep?Object.fromEntries(new FormData($('#f-feat'))):{};
   const keepImgs=keep?Object.fromEntries($$('#feat-form .mini[data-img]').filter(m=>m.value).map(m=>[m.dataset.img,m.value])):{}; // 창이 다시 활성화되며 목록을 새로 그려도 올린 이미지는 유지
-  const miss=[...(f.missing_nodes||[]).map(n=>`노드 ${n}`),...(f.missing_lists||[]).map(k=>({checkpoints:'체크포인트'}[k]||k))];
+  const miss=[...(f.missing_nodes||[]).map(n=>`노드 ${n}`),...(f.missing_lists||[]).map(k=>({checkpoints:'체크포인트',anymodels:'이미지 모델'}[k]||k))];
   const main=f.fields.filter(x=>!x.advanced),adv=f.fields.filter(x=>x.advanced);
   $('#feat-form').innerHTML=`<h3>${esc(f.title)}</h3><p class="hint plain">${esc(f.summary)}</p>
     <ol class="steps">${f.steps.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>
@@ -965,6 +1029,28 @@ async function loadManage(){
   for(const [d,fs] of Object.entries(m.folders))h.push(grp(DIRN[d]||d,fs,'file',d));
   $('#manage').innerHTML=h.join('')||'<p class="empty">설치된 파일이 없어요.</p>';
 }
+/* ── 저장 공간 점검 ── */
+async function diskScan(){
+  const st=$('#disk-st');st.textContent='폴더를 훑는 중이에요… (몇 초 걸려요)';$('#disk-scan').disabled=true;
+  let r;try{r=await api('/api/disk')}catch{st.textContent='확인하지 못했어요.';$('#disk-scan').disabled=false;return}
+  $('#disk-scan').disabled=false;st.textContent='';
+  const tot=r.used||1,gb=fmtSize,CL={temp:'임시 미리보기 지우기',input:'임시 입력 이미지 지우기',backup:'오래된 백업 지우기',logs:'로그 줄이기'};
+  const rows=r.items.filter(i=>i.bytes>1e6||i.clean).map(i=>`<tr><td>${esc(i.key.startsWith('m_')?'모델: '+(DIRN[i.key.slice(2)]||i.key.slice(2)):i.label)}<small class="mute">${esc(i.note||'')}</small></td><td class="num">${gb(i.bytes)}</td><td class="bar"><i style="width:${Math.max(1,Math.round(i.bytes/tot*100))}%"></i></td><td>${i.clean?`<button type="button" class="ghost cl" data-w="${i.clean}">${CL[i.clean]}</button>`:''}</td></tr>`).join('');
+  const big=r.big.map(f=>`<tr><td>${esc(DIRN[f.dir]||f.dir)} / ${esc(f.name)}</td><td class="num">${gb(f.size)}</td><td></td><td><button type="button" class="ghost del" data-kind="file" data-dir="${esc(f.dir)}" data-name="${esc(f.name)}">삭제</button></td></tr>`).join('');
+  const dup=r.dups.map(g=>`<li>${g.map(f=>`${esc(DIRN[f.dir]||f.dir)} / <b>${esc(f.name)}</b>`).join(' = ')} <small class="mute">(${gb(g[0].size)}씩)</small></li>`).join('');
+  $('#disk').innerHTML=`<p class="diskhead">디스크 여유 <b>${gb(r.free)}</b> / 전체 ${gb(r.total)} · 이 프로그램이 쓰는 용량 <b>${gb(r.used)}</b></p>
+   <table class="disktb"><tbody>${rows}</tbody></table>
+   ${r.parts.length?`<p class="warn">받다 만 파일이 ${r.parts.length}개(${gb(r.parts.reduce((a,f)=>a+f.size,0))}) 있어요. <button type="button" class="ghost cl" data-w="parts">받다 만 파일 지우기</button></p>`:''}
+   ${dup?`<h4>같은 내용으로 보이는 파일 (둘 중 하나만 있어도 돼요)</h4><ul class="duplist">${dup}</ul>`:''}
+   <h4>용량이 큰 모델 파일 순서</h4><table class="disktb"><tbody>${big}</tbody></table>`;
+}
+$('#disk-scan').onclick=diskScan;
+$('#disk').onclick=async e=>{
+  const c=e.target.closest('.cl');if(c){c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
+  const b=e.target.closest('.del');if(!b)return;
+  if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;
+  const r=await api('/api/delete',{kind:b.dataset.kind,dir:b.dataset.dir,name:b.dataset.name});
+  toast(r.error||'삭제했어요.');diskScan();loadManage();loadLists(true)};
 $('#manage').onchange=async e=>{const s=e.target.closest('.fam');if(!s)return;
   const r=await api('/api/family',{folder:s.dataset.dir,name:s.dataset.name,family:s.value});toast(r.error||'계열을 바꿨어요. 이미지 생성 탭 목록에 반영돼요.');loadManage();loadLists(true)};
 $('#manage').onclick=async e=>{

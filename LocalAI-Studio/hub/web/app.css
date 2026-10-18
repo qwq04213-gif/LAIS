@@ -69,7 +69,8 @@ details details{border-top:0}
 .jobbar .stop{padding:6px 14px}
 .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--acc);animation:spin .9s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
-[data-e=qwen] .sdxl,[data-e=sdxl] .qwen,[data-m=esrgan] .refine{display:none!important}
+[data-e=qwen] .sdxl,[data-e=qwen] .fxe,[data-e=qwen] .den,[data-e=sdxl] .qwen,[data-e=sdxl] .fxe,[data-e=flux] .qwen,[data-e=flux] .sdxl,[data-e=flux] .den,[data-m=esrgan] .refine{display:none!important}
+#f-edit[data-fe=flux] .fe-c,#f-edit[data-fe=krea2] .fe-g,#f-edit[data-fe=chroma] .fe-g{display:none}
 #f-gen[data-g=sdxl] [data-for]:not([data-for~=sdxl]),#f-gen[data-g=flux] [data-for]:not([data-for~=flux]),#f-gen[data-g=chroma] [data-for]:not([data-for~=chroma]),#f-gen[data-g=krea2] [data-for]:not([data-for~=krea2]){display:none!important}
 div[data-for]{display:grid;gap:14px}
 .presets{display:grid;grid-template-columns:1fr auto auto;gap:8px}
@@ -244,6 +245,31 @@ form .go{position:sticky;top:0;z-index:5;width:100%;box-shadow:0 6px 10px -6px r
 .famsel{display:flex;gap:6px;align-items:center;font-size:12.5px}.famsel select{flex:1;min-width:0}
 
 .growbox{display:inline-flex;gap:6px;align-items:center;font-size:12.5px}.growbox input{width:64px}
-#f-up[data-re=sdxl] .re-fx,#f-up:not([data-re=sdxl]) .re-sd{display:none!important}
+#f-up[data-re=sdxl] .re-fx,#f-up[data-re=qwen] .re-fx,#f-up:not([data-re=sdxl]) .re-sd,#f-up:not([data-re=qwen]) .re-q,#f-up[data-re=qwen] .re-noq{display:none!important}
 #f-up[data-re=flux] .re-c,#f-up[data-re=krea2] .re-g,#f-up[data-re=chroma] .re-g{display:none}
 .re-fx{display:grid;gap:12px}
+
+.lora-row .lnote{grid-column:1/-1;font-size:12.5px;line-height:1.5;color:var(--mute)}
+.lora-row .lnote.ok{color:var(--ok,#4caf7d)}
+.lora-row .lnote.bad{color:var(--warn,#e0a040);font-weight:600}
+
+.diskbar{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.diskhead{margin:8px 0}
+.disktb{width:100%;border-collapse:collapse;font-size:13px}
+.disktb td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.disktb td small{display:block;margin-top:2px}
+.disktb .num{white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.disktb .bar{width:22%}.disktb .bar i{display:block;height:8px;border-radius:4px;background:var(--acc,#6c8cff)}
+.disktb .del{color:var(--bad)}
+.duplist{margin:6px 0 12px;padding-left:20px;font-size:13px;line-height:1.7}
+
+/* 크게 보며 선택·칠하기: 설정 칸을 숨기고 이미지를 화면 가득 보여 줘요 */
+.view.split.on.bigedit{grid-template-columns:minmax(0,1fr)}
+.view.bigedit>form,.view.bigedit>.gutter{display:none}
+.view.bigedit>.col{display:flex;flex-direction:column;gap:10px;padding:12px 18px}
+.view.bigedit .tools{order:-1;position:sticky;top:0;z-index:6;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--line)}
+.view.bigedit .jobbar{order:-2}
+.view.bigedit .stage{justify-self:center}
+.view.bigedit .res,.view.bigedit .pane.outp{display:none}
+.bigrun{display:none}.view.bigedit .bigrun{display:inline-flex}
+.view.bigedit .zoom,.view.bigedit .swap{display:none}

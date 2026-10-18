@@ -134,11 +134,9 @@ def wf_refine(q, img):
 
 
 # ───────────────────────── FLUX 계열 (FLUX.1 dev / Krea dev / Chroma) ─────────────────────────
-def wf_flux(q):
-    """FLUX 계열 텍스트→이미지(+이미지→이미지).
-    flux  : DualCLIP(clip_l+T5) + FluxGuidance, 네거티브는 ConditioningZeroOut, cfg 1.
-    chroma: T5 단독 CLIPLoader(type=chroma) + 실제 네거티브 프롬프트, cfg 사용."""
-    w = WF()
+def flux_stack(w, q):
+    """FLUX 계열 모델·텍스트 인코더·VAE·LoRA·프롬프트 인코딩을 만들어 (model, positive, negative, vae) 를 돌려줘요.
+    q['ref'] 가 있으면 FLUX Kontext 처럼 그 이미지를 참조 조건으로 걸고, w.ref_lat 에 참조 latent 를 남겨요."""
     if q.get("allin"):       # 텍스트 인코더·VAE 까지 들어 있는 올인원 체크포인트
         ck = w.add("CheckpointLoaderSimple", ckpt_name=q["unet"])
         unet, clip, vae = ck, ck, [ck, 2]
@@ -157,22 +155,76 @@ def wf_flux(q):
     for name, wt in q["loras"]:
         model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
     enc = w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, clip_idx])
+    w.ref_lat = None
+    cond = [enc, 0]
+    if q.get("ref"):
+        li = w.add("LoadImage", image=q["ref"])
+        sc = w.add("FluxKontextImageScale", image=[li, 0])
+        w.ref_lat = [w.add("VAEEncode", pixels=[sc, 0], vae=vae), 0]
+        cond = [w.add("ReferenceLatent", conditioning=cond, latent=w.ref_lat), 0]
     if q["family"] == "krea2":      # cfg 1(Turbo)이면 비운 네거티브, 1보다 크면 실제 네거티브
-        pos = [enc, 0]
+        pos = cond
         neg = [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, clip_idx]), 0] if q["cfg"] > 1.0 else [w.add("ConditioningZeroOut", conditioning=[enc, 0]), 0]
     elif q["family"] == "chroma":
-        pos, neg = [enc, 0], [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, clip_idx]), 0]
+        pos, neg = cond, [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, clip_idx]), 0]
     else:
         neg = [w.add("ConditioningZeroOut", conditioning=[enc, 0]), 0]
-        pos = [w.add("FluxGuidance", conditioning=[enc, 0], guidance=q["guidance"]), 0]
+        pos = [w.add("FluxGuidance", conditioning=cond, guidance=q["guidance"]), 0]
+    return model, pos, neg, vae
+
+
+def flux_sample(w, q, model, pos, neg, lat, denoise=1.0):
+    return w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
+                 scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat, denoise=denoise)
+
+
+def wf_flux(q):
+    """FLUX 계열 텍스트→이미지(+이미지→이미지).
+    flux  : DualCLIP(clip_l+T5) + FluxGuidance, 네거티브는 ConditioningZeroOut, cfg 1.
+    chroma: T5 단독 CLIPLoader(type=chroma) + 실제 네거티브 프롬프트, cfg 사용."""
+    w = WF()
+    model, pos, neg, vae = flux_stack(w, q)
     denoise = 1.0
     if q.get("init"):
         li = w.add("LoadImage", image=q["init"])
         lat, denoise = [w.add("VAEEncode", pixels=[li, 0], vae=vae), 0], q["init_denoise"]
     else:
         lat = [w.add("EmptyLatentImage" if q["family"] == "krea2" else "EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
-    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
-              scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat, denoise=denoise)
+    k = flux_sample(w, q, model, pos, neg, lat, denoise)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
+def wf_flux_inpaint(q, img, msk):
+    """FLUX·Krea·Chroma 로 칠한 부분만 다시 그리기 (InpaintModelConditioning + DifferentialDiffusion)."""
+    w = WF()
+    model, pos, neg, vae = flux_stack(w, q)
+    li = w.add("LoadImage", image=img)
+    lm = w.add("LoadImageMask", image=msk, channel="red")
+    ic = w.add("InpaintModelConditioning", positive=pos, negative=neg, vae=vae, pixels=[li, 0], mask=[lm, 0], noise_mask=True)
+    dd = w.add("DifferentialDiffusion", model=model)
+    k = flux_sample(w, q, [dd, 0], [ic, 0], [ic, 1], [ic, 2], q["denoise"])
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
+def wf_flux_outpaint(q, img, pad, feather):
+    w = WF()
+    model, pos, neg, vae = flux_stack(w, q)
+    li = w.add("LoadImage", image=img)
+    pd = w.add("ImagePadForOutpaint", image=[li, 0], left=pad[0], top=pad[1], right=pad[2], bottom=pad[3], feathering=feather)
+    ic = w.add("InpaintModelConditioning", positive=pos, negative=neg, vae=vae, pixels=[pd, 0], mask=[pd, 1], noise_mask=True)
+    dd = w.add("DifferentialDiffusion", model=model)
+    k = flux_sample(w, q, [dd, 0], [ic, 0], [ic, 1], [ic, 2], 1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
+def wf_kontext(q, img):
+    """FLUX Kontext: 말로 지시해 이미지를 고쳐요. q['ref'] 는 쓰지 않고 img 를 참조 이미지로 써요."""
+    w = WF()
+    model, pos, neg, vae = flux_stack(w, {**q, "ref": img})
+    k = flux_sample(w, q, model, pos, neg, w.ref_lat, 1.0)
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
     return w.n
 
@@ -199,7 +251,7 @@ def wf_qwen(q, img, refs, plus):
     pos, neg = enc(q["prompt"]), enc("")
     lat = w.add("VAEEncode", pixels=[li, 0], vae=[vae, 0])
     k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
-              scheduler=q["scheduler"], positive=[pos, 0], negative=[neg, 0], latent_image=[lat, 0], denoise=1.0)
+              scheduler=q["scheduler"], positive=[pos, 0], negative=[neg, 0], latent_image=[lat, 0], denoise=q.get("denoise", 1.0))
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=[vae, 0]), 0])
     return w.n
 

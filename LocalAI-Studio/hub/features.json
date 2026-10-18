@@ -1,51 +1,369 @@
 [
- {"id":"outpaint","title":"이미지 확장 (아웃페인팅)","icon":"⤢",
-  "summary":"사진 가장자리 바깥으로 그림을 이어서 그려 화면을 넓혀요. 세로 사진을 가로로 만들거나, 인물 주변 배경을 더 넓게 만들 때 써요.",
-  "steps":["확장할 이미지를 올려요","늘릴 방향의 픽셀 수를 적어요 (예: 오른쪽 512)","새로 그려질 부분에 어떤 풍경이 이어질지 적어요"],
-  "needs":{"nodes":["ImagePadForOutpaint","InpaintModelConditioning","DifferentialDiffusion"],"lists":["checkpoints"]},
-  "fields":[
-   {"name":"image","type":"image","label":"확장할 이미지","required":true},
-   {"name":"prompt","type":"textarea","label":"이어서 그릴 내용","hint":"NoobAI·Pony 등은 영어 태그, 사실적 모델은 문장으로 적어요. 예: city street at night, neon signs","required":true},
-   {"name":"ckpt","type":"list","list":"checkpoints","label":"체크포인트"},
-   {"name":"left","type":"number","label":"왼쪽 (px)","default":0,"min":0,"max":1024,"step":64},
-   {"name":"right","type":"number","label":"오른쪽 (px)","default":256,"min":0,"max":1024,"step":64},
-   {"name":"top","type":"number","label":"위 (px)","default":0,"min":0,"max":1024,"step":64},
-   {"name":"bottom","type":"number","label":"아래 (px)","default":0,"min":0,"max":1024,"step":64},
-   {"name":"feather","type":"number","label":"경계 부드럽게 (px)","default":40,"min":0,"max":200,"step":8,"hint":"원본과 새 부분이 만나는 경계를 섞는 폭이에요. 이음새가 보이면 키워요.","advanced":true},
-   {"name":"steps","type":"number","label":"단계 수","default":28,"min":1,"max":100,"advanced":true},
-   {"name":"cfg","type":"number","label":"CFG","default":5.5,"min":0,"max":30,"step":0.5,"advanced":true},
-   {"name":"seed","type":"seed","label":"시드","default":-1,"advanced":true}
-  ]},
- {"id":"regional","title":"영역별 프롬프트 (칸 나눠 그리기)","icon":"▦",
-  "summary":"화면을 둘 또는 셋으로 나눠 칸마다 다른 내용을 적어요. '왼쪽엔 소녀, 오른쪽엔 고양이'처럼 여러 대상이 섞이지 않게 그릴 때 좋아요.",
-  "steps":["나누는 방식을 골라요","전체 분위기를 공통 문장에 적어요","칸마다 그릴 내용을 적어요"],
-  "needs":{"nodes":["ConditioningSetAreaPercentage","ConditioningCombine"],"lists":["checkpoints"]},
-  "fields":[
-   {"name":"layout","type":"select","label":"나누는 방식","options":[["lr","좌 / 우 (2칸)"],["tb","위 / 아래 (2칸)"],["lcr","좌 / 중 / 우 (3칸)"]],"default":"lr"},
-   {"name":"common","type":"textarea","label":"전체 공통 (분위기·화풍·품질)","hint":"예: masterpiece, best quality, soft lighting","rows":2},
-   {"name":"r1","type":"textarea","label":"1번 칸 (왼쪽 / 위)","required":true,"rows":2},
-   {"name":"r2","type":"textarea","label":"2번 칸 (오른쪽 / 아래 / 가운데)","required":true,"rows":2},
-   {"name":"r3","type":"textarea","label":"3번 칸 (오른쪽, 3칸일 때만)","rows":2},
-   {"name":"ckpt","type":"list","list":"checkpoints","label":"체크포인트"},
-   {"name":"w","type":"number","label":"가로 (px)","default":1216,"min":512,"max":2048,"step":64},
-   {"name":"h","type":"number","label":"세로 (px)","default":832,"min":512,"max":2048,"step":64},
-   {"name":"steps","type":"number","label":"단계 수","default":28,"min":1,"max":100,"advanced":true},
-   {"name":"cfg","type":"number","label":"CFG","default":5.5,"min":0,"max":30,"step":0.5,"advanced":true},
-   {"name":"seed","type":"seed","label":"시드","default":-1,"advanced":true}
-  ]},
- {"id":"compare","title":"설정 비교표 (설정이 그림을 어떻게 바꾸는지)","icon":"▤",
-  "summary":"같은 프롬프트·같은 시드로 설정값 하나만 바꿔 여러 장을 만들고 한 장의 표로 보여 줘요. CFG나 단계 수를 바꾸면 어떻게 달라지는지 눈으로 익힐 수 있어요.",
-  "steps":["프롬프트를 적어요","바꿔 볼 설정을 고르고 값을 쉼표로 적어요 (예: 3,5,7,9)","표가 완성되면 마음에 드는 값을 생성 탭에 써요"],
-  "needs":{"nodes":[],"lists":["checkpoints"]},
-  "fields":[
-   {"name":"prompt","type":"textarea","label":"프롬프트","required":true},
-   {"name":"ckpt","type":"list","list":"checkpoints","label":"체크포인트"},
-   {"name":"axis","type":"select","label":"가로로 바꿀 설정","options":[["cfg","CFG (지시를 따르는 정도)"],["steps","단계 수"],["sampler","샘플러"],["scheduler","스케줄러"],["clip_skip","CLIP skip"]],"default":"cfg"},
-   {"name":"values","type":"text","label":"값 목록 (쉼표로 구분, 최대 6개)","default":"3,5,7,9"},
-   {"name":"axis2","type":"select","label":"세로로 바꿀 설정 (선택)","options":[["","사용 안 함"],["cfg","CFG"],["steps","단계 수"],["sampler","샘플러"],["scheduler","스케줄러"],["clip_skip","CLIP skip"]],"default":""},
-   {"name":"values2","type":"text","label":"세로 값 목록 (최대 4개)","default":""},
-   {"name":"w","type":"number","label":"칸 가로 (px)","default":832,"min":512,"max":1536,"step":64,"advanced":true},
-   {"name":"h","type":"number","label":"칸 세로 (px)","default":1216,"min":512,"max":1536,"step":64,"advanced":true},
-   {"name":"seed","type":"seed","label":"시드 (모든 칸에 같은 값)","default":-1,"advanced":true}
-  ]}
+ {
+  "id": "outpaint",
+  "title": "이미지 확장 (아웃페인팅)",
+  "icon": "⤢",
+  "summary": "사진 가장자리 바깥으로 그림을 이어서 그려 화면을 넓혀요. 세로 사진을 가로로 만들거나, 인물 주변 배경을 더 넓게 만들 때 써요.",
+  "steps": [
+   "확장할 이미지를 올려요",
+   "늘릴 방향의 픽셀 수를 적어요 (예: 오른쪽 512)",
+   "새로 그려질 부분에 어떤 풍경이 이어질지 적어요"
+  ],
+  "needs": {
+   "nodes": [
+    "ImagePadForOutpaint",
+    "InpaintModelConditioning",
+    "DifferentialDiffusion"
+   ],
+   "lists": [
+    "anymodels"
+   ]
+  },
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "확장할 이미지",
+    "required": true
+   },
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "이어서 그릴 내용",
+    "hint": "NoobAI·Pony 등은 영어 태그, 사실적 모델은 문장으로 적어요. 예: city street at night, neon signs",
+    "required": true
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "models",
+    "label": "모델",
+    "hint": "SDXL 체크포인트뿐 아니라 FLUX·Krea·Krea 2·Chroma 모델로도 확장할 수 있어요. FLUX 계열은 단계 수·CFG를 모델에 맞게 자동으로 정해요."
+   },
+   {
+    "name": "left",
+    "type": "number",
+    "label": "왼쪽 (px)",
+    "default": 0,
+    "min": 0,
+    "max": 1024,
+    "step": 64
+   },
+   {
+    "name": "right",
+    "type": "number",
+    "label": "오른쪽 (px)",
+    "default": 256,
+    "min": 0,
+    "max": 1024,
+    "step": 64
+   },
+   {
+    "name": "top",
+    "type": "number",
+    "label": "위 (px)",
+    "default": 0,
+    "min": 0,
+    "max": 1024,
+    "step": 64
+   },
+   {
+    "name": "bottom",
+    "type": "number",
+    "label": "아래 (px)",
+    "default": 0,
+    "min": 0,
+    "max": 1024,
+    "step": 64
+   },
+   {
+    "name": "feather",
+    "type": "number",
+    "label": "경계 부드럽게 (px)",
+    "default": 40,
+    "min": 0,
+    "max": 200,
+    "step": 8,
+    "hint": "원본과 새 부분이 만나는 경계를 섞는 폭이에요. 이음새가 보이면 키워요.",
+    "advanced": true
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.5,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "regional",
+  "title": "영역별 프롬프트 (칸 나눠 그리기)",
+  "icon": "▦",
+  "summary": "화면을 둘 또는 셋으로 나눠 칸마다 다른 내용을 적어요. '왼쪽엔 소녀, 오른쪽엔 고양이'처럼 여러 대상이 섞이지 않게 그릴 때 좋아요.",
+  "steps": [
+   "나누는 방식을 골라요",
+   "전체 분위기를 공통 문장에 적어요",
+   "칸마다 그릴 내용을 적어요"
+  ],
+  "needs": {
+   "nodes": [
+    "ConditioningSetAreaPercentage",
+    "ConditioningCombine"
+   ],
+   "lists": [
+    "checkpoints"
+   ]
+  },
+  "fields": [
+   {
+    "name": "layout",
+    "type": "select",
+    "label": "나누는 방식",
+    "options": [
+     [
+      "lr",
+      "좌 / 우 (2칸)"
+     ],
+     [
+      "tb",
+      "위 / 아래 (2칸)"
+     ],
+     [
+      "lcr",
+      "좌 / 중 / 우 (3칸)"
+     ]
+    ],
+    "default": "lr"
+   },
+   {
+    "name": "common",
+    "type": "textarea",
+    "label": "전체 공통 (분위기·화풍·품질)",
+    "hint": "예: masterpiece, best quality, soft lighting",
+    "rows": 2
+   },
+   {
+    "name": "r1",
+    "type": "textarea",
+    "label": "1번 칸 (왼쪽 / 위)",
+    "required": true,
+    "rows": 2
+   },
+   {
+    "name": "r2",
+    "type": "textarea",
+    "label": "2번 칸 (오른쪽 / 아래 / 가운데)",
+    "required": true,
+    "rows": 2
+   },
+   {
+    "name": "r3",
+    "type": "textarea",
+    "label": "3번 칸 (오른쪽, 3칸일 때만)",
+    "rows": 2
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "checkpoints",
+    "label": "체크포인트"
+   },
+   {
+    "name": "w",
+    "type": "number",
+    "label": "가로 (px)",
+    "default": 1216,
+    "min": 512,
+    "max": 2048,
+    "step": 64
+   },
+   {
+    "name": "h",
+    "type": "number",
+    "label": "세로 (px)",
+    "default": 832,
+    "min": 512,
+    "max": 2048,
+    "step": 64
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.5,
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "compare",
+  "title": "설정 비교표 (설정이 그림을 어떻게 바꾸는지)",
+  "icon": "▤",
+  "summary": "같은 프롬프트·같은 시드로 설정값 하나만 바꿔 여러 장을 만들고 한 장의 표로 보여 줘요. CFG나 단계 수를 바꾸면 어떻게 달라지는지 눈으로 익힐 수 있어요.",
+  "steps": [
+   "프롬프트를 적어요",
+   "바꿔 볼 설정을 고르고 값을 쉼표로 적어요 (예: 3,5,7,9)",
+   "표가 완성되면 마음에 드는 값을 생성 탭에 써요"
+  ],
+  "needs": {
+   "nodes": [],
+   "lists": [
+    "checkpoints"
+   ]
+  },
+  "fields": [
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "프롬프트",
+    "required": true
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "checkpoints",
+    "label": "체크포인트"
+   },
+   {
+    "name": "axis",
+    "type": "select",
+    "label": "가로로 바꿀 설정",
+    "options": [
+     [
+      "cfg",
+      "CFG (지시를 따르는 정도)"
+     ],
+     [
+      "steps",
+      "단계 수"
+     ],
+     [
+      "sampler",
+      "샘플러"
+     ],
+     [
+      "scheduler",
+      "스케줄러"
+     ],
+     [
+      "clip_skip",
+      "CLIP skip"
+     ]
+    ],
+    "default": "cfg"
+   },
+   {
+    "name": "values",
+    "type": "text",
+    "label": "값 목록 (쉼표로 구분, 최대 6개)",
+    "default": "3,5,7,9"
+   },
+   {
+    "name": "axis2",
+    "type": "select",
+    "label": "세로로 바꿀 설정 (선택)",
+    "options": [
+     [
+      "",
+      "사용 안 함"
+     ],
+     [
+      "cfg",
+      "CFG"
+     ],
+     [
+      "steps",
+      "단계 수"
+     ],
+     [
+      "sampler",
+      "샘플러"
+     ],
+     [
+      "scheduler",
+      "스케줄러"
+     ],
+     [
+      "clip_skip",
+      "CLIP skip"
+     ]
+    ],
+    "default": ""
+   },
+   {
+    "name": "values2",
+    "type": "text",
+    "label": "세로 값 목록 (최대 4개)",
+    "default": ""
+   },
+   {
+    "name": "w",
+    "type": "number",
+    "label": "칸 가로 (px)",
+    "default": 832,
+    "min": 512,
+    "max": 1536,
+    "step": 64,
+    "advanced": true
+   },
+   {
+    "name": "h",
+    "type": "number",
+    "label": "칸 세로 (px)",
+    "default": 1216,
+    "min": 512,
+    "max": 1536,
+    "step": 64,
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드 (모든 칸에 같은 값)",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ }
 ]

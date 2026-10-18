@@ -275,6 +275,19 @@ def tidy():
             pass
 
 
+def speed_args():
+    """ComfyUI 가 지원할 때만 쓰는 안전한 속도 옵션(fp16 누적 연산). settings.json 에 "speed_boost": false 를 적으면 꺼요."""
+    if not settings().get("speed_boost", True) or not PY.exists():
+        return []
+    try:
+        r = subprocess.run([str(PY), "-s", str(COMFY / "main.py"), "--help"], cwd=HOME, capture_output=True, text=True, timeout=40)
+        if "fp16_accumulation" in (r.stdout or ""):
+            return ["--fast", "fp16_accumulation"]
+    except Exception:  # noqa: BLE001
+        pass
+    return []
+
+
 def start_engines():
     LOGS.mkdir(exist_ok=True)
     tidy()
@@ -284,7 +297,7 @@ def start_engines():
                                       stdout=open(LOGS / "ollama.log", "ab"), stderr=subprocess.STDOUT))
     if PY.exists() and not alive(CUI + "/system_stats"):
         cmd = [str(PY), "-s", str(COMFY / "main.py"), "--windows-standalone-build",
-               "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"]
+               "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"] + speed_args()
         procs.append(subprocess.Popen(cmd, cwd=HOME, stdout=open(LOGS / "comfyui.log", "ab"),
                                       stderr=subprocess.STDOUT))
 
@@ -382,7 +395,7 @@ def grow_feather(m, grow, feather=None):
     return m.filter(ImageFilter.GaussianBlur(feather if feather else max(3, min(x1 - x0, y1 - y0) // 16)))
 
 
-def plan(img, mask, grow, ctx=0.35, target=1024, feather=None):
+def plan(img, mask, grow, ctx=0.35, target=1024, feather=None, mult=8):
     """마스크 주변만 잘라 모델 해상도(≈target²)로 맞춥니다. 작은 영역도 고해상도로 그려져 디테일이 좋아집니다."""
     W, H = img.size
     bx0, by0, bx1, by1 = mask.getbbox()
@@ -395,7 +408,7 @@ def plan(img, mask, grow, ctx=0.35, target=1024, feather=None):
         y0 = max(0, min((y0 + y1 - ms) // 2, H - ms)); y1 = y0 + ms
     w, h = x1 - x0, y1 - y0
     s = min((target * target / (w * h)) ** 0.5, 2048 / max(w, h))
-    size = (max(64, round(w * s / 8) * 8), max(64, round(h * s / 8) * 8))
+    size = (max(64, round(w * s / mult) * mult), max(64, round(h * s / mult) * mult))
     crop = img.crop((x0, y0, x1, y1))
     soft = grow_feather(mask.crop((x0, y0, x1, y1)), grow, feather)
     return (x0, y0), crop, soft, size
@@ -599,7 +612,7 @@ def wait_comfy():
 def put_input(img, J):
     name = f"hub_{uuid.uuid4().hex[:10]}.png"
     (COMFY / "input").mkdir(parents=True, exist_ok=True)
-    img.save(COMFY / "input" / name)
+    img.save(COMFY / "input" / name, compress_level=1)   # 임시 파일이라 압축을 줄여 저장 시간을 아껴요
     J["tmp"].append(COMFY / "input" / name)
     return name
 
@@ -629,6 +642,9 @@ def comfy_cancel(pid):
 
 # ── ComfyUI 진행률(웹소켓). 표준 라이브러리만으로 최소 구현: 연결 실패하면 시간 기반 추정으로 대신해요 ──
 WSP = {}          # prompt_id -> (value, max)
+EXE = {}          # prompt_id -> 지금 실행 중인 노드 번호(문자열)
+LOAD_CLS = {"CheckpointLoaderSimple", "UNETLoader", "CLIPLoader", "DualCLIPLoader", "VAELoader", "LoraLoader", "LoraLoaderModelOnly",
+            "ControlNetLoader", "UpscaleModelLoader", "CLIPTextEncode", "TextEncodeQwenImageEdit", "TextEncodeQwenImageEditPlus", "VAEEncode"}
 WS_STATE = {"on": False, "ok": False}
 
 
@@ -687,9 +703,14 @@ def ws_loop():
                     d = json.loads(msg)
                 except ValueError:
                     continue
-                if d.get("type") == "progress" and d.get("data", {}).get("prompt_id"):
-                    x = d["data"]
+                x = d.get("data") or {}
+                if d.get("type") == "progress" and x.get("prompt_id"):
                     WSP[x["prompt_id"]] = (x.get("value", 0), max(1, x.get("max", 1)))
+                elif d.get("type") == "executing" and x.get("prompt_id"):
+                    if x.get("node") is None:
+                        EXE.pop(x["prompt_id"], None)
+                    else:
+                        EXE[x["prompt_id"]] = str(x["node"])
         except Exception:
             WS_STATE["ok"] = False
             time.sleep(3)
@@ -699,6 +720,17 @@ def ws_start():
     if not WS_STATE["on"]:
         WS_STATE["on"] = True
         threading.Thread(target=ws_loop, daemon=True).start()
+
+
+def phase_of(wf, pid):
+    """지금 하는 일: wait(대기) / load(모델 불러오는 중) / gen(그리는 중). 웹소켓이 없으면 구분하지 않고 gen 으로 둬요."""
+    if not WS_STATE["ok"] or pid in WSP:
+        return "gen"
+    ex = EXE.get(pid)
+    if ex is None:
+        return "wait"
+    c = wf.get(ex, {}).get("class_type", "")
+    return "load" if c in LOAD_CLS or c.startswith("KSampler") else "gen"
 
 
 def set_progress(J, frac, est=False):
@@ -721,6 +753,7 @@ def run_wf(wf, J):
             comfy_cancel(pid)
             raise Cancelled("사용자가 중단했어요.")
         h = http(CUI + f"/history/{pid}", timeout=15).get(pid)
+        J["phase"] = phase_of(wf, pid) if not h else "gen"
         if pid in WSP:
             v, m = WSP[pid]
             set_progress(J, v / m * 0.97)
@@ -740,11 +773,20 @@ def run_wf(wf, J):
                 for im in o.get("images", []):
                     with urllib.request.urlopen(CUI + "/view?" + urllib.parse.urlencode(im), timeout=60) as f:
                         imgs.append(Image.open(io.BytesIO(f.read())).convert("RGB"))
+                    if im.get("type") == "temp":   # 미리보기 파일은 읽은 즉시 지워요 (안 그러면 temp 폴더에 계속 쌓여요)
+                        try:
+                            (COMFY / "temp" / im.get("subfolder", "") / Path(im["filename"]).name).unlink(missing_ok=True)
+                        except OSError:
+                            pass
+            try:   # ComfyUI 메모리에 쌓이는 기록도 바로 비워요
+                http(CUI + "/history", {"delete": [pid]}, 5)
+            except Exception:
+                pass
             if not imgs:
                 raise RuntimeError("결과 이미지가 없습니다.")
             return imgs
         J["elapsed"] = int(time.time() - t0)
-        time.sleep(0.5 if J.get("cancel") else 1)
+        time.sleep(0.3)
 
 
 # ───────────────────────── 작업 (편집 / 생성 / 업스케일 / 워크플로) ─────────────────────────
@@ -775,12 +817,70 @@ def upscale(img, J, model, scale):
     return run_wf(flows.wf_upscale(model, put_input(img, J), scale == 2), J)[0]
 
 
+FX_DEFAULTS = {"flux": (20, 3.5, 1, "simple"), "chroma": (26, 0, 4, "beta"), "krea2": (8, 0, 1, "simple")}   # 단계, 가이던스, CFG, 스케줄러
+FLUX_FAMS = ("flux", "krea2", "chroma")
+
+
+def flux_q(p, J, fam, text, tags, seed, w=1024, h=1024):
+    """FLUX·Krea 2·Chroma 생성 그래프에 넘길 설정 한 벌(생성·편집·확장·업스케일이 같이 써요)."""
+    f, allin, sch = flux_setup(p, J, fam)
+    neg = ""
+    if fam == "krea2":
+        neg = (p.get("negative") or "").strip()
+    elif fam == "chroma":
+        neg = (p.get("negative") or "").strip() or CHROMA_NEG
+        if flows_sex(text):
+            neg += ", child, loli, shota, underage, aged down"
+    return dict(family=fam, allin=allin, **f, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=seed, w=w, h=h,
+                guidance=clamp(num(p, "fx_guidance", 3.5), 0.0, 20.0), steps=clamp(num(p, "fx_steps", 20, int), 1, 100),
+                cfg=clamp(num(p, "fx_cfg", 4.0), 0.0, 20.0) if fam in ("chroma", "krea2") else 1.0,
+                sampler=p.get("fx_sampler") or "euler", scheduler=sch)
+
+
+def flux_info(q, res, kind, **extra):
+    fam = q["family"]
+    return dict(kind=kind, prompt=q["prompt"], negative=q["negative"], steps=q["steps"], cfg=q["guidance"] if fam == "flux" else q["cfg"],
+                sampler=q["sampler"], scheduler=q["scheduler"], seed=q["seed"], w=res.width, h=res.height, model=q["unet"],
+                loras=[[a, b] for a, b in q["loras"]],
+                extra={"Family": fam, **({"Distilled CFG": q["guidance"]} if fam == "flux" else {}), **extra})
+
+
+def edit_flux(p, J, img, mask, grow, feather, rng):
+    """FLUX·Krea 2·Chroma 로 편집. 칠한 영역은 인페인트, FLUX Kontext 모델이면 말로 지시하는 편집."""
+    fam = p.get("fengine") if p.get("fengine") in FLUX_FAMS else "flux"
+    text, tags = prep(p, J, "caption", rng)
+    q = flux_q(p, J, fam, text, tags, seed_of(p))
+    kontext = fam == "flux" and "kontext" in (p.get("fx_model") or "").lower()
+    if kontext:
+        if not has_node("ReferenceLatent") or not has_node("FluxKontextImageScale"):
+            raise RuntimeError("FLUX Kontext 편집에는 ReferenceLatent·FluxKontextImageScale 노드가 필요해요. ComfyUI 를 업데이트해 주세요.")
+        small = img.resize(qsize(img.size, 1.0), RS.LANCZOS)
+        J["msg"] = "편집 중"
+        res = run_wf(flows.wf_kontext(q, put_input(small, J)), J)[0]
+        res = res.resize(img.size, RS.LANCZOS)
+        if mask:
+            res = Image.composite(res, img, grow_feather(mask, grow, feather))
+        return [(res, flux_info(q, res, "edit-flux", Kontext=True), None)]
+    if not mask:
+        raise ValueError("칠해서 고치는 방식이에요. 편집할 영역을 마스크로 칠하거나 [선택 도구]로 골라 주세요. (말로만 지시해서 고치려면 Qwen-Image-Edit 이나 FLUX Kontext 모델을 쓰세요.)")
+    q["denoise"] = clamp(num(p, "fx_denoise", 1.0), 0.1, 1.0)
+    pos, crop, soft, size = plan(img, mask, grow, clamp(num(p, "ctx", 35.0), 5, 200) / 100,
+                                 clamp(num(p, "res", 1024, int), 512, 2048), feather, mult=16)
+    a = put_input(crop.resize(size, RS.LANCZOS), J)
+    b = put_input(soft.resize(size, RS.BILINEAR), J)
+    J["msg"] = "인페인트 생성 중"
+    out = finish(img, pos, crop, soft, run_wf(flows.wf_flux_inpaint(q, a, b), J)[0])
+    return [(out, flux_info(q, out, "edit-flux", **{"Denoising strength": q["denoise"], "Mask grow": grow}), None)]
+
+
 def do_edit(p, J):
     img = load_img(p["image"])
     mask = load_mask(p.get("mask"), img.size)
     grow = clamp(num(p, "grow", 8, int), 0, 128)
     rng = random.Random(num(p, "seed", -1, int))
     feather = clamp(num(p, "feather", 0, int), 0, 200) or None
+    if p.get("engine") == "flux":
+        return edit_flux(p, J, img, mask, grow, feather, rng)
     if p.get("engine") == "sdxl":
         if not mask:
             raise ValueError("편집할 영역을 마스크로 칠해 주세요.")
@@ -813,7 +913,7 @@ def do_edit(p, J):
         raise RuntimeError("참조 이미지는 TextEncodeQwenImageEditPlus 노드가 필요해요. ComfyUI 를 업데이트해 주세요.")
     small = img.resize(qsize(img.size, clamp(num(p, "q_mp", 1.0), 0.3, 2.5)), RS.LANCZOS)
     wf = flows.wf_qwen(q, put_input(small, J), [put_input(r.resize(qsize(r.size), RS.LANCZOS), J) for r in refs], plus)
-    J["msg"] = "편집 중 (첫 실행은 모델을 불러오느라 오래 걸려요)"
+    J["msg"] = "편집 중"
     res = run_wf(wf, J)[0]
     if mask:  # 칠한 영역만 바꾸고 나머지는 원본 100% 유지
         res = Image.composite(res.resize(img.size, RS.LANCZOS), img, grow_feather(mask, grow, feather))
@@ -858,10 +958,25 @@ def feat_outpaint(p, J):
         pad = [int(round(v * s / 8) * 8) for v in pad]
         warn(J, f"이미지가 커서 {s:.0%} 크기로 줄여 처리했어요.")
     rng = random.Random(num(p, "seed", -1, int))
-    q = sd(p, *prep(p, J, "tags", rng), J)
     feather = int(clamp(num(p, "feather", 40, int), 0, 200))
-    J["msg"] = "빈 공간을 그리는 중"
-    g = flows.wf_outpaint(q, put_input(img, J), pad, feather)
+    sel = str(p.get("ckpt") or "")
+    fx = re.match(r"fx:(flux|krea2|chroma):(.*)$", sel, re.S)
+    if fx:      # FLUX·Krea·Krea 2·Chroma 모델로 확장 (단계 수·CFG 는 그 모델에 맞는 값을 써요)
+        fam = fx.group(1)
+        d = FX_DEFAULTS[fam]
+        p2 = dict(p, fx_model=fx.group(2), fx_steps=d[0], fx_guidance=d[1], fx_cfg=d[2], fx_scheduler=d[3])
+        if fam == "krea2" and re.search("raw", fx.group(2), re.I):
+            p2.update(fx_steps=30, fx_cfg=4)
+        text, tags = prep(p2, J, "caption", rng)
+        fq = flux_q(p2, J, fam, text, tags, seed_of(p))
+        J["msg"] = "빈 공간을 그리는 중"
+        g = flows.wf_flux_outpaint(fq, put_input(img, J), pad, feather)
+        info_fn = lambda r: flux_info(fq, r, "feat-outpaint", Outpaint="/".join(map(str, pad)))
+    else:
+        q = sd(p, *prep(p, J, "tags", rng), J)
+        J["msg"] = "빈 공간을 그리는 중"
+        g = flows.wf_outpaint(q, put_input(img, J), pad, feather)
+        info_fn = lambda r: info_sd(q, r.size, "feat-outpaint", **{"Outpaint": "/".join(map(str, pad))})
     res = run_wf(g, J)[0]
     inner = Image.new("L", img.size, 255)    # 원본 부분은 그대로 되돌려요(이음새만 부드럽게)
     if feather:
@@ -874,7 +989,7 @@ def feat_outpaint(p, J):
                 box = [(0, 0, feather, img.height), (0, 0, img.width, feather), (img.width - feather, 0, img.width, img.height), (0, img.height - feather, img.width, img.height)][side]
                 ImageDraw.Draw(inner).rectangle(box, fill=255)
     res.paste(img, (pad[0], pad[1]), inner)
-    return [(res, info_sd(q, res.size, "feat-outpaint", **{"Outpaint": "/".join(map(str, pad))}), g)]
+    return [(res, info_fn(res), g)]
 
 
 def feat_regional(p, J):
@@ -1127,6 +1242,9 @@ def do_gen_flux(p, J):
     return out
 
 
+QWEN_REFINE = "Enhance this image: make it sharper with fine natural detail and clean textures. Keep the composition, colors, faces and identity exactly the same."
+
+
 def refine_tiles(img, q, tile, overlap, J, build=None, mult=8):
     """큰 이미지를 겹치는 타일로 나눠 각각 낮은 denoise 로 다시 그린 뒤 부드럽게 이어 붙입니다."""
     xs, ys = spans(img.width, tile, overlap), spans(img.height, tile, overlap)
@@ -1157,7 +1275,23 @@ def do_up(p, J):
     if p.get("mode") != "refine":
         return [(big, dict(kind="upscale", extra={"Upscaler": p.get("upm") or "auto", "Scale": scale}), None)]
     rng = random.Random(num(p, "seed", -1, int))
-    fam = p.get("rengine") if p.get("rengine") in ("flux", "chroma", "krea2") else "sdxl"
+    fam = p.get("rengine") if p.get("rengine") in ("flux", "chroma", "krea2", "qwen") else "sdxl"
+    if fam == "qwen":      # 이미지 편집에 쓰는 Qwen-Image-Edit 으로 타일을 다시 그려요
+        raw = (p.get("prompt") or "").strip()
+        text, tags = prep(p, J, "sentence", rng) if raw else (QWEN_REFINE, [])
+        q = qwen_params(p, text, tags, J)
+        den = clamp(num(p, "rdenoise", 0.45), 0.05, 0.9)
+        if p.get("fast"):          # 4단계용 모델은 일부만 다시 그릴 때 단계가 모자라서 조금 늘려요
+            q["steps"] = int(min(12, max(4, round(2.5 / den))))
+        q["denoise"] = den
+        plus = has_node("TextEncodeQwenImageEditPlus")
+        tile = clamp(num(p, "tile", 1024, int) // 16 * 16, 512, 1536)
+        out = refine_tiles(big, q, tile, clamp(num(p, "overlap", 128, int), 32, tile // 2), J,
+                           build=lambda n: flows.wf_qwen(q, n, [], plus), mult=16)
+        info = dict(kind="upscale-refine", prompt=text, negative="", steps=q["steps"], cfg=q["cfg"], sampler=q["sampler"],
+                    scheduler=q["scheduler"], seed=q["seed"], w=out.width, h=out.height, model=q["files"]["unet"],
+                    loras=[[n, w] for n, w in q["loras"]], extra={"Family": "qwen", "Denoising strength": den, "Tile": tile})
+        return [(out, info, None)]
     if fam != "sdxl":      # 실사 등 FLUX 계열 모델로 타일을 다시 그려요
         f, allin, sch = flux_setup(p, J, fam)
         text, tags = prep(p, J, "caption", rng) if (p.get("prompt") or "").strip() else ("high quality photo, sharp focus, fine detail, natural skin texture", [])
@@ -1685,6 +1819,149 @@ def delete_item(p):
     return {"ok": True}
 
 
+# ───────────────────────── 저장 공간 점검 / 정리 ─────────────────────────
+def dir_size(p, skip=()):
+    """폴더 전체 크기. 심볼릭 링크는 따라가지 않아요."""
+    total = 0
+    stack = [p]
+    while stack:
+        d = stack.pop()
+        try:
+            with os.scandir(d) as it:
+                for e in it:
+                    try:
+                        if e.is_symlink():
+                            continue
+                        if e.is_dir(follow_symlinks=False):
+                            if e.path not in skip:
+                                stack.append(e.path)
+                        else:
+                            total += e.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+    return total
+
+
+def quick_sig(f):
+    """같은 파일인지 빠르게 비교: 크기 + 앞뒤 1MB 지문."""
+    h = hashlib.sha1()
+    try:
+        with open(f, "rb") as fh:
+            h.update(fh.read(1 << 20))
+            if fsize(f) > (2 << 20):
+                fh.seek(-(1 << 20), 2)
+                h.update(fh.read(1 << 20))
+    except OSError:
+        return None
+    return f"{fsize(f)}:{h.hexdigest()}"
+
+
+def disk_report():
+    import shutil
+    items, skip_models = [], str(MODELS)
+    def add(key, label, path, note="", clean=None, skip=()):
+        path = Path(path)
+        if path.exists():
+            items.append(dict(key=key, label=label, bytes=dir_size(str(path), skip), note=note, clean=clean))
+    for d in sorted(FOLDERS):
+        add("m_" + d, "모델: " + d, MODELS / d, "필요 없는 파일은 아래 목록이나 '설치와 모델'의 설치된 파일에서 지울 수 있어요.")
+    add("llm", "대화 모델 (Ollama)", ROOT / "models" / "llm", "쓰지 않는 대화 모델을 지우면 가장 크게 줄어요.")
+    add("outputs", "결과 이미지 (outputs)", OUT, "직접 만든 결과물이라 자동으로 지우지 않아요. 필요 없는 건 폴더에서 직접 지워 주세요.")
+    add("temp", "임시 미리보기 (ComfyUI temp)", COMFY / "temp", "지워도 안전해요.", "temp")
+    add("input", "임시 입력 이미지 (ComfyUI input)", COMFY / "input", "이 프로그램이 만든 hub_*.png 만 지워요.", "input")
+    add("backup", "업데이트 되돌리기용 백업", ROOT / "backup", "가장 최근 1개만 남기고 지워요.", "backup")
+    add("logs", "로그", LOGS, "지워도 안전해요.", "logs")
+    add("comfy_engine", "ComfyUI 엔진 (python_embeded)", HOME / "python_embeded", "엔진 본체라 지우면 안 돼요.")
+    add("comfy_app", "ComfyUI 프로그램·확장", COMFY, "엔진 본체라 지우면 안 돼요.", skip=(str(MODELS), str(COMFY / "temp"), str(COMFY / "input"), str(COMFY / "output")))
+    add("comfy_out", "ComfyUI 자체 output 폴더", COMFY / "output", "이 프로그램은 쓰지 않는 폴더예요. 비어 있지 않다면 ComfyUI 화면을 따로 쓰고 계신 거예요.")
+    add("ollama_eng", "Ollama 프로그램", ROOT / "engine" / "ollama", "엔진 본체라 지우면 안 돼요.")
+    home = Path.home()
+    for k, label, pth, note in (("o_default", "별도로 설치한 Ollama의 모델 폴더 (~/.ollama)", home / ".ollama", "이 프로그램과 따로 설치한 Ollama가 같은 모델을 한 번 더 받아 둔 경우예요. 쓰지 않으면 직접 지워도 돼요."),
+                                ("hf", "HuggingFace 캐시 (~/.cache/huggingface)", home / ".cache" / "huggingface", "다른 프로그램이 받은 캐시예요. 필요 없으면 직접 지워도 돼요."),
+                                ("pip", "pip 캐시", home / ".cache" / "pip", "필요 없으면 직접 지워도 돼요.")):
+        add(k, label, pth, note)
+    parts = [dict(dir=d, name=f.name, size=fsize(f)) for d in sorted(FOLDERS) if (MODELS / d).is_dir()
+             for f in (MODELS / d).iterdir() if f.is_file() and f.suffix == ".part"]
+    # 가장 큰 파일 15개 + 중복 의심 파일
+    big, sigs = [], {}
+    for d in sorted(FOLDERS):
+        base = MODELS / d
+        if not base.is_dir():
+            continue
+        for f in base.iterdir():
+            if f.is_file() and f.suffix.lower() in EXT:
+                sz = fsize(f)
+                big.append(dict(dir=d, name=f.name, size=sz))
+                if sz > (50 << 20):
+                    sigs.setdefault(sz, []).append((d, f))
+    big.sort(key=lambda x: -x["size"])
+    dups = []
+    for sz, fs in sigs.items():
+        if len(fs) > 1:
+            g = {}
+            for d, f in fs:
+                g.setdefault(quick_sig(f), []).append(dict(dir=d, name=f.name, size=sz))
+            dups += [v for k, v in g.items() if k and len(v) > 1]
+    items.sort(key=lambda x: -x["bytes"])
+    try:
+        du = shutil.disk_usage(ROOT)
+        free, total = du.free, du.total
+    except OSError:
+        free = total = 0
+    return dict(items=items, big=big[:15], dups=dups, parts=parts, free=free, total=total,
+                used=sum(i["bytes"] for i in items if i["key"] not in ("o_default", "hf", "pip")))
+
+
+def clean_item(what):
+    """안전한 임시 파일만 지워요. 돌려주는 값: 확보한 바이트."""
+    freed = 0
+    def rm(f):
+        nonlocal freed
+        try:
+            sz = fsize(f)
+            f.unlink()
+            freed += sz
+        except OSError:
+            pass
+    if what == "temp":
+        for f in (COMFY / "temp").rglob("*"):
+            if f.is_file():
+                rm(f)
+    elif what == "input":
+        for f in (COMFY / "input").glob("hub_*.png"):
+            rm(f)
+    elif what == "logs":
+        for f in LOGS.glob("*.old"):
+            rm(f)
+        for n in ("hub.log", "comfyui.log", "ollama.log"):   # 실행 중인 로그는 비워서 줄여요
+            f = LOGS / n
+            try:
+                if f.is_file() and f.stat().st_size > 1 << 20:
+                    sz = f.stat().st_size
+                    open(f, "wb").close()
+                    freed += sz
+            except OSError:
+                pass
+    elif what == "backup":
+        bk = ROOT / "backup"
+        olds = sorted((d for d in bk.iterdir() if d.is_dir() and (d / "_restore.json").is_file()), reverse=True) if bk.is_dir() else []
+        import shutil
+        for d in olds[1:]:
+            freed += dir_size(str(d))
+            shutil.rmtree(d, ignore_errors=True)
+    elif what == "parts":
+        if any(t.get("state") in ("running", "queued") for t in TASKS):
+            return {"error": "설치·다운로드가 진행 중일 때는 받다 만 파일을 지우지 않아요."}
+        for d in FOLDERS:
+            for f in (MODELS / d).glob("*.part") if (MODELS / d).is_dir() else []:
+                rm(f)
+    else:
+        return {"error": "알 수 없는 정리 항목이에요."}
+    return {"ok": True, "freed": freed}
+
+
 # ───────────────────────── API 응답 ─────────────────────────
 def status():
     return {"ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "version": VERSION}
@@ -1748,10 +2025,12 @@ def lists():
     wc = ROOT / "wildcards"
     sdxl, flux, chroma, krea2, info = sorted_models()
     fp, kp = flux_parts(), krea2_parts()      # 폴더를 한 번씩만 훑어요
-    return {"llm": llms(), "checkpoints": sdxl, "loras": files("loras"), "families": info,
+    loras = files("loras")
+    return {"llm": llms(), "checkpoints": sdxl, "loras": loras, "families": info,
+            "lora_info": {n: modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras},
             "upscalers": files("upscale_models"), "controlnets": files("controlnet"),
             "vaes": files("vae"), "text_encoders": files("text_encoders"), "diffusion": files("diffusion_models"),
-            "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2,
+            "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2, "anymodels": sdxl + flux + chroma + krea2,
             "flux_ready": bool(fp["t5"] and fp["clip_l"] and fp["vae"]),
             "chroma_ready": bool(fp["t5"] and fp["vae"]),
             "krea2_ready": bool(kp["te"] and kp["vae"]),
@@ -1849,13 +2128,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(sam_status())
         if u == "/api/dl/tokens":
             return self.send_json(token_state())
+        if u == "/api/disk":
+            return self.send_json(disk_report())
         if u == "/api/manage":
             return self.send_json(manage())
         if u.startswith("/api/job/"):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            return self.send_json({k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest") if k in J})
+            return self.send_json({k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase") if k in J})
         self.send_json({"error": "not found"}, 404)
 
     def do_POST(self):
@@ -1905,6 +2186,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": f"선택하지 못했어요 ({type(e).__name__}: {e})"})
         if u == "/api/family":
             return self.send_json(set_family(p))
+        if u == "/api/clean":
+            return self.send_json(clean_item(str(p.get("what", ""))))
         if u == "/api/delete":
             return self.send_json(delete_item(p))
         if u == "/api/meta":

@@ -76,10 +76,13 @@
       <select name="engine">
         <option value="qwen">말로 편집 (Qwen-Image-Edit)</option>
         <option value="sdxl">칠해서 편집 (SDXL 인페인트)</option>
+        <option value="flux">칠해서 편집 (FLUX · Krea · Krea 2 · Chroma)</option>
       </select></label>
     <label class="f">원하는 변화<textarea name="prompt" rows="4"></textarea></label>
     <p class="hint qwen">문장으로 지시하세요. 예: <b>재킷을 붉은 가죽으로 바꿔줘</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 참조 이미지는 <b>이미지 2의 옷을 입혀줘</b>처럼 번호로 불러요.</p>
     <p class="hint sdxl">칠한 영역에 그릴 내용만 영어 태그로 적어요. 예: <b>black silk robe, natural skin texture</b></p>
+    <p class="hint fxe">칠한 영역에 그릴 내용을 문장으로 적어요. 예: <b>black silk robe, natural skin texture</b><br>모델 파일에 <b>FLUX Kontext</b>를 고르면 칠하지 않아도 <b>재킷을 붉은 가죽으로 바꿔줘</b>처럼 말로 지시해서 고칠 수 있어요.</p>
+    <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="exprs" title="바꿀 얼굴 부분을 [선택 도구]로 클릭하거나 칠한 뒤 눌러 보세요. 얼굴 생김새는 그대로, 표정만 바뀌어요.">
       <span>표정 바꾸기</span>
       <button type="button" class="chip" data-t="smile, happy, open mouth" data-s="환하게 웃는 얼굴로">웃음</button>
@@ -93,6 +96,20 @@
     </div>
     <label class="f sdxl">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 프로필 기본값을 써요"></textarea></label>
     <div class="sdxl" data-blk="sd-main"></div>
+    <div class="fxe">
+      <label class="f">모델 종류<select name="fengine"><option value="flux">FLUX · Krea(FLUX.1)</option><option value="krea2">Krea 2</option><option value="chroma">Chroma</option></select></label>
+      <label class="f">모델 파일<select name="fx_model"></select></label>
+      <div class="row">
+        <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
+        <label class="f fe-g">가이던스(FLUX)<input type="number" name="fx_guidance" value="3.5" step="0.5" min="0" max="20"></label>
+        <label class="f fe-c">CFG(Chroma·Krea 2)<input type="number" name="fx_cfg" value="1" step="0.5" min="0" max="20"></label>
+      </div>
+      <div class="row">
+        <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
+        <label class="f">스케줄러<select name="fx_scheduler" data-def="simple"></select></label>
+        <label class="f">변화 강도<input type="number" name="fx_denoise" value="1" step="0.05" min="0.1" max="1"></label>
+      </div>
+    </div>
     <div class="qwen">
       <label class="chk"><input type="checkbox" name="fast"> 빠른 모드 (Lightning 4단계)</label>
       <label class="chk"><input type="checkbox" name="hires"> 원본 해상도로 복원 (Real-ESRGAN)</label>
@@ -102,7 +119,7 @@
       </div>
     </div>
     <div class="row">
-      <label class="f sdxl">변화 강도<input type="number" name="denoise" value="0.9" step="0.05" min="0.1" max="1"></label>
+      <label class="f den">변화 강도<input type="number" name="denoise" value="0.9" step="0.05" min="0.1" max="1"></label>
       <label class="f">마스크 확장(px)<input type="number" name="grow" value="8" min="0" max="128"></label>
     </div>
     <details><summary>영역 처리 (고급)</summary>
@@ -152,7 +169,6 @@
       <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
       <label class="chk sdxl"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label>
       <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
-      <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     </details>
   </form>
   <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
@@ -196,6 +212,8 @@
           <button type="button" class="ghost sam-install" title="작은 AI 모델(MobileSAM, 약 45MB)과 실행 도구(onnxruntime)를 한 번만 설치해요.">선택 도구 설치 (약 45MB)</button>
         </span>
       </span>
+      <button type="button" class="ghost bigsel" title="설정 칸을 접고 이미지를 화면 가득 키워서 칠하거나 선택해요. Esc 로 돌아와요.">크게 보며 선택</button>
+      <button type="button" class="go bigrun" title="큰 화면을 닫고 지금 선택으로 바로 편집해요.">닫고 편집 실행</button>
       <button type="button" class="ghost zoom">원본 크게 보기</button>
       <button type="button" class="ghost swap">다른 이미지</button>
     </div>
@@ -236,6 +254,7 @@
     </details>
     <p class="hint" data-for="flux chroma krea2">FLUX·Krea 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
     <label class="f" data-for="sdxl chroma krea2">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="row">
       <label class="f">가로<input type="number" name="w" value="1024" step="8" min="256" max="2048"></label>
       <label class="f">세로<input type="number" name="h" value="1024" step="8" min="256" max="2048"></label>
@@ -292,7 +311,6 @@
       <label class="chk"><input type="checkbox" name="dyn" checked> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
       <label class="chk" data-for="sdxl"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label>
       <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
-      <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     </details>
   </form>
   <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
@@ -491,6 +509,10 @@
   </div>
   <h3>대화 모델</h3><div id="cat-llm"></div>
   <h3>이미지 모델</h3><div id="cat-img"></div>
+  <h3>저장 공간 점검</h3>
+  <p class="hint plain">어디에서 용량을 쓰는지 폴더별로 보여 주고, 지워도 안전한 임시 파일만 골라서 정리해 줘요. 모델과 결과 이미지는 자동으로 지우지 않아요.</p>
+  <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button><span class="mute" id="disk-st"></span></div>
+  <div id="disk"></div>
   <h3>설치된 파일 관리</h3>
   <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>
   <div id="manage"></div>
