@@ -5,7 +5,7 @@
 역할: Ollama / ComfyUI 실행, 웹 UI 제공, 모델 설치, 이미지 작업(마스크 크롭·합성·타일 리파인) 조율,
       이미지 메타데이터 읽기/제거(meta.py), ComfyUI 그래프 생성·사용자 워크플로 실행(flows.py).
 """
-import base64, hashlib, io, json, os, random, re, shutil, subprocess, sys, threading, time, uuid, webbrowser
+import base64, hashlib, io, json, os, random, re, shutil, subprocess, sys, tempfile, threading, time, uuid, webbrowser
 import urllib.error, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -1933,6 +1933,130 @@ def restart_comfy():
     return {"ok": True}
 
 
+# ───────────────────────── 프로그램 다시 시작 · 위치 옮기기 ─────────────────────────
+def _appdata():
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "LocalAI-Studio"
+
+
+def _exit_now():
+    for pr in list(procs):
+        try:
+            pr.terminate()
+        except Exception:
+            pass
+    os._exit(0)
+
+
+def busy_count():
+    return sum(1 for j in JOBS.values() if j.get("state") in ("queued", "running")) + \
+        sum(1 for t in TASKS if t.get("state") in ("queued", "running")) + sum(1 for j in NODE_JOBS.values() if j.get("state") == "running")
+
+
+def spawn_helper(mode, dst=None):
+    """스튜디오를 끈 뒤 옮기기·다시 켜기를 맡을 도우미를 임시 폴더에서 따로 띄워요(이 폴더 밖이라 옮겨도 안전해요)."""
+    import relocate
+    tmp = Path(tempfile.mkdtemp(prefix="localai-helper-"))
+    shutil.copy2(HUB / "relocate.py", tmp / "relocate.py")
+    py = Path(sys.executable)
+    try:       # 내장 파이썬이 옮길 폴더 안에 있으면 가벼운 실행 파일 일부만 임시 폴더로 복사해서 써요
+        if relocate._inside(py, ROOT):
+            rt = tmp / "rt"
+            rt.mkdir()
+            for f in py.parent.iterdir():
+                if f.is_file():
+                    shutil.copy2(f, rt / f.name)
+            py = rt / py.name
+    except OSError:
+        py = Path(sys.executable)
+    ad = _appdata()
+    job = {"mode": mode, "src": str(ROOT), "dst": str(dst or ROOT), "ppid": os.getppid(), "wait": 3, "log": str(ad / "move.log"),
+           "result": str(ad / "last-move.json"), "path_txt": str(ad / "path.txt")}
+    (tmp / "job.json").write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+    flags = (0x00000008 | 0x00000200) if os.name == "nt" else 0      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([str(py), "-I", "-X", "utf8", str(tmp / "relocate.py"), str(tmp / "job.json")], cwd=str(tmp), creationflags=flags,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+
+
+def app_restart(p):
+    n = busy_count()
+    if n and not p.get("force"):
+        return {"busy": n}
+    spawn_helper("restart")
+    threading.Timer(0.8, _exit_now).start()
+    return {"ok": True}
+
+
+def app_move(p, check_only):
+    import relocate
+    try:
+        pl = relocate.plan(ROOT, p.get("dest"))
+    except ValueError as e:
+        return {"error": str(e)}
+    except OSError as e:
+        return {"error": f"그 위치를 확인하지 못했어요: {e}"}
+    if check_only:
+        return pl
+    n = busy_count()
+    if n and not p.get("force"):
+        return {"busy": n}
+    spawn_helper(pl["mode"], pl["dst"])
+    threading.Timer(0.8, _exit_now).start()
+    return {"ok": True, **pl}
+
+
+def app_where():
+    return {"root": str(ROOT), "parent": str(ROOT.parent), "nested_same_name": ROOT.parent.name == ROOT.name,
+            "free": shutil.disk_usage(ROOT).free}
+
+
+def app_notice():
+    """옮기기/재시작 결과를 한 번만 알려 줘요."""
+    f = _appdata() / "last-move.json"
+    try:
+        d = json.loads(f.read_text(encoding="utf-8"))
+        f.unlink()
+        return d
+    except (OSError, ValueError):
+        return {}
+
+
+# ───────────────────────── LoRA / 모델 정보 ─────────────────────────
+PREV_EXT = (".preview.png", ".preview.jpg", ".preview.jpeg", ".png", ".jpg", ".jpeg", ".webp")
+
+
+def model_preview(kind, name):
+    """모델 파일과 이름이 같은 그림 파일(예: x.safetensors 옆의 x.preview.png, x.png)을 미리보기로 써요."""
+    stem = Path(name).stem
+    for ext in PREV_EXT:
+        f = MODELS / kind / (stem + ext)
+        if f.is_file():
+            return f
+    return None
+
+
+def model_cards(kind):
+    """kind: loras(트리거 단어·학습 정보까지) / checkpoints(계열·크기)."""
+    out = []
+    if kind == "loras":
+        for n in files("loras"):
+            try:
+                c = dict(modelinfo.lora_card(MODELS / "loras" / n))
+            except Exception:  # noqa: BLE001
+                c = {"name": n, "family": "unknown", "trigger": [], "tags": []}
+            c["preview"] = bool(model_preview("loras", n))
+            out.append(c)
+    else:
+        for sub in ("checkpoints", "diffusion_models"):
+            for n in files(sub):
+                try:
+                    sz = round((MODELS / sub / n).stat().st_size / 1048576, 1)
+                    fam = model_family(sub, n)[0]
+                except OSError:
+                    sz, fam = 0, "unknown"
+                out.append({"name": n, "dir": sub, "size_mb": sz, "family": fam, "preview": bool(model_preview(sub, n))})
+    return {"items": out}
+
+
 # ───────────────────────── 모델 설치 ─────────────────────────
 def add_task(label, **kw):
     t = dict(id=uuid.uuid4().hex[:8], label=label, state="queued", msg="", done=0, total=0, **kw)
@@ -2522,8 +2646,11 @@ def clean_item(what):
 
 
 # ───────────────────────── API 응답 ─────────────────────────
+BOOT = uuid.uuid4().hex[:8]
+
+
 def status():
-    return {"ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "gpu_live": gpu_live(), "version": VERSION}
+    return {"boot": BOOT, "ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "gpu_live": gpu_live(), "version": VERSION}
 
 
 FAMILY_CHOICES = ("sd15", "sdxl", "flux", "krea2", "chroma", "qwen", "hidden")
@@ -2734,6 +2861,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "thumb failed"}, 500)
         if u == "/api/nodes/status":
             return self.send_json({r: {"state": j["state"], "msg": j["msg"]} for r, j in NODE_JOBS.items()})
+        if u == "/api/app/where":
+            return self.send_json(app_where())
+        if u == "/api/app/notice":
+            return self.send_json(app_notice())
+        if u == "/api/models/cards":
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            return self.send_json(model_cards((qs.get("kind") or ["loras"])[0]))
+        if u.startswith("/mprev/"):
+            parts = urllib.parse.unquote(u[7:]).split("/")
+            f = model_preview(parts[0], parts[1]) if len(parts) == 2 and parts[0] in ("loras", "checkpoints", "diffusion_models") else None
+            if not f:
+                return self.send_json({"error": "not found"}, 404)
+            try:
+                return self.send_bytes(thumb_bytes(f), "image/jpeg", extra={"Cache-Control": "max-age=3600"})
+            except Exception:
+                return self.send_json({"error": "preview failed"}, 500)
         if u == "/api/vision":
             return self.send_json({"models": vision_models()})
         if u == "/api/manage":
@@ -2792,6 +2935,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": f"선택하지 못했어요 ({type(e).__name__}: {e})"})
         if u == "/api/family":
             return self.send_json(set_family(p))
+        if u == "/api/app/restart":
+            return self.send_json(app_restart(p))
+        if u == "/api/app/move/check":
+            return self.send_json(app_move(p, True))
+        if u == "/api/app/move":
+            return self.send_json(app_move(p, False))
         if u == "/api/nodes/sources":
             try:
                 return self.send_json(node_sources([str(x) for x in (p.get("missing") or [])][:200]))

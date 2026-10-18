@@ -11,6 +11,7 @@
   <div class="brand">로컬 AI 스튜디오<small id="ver"></small></div>
   <div id="gbars" hidden></div>
   <nav>
+    <button data-v="start">시작하기</button>
     <button data-v="chat" class="on">대화</button>
     <i class="sep"></i>
     <button data-v="edit">이미지 편집</button>
@@ -30,6 +31,7 @@
   </nav>
   <div class="grow"></div>
   <button class="adv" id="refresh-models" type="button" title="폴더에 새로 넣거나 지운 모델·LoRA·VAE 파일을 목록에 바로 반영해요.">↻ 모델 목록 새로고침</button>
+  <button class="adv" id="restart-app" type="button" title="스튜디오와 엔진을 껐다가 다시 켜요.">⟳ 프로그램 다시 시작</button>
   <button class="adv" data-open="outputs" type="button">결과 폴더 열기</button>
   <a class="adv" href="http://127.0.0.1:8188" target="_blank" rel="noopener">ComfyUI 고급 화면 열기</a>
   <div id="stat">
@@ -40,6 +42,21 @@
 </aside>
 
 <main>
+<!-- 시작하기 -->
+<section class="view" id="v-start">
+  <h2>시작하기</h2>
+  <p class="hint plain">처음이어도 괜찮아요. 하고 싶은 일을 고르면 알맞은 화면으로 안내하고, 필요한 순서도 알려 줘요.</p>
+  <h3>내 컴퓨터 준비 상태</h3>
+  <div id="st-ready" class="ready"></div>
+  <h3>무엇을 하고 싶나요?</h3>
+  <div id="st-goals" class="goals"></div>
+  <h3>결과가 이상해요</h3>
+  <div id="st-fix"></div>
+  <h3>안내 설정</h3>
+  <label class="chk"><input type="checkbox" id="coach-on"> 각 화면 오른쪽 위에 [💡 이 화면 사용법] 안내 보이기</label>
+  <div class="actions"><button class="ghost" id="coach-reset" type="button">닫아 둔 안내 다시 보이기</button></div>
+</section>
+
 <!-- 대화 -->
 <section class="view on" id="v-chat">
   <p class="warn" id="w-chat" hidden>대화 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.</p>
@@ -518,6 +535,8 @@
     <dt>좋아하는 프롬프트를 저장해 두고 싶어요</dt><dd><b>프롬프트</b> 탭 → 보관함. 생성·편집·영상 화면의 [📚 보관함에서 넣기]로 불러와요. 후보를 무작위로 바꿔 넣는 <b>와일드카드</b>도 여기서 만들어요.</dd>
     <dt>마음에 든 사진과 비슷하게 만들고 싶어요</dt><dd><b>프롬프트</b> 탭 → [이미지에서 프롬프트 뽑기]. 사진을 올리면 설명(프롬프트)을 만들어 줘요. 이미지를 보는 대화 모델(Qwen2.5-VL)이 필요해요.</dd>
     <dt>GPU가 얼마나 쓰이는지 보고 싶어요</dt><dd>왼쪽 위 버전 아래에 VRAM·사용률·온도·전력이 막대로 보여요. 막대가 주황·빨강이면 여유가 거의 없는 거예요.</dd>
+    <dt>설치 폴더를 다른 곳으로 옮기고 싶어요</dt><dd><b>설치와 모델</b> 탭 → [프로그램 관리] → 새 위치를 적고 [확인] → [옮기기 시작]. 폴더가 한 겹 더 들어가 있다면 [바깥 폴더로 한 단계 올리기]를 써요. 같은 드라이브에서는 몇 초면 끝나요.</dd>
+    <dt>화면이 멈췄거나 설정을 바꾼 뒤 적용하고 싶어요</dt><dd>왼쪽 아래 <b>[⟳ 프로그램 다시 시작]</b>을 눌러요. 스튜디오와 엔진이 다시 켜지고 화면이 자동으로 새로고침돼요.</dd>
     <dt>디스크가 가득 찼어요</dt><dd><b>설치와 모델</b> 탭 → [저장 공간 점검]에서 큰 파일과 임시 파일을 찾아 정리해요.</dd>
   </dl>
   <h3>ComfyUI 기능을 여기서 쓸 수 있나요?</h3>
@@ -541,6 +560,9 @@
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
     <tr><td>만든 결과 모아 보기 · 검색 · 즐겨찾기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
     <tr><td>프롬프트 보관함 · 와일드카드 편집 · 이미지에서 프롬프트 뽑기</td><td class="y">지원</td><td>프롬프트</td></tr>
+    <tr><td>처음 쓰는 사람을 위한 안내 (준비 상태 점검, 하고 싶은 일별 순서, 문제 해결집)</td><td class="y">지원</td><td>시작하기</td></tr>
+    <tr><td>LoRA 트리거 단어·학습 정보·미리보기 보기</td><td class="y">지원</td><td>설치와 모델 → LoRA·모델 정보, LoRA 칸 아래</td></tr>
+    <tr><td>프로그램 다시 시작 · 설치 위치 옮기기</td><td class="y">지원</td><td>왼쪽 아래 버튼, 설치와 모델 → 프로그램 관리</td></tr>
     <tr><td>워크플로의 없는 커스텀 노드 설치</td><td class="y">지원</td><td>워크플로 (노드 도우미)</td></tr>
     <tr><td>IP-Adapter · 얼굴 교체 · SAM 같은 커스텀 노드 기능</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
     <tr><td>오디오 · 3D 생성</td><td class="n">미지원</td><td>ComfyUI 고급 화면</td></tr>
@@ -642,9 +664,26 @@
     <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>
     <div id="manage"></div>
   </details>
+  <details class="fold" id="fold-minfo"><summary>LoRA · 모델 정보</summary>
+    <p class="hint plain">설치된 LoRA와 모델이 어느 계열용인지, 파일 안에 적힌 트리거 단어·자주 쓰인 태그가 무엇인지 보여 줘요. LoRA 파일 옆에 같은 이름의 그림 파일(예: 이름.preview.png)이 있으면 미리보기로 써요. 이미지 생성·편집 화면에서 LoRA를 고르면 같은 정보가 칸 아래에 나오고, 단어를 누르면 프롬프트에 들어가요.</p>
+    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
+    <div id="mi-list"></div>
+  </details>
+  <details class="fold" id="fold-app"><summary>프로그램 관리 (다시 시작 · 위치 옮기기)</summary>
+    <p class="hint plain">지금 설치 위치: <b id="app-root"></b></p>
+    <div class="actions"><button class="ghost" id="app-restart" type="button">프로그램 다시 시작</button></div>
+    <h4>프로그램 위치 옮기기</h4>
+    <p class="hint plain">설치 폴더 전체(엔진·모델·결과·설정)를 다른 폴더나 드라이브로 옮겨요. 스튜디오가 잠시 꺼졌다가 새 위치에서 다시 켜져요. 같은 드라이브 안에서는 파일을 복사하지 않고 자리만 바꿔서 몇 초면 끝나요. 다른 드라이브로는 복사한 뒤 확인하고, 원래 폴더는 지우지 않고 남겨요. 중간에 문제가 생기면 원래대로 되돌려요.</p>
+    <p class="hint plain" id="app-nest" hidden>지금 폴더 이름이 바깥 폴더와 같아서 한 겹 더 들어가 있는 것 같아요. 아래 버튼으로 바깥 폴더로 올릴 수 있어요.</p>
+    <label class="f">새 위치 (전체 경로)<input id="app-dest" placeholder="예: E:\sd\LocalAI"></label>
+    <div class="actions"><button class="ghost" id="app-up" type="button">바깥 폴더로 한 단계 올리기</button><button class="ghost" id="app-check" type="button">확인</button><button class="go" id="app-go" type="button" hidden>옮기기 시작</button></div>
+    <p id="app-plan" class="hint plain"></p>
+  </details>
   <h3>진행 상황</h3><div id="tasks"></div>
 </section>
 </main>
+
+<div id="restarting" hidden role="alert"><div><span class="spin"></span><b id="rs-t">프로그램을 다시 켜는 중…</b><p id="rs-m" class="mute">잠시만 기다려 주세요. 켜지면 이 화면이 자동으로 새로고침돼요. 1분이 지나도 안 되면 바탕화면의 start.bat 을 직접 실행해 주세요.</p></div></div>
 
 <!-- 확대 보기 -->
 <div id="lb" hidden role="dialog" aria-modal="true" aria-label="이미지 확대 보기">

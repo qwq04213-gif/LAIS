@@ -145,3 +145,50 @@ def lora_family(path):
         out = {"family": fam if fam in ("sd15", "sdxl", "flux", "qwen", "chroma", "krea2") else "unknown", "how": "name"}
     _CACHE[key] = out
     return out
+
+
+# ───────────────────────── LoRA 정보 카드 ─────────────────────────
+def _json(v):
+    try:
+        return json.loads(v) if isinstance(v, str) else v
+    except ValueError:
+        return None
+
+
+def lora_card(path):
+    """LoRA 파일 안에 적힌 학습 정보를 사람이 읽을 수 있게 정리해요(트리거 단어, 기반 모델, 크기 등). 파일이 같으면 캐시."""
+    p = Path(path)
+    st = p.stat()
+    key = ("card", str(p), st.st_mtime, st.st_size)
+    if key in _CACHE:
+        return _CACHE[key]
+    card = {"name": p.name, "size_mb": round(st.st_size / 1048576, 1), "family": lora_family(p)["family"],
+            "title": "", "base": "", "trigger": [], "tags": [], "dim": None, "alpha": None, "images": None, "epochs": None, "description": ""}
+    try:
+        meta = read_header(p) if p.suffix.lower() == ".safetensors" else None
+    except Exception:  # noqa: BLE001
+        meta = None
+    md = (meta or {}).get("__metadata__") or {}
+    g = lambda *ks: next((str(md[k]).strip() for k in ks if md.get(k) not in (None, "")), "")
+    card["title"] = g("modelspec.title", "ss_output_name")
+    card["base"] = g("ss_sd_model_name", "ss_base_model_version", "modelspec.architecture")
+    card["description"] = g("modelspec.description")[:300]
+    card["dim"], card["alpha"] = g("ss_network_dim") or None, g("ss_network_alpha") or None
+    card["images"], card["epochs"] = g("ss_num_train_images") or None, g("ss_epoch", "ss_num_epochs") or None
+    trig = g("modelspec.trigger_phrase", "trigger_words", "ss_trigger_words")
+    if trig:
+        t = _json(trig)
+        card["trigger"] = [str(x).strip() for x in (t if isinstance(t, list) else trig.split(",")) if str(x).strip()][:12]
+    freq = _json(md.get("ss_tag_frequency")) if md.get("ss_tag_frequency") else None
+    if isinstance(freq, dict):        # {데이터셋: {태그: 횟수}} → 가장 자주 쓰인 태그
+        tot = {}
+        for d in freq.values():
+            if isinstance(d, dict):
+                for tag, n in d.items():
+                    try:
+                        tot[tag.strip()] = tot.get(tag.strip(), 0) + int(n)
+                    except (TypeError, ValueError):
+                        pass
+        card["tags"] = [t for t, _ in sorted(tot.items(), key=lambda kv: -kv[1])[:14] if t]
+    _CACHE[key] = card
+    return card

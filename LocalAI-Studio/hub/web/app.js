@@ -82,7 +82,13 @@ function loraOptions(sel,val){
   if(val&&LISTS.loras.includes(val))sel.value=val;
   loraNote(sel)}
 /* 고른 LoRA 아래에 '어느 모델용인지'와 맞지 않을 때의 경고 */
-function loraNote(sel){
+let LCARD={t:0,m:{}};
+async function loraCards(force){if(!force&&Date.now()-LCARD.t<60000)return LCARD.m;LCARD.t=Date.now();
+  try{const r=await api('/api/models/cards?kind=loras');LCARD.m=Object.fromEntries(r.items.map(c=>[c.name,c]))}catch{}return LCARD.m}
+function loraTrig(sel){const row=sel.closest('.lora-row');if(!row)return;$('.ltr',row)?.remove();const v=sel.value;if(!v)return;
+  loraCards().then(m=>{const c=m[v];if(!c||sel.value!==v||$('.ltr',row))return;const w=[...(c.trigger||[]),...(c.tags||[]).filter(t=>!(c.trigger||[]).includes(t))].slice(0,8);if(!w.length)return;
+    const d=document.createElement('div');d.className='ltr';d.innerHTML=`<span class="mute">${c.trigger&&c.trigger.length?'트리거 단어':'이 LoRA 학습에 자주 쓰인 태그'}:</span> `+w.map(t=>`<button type="button" class="chip lt-chip" data-t="${esc(t)}" title="프롬프트에 넣기">+ ${esc(t)}</button>`).join('');row.append(d)})}
+function loraNote(sel){loraTrig(sel);
   const row=sel.closest('.lora-row');if(!row)return;
   let n=$('.lnote',row);if(!n){n=document.createElement('small');n.className='lnote';row.append(n)}
   const v=sel.value;if(!v){n.textContent='';n.className='lnote';return}
@@ -255,13 +261,15 @@ $$('.mini[data-img]').forEach(b=>mini(b));
 function show(v){
   $$('#rail nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   $$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  if(v==='start')startInit();
   if(v==='gal')galLoad();else if(v==='lib')libShow();
+  if(v==='setup'){appInit()}
   if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide')loadLists();
 }
 $$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
-function toast(t){
+function toast(t,ms){
   let b=$('#toast');if(!b){b=document.createElement('div');b.id='toast';b.setAttribute('role','status');document.body.append(b)}
-  b.textContent=t;b.hidden=false;clearTimeout(b._t);b._t=setTimeout(()=>{b.hidden=true},3500);
+  b.textContent=t;b.hidden=false;clearTimeout(b._t);b._t=setTimeout(()=>{b.hidden=true},ms||3500);
 }
 async function openFolder(which){
   try{const r=await api('/api/open',{which});toast(r.error?r.error:'폴더를 열었어요: '+r.path)}
@@ -1315,6 +1323,130 @@ $('#gal-grid').addEventListener('click',async e=>{
   const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>!x.video),u=im.closest('.gt').dataset.u;
     lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name})),Math.max(0,imgs.findIndex(x=>x.url===u)))}
 });
+
+/* ══════════ 프로그램 다시 시작 · 위치 옮기기 ══════════ */
+let BOOT=null;
+async function waitReboot(title){
+  $('#rs-t').textContent=title;$('#restarting').hidden=false;let down=false;const t0=Date.now();
+  for(;;){await sleep(1500);
+    try{const s=await api('/api/status');if(BOOT&&s.boot&&s.boot!==BOOT&&(down||Date.now()-t0>4000)){location.reload();return}}
+    catch{down=true}
+    if(Date.now()-t0>180000){$('#rs-m').textContent='아직 켜지지 않았어요. 설치 폴더의 start.bat 을 직접 실행해 주세요.';}}
+}
+async function appRestart(){
+  let r=await api('/api/app/restart',{});
+  if(r.busy){if(!confirm(`진행 중인 작업이 ${r.busy}개 있어요. 중단하고 다시 시작할까요?`))return;r=await api('/api/app/restart',{force:true})}
+  if(r.error)return toast(r.error);waitReboot('프로그램을 다시 켜는 중…')}
+$('#restart-app').onclick=()=>{if(confirm('스튜디오와 엔진을 껐다가 다시 켤까요?'))appRestart()};
+$('#app-restart').onclick=()=>{if(confirm('스튜디오와 엔진을 껐다가 다시 켤까요?'))appRestart()};
+let APP_PLAN=null;
+async function appInit(){try{const w=await api('/api/app/where');$('#app-root').textContent=w.root;$('#app-nest').hidden=!w.nested_same_name;$('#app-up').dataset.p=w.parent;$('#app-up').title=w.parent}catch{}}
+$('#app-up').onclick=()=>{$('#app-dest').value=$('#app-up').dataset.p||'';appCheck()};
+async function appCheck(){const pl=$('#app-plan'),go=$('#app-go');go.hidden=true;APP_PLAN=null;
+  const r=await api('/api/app/move/check',{dest:$('#app-dest').value});
+  if(r.error){pl.className='warn';pl.textContent=r.error;return}
+  const gb=x=>(x/1073741824).toFixed(1)+'GB';
+  const how={flatten:'바깥 폴더로 올려요(파일 복사 없이 자리만 바꿔서 금방 끝나요).',move:'같은 드라이브라서 복사 없이 자리만 바꿔요(금방 끝나요).',copy:`다른 드라이브라서 복사해요(파일 ${r.files}개, ${gb(r.bytes)}, 남은 공간 ${gb(r.free)}). 시간이 오래 걸릴 수 있고, 원래 폴더는 남겨 둬요.`}[r.mode];
+  pl.className='hint plain';pl.innerHTML=`<b>${esc(r.src)}</b> → <b>${esc(r.dst)}</b><br>${esc(how)}<br>시작하면 스튜디오가 꺼졌다가 새 위치에서 다시 켜져요.`;APP_PLAN=r;go.hidden=false}
+$('#app-check').onclick=appCheck;
+$('#app-go').onclick=async()=>{if(!APP_PLAN)return;
+  if(!confirm(`프로그램을 옮길까요?\n\n${APP_PLAN.src}\n→ ${APP_PLAN.dst}\n\n스튜디오가 꺼지고 새 위치에서 다시 켜져요. (만약을 위해 설치 폴더를 백업해 두면 가장 안전해요.)`))return;
+  let r=await api('/api/app/move',{dest:APP_PLAN.dst});
+  if(r.busy){if(!confirm(`진행 중인 작업이 ${r.busy}개 있어요. 중단하고 옮길까요?`))return;r=await api('/api/app/move',{dest:APP_PLAN.dst,force:true})}
+  if(r.error)return toast(r.error);waitReboot('프로그램을 옮기는 중…')};
+(async()=>{try{const s=await api('/api/status');BOOT=s.boot||null}catch{}
+  try{const n=await api('/api/app/notice');if(n&&n.msg)toast((n.ok?'✔ ':'⚠ ')+n.msg,12000)}catch{}})();
+
+/* ══════════ LoRA · 모델 정보 ══════════ */
+document.addEventListener('click',e=>{const c=e.target.closest('.lt-chip');if(!c)return;const f=c.closest('form'),t=f&&f.elements.prompt;if(!t)return;
+  const cur=t.value.trim();t.value=cur?cur.replace(/[\s,]+$/,'')+', '+c.dataset.t:c.dataset.t;t.dispatchEvent(new Event('input',{bubbles:true}));toast(`'${c.dataset.t}' 을(를) 넣었어요.`)});
+let MI=[];
+async function miLoad(force){const kind=$('#mi-kind').value;$('#mi-list').innerHTML='<p class="mute">읽는 중…</p>';
+  if(force)await loraCards(true);
+  try{MI=(await api('/api/models/cards?kind='+kind)).items}catch{MI=[]}miRender()}
+function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('#mi-kind').value;
+  const list=MI.filter(c=>!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q));
+  $('#mi-list').innerHTML=list.length?list.map(c=>{const fam=LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),
+    img=c.preview?`<img class="mimg" loading="lazy" src="/mprev/${kind==='loras'?'loras':c.dir}/${encodeURIComponent(c.name)}" alt="">`:'<div class="mimg none">미리보기 없음</div>';
+    const chips=(arr,lab)=>arr&&arr.length?`<div class="mchips"><span class="mute">${lab}</span> ${arr.map(t=>`<span class="badge" title="클릭하면 복사해요" data-copy="${esc(t)}">${esc(t)}</span>`).join('')}</div>`:'';
+    return `<div class="mcard2">${img}<div class="mbody"><b>${esc(c.title||c.name)}</b>${c.title?`<div class="mute">${esc(c.name)}</div>`:''}<div><span class="badge acc">${esc(fam)}</span> <span class="mute">${c.size_mb} MB${c.dim?` · 차원 ${esc(c.dim)}`:''}${c.images?` · 학습 이미지 ${esc(c.images)}장`:''}${c.base?` · 기반 ${esc(c.base)}`:''}</span></div>${c.description?`<p class="mute">${esc(c.description)}</p>`:''}${chips(c.trigger,'트리거 단어')}${chips(c.tags,'자주 쓰인 태그')}</div></div>`}).join(''):'<p class="mute">표시할 항목이 없어요.</p>'}
+$('#mi-list').addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.copy);toast(`'${b.dataset.copy}' 을(를) 복사했어요.`)}catch{toast('복사하지 못했어요.')}});
+$('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-reload').onclick=()=>miLoad(true);
+$('#fold-minfo').addEventListener('toggle',e=>{if(e.target.open&&!MI.length)miLoad()});
+/* ══════════ 시작하기 · 화면별 사용법 안내 ══════════ */
+const GOALS=[
+ {t:'글만으로 그림을 만들고 싶어요',d:'프롬프트(원하는 그림을 설명한 글)를 쓰면 그림이 나와요.',go:'gen',need:()=>LISTS.checkpoints.length||fxAny(),why:'이미지 모델이 필요해요',
+  steps:['이미지 생성 탭에서 모델을 고르세요(처음이면 프로필은 \'자동\').','프롬프트에 그리고 싶은 장면을 적어요. 모델 종류에 따라 태그형(쉼표로 구분)이나 문장형으로 써요.','[이미지 생성]을 누르면 아래에 결과가 나와요. 마음에 들면 시드를 고정해 조금씩 바꿔 보세요.']},
+ {t:'사진 속 일부만 바꾸고 싶어요',d:'옷·머리색·표정처럼 바꿀 곳만 골라서 다시 그려요.',go:'edit',need:()=>LISTS.checkpoints.length||fxAny()||LISTS.qwen,why:'이미지 모델이 필요해요',
+  steps:['이미지 편집 탭에 사진을 올려요.','[선택 도구]로 바꿀 곳(얼굴, 머리, 옷 등)을 클릭해 고르거나 직접 칠해요.','바뀔 모습을 적고 [편집 실행]을 눌러요. 크게 보며 고르려면 [크게 보며 선택]을 써요.']},
+ {t:'사진을 크고 선명하게 만들고 싶어요',d:'해상도를 2~4배로 키워요.',go:'up',need:()=>LISTS.upscalers.length,why:'업스케일 모델(Real-ESRGAN)이 필요해요',
+  steps:['업스케일 탭에 사진을 올려요.','빠르게는 [빠른 업스케일], 질감을 더 살리려면 [디테일 재생성]을 골라요.','배율을 정하고 [업스케일 실행]. 결과는 [겹쳐서 비교]로 원본과 견줘 볼 수 있어요.']},
+ {t:'그림을 영상으로 움직이고 싶어요',d:'글이나 시작 이미지로 몇 초짜리 영상을 만들어요.',go:'vid',need:()=>LISTS.wan_ready&&(LISTS.wanmodels||[]).length,why:'Wan 2.2 영상 모델이 필요해요(설치와 모델 탭)',
+  steps:['영상 만들기 탭에서 장면과 움직임을 문장으로 적어요.','움직이게 할 이미지가 있으면 [이미지 고르기]로 올려요.','크기와 길이를 고르고 [영상 만들기]. 처음엔 3초, 가로 480p로 시험해 보세요.']},
+ {t:'예전에 만든 그림을 찾고 싶어요',d:'만든 이미지·영상을 모아 보고 검색해요.',go:'gal',need:()=>true,why:'',
+  steps:['기록 갤러리 탭을 열어요.','프롬프트나 종류로 검색하고, 마음에 드는 건 ★로 즐겨찾기를 해요.','↻를 누르면 그 그림의 설정을 그대로 불러와 다시 만들 수 있어요.']},
+ {t:'마음에 든 사진처럼 만들고 싶어요',d:'사진을 설명하는 프롬프트를 자동으로 뽑아요.',go:'lib',need:()=>true,why:'',
+  steps:['프롬프트 탭에서 [이미지에서 프롬프트 뽑기]를 열어요.','사진을 올리고 형식(문장형·태그형)을 골라 [프롬프트 만들기]를 눌러요.','[이미지 생성에 넣기]로 바로 만들어 보세요. 이미지를 보는 대화 모델(Qwen2.5-VL)이 필요해요.']},
+ {t:'ComfyUI 워크플로를 돌려 보고 싶어요',d:'인터넷에서 받은 워크플로(JSON·PNG)를 실행해요.',go:'wf',need:()=>true,why:'',
+  steps:['워크플로 탭에서 [파일 열기]로 JSON이나 ComfyUI로 만든 PNG를 올려요.','없는 노드가 있으면 안내에 따라 [설치]하고 [이미지 엔진 다시 시작]을 눌러요.','프롬프트·시드·크기를 고치고 [실행]을 눌러요.']},
+ {t:'모델을 설치하거나 정리하고 싶어요',d:'추천 모델 설치, 디스크 정리, 프로그램 위치 옮기기.',go:'setup',need:()=>true,why:'',
+  steps:['설치와 모델 탭의 [내 GPU에 맞춰 고르기]를 누르면 추천 항목이 골라져요.','[선택한 항목 설치]를 누르고 아래 \'진행 상황\'을 지켜봐요.','디스크가 부족하면 [저장 공간 점검]에서 정리하세요.']},
+];
+const fxAny=()=>(LISTS.fluxmodels||[]).length||(LISTS.chromamodels||[]).length||(LISTS.krea2models||[]).length;
+const FIXES=[
+ ['손가락이나 손이 이상해요','손은 AI가 가장 어려워하는 부분이에요. 이미지 편집 탭에서 손 부분만 칠해 다시 그리면(변화 강도 0.6~0.8) 대부분 고쳐져요. 단계 수를 조금 늘리거나 제외할 요소에 bad hands, extra fingers 를 넣는 것도 도움이 돼요.'],
+ ['얼굴이 뭉개지거나 작아요','이미지 편집 탭에서 [선택 도구]의 [얼굴]로 얼굴만 고르고, 변화 강도를 0.4~0.55로 낮춰 다시 그려 보세요. 얼굴이 아주 작은 그림은 해상도를 키워 만들면 나아져요.'],
+ ['업스케일했더니 배경에 눈·얼굴이 여러 개 생겨요','업스케일 > 디테일 재생성에서 변화 강도를 0.15~0.25로 낮추고 타일 크기를 1280~1536으로 키워 보세요. 타일 프롬프트는 기본(일반 고화질 지시)을 쓰세요.'],
+ ['결과가 흐리거나 밋밋해요','단계 수를 늘리거나 하이레스 픽스를 켜 보세요. 다 만든 뒤 업스케일 탭의 디테일 재생성도 효과가 좋아요.'],
+ ['메모리 부족 오류가 나요','해상도(또는 영상 길이)를 낮추고, 설정의 \'빠른 모드\'를 켜 보세요. 왼쪽 위 GPU 막대(VRAM)가 빨갛다면 다른 프로그램이 GPU를 쓰고 있을 수도 있어요.'],
+ ['너무 느려요','처음 한 번은 모델을 불러오느라 오래 걸려요. 이후에도 느리면 해상도·단계 수를 줄이고 GPU 막대에서 사용률과 VRAM을 확인해 보세요. VRAM이 가득 차면 크게 느려져요.'],
+ ['모델이 목록에 안 보여요','왼쪽 아래 [↻ 모델 목록 새로고침]을 눌러 보세요. 그래도 없으면 파일이 알맞은 폴더에 들어 있는지(설치와 모델 탭의 [폴더 열기]) 확인하고, 계열이 잘못 분류됐다면 \'설치된 모델\'에서 계열을 직접 지정하세요.'],
+ ['프롬프트를 잘 안 따라요','모델 종류를 확인하세요. NoobAI·Illustrious·Pony 계열은 쉼표로 구분한 태그, FLUX·Krea·Qwen 계열은 문장으로 써야 잘 따라요. 프로필을 \'자동\'으로 두고 CFG를 4~7 사이에서 조금씩 바꿔 보세요.'],
+];
+function readyRows(s){
+  const row=(ok,t,fix)=>`<div class="rrow ${ok?'ok':'no'}"><span>${ok?'✓':'✗'}</span><div><b>${t}</b>${ok?'':`<div class="mute">${fix}</div>`}</div></div>`;
+  return [row(s.comfy,'이미지 엔진(ComfyUI)','아직 꺼져 있어요. 잠시 기다리거나 [프로그램 다시 시작]을 눌러 보세요.'),
+    row(s.ollama,'대화 엔진(Ollama)','아직 꺼져 있어요. 잠시 기다리거나 [프로그램 다시 시작]을 눌러 보세요.'),
+    row(!!LISTS.llm.length,'대화 모델','<a href="#" data-go="setup">설치와 모델</a>에서 설치해요.'),
+    row(!!(LISTS.checkpoints.length||fxAny()),'이미지 모델','<a href="#" data-go="setup">설치와 모델</a>에서 [내 GPU에 맞춰 고르기]를 눌러요.'),
+    row(!!LISTS.upscalers.length,'업스케일 모델','<a href="#" data-go="setup">설치와 모델</a>에서 Real-ESRGAN을 설치해요.'),
+    row(!!(LISTS.wan_ready&&(LISTS.wanmodels||[]).length),'영상 모델 (선택)','영상을 만들고 싶을 때만 <a href="#" data-go="setup">설치와 모델</a>에서 Wan 2.2를 설치해요.')].join('');
+}
+async function startInit(){
+  let s={};try{s=await api('/api/status')}catch{}
+  await loadLists(true);
+  $('#st-ready').innerHTML=readyRows(s);
+  $('#st-goals').innerHTML=GOALS.map((g,i)=>{const ok=!!g.need();
+    return `<div class="goal"><b>${esc(g.t)}</b><p class="mute">${esc(g.d)}</p>${ok?'':`<p class="warn">${esc(g.why)}</p>`}<details><summary>어떻게 하나요?</summary><ol>${g.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></details><button type="button" class="ghost" data-go="${g.go}">${ok?'이 화면으로 가기':'먼저 준비하러 가기'}</button></div>`}).join('');
+  $('#st-fix').innerHTML=FIXES.map(([q,a])=>`<details class="fixd"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('');
+  $('#coach-on').checked=coachOn();
+}
+const coachOn=()=>ls.get('coach:on',true);
+const COACH={
+ edit:['사진을 올려요(끌어다 놓기).','[선택 도구]로 바꿀 곳을 클릭하거나 직접 칠해요.','바뀔 모습을 적고 [편집 실행].'],
+ gen:['모델을 고르고 프롬프트를 적어요.','필요하면 크기와 시드를 정해요(모르면 그대로 둬도 돼요).','[이미지 생성]을 누르고 결과를 확인해요.'],
+ up:['사진을 올려요.','빠른 업스케일 / 디테일 재생성 중 방식을 골라요.','[업스케일 실행] 후 [겹쳐서 비교]로 확인해요.'],
+ vid:['장면과 움직임을 문장으로 적어요.','움직일 이미지가 있으면 올려요(없어도 돼요).','크기·길이를 고르고 [영상 만들기]. 처음엔 3초로 시험해 보세요.'],
+ gal:['위 칸에서 프롬프트나 종류로 검색해요.','★로 즐겨찾기, ↻로 같은 설정 다시 만들기.','사진을 클릭하면 크게 볼 수 있어요.'],
+ lib:['자주 쓰는 프롬프트를 보관함에 저장해요.','와일드카드로 후보를 무작위로 바꿔 넣어요.','사진에서 프롬프트를 뽑아 바로 생성에 써요.'],
+ wf:['워크플로 JSON이나 PNG를 올려요.','없는 노드는 [설치] 후 엔진을 다시 시작해요.','프롬프트·시드를 고치고 [실행]을 눌러요.'],
+ feat:['하고 싶은 기능 카드를 골라요.','이미지를 올리고 값을 정해요.','실행하면 결과가 아래에 쌓여요.'],
+ info:['이미지를 올리면 만든 설정(프롬프트·시드 등)이 보여요.','[같은 설정으로 생성]으로 바로 다시 만들 수 있어요.','메타데이터 제거본을 저장하면 공유할 때 안전해요.'],
+ dl:['검색창에 모델 이름을 적어요.','마음에 드는 파일의 [받기]를 눌러요.','받은 뒤 모델 목록 새로고침을 눌러 확인해요.'],
+};
+function coachMount(){
+  Object.entries(COACH).forEach(([v,steps])=>{const sec=$('#v-'+v);if(!sec||$('.coach',sec))return;
+    const host=$('.col',sec)||sec,h2=sec.matches('.split')?null:$('h2',sec);
+    const el=document.createElement('div');el.className='coach';el.dataset.coach=v;
+    el.innerHTML=`<b>💡 이 화면 사용법</b><ol>${steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol><button type="button" class="cx" title="이 안내 닫기" aria-label="이 안내 닫기">×</button>`;
+    if(h2)h2.after(el);else host.prepend(el)});
+  coachApply();
+}
+function coachApply(){$$('.coach').forEach(el=>{el.hidden=!coachOn()||!!ls.get('coach:x:'+el.dataset.coach,false)})}
+document.addEventListener('click',e=>{const x=e.target.closest('.coach .cx');if(x){const el=x.closest('.coach');ls.set('coach:x:'+el.dataset.coach,true);el.hidden=true}});
+$('#coach-on').onchange=e=>{ls.set('coach:on',e.target.checked);coachApply()};
+$('#coach-reset').onclick=()=>{Object.keys(COACH).forEach(v=>ls.set('coach:x:'+v,false));ls.set('coach:on',true);$('#coach-on').checked=true;coachApply();toast('닫아 둔 안내를 다시 보이게 했어요.')};
+coachMount();
 
 /* 접이식 섹션: 열고 닫은 상태 기억 */
 $$('details.fold').forEach(d=>{
