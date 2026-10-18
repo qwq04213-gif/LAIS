@@ -3393,6 +3393,94 @@ def _node_install(repo):
         log("[노드 설치 오류]", repr(e))
 
 
+# ───────────────────────── 설치돼 있는데 노드가 안 보일 때: 원인 확인 · 빠진 부품 설치 ─────────────────────────
+PIP2MOD = {"opencv-python-headless": "cv2", "opencv-python": "cv2", "opencv-contrib-python": "cv2", "scikit-image": "skimage", "pillow": "PIL", "pyyaml": "yaml",
+           "scikit-learn": "sklearn", "segment-anything": "segment_anything", "gitpython": "git", "colour-science": "colour"}
+
+
+def pack_reqs(dest):
+    """확장 폴더의 requirements.txt 에서 (모듈 이름 → pip 이름). git+ 줄과 주석은 빼요."""
+    out = {}
+    try:
+        lines = (dest / "requirements.txt").read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return out
+    for ln in lines:
+        ln = ln.strip()
+        if not ln or ln.startswith(("#", "git+", "-")):
+            continue
+        name = re.split(r"[<>=!~;\[\s@]", ln, 1)[0].strip()
+        if re.match(r"^[A-Za-z0-9_.\-]+$", name) and name.lower() not in ("torch", "torchvision", "torchaudio", "numpy"):
+            out[PIP2MOD.get(name.lower(), name.lower().replace("-", "_"))] = name
+    return out
+
+
+def comfy_import_error(dirname):
+    """comfyui.log 맨 끝쪽에서 이 확장이 불러오다 실패한 이유(마지막 오류 줄)를 찾아요."""
+    try:
+        f = LOGS / "comfyui.log"
+        with open(f, "rb") as fh:
+            fh.seek(max(0, f.stat().st_size - 300_000))
+            lines = fh.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    hit = ""
+    for i, ln in enumerate(lines):
+        if dirname.lower() in ln.lower() and re.search(r"IMPORT FAILED|Cannot import|Traceback|Error", ln, re.I):
+            seg = lines[i:i + 45]
+            errs = [x.strip() for x in seg if re.search(r"(ModuleNotFoundError|ImportError|Error:)", x) and "Traceback" not in x]
+            hit = (errs[-1] if errs else ln.strip())[:240]
+    return hit
+
+
+def node_diagnose(p):
+    repo = str(p.get("repo") or "")
+    dest = _repo_dir(repo)
+    if not repo.startswith(GHURL + "/") or not dest.is_dir():
+        return {"error": "설치된 확장을 찾지 못했어요."}
+    reqs = pack_reqs(dest)
+    gone = mods_missing(reqs) if reqs else []
+    reason = comfy_import_error(dest.name)
+    m = re.search(r"No module named ['\"]([A-Za-z0-9_.]+)", reason)
+    extra = [m.group(1).split(".")[0]] if m and m.group(1).split(".")[0] not in gone else []
+    mods = [{"module": g, "pip": reqs[g]} for g in gone] + [{"module": g, "pip": PYMODS.get(g, g)} for g in extra if g in PYMODS or g not in reqs]
+    return {"installed": True, "mine": _own_comfy() is not None, "missing": mods, "reason": reason, "running": bool(alive(CUI + "/system_stats"))}
+
+
+def _deps_run(repo, mods):
+    J = NODE_JOBS[repo]
+    try:
+        bad = []
+        for m in mods:
+            J["msg"] = f"{m['pip']} 설치 중…(1~3분 걸릴 수 있어요)"
+            rc, out, note = pip_install_one(m["pip"])
+            LOGS.mkdir(exist_ok=True)
+            with open(LOGS / "nodes.log", "a", encoding="utf-8") as f:
+                f.write(f"\n[확장 부품] {m['pip']} → 종료 코드 {rc}\n" + out[-3000:])
+            if rc or m["module"] in mods_missing({m["module"]: m["pip"]}):
+                last = [x for x in out.strip().splitlines() if x.strip()][-1:] or [""]
+                bad.append(f"{m['pip']}({note or last[0][:120]})")
+        if bad:
+            raise RuntimeError("설치하지 못한 부품: " + ", ".join(bad) + " (자세한 내용: logs\\nodes.log)")
+        J["state"], J["msg"] = "done", "부품을 설치했어요. 이미지 엔진을 다시 시작하면 적용돼요."
+    except Exception as e:  # noqa: BLE001
+        J["state"], J["msg"] = "error", str(e) or e.__class__.__name__
+
+
+def node_fixdeps(p):
+    d = node_diagnose(p)
+    if d.get("error"):
+        return d
+    repo = str(p["repo"])
+    if not d["missing"]:
+        return {"error": "빠진 부품이 없어요. 이미지 엔진을 다시 시작해 보세요."}
+    if NODE_JOBS.get(repo, {}).get("state") == "running":
+        return {"ok": True}
+    NODE_JOBS[repo] = {"state": "running", "msg": "시작해요…"}
+    threading.Thread(target=_deps_run, args=(repo, d["missing"]), daemon=True).start()
+    return {"ok": True}
+
+
 # 확장 노드가 실행 중 "No module named 'xxx'" 로 멈출 때, 화면에서 바로 설치할 수 있게 해 줘요(아래 목록의 흔한 부품만)
 PYMODS = {"matplotlib": "matplotlib", "scipy": "scipy", "cv2": "opencv-python-headless", "skimage": "scikit-image", "sklearn": "scikit-learn",
           "yaml": "pyyaml", "PIL": "pillow", "einops": "einops", "timm": "timm", "addict": "addict", "yapf": "yapf", "mediapipe": "mediapipe",
@@ -5636,6 +5724,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(e)})
         if u == "/api/nodes/install":
             return self.send_json(node_install(p))
+        if u == "/api/nodes/diagnose":
+            return self.send_json(node_diagnose(p))
+        if u == "/api/nodes/fixdeps":
+            return self.send_json(node_fixdeps(p))
         if u == "/api/engine/restart":
             return self.send_json(restart_comfy())
         if u == "/api/control/prep":

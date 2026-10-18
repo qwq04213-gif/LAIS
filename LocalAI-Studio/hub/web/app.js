@@ -1097,15 +1097,26 @@ async function stripInfo(){
  sec.ondrop=e=>{e.preventDefault();d.classList.remove('over');infoRead(e.dataTransfer.files[0])}}
 
 /* ══════════ 커스텀 노드 도우미 ══════════ */
+/* 설치돼 있는데 노드가 안 보일 때: 원인(빠진 부품·불러오기 오류)을 찾아 보여 주고 고쳐요 */
+async function nodeDiag(repo,host){host.innerHTML='<span class="mute">원인을 확인하는 중…</span>';let d;
+  try{d=await api('/api/nodes/diagnose',{repo})}catch{host.textContent='서버와 연결되지 않았어요.';return}
+  if(d.error){host.textContent=d.error;return}
+  const rs=`<button type="button" class="ghost sm nd-rs">이미지 엔진 다시 시작</button>`;
+  if(d.missing.length){host.innerHTML=`<b>이 확장이 쓰는 파이썬 부품이 빠져 있어요:</b> ${d.missing.map(m=>esc(m.pip)).join(', ')}.${d.reason?`<br><small class="mute">엔진 기록: ${esc(d.reason)}</small>`:''}<br><button type="button" class="ghost sm nd-fix">빠진 부품 설치</button> <span class="mute nd-st"></span>`;
+    $('.nd-fix',host).onclick=async e=>{const b=e.target;b.disabled=true;const st=$('.nd-st',host);const r=await api('/api/nodes/fixdeps',{repo});if(r.error){st.textContent=r.error;b.disabled=false;return}
+      for(;;){await sleep(1500);let j;try{j=(await api('/api/nodes/status'))[repo]}catch{continue}if(!j)continue;st.textContent=j.msg;if(j.state!=='running'){b.disabled=false;if(j.state==='done'){host.insertAdjacentHTML('beforeend',' '+rs);$('.nd-rs',host).onclick=ndRestart}break}}};return}
+  host.innerHTML=(d.reason?`<b>엔진이 이 확장을 불러오다 멈췄어요:</b> <small>${esc(d.reason)}</small><br>`:'<b>부품은 다 갖춰져 있어요.</b> ')+(d.reason?'위 오류가 사라지지 않으면 확장이 이 ComfyUI 버전과 안 맞는 걸 수 있어요. ':'')+`이미지 엔진을 다시 시작하면 노드가 보여요. ${rs}`;$('.nd-rs',host).onclick=ndRestart}
+async function ndRestart(e){const b=e.target;b.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 1~2분 뒤 화면을 새로 열거나 다시 점검해 주세요.',6000);setTimeout(()=>{b.disabled=false},9000)}
 let NODE_POLL=null;
 async function nodeHelp(missing,box){
   box=box||$('#nodelist');if(!box)return;
   let r;try{r=await api('/api/nodes/sources',{missing})}catch{box.textContent='목록을 불러오지 못했어요.';return}
   if(r.error){box.textContent=r.error;return}
-  const rows=r.repos.map(x=>`<div class="nrow" data-repo="${esc(x.repo)}"><div><b>${esc(x.title)}</b> <span class="mute">(${x.nodes.map(esc).join(', ')})</span><br><a href="${esc(x.repo)}" target="_blank" rel="noopener">${esc(x.repo)}</a><div class="nst mute"></div></div>${x.installed?'<span class="badge">설치됨</span>':`<button type="button" class="ghost ninst">${x.incomplete?'이어서 설치':'설치'}</button>`}</div>`).join('');
+  const rows=r.repos.map(x=>`<div class="nrow" data-repo="${esc(x.repo)}"><div><b>${esc(x.title)}</b> <span class="mute">(${x.nodes.map(esc).join(', ')})</span><br><a href="${esc(x.repo)}" target="_blank" rel="noopener">${esc(x.repo)}</a><div class="nst mute"></div></div>${x.installed?'<span class="badge">설치됨</span> <button type="button" class="ghost sm ndiag" title="설치돼 있는데 노드가 안 보일 때 원인을 찾아요">노드가 안 보여요</button>':`<button type="button" class="ghost ninst">${x.incomplete?'이어서 설치':'설치'}</button>`}</div>`).join('');
   box.className='';box.innerHTML=(rows||'<p class="mute">설치할 곳을 찾지 못했어요.</p>')+(r.unknown.length?`<p class="mute">찾지 못한 노드: ${r.unknown.map(esc).join(', ')} — ComfyUI 화면의 Manager에서 검색해 보세요.</p>`:'')+
     (r.repos.length?'<div class="actions"><button type="button" class="ghost node-restart'+(box.id==='nodelist'?'" id="node-restart':'')+'">이미지 엔진 다시 시작</button><span class="mute">설치한 노드는 엔진을 다시 시작해야 적용돼요. 그 뒤 [분석]을 다시 눌러 확인하세요.</span></div>':'');
 }
+document.addEventListener('click',e=>{const d=e.target.closest('.ndiag');if(d){const row=d.closest('.nrow');nodeDiag(row.dataset.repo,$('.nst',row))}});
 document.addEventListener('click',async e=>{
   const b=e.target.closest('.ninst');if(b){const row=b.closest('.nrow'),repo=row.dataset.repo;
     if(!confirm('이 커스텀 노드의 코드를 내려받아 설치해요.\n커스텀 노드는 컴퓨터에서 프로그램처럼 실행되니, 믿을 수 있는 출처인지 확인하세요.\n\n'+repo+'\n\n설치할까요?'))return;
@@ -1497,9 +1508,10 @@ async function galLoad(more){
   const fmt=t=>new Date(t*1000).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   $('#gal-grid').insertAdjacentHTML('beforeend',r.items.map(x=>{const tn=x.url.replace('/out/','/thumb/');
     let head='';if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
-    return head+`<figure class="gt" data-u="${x.url}">${x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
+    const noprev=D.dataset.galprev==='off';
+    return head+`<figure class="gt${noprev?' noprev':''}" data-u="${x.url}">${noprev?`<div class="gnoimg" title="${esc(x.prompt||x.name)}"><b>${x.video?'▶ ':''}${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span></div>`:x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
-    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="같은 설정으로 생성">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
+    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
   $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value||$('#gal-date').value);
 }
 $('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=$('#gal-date').onchange=()=>galLoad();
@@ -1527,6 +1539,9 @@ $('#gal-grid').addEventListener('click',async e=>{
   if(GSEL){const t=e.target.closest('.gt');if(t&&!e.target.closest('button')){e.preventDefault();const u=t.dataset.u;GPICK.has(u)?GPICK.delete(u):GPICK.add(u);galSelUi();return}}
   const st=e.target.closest('[data-star]');if(st){const on=!st.classList.contains('on'),r=await api('/api/gallery/fav',{file:st.dataset.star,on});
     if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
+  const nv=e.target.closest('.gt .gnoimg');if(nv){const t=nv.closest('.gt'),u=t.dataset.u,it=GAL.items.find(x=>x.url===u);
+    if(it&&it.video){nv.outerHTML=`<video src="${u}" controls autoplay playsinline></video>`;return}
+    const imgs=GAL.items.filter(x=>!x.video);lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name})),Math.max(0,imgs.findIndex(x=>x.url===u)));return}
   const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>!x.video),u=im.closest('.gt').dataset.u;
     lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name})),Math.max(0,imgs.findIndex(x=>x.url===u)))}
 });
@@ -1572,6 +1587,14 @@ function chOpen(it){const f=$('#ch-form');f.reset();it=it||{};f.elements.id.valu
   $('#ch-loras').innerHTML='';(it.loras||[]).forEach(l=>chLoraRow(l[0],l[1]));if(!(it.loras||[]).length)chLoraRow();
   ['chref1','chref2'].forEach((k,i)=>{const m=$(`.mini[data-img=${k}]`,f);m.clear();const r=(it.refs||[])[i];if(r)m.set(it.refsData&&it.refsData[i]||chImg(r))});
   f.hidden=false;f.scrollIntoView({block:'nearest'});f.elements.name.focus()}
+$('#ch-copy').onclick=async()=>{const f=$('#ch-form'),g=chFromGenForm(),on=k=>$(`[data-cp=${k}]`,f).checked,got=[];
+  if(on('prompt')&&g.prompt){f.elements.prompt.value=g.prompt;got.push('프롬프트')}
+  if(on('negative')&&g.negative){f.elements.negative.value=g.negative;got.push('제외할 요소')}
+  if(on('loras')&&g.loras.length){$('#ch-loras').innerHTML='';g.loras.forEach(l=>chLoraRow(l[0],l[1]));got.push(`LoRA ${g.loras.length}개`)}
+  if(on('seed')){if(g.seed!=null){f.elements.seed.value=g.seed;got.push('시드')}else toast('지금 생성 화면의 시드가 -1(무작위)이라 시드는 가져오지 않았어요.',4000)}
+  if(on('model')&&g.model){f.elements.model.value=g.model;got.push('모델')}
+  if(on('cover')){const im=$('#v-gen .res figure img');if(im){try{$('.mini[data-img=chref1]',f).set(await urlToDataURL(im.getAttribute('src')));got.push('대표 이미지')}catch{}}else toast('이미지 생성 화면에 아직 결과 그림이 없어요.',4000)}
+  toast(got.length?`가져왔어요: ${got.join(', ')}`:'가져올 내용이 없어요. 이미지 생성 화면에 값을 먼저 채워 주세요.',4000)};
 $('#ch-addl').onclick=()=>chLoraRow();
 $('#ch-new').onclick=()=>chOpen();$('#ch-cancel').onclick=()=>{$('#ch-form').hidden=true};
 $('#ch-q').oninput=chRender;$('#ch-kind').onchange=chRender;
@@ -1932,7 +1955,7 @@ const COACH={
  lib:['자주 쓰는 프롬프트를 보관함에 저장해요.','와일드카드로 후보를 무작위로 바꿔 넣어요.','사진에서 프롬프트를 뽑아 바로 생성에 써요.'],
  wf:['워크플로 JSON이나 PNG를 올려요.','없는 노드는 [설치] 후 엔진을 다시 시작해요.','프롬프트·시드를 고치고 [실행]을 눌러요.'],
  feat:['하고 싶은 기능 카드를 골라요.','이미지를 올리고 값을 정해요.','실행하면 결과가 아래에 쌓여요.'],
- info:['이미지를 올리면 만든 설정(프롬프트·시드 등)이 보여요.','[같은 설정으로 생성]으로 바로 다시 만들 수 있어요.','메타데이터 제거본을 저장하면 공유할 때 안전해요.'],
+ info:['이미지를 올리면 만든 설정(프롬프트·시드 등)이 보여요.','[이 설정으로 이미지 생성 탭 채우기]로 바로 다시 만들 수 있어요.','메타데이터 제거본을 저장하면 공유할 때 안전해요.'],
  dl:['검색창에 모델 이름을 적어요.','마음에 드는 파일의 [받기]를 눌러요.','받은 뒤 모델 목록 새로고침을 눌러 확인해요.'],
 };
 function coachMount(){
@@ -2037,6 +2060,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
   el.onchange=()=>{const v=isNaN(+el.value)||el.value===''?el.value:+el.value;ls.set(key,v);fn&&fn(v)}};
  pick('opt-chatfs','opt:chatfs',1,v=>D.style.setProperty('--chatfs',v));
  pick('opt-galsz','opt:galsz',190,v=>D.style.setProperty('--galmin',v));
+ pick('opt-galprev','opt:galprev','on',v=>{D.dataset.galprev=v;if(GAL&&GAL.items&&GAL.items.length)galLoad()});
  pick('opt-ressz','opt:ressz',420,v=>D.style.setProperty('--resh',v));
  pick('opt-sbw','opt:sbw',208,v=>D.style.setProperty('--sbw',v));
  pick('opt-bubw','opt:bubw',72,v=>D.style.setProperty('--bubw',v));
@@ -2176,7 +2200,8 @@ async function chkFix(btn){const g=CHK.groups.find(x=>x.id===btn.dataset.gi),x=g
    if(f.a==='restart'||f.a==='restart_all'){if(f.a==='restart_all'){btn.disabled=false;return appRestart()}
      st.textContent='다시 시작하는 중…';const r=await api('/api/engine/restart',{});if(r.error)return done(r.error);await sleep(9000);await loadCaps();await checkScan();return}
    if(f.a==='nodes'){st.textContent='설치할 확장을 찾는 중…';const r=await api('/api/nodes/sources',{missing:f.missing});if(r.error)return done(r.error);
-     const todo=(r.repos||[]).filter(q=>!q.installed||q.incomplete);if(!todo.length&&!(r.unknown||[]).length)return done('이미 설치돼 있어요. 이미지 엔진을 다시 시작하면 적용돼요.',true);
+     const todo=(r.repos||[]).filter(q=>!q.installed||q.incomplete);const have=(r.repos||[]).filter(q=>q.installed&&(q.nodes||[]).length);if(!todo.length&&have.length){st.innerHTML='';const box=document.createElement('div');box.className='chk-diag';row.append(box);btn.disabled=false;return nodeDiag(have[0].repo,box)}
+     if(!todo.length&&!(r.unknown||[]).length)return done('이미 설치돼 있어요. 이미지 엔진을 다시 시작하면 적용돼요.',true);
      for(const q of todo){const i=await api('/api/nodes/install',{repo:q.repo});if(i.error){st.textContent=q.title+': '+i.error;continue}st.textContent=q.title+' 설치 중…';const s=await chkPoll('/api/nodes/status',q.repo,st);if(s.state==='error'){st.textContent=q.title+': '+s.msg;btn.disabled=false;return}}
      if((r.unknown||[]).length)return done('설치할 곳을 못 찾은 노드: '+r.unknown.join(', ')+' — ComfyUI 를 업데이트하거나 직접 설치해야 해요.');
      st.innerHTML='설치했어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>';btn.disabled=false;return}

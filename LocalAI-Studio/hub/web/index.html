@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
-<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','side');D.style.setProperty('--sbw',g('opt:sbw',208));D.style.setProperty('--bubw',g('opt:bubw',72));if(!g('opt:gosticky',true))D.dataset.gosticky='off'}catch(e){}</script>
+<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};D.dataset.galprev=g('opt:galprev','on');var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','side');D.style.setProperty('--sbw',g('opt:sbw',208));D.style.setProperty('--bubw',g('opt:bubw',72));if(!g('opt:gosticky',true))D.dataset.gosticky='off'}catch(e){}</script>
 <script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}try{var z=parseFloat(localStorage.getItem('ui:scale'));if(z>=0.8&&z<=1.6)document.documentElement.style.setProperty('--ui',z)}catch(e){}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
@@ -576,12 +576,15 @@
   <h2>프롬프트</h2>
   <details class="fold" id="fold-chars" open><summary>캐릭터·스타일 보관함</summary>
     <p class="hint plain">자주 쓰는 캐릭터나 그림체를 <b>프롬프트·LoRA(강도 포함)·시드·모델·참고 이미지</b> 묶음으로 저장해 두고, 이미지 생성·편집·참고 이미지 기능에 한 번에 불러와요. 마음에 드는 그림의 [이어서 작업 → 캐릭터·스타일로 저장]이나 이미지 생성 화면의 [캐릭터·스타일로 저장]으로도 만들 수 있어요. 파일은 프로그램 폴더의 <code>library</code> 폴더에 쌓여요.</p>
-    <div class="plbar"><input id="ch-q" type="search" placeholder="보관함 검색"><select id="ch-kind" aria-label="종류"><option value="">전체</option></select><button type="button" class="ghost" id="ch-new">+ 새로 만들기</button><button type="button" class="ghost" id="ch-fromgen" title="지금 이미지 생성 화면에 채워 둔 프롬프트·LoRA·시드·모델을 가져와요">생성 화면에서 가져오기</button></div>
+    <div class="plbar"><input id="ch-q" type="search" placeholder="보관함 검색"><select id="ch-kind" aria-label="종류"><option value="">전체</option></select><button type="button" class="ghost" id="ch-new">+ 새로 만들기</button><button type="button" class="ghost" id="ch-fromgen" title="지금 이미지 생성 화면에 채워 둔 프롬프트·LoRA·시드·모델로 새 항목을 만들어요">+ 생성 화면 설정으로 새로 만들기</button></div>
     <div id="ch-list" class="chgrid"></div>
     <form id="ch-form" hidden autocomplete="off">
       <input type="hidden" name="id">
       <div class="row"><label class="f">이름<input name="name" maxlength="60" placeholder="예: 은발 마법사 리아"></label>
       <label class="f">종류<select name="kind"></select></label></div>
+      <div class="chcopy"><b>이미지 생성 화면에서 복사</b><span class="mute">지금 이미지 생성 화면에 채워 둔 값을 이 칸들로 가져와요. 가져올 것만 체크하세요.</span>
+        <div class="chcopy-r"><label class="chk"><input type="checkbox" data-cp="prompt" checked> 프롬프트</label><label class="chk"><input type="checkbox" data-cp="negative" checked> 제외할 요소</label><label class="chk"><input type="checkbox" data-cp="loras" checked> LoRA·강도</label><label class="chk"><input type="checkbox" data-cp="seed"> 시드</label><label class="chk"><input type="checkbox" data-cp="model" checked> 모델</label><label class="chk"><input type="checkbox" data-cp="cover"> 마지막 결과 그림을 대표 이미지로</label>
+        <button type="button" class="ghost sm" id="ch-copy">복사해 오기</button></div></div>
       <label class="f">프롬프트<textarea name="prompt" rows="4" placeholder="이 캐릭터·스타일을 나타내는 프롬프트 (LoRA 태그는 아래 LoRA 칸에 넣어 주세요)"></textarea></label>
       <label class="f">제외할 요소 (선택)<textarea name="negative" rows="2"></textarea></label>
       <div class="f"><span>LoRA (선택)</span><div id="ch-loras"></div><button type="button" class="ghost sm" id="ch-addl">+ LoRA 줄 추가</button></div>
@@ -677,7 +680,7 @@
   <h3>하고 싶은 일로 찾기</h3>
   <dl class="gloss">
     <dt>글만으로 그림을 만들고 싶어요</dt><dd><b>이미지 생성</b> 탭 → 모델을 고르고 프롬프트를 적고 [이미지 생성]. 처음이면 프로필은 '자동'으로 두세요.</dd>
-    <dt>마음에 든 그림을 조금만 바꿔서 또 만들고 싶어요</dt><dd>결과 아래 <b>[같은 설정으로 생성]</b>을 누른 뒤 프롬프트나 시드만 바꿔요. 시드를 그대로 두면 같은 구도로 나와요.</dd>
+    <dt>마음에 든 그림을 조금만 바꿔서 또 만들고 싶어요</dt><dd>결과 아래 <b>[같은 설정으로]</b>(갤러리에서는 큰 화면의 [이어서 작업 → 이미지 생성으로 보내기])를 누른 뒤 프롬프트나 시드만 바꿔요. 시드를 그대로 두면 같은 구도로 나와요.</dd>
     <dt>사진 속 옷·머리색·표정만 바꾸고 싶어요</dt><dd><b>이미지 편집</b> → 사진을 올리고 [선택 도구]로 바꿀 곳을 클릭 → 원하는 변화를 적고 [편집 실행]. 말로만 바꾸려면 'Qwen-Image-Edit'을 쓰세요.</dd>
     <dt>사진을 더 크고 선명하게 만들고 싶어요</dt><dd><b>업스케일</b> → 빠른 업스케일. 더 자세한 질감이 필요하면 '디테일 재생성'(실사는 변화 강도 0.2 안팎).</dd>
     <dt>사진의 배경만 지우고 싶어요</dt><dd><b>이미지 편집</b> → [배경] → [선택 반전] → [선택만 남겨 투명 PNG 저장].</dd>
@@ -695,6 +698,7 @@
     <dt>디스크가 가득 찼어요</dt><dd><b>설치와 모델</b> 탭 → [저장 공간 점검]에서 큰 파일과 임시 파일을 찾아 정리해요.</dd>
   </dl>
   <h3>ComfyUI 기능을 여기서 쓸 수 있나요?</h3>
+  <p class="hint plain"><b>지원</b>은 만든 쪽에서 동작을 확인한 기능이에요. <b>미검증</b>은 기능은 들어 있지만 실제 PC(여러 GPU·환경)에서 확인하지 못한 기능이에요. 안 되면 [설정 → 문제 해결]의 진단 파일이나 [설치와 모델 → 내 PC 점검]으로 원인을 찾아볼 수 있어요.</p>
   <table class="cov"><thead><tr><th>기능</th><th>상태</th><th>어디서</th></tr></thead><tbody>
     <tr><td>글로 그림 만들기 (SD1.5·SDXL·Illustrious·Pony·NoobAI)</td><td class="y">지원</td><td>이미지 생성</td></tr>
     <tr><td>FLUX · Krea · Chroma</td><td class="y">지원</td><td>이미지 생성</td></tr>
@@ -716,7 +720,7 @@
     <tr><td>Stable Diffusion 3.5 · HiDream · Lumina 2</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류 (설치와 모델에서 받아요)</td></tr>
     <tr><td>음악 만들기 (ACE-Step 1.5)</td><td class="p">미검증</td><td>사이드바 [음악 만들기] — 스타일과 가사로 곡을 만들어요</td></tr>
     <tr><td>음성 만들기 (글 읽어 주기 — 윈도우 내장 음성 · Edge 읽어 주기)</td><td class="p">미검증</td><td>사이드바 [음성 만들기] — ComfyUI 없이 동작해요. Edge 방식은 글이 마이크로소프트 서버로 전송돼요</td></tr>
-    <tr><td>얼굴 교체 (ReActor)</td><td class="p">미검증</td><td>기능 모음 → 얼굴 교체 — 동의 확인 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
+    <tr><td>얼굴 교체 (ReActor)</td><td class="y">지원</td><td>기능 모음 → 얼굴 교체 — 동의 확인 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
     <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
     <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
@@ -920,6 +924,7 @@
 <div class="row"><div class="rl"><b>알림 메시지 표시 시간</b><span>화면 아래에 잠깐 뜨는 안내 문구가 머무는 시간이에요.</span></div><div class="rc"><select id="opt-toast"><option value="2">짧게(2초)</option><option value="3.5">보통(3.5초)</option><option value="7">길게(7초)</option><option value="12">아주 길게(12초)</option></select></div></div>
 <div class="row"><div class="rl"><b>만들기 버튼 고정</b><span>입력 칸을 내려도 [만들기] 버튼이 위에 따라와요. 끄면 제자리에 있어요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-gosticky"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>갤러리 미리보기 크기</b><span>기록 갤러리의 그림 크기예요.</span></div><div class="rc"><select id="opt-galsz"><option value="150">작게</option><option value="190">보통</option><option value="250">크게</option><option value="340">아주 크게</option></select></div></div>
+<div class="row"><div class="rl"><b>갤러리 미리보기</b><span>[끄기]로 두면 그림을 불러오지 않고 파일 이름·프롬프트만 보여 줘요. 그림이 아주 많아 느릴 때 쓰세요. 칸을 누르면 큰 그림으로 열려요.</span></div><div class="rc"><select id="opt-galprev"><option value="on">켜기</option><option value="off">끄기</option></select></div></div>
 </div></div>
   <div class="cpane" id="fold-input"><div class="card"><h3>프롬프트 입력</h3>
 <div class="row"><div class="rl"><b>태그 자동완성</b><span>프롬프트 칸에 두 글자 이상 쓰면 아래에 후보를 보여줘요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="tag-on"><i></i></label></div></div>
@@ -998,7 +1003,7 @@
     <button type="button" id="lb-one">원본 크기</button>
     <button type="button" id="lb-cmp" hidden title="원본과 결과를 겹쳐 놓고 가운데 선을 움직여 비교해요 (C 키)">겹쳐서 비교</button>
     <details class="more up" id="lb-cont" hidden><summary>이어서 작업</summary><div class="menu">
-      <button type="button" data-to="regen" title="이 그림을 만든 설정(프롬프트·모델·LoRA·시드)을 생성 화면에 채워 줘요">같은 설정으로 채우기</button>
+      <button type="button" data-to="regen" title="이 그림의 프롬프트·모델·LoRA·시드를 이미지 생성 화면에 채워서 보내요">이미지 생성으로 보내기</button>
       <button type="button" data-to="again" title="같은 설정에 시드만 바꿔 4장을 바로 만들어요">같은 설정으로 새 시드 4장</button>
       <button type="button" data-to="gvar" title="이 그림을 바탕으로 구도는 비슷하게 4장 변형해요">비슷하게 변형 4장</button>
       <button type="button" data-to="edit">이미지 편집으로 보내기</button>
