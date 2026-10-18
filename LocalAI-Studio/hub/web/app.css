@@ -477,3 +477,7 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 .ttmodel .f{margin-top:10px}
 
 .partlist{list-style:none;margin:6px 0 14px;padding:0}.partlist li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line)}.partlist li div{display:flex;flex-direction:column;gap:2px;min-width:0}.partlist b{font-weight:600;word-break:break-all}
+
+.swapm:empty{display:none}.swapm{margin:10px 0}.swapm button{margin-left:8px}
+
+.cachein{margin:12px 0}.cachelist li{display:block}.cachelist code,.cachein code{word-break:break-all}

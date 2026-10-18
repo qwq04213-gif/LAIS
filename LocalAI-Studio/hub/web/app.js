@@ -1177,12 +1177,14 @@ function featForm(id,keep){
     <ol class="steps">${f.steps.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>
     ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?'아래 <b>[설치]</b> 버튼으로 확장을 설치하세요.':'<a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.'}</p>`:''}
     ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?`<div class="warn feat-nodes"><b>필요한 확장:</b> ${esc(f.needs.pack)}<div class="fn-list mute">설치할 수 있는 곳을 찾는 중…</div></div>`:''}
+    ${id==='faceswap'&&!(f.missing_nodes||[]).length?'<div class="swapm" id="swapm"></div>':''}
     <button class="go">만들기</button>
     <input type="hidden" name="feature" value="${esc(id)}">
     ${main.map(fieldHTML).join('')}
     ${adv.length?`<details><summary>고급 설정</summary>${adv.map(fieldHTML).join('')}</details>`:''}`;
   $$('#feat-form .mini[data-img]').forEach(b=>{mini(b);if(keepImgs[b.dataset.img])b.set(keepImgs[b.dataset.img])});
   {const fl=$('#feat-form .fn-list');if(fl)nodeHelp(f.missing_nodes,fl)}
+  if($('#swapm'))swapPanel();
   if(keep)for(const [k,v] of Object.entries(keepVals)){const el=$('#f-feat').elements[k];if(el&&el.type!=='file'&&v!=='')el.value=v}
 }
 $('#feat-pick').onclick=e=>{const b=e.target.closest('.fcard');if(b)featForm(b.dataset.f)};
@@ -1253,7 +1255,7 @@ async function diskScan(){
   const st=$('#disk-st');st.textContent='폴더를 훑는 중이에요… (몇 초에서 1분쯤 걸려요)';$('#disk-scan').disabled=true;
   let r;try{r=await api('/api/disk')}catch{st.textContent='확인하지 못했어요.';$('#disk-scan').disabled=false;return}
   $('#disk-scan').disabled=false;st.textContent='';
-  const gb=fmtSize,CL={temp:'임시 미리보기 지우기',input:'임시 입력 이미지 지우기',backup:'오래된 백업 지우기',logs:'로그 줄이기',cache:'작업용 캐시 지우기',x_hf:'캐시 지우기',x_torch:'캐시 지우기',x_pip:'캐시 지우기',x_pip2:'캐시 지우기',x_uv:'캐시 지우기'};
+  const gb=fmtSize,CL={temp:'임시 미리보기 지우기',input:'임시 입력 이미지 지우기',backup:'오래된 백업 지우기',logs:'로그 줄이기',cache:'작업용 캐시 지우기',x_hf:'캐시 지우기',x_torch:'캐시 지우기',x_pip:'캐시 지우기',x_pip2:'캐시 지우기',x_uv:'캐시 지우기',cache_in:'캐시 지우기'};
   const inside=r.items.filter(i=>i.inside),tot=r.used||1,big1=inside.filter(i=>i.bytes>=1e6||i.clean||i.key==='rest'),small=inside.filter(i=>!(i.bytes>=1e6||i.clean||i.key==='rest'));
   const nm=i=>i.key.startsWith('m_')&&DIRN[i.key.slice(2)]?'모델: '+DIRN[i.key.slice(2)]:i.label;
   const row=i=>`<tr><td>${esc(nm(i))}<small class="mute">${esc(i.note||'')}</small><small class="path"><code>${esc(i.path)}</code></small></td><td class="num">${gb(i.bytes)}</td><td class="bar"><i style="width:${Math.max(1,Math.round(i.bytes/tot*100))}%"></i></td><td class="act"><button type="button" class="ghost sm op" data-k="${esc(i.key)}">폴더 열기</button>${i.clean?` <button type="button" class="ghost sm cl" data-w="${i.clean}"${i.key.startsWith('x_')?' data-ext="1"':''}>${CL[i.clean]}</button>`:''}</td></tr>`;
@@ -1271,7 +1273,7 @@ async function diskScan(){
    ${dup?`<h4>같은 내용으로 보이는 파일 (둘 중 하나만 있어도 돼요)</h4><ul class="duplist">${dup}</ul>`:''}
    <h4>용량이 큰 모델 파일 순서</h4><table class="disktb"><tbody>${big}</tbody></table>`;
 }
-$('#disk-scan').onclick=diskScan;
+$('#disk-scan').onclick=()=>{diskScan();cachePanel()};
 let TIDY=[];
 const tidySum=()=>{const ck=[...$$('#tidy .tk:checked')],sz=ck.reduce((a,c)=>a+(+c.dataset.s),0),b=$('#tidy-go');if(b){b.disabled=!ck.length;b.textContent=ck.length?`선택한 ${ck.length}개 지우기 (${fmtSize(sz)})`:'지울 파일을 골라 주세요'}};
 $('#tidy-scan').onclick=async()=>{const st=$('#disk-st'),T=$('#tidy');st.textContent='찾는 중이에요…';let r;try{r=await api('/api/model-tidy')}catch{st.textContent='확인하지 못했어요.';return}st.textContent='';
@@ -1286,7 +1288,7 @@ $('#tidy').onclick=async e=>{if(e.target.id!=='tidy-go')return;const ck=[...$$('
   toast(`${ok}개를 지웠어요.`+(bad?` (${bad}개는 다른 프로그램이 쓰고 있어서 못 지웠어요)`:''));$('#tidy-scan').click();diskScan();loadManage();loadLists(true)};
 $('#disk').onclick=async e=>{
   const op=e.target.closest('.op');if(op){const r=await api('/api/disk/open',{key:op.dataset.k});toast(r.error||'폴더를 열었어요: '+r.path,5000);return}
-  const c=e.target.closest('.cl');if(c){if(c.dataset.ext&&!confirm('이 캐시를 모두 지울까요?\n다른 프로그램이 다시 받아야 할 수 있어서 처음 쓸 때 시간이 걸려요. 되돌릴 수 없어요.'))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
+  const c=e.target.closest('.cl');if(c){if((c.dataset.ext||c.dataset.w==='cache_in')&&!confirm('이 캐시를 모두 지울까요?\n다른 프로그램이 다시 받아야 할 수 있어서 처음 쓸 때 시간이 걸려요. 되돌릴 수 없어요.'))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
   const b=e.target.closest('.del');if(!b)return;
   if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;
   const r=await api('/api/delete',{kind:b.dataset.kind,dir:b.dataset.dir,name:b.dataset.name});
@@ -1997,3 +1999,31 @@ $('#parts').onclick=async e=>{const b=e.target.closest('.pdel');if(!b)return;con
   const msg={node:`확장 '${t}' 을(를) 지울까요?\nComfyUI 가 잠깐 다시 시작돼요. 이 확장을 쓰는 기능은 다시 설치하기 전까지 안 돼요. 되돌릴 수 없어요.`,model:`모델 폴더 '${t}' 을(를) 통째로 지울까요?\n그 안의 파일을 쓰는 확장은 다시 내려받아야 해요. 되돌릴 수 없어요.`,pip:`파이썬 부품 '${t}' 을(를) 지울까요?\n이 부품을 쓰는 확장이 있으면 오류가 날 수 있어요.`,edge:`음성 읽기 부품 '${t}' 을(를) 지울까요?\nEdge 목소리는 다시 [부품 설치]를 눌러야 써요.`}[k];
   if(!confirm(msg))return;b.disabled=true;b.textContent='지우는 중…';
   const r=await api('/api/parts/delete',{kind:k,name:b.dataset.name});toast(r.error||(r.left?'일부 파일이 남았어요(다른 프로그램이 쓰는 중일 수 있어요).':'지웠어요.'),5000);partsScan();diskScan();loadLists(true)};
+
+/* ── 얼굴 교체 모델(inswapper) 상태·받기 ── */
+let swapT=null;
+async function swapPanel(){const box=$('#swapm');clearTimeout(swapT);if(!box)return;let r;try{r=await api('/api/faceswap/model')}catch{return}
+  if(r.state==='running'){box.className='swapm warn';box.innerHTML=`<b>얼굴 교체 모델 받는 중</b> <span class="mute">${esc(r.msg)}</span>`;swapT=setTimeout(swapPanel,2000);return}
+  if(r.listed){box.className='swapm';box.innerHTML='';return}
+  const err=r.state==='error'?`<div class="mute">${esc(r.msg)}</div>`:'';
+  if(r.file){box.className='swapm warn';box.innerHTML=`<b>얼굴 교체 모델 파일은 받아져 있는데 엔진이 아직 못 봤어요.</b> 엔진을 다시 시작하면 보여요.${err} <button type="button" class="ghost" id="swap-rs">이미지 엔진 다시 시작</button>`;
+    $('#swap-rs').onclick=async()=>{const x=await api('/api/engine/restart',{});toast(x.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 다시 확인해요.',5000);swapT=setTimeout(async()=>{await loadCaps();swapPanel()},9000)};return}
+  box.className='swapm warn';box.innerHTML=`<b>얼굴 교체 모델(inswapper_128.onnx, 약 550MB)이 없어요.</b> 확장 설치 때 받지 못했을 수 있어요.${err} <button type="button" class="ghost" id="swap-dl">모델 받기</button>`;
+  $('#swap-dl').onclick=async()=>{const x=await api('/api/faceswap/model',{});if(x.error)return toast(x.error,6000);swapPanel()}}
+
+/* ── 바깥 캐시를 프로그램 폴더 안으로 ── */
+let cacheT=null;
+async function cachePanel(){const box=$('#cachein');clearTimeout(cacheT);if(!box)return;let r;try{r=await api('/api/cachein')}catch{return}
+  const run=r.state==='running',tot=r.items.reduce((a,i)=>a+i.src_size,0);
+  const rows=r.items.filter(i=>i.src_size).map(i=>`<li><b>${esc(i.label)}</b> <small class="mute">${fmtSize(i.src_size)} · 지금: <code>${esc(i.src)}</code></small></li>`).join('');
+  box.innerHTML=`<h4>바깥 캐시를 프로그램 폴더 안으로 모으기 ${r.on?'<small class="mute">켜져 있어요</small>':''}</h4>
+   <p class="hint plain">HuggingFace·PyTorch·pip 캐시는 보통 <code>C:\\Users\\내이름\\.cache</code> 같은 곳에 쌓여요. 켜면 이 프로그램이 띄우는 ComfyUI·부품 설치가 <code>${esc(r.root)}</code> 안에 쌓고, 이미 있는 파일은 옮겨 줘요(복사가 맞는지 확인한 뒤 원래 폴더를 지워요). 프로그램 폴더를 옮기면 같이 따라가요. 직접 따로 실행하는 프로그램은 예전 위치를 계속 써요. ※ 실제 PC 확인 전이에요(미검증).</p>
+   ${tot?`<ul class="partlist cachelist">${rows}</ul>`:''}
+   <div class="diskbar">${run?`<span class="mute">${esc(r.msg)}</span>`:`<button type="button" class="ghost" id="cache-move"${tot?'':' disabled'}>${tot?`지금 있는 캐시 ${fmtSize(tot)} 옮기고 켜기`:'옮길 캐시가 없어요'}</button>
+     <button type="button" class="ghost" id="cache-tog">${r.on?'끄기(원래 위치로 되돌리기)':'옮기지 않고 앞으로만 켜기'}</button>`}</div>
+   ${r.state==='done'||r.state==='error'?`<p class="${r.state==='error'?'warn':'hint plain'}">${esc(r.msg)}</p>`:''}`;
+  if(run){cacheT=setTimeout(cachePanel,2000);return}
+  const mv=$('#cache-move');if(mv)mv.onclick=async()=>{if(!confirm(`위 캐시 ${fmtSize(tot)} 를 프로그램 폴더 안으로 옮길까요?\n복사가 끝나고 크기가 맞으면 원래 폴더를 지워요. 몇 분 걸릴 수 있고, 끝난 뒤 프로그램을 다시 시작해야 적용돼요.`))return;
+    const x=await api('/api/cachein/move',{});if(x.error)return toast(x.error,6000);cachePanel()};
+  const tg=$('#cache-tog');if(tg)tg.onclick=async()=>{const x=await api('/api/cachein',{on:!r.on});toast(x.error||'바꿨어요. 적용하려면 프로그램을 다시 시작해 주세요.',6000);cachePanel();diskScan()}}
+$('#fold-disk').addEventListener('toggle',e=>{if(e.target.open)cachePanel()});

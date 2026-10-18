@@ -1292,6 +1292,78 @@ def feat_detailer(p, J):
     return [(res, info_sd(q, res.size, "feat-detailer", Detailer=" + ".join(d for d, _ in passes)), g)]
 
 
+# ───────────────────────── 얼굴 교체 모델(inswapper) 직접 받기 ─────────────────────────
+SWAP_URL = "https://huggingface.co/datasets/Gourieff/ReActor/resolve/main/models/inswapper_128.onnx"
+SWAP_MIN = 100 << 20
+SWAP_JOB = {"state": "", "msg": ""}
+
+
+def swap_file():
+    return MODELS / "insightface" / "inswapper_128.onnx"
+
+
+def swap_status():
+    f = swap_file()
+    have = f.is_file() and f.stat().st_size >= SWAP_MIN
+    try:
+        listed = bool(combo_opts("ReActorFaceSwap", "swap_model"))
+    except Exception:
+        listed = False
+    return {"file": have, "listed": listed, "size": f.stat().st_size if have else 0, "state": SWAP_JOB["state"], "msg": SWAP_JOB["msg"],
+            "pack": _pack_done(REACTOR_REPO), "path": str(f)}
+
+
+def _swap_run():
+    J = SWAP_JOB
+    try:
+        f = swap_file()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        part = f.with_name(f.name + ".part")
+        for _try in range(3):
+            have = part.stat().st_size if part.exists() else 0
+            rq = urllib.request.Request(SWAP_URL, headers={"User-Agent": "LocalAI-Studio", **({"Range": f"bytes={have}-"} if have else {})})
+            try:
+                with urllib.request.urlopen(rq, timeout=60) as r:
+                    code = getattr(r, "status", 200)
+                    if have and code != 206:
+                        have = 0
+                    total = int(r.headers.get("Content-Length") or 0) + have
+                    with open(part, "ab" if have else "wb") as o:
+                        done = have
+                        while True:
+                            c = r.read(1 << 20)
+                            if not c:
+                                break
+                            o.write(c)
+                            done += len(c)
+                            J["msg"] = f"받는 중… {done >> 20}MB" + (f" / {total >> 20}MB" if total else "")
+                if total and part.stat().st_size < total:
+                    continue
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 416:       # 이미 다 받은 상태
+                    break
+                raise
+        if not part.exists() or part.stat().st_size < SWAP_MIN:
+            raise RuntimeError("받은 파일이 너무 작아요. 인터넷 연결을 확인하고 다시 눌러 주세요.")
+        os.replace(part, f)
+        J["state"], J["msg"] = "done", "받았어요. [이미지 엔진 다시 시작]을 눌러야 목록에 나타나요."
+        _CAPS["t"] = 0
+    except Exception as e:  # noqa: BLE001
+        J["state"], J["msg"] = "error", f"받지 못했어요: {e}. 같은 버튼을 다시 누르면 이어서 받아요. (huggingface.co 에 접속할 수 있는지 확인해 주세요.)"
+        log("[얼굴 교체 모델 받기 오류]", repr(e))
+
+
+def swap_download():
+    if SWAP_JOB["state"] == "running":
+        return {"ok": True}
+    if swap_status()["file"]:
+        return {"error": "이미 받아 둔 모델이 있어요. 목록에 안 나오면 [이미지 엔진 다시 시작]을 눌러 주세요."}
+    SWAP_JOB.update(state="running", msg="시작해요…")
+    threading.Thread(target=_swap_run, daemon=True).start()
+    return {"ok": True}
+
+
 def feat_faceswap(p, J):
     """얼굴 교체(ReActor). 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요. 동의 확인 없이는 실행하지 않아요."""
     if not p.get("consent"):
@@ -1300,7 +1372,9 @@ def feat_faceswap(p, J):
         raise ValueError("얼굴을 바꿀 사진과, 가져올 얼굴 사진을 둘 다 올려 주세요.")
     swaps = combo_opts("ReActorFaceSwap", "swap_model")
     if not swaps:
-        raise RuntimeError("얼굴 교체 모델이 없어요. 확장 설치 버튼을 누르면 inswapper_128.onnx 를 함께 받아요. 이미 눌렀다면 이미지 엔진을 다시 시작해 주세요.")
+        if swap_file().is_file() and swap_file().stat().st_size >= SWAP_MIN:
+            raise RuntimeError("얼굴 교체 모델 파일은 있는데 엔진이 아직 못 봤어요. 이 화면의 [이미지 엔진 다시 시작]을 눌러 주세요.")
+        raise RuntimeError("얼굴 교체 모델(inswapper_128.onnx)이 아직 없어요. 이 화면의 [모델 받기] 버튼으로 받은 뒤 [이미지 엔진 다시 시작]을 눌러 주세요.")
     swap = next((x for x in swaps if x.lower().startswith("inswapper")), swaps[0])
     rests = combo_opts("ReActorFaceSwap", "face_restore_model")
     want = {"gfpgan": "gfpganv1.4", "codeformer": "codeformer", "none": "none"}.get(p.get("restore") or "gfpgan", "gfpganv1.4")
@@ -4444,16 +4518,111 @@ def quick_sig(f):
     return f"{fsize(f)}:{h.hexdigest()}"
 
 
+# ───────────────────────── 바깥 캐시를 프로그램 폴더 안으로 ─────────────────────────
+CACHE_IN = ROOT / "engine" / "cache"
+CACHE_ENV = ("HF_HUB_CACHE", "TORCH_HOME", "PIP_CACHE_DIR")
+ORIG_ENV = {k: os.environ.get(k) for k in CACHE_ENV + ("HF_HOME",)}     # 스튜디오가 바꾸기 전 값
+CACHE_JOB = {"state": "", "msg": ""}
+
+
+_CACHE_DST = [("hf", "", "HF_HUB_CACHE", None, CACHE_IN / "huggingface" / "hub"), ("torch", "", "TORCH_HOME", None, CACHE_IN / "torch"), ("pip", "", "PIP_CACHE_DIR", None, CACHE_IN / "pip")]
+
+
+def cache_map():
+    """(키, 이름, 환경 변수, 원래 위치, 옮길 위치). 원래 위치는 사용자의 환경 변수·윈도우 기본값을 따라요."""
+    ours = {env: str(dst) for _k, _l, env, _s, dst in _CACHE_DST}
+    o = {k: (ORIG_ENV.get(k) if os.environ.get(k) == ours.get(k) else os.environ.get(k)) for k in CACHE_ENV + ("HF_HOME",)}      # 우리가 바꾼 값이면 원래 값을 써요
+    home = Path.home()
+    la = Path(os.environ["LOCALAPPDATA"]) if os.environ.get("LOCALAPPDATA") else None
+    hf = Path(o["HF_HUB_CACHE"]) if o.get("HF_HUB_CACHE") else (Path(o["HF_HOME"]) / "hub" if o.get("HF_HOME") else home / ".cache" / "huggingface" / "hub")
+    tc = Path(o["TORCH_HOME"]) if o.get("TORCH_HOME") else home / ".cache" / "torch"
+    pp = Path(o["PIP_CACHE_DIR"]) if o.get("PIP_CACHE_DIR") else ((la / "pip" / "Cache") if la else home / ".cache" / "pip")
+    return [("hf", "HuggingFace 모델 캐시", "HF_HUB_CACHE", hf, CACHE_IN / "huggingface" / "hub"),
+            ("torch", "PyTorch 캐시", "TORCH_HOME", tc, CACHE_IN / "torch"),
+            ("pip", "pip 설치 캐시", "PIP_CACHE_DIR", pp, CACHE_IN / "pip")]
+
+
+def cache_in_on():
+    return bool(settings().get("cache_in"))
+
+
+def apply_cache_env():
+    """켜져 있으면 이 프로그램이 띄우는 프로그램(ComfyUI·pip 등)이 캐시를 프로그램 폴더 안에 쌓게 해요. 꺼져 있으면 원래대로."""
+    on = cache_in_on()
+    for _k, _l, env, _src, dst in cache_map():
+        if os.environ.get(env) != str(dst):
+            ORIG_ENV[env] = os.environ.get(env)
+        if on:
+            dst.mkdir(parents=True, exist_ok=True)
+            os.environ[env] = str(dst)
+        elif ORIG_ENV.get(env) is None:
+            os.environ.pop(env, None)
+        else:
+            os.environ[env] = ORIG_ENV[env]
+
+
+def cache_status():
+    items = []
+    for k, label, env, src, dst in cache_map():
+        items.append({"key": k, "label": label, "src": str(src), "dst": str(dst), "src_size": dir_size(src) if src.is_dir() else 0, "dst_size": dir_size(dst) if dst.is_dir() else 0})
+    return {"on": cache_in_on(), "items": items, "state": CACHE_JOB["state"], "msg": CACHE_JOB["msg"], "root": str(CACHE_IN)}
+
+
+def cache_set(on):
+    d = settings()
+    d["cache_in"] = bool(on)
+    save_settings(d)
+    apply_cache_env()
+    return {"ok": True, "status": cache_status(), "restart": True}
+
+
+def _cache_move_run():
+    J = CACHE_JOB
+    moved = 0
+    left = []
+    try:
+        for k, label, env, src, dst in cache_map():
+            if not src.is_dir() or _under(src, ROOT) or os.path.normcase(str(src)) == os.path.normcase(str(dst)):
+                continue
+            J["msg"] = f"{label} 옮기는 중…"
+            before = dir_size(src)
+            dst.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(_lp(src), _lp(dst), symlinks=True, dirs_exist_ok=True, copy_function=shutil.copy2)
+            after = dir_size(dst)
+            if after < before:
+                raise RuntimeError(f"{label}: 복사한 크기가 원본보다 작아요(원본 {before}바이트, 복사본 {after}바이트). 원본은 그대로 뒀어요.")
+            _rm_tree(src)
+            if src.exists() and any(src.iterdir()):
+                left.append(label)
+            moved += before
+        J["state"], J["msg"] = "done", f"{moved >> 20}MB 를 옮겼어요." + (f" (다른 프로그램이 쓰고 있어서 일부가 남았어요: {', '.join(left)})" if left else "") + " 적용하려면 프로그램을 다시 시작해 주세요."
+    except Exception as e:  # noqa: BLE001
+        J["state"], J["msg"] = "error", f"옮기지 못했어요: {e}"
+        log("[캐시 옮기기 오류]", repr(e))
+
+
+def cache_move():
+    if CACHE_JOB["state"] == "running":
+        return {"ok": True}
+    if busy_count():
+        return {"error": "작업이 진행 중일 때는 옮기지 않아요. 끝난 뒤에 다시 눌러 주세요."}
+    cache_set(True)
+    CACHE_JOB.update(state="running", msg="시작해요…")
+    threading.Thread(target=_cache_move_run, daemon=True).start()
+    return {"ok": True}
+
+
 def _ext_cache_dirs():
     """프로그램 폴더 밖에 있는 큰 캐시들의 실제 위치(환경 변수와 윈도우 기본 위치를 따라가요)."""
-    home, env = Path.home(), os.environ
-    la = Path(env["LOCALAPPDATA"]) if env.get("LOCALAPPDATA") else None
-    hf = Path(env["HF_HUB_CACHE"]) if env.get("HF_HUB_CACHE") else (Path(env["HF_HOME"]) / "hub" if env.get("HF_HOME") else home / ".cache" / "huggingface" / "hub")
+    home = Path.home()
+    la = Path(os.environ["LOCALAPPDATA"]) if os.environ.get("LOCALAPPDATA") else None
+    cm = {k: src for k, _l, _e, src, _d in cache_map()}
     out = [("o_default", "별도로 설치한 Ollama의 모델 폴더", home / ".ollama", "이 프로그램과 따로 설치한 Ollama가 같은 모델을 한 번 더 받아 둔 경우예요. 쓰지 않으면 직접 지워도 돼요.", None),
-           ("x_hf", "HuggingFace 모델 캐시", hf, "다른 프로그램(확장 노드 등)이 받아 둔 모델이에요. 지워도 다음에 필요할 때 다시 받아요. 로그인 정보는 지우지 않아요.", "x_hf"),
-           ("x_torch", "PyTorch 캐시", home / ".cache" / "torch", "지워도 다음에 필요할 때 다시 받아요.", "x_torch")]
-    pips = [(la / "pip" / "Cache") if la else None, home / ".cache" / "pip"]
-    for i, pp in enumerate(x for x in pips if x):
+           ("x_hf", "HuggingFace 모델 캐시", cm["hf"], "다른 프로그램(확장 노드 등)이 받아 둔 모델이에요. 지워도 다음에 필요할 때 다시 받아요. 로그인 정보는 지우지 않아요.", "x_hf"),
+           ("x_torch", "PyTorch 캐시", cm["torch"], "지워도 다음에 필요할 때 다시 받아요.", "x_torch")]
+    pips = [cm["pip"], home / ".cache" / "pip"]
+    seen = set()
+    for i, pp in enumerate(x for x in pips if x and str(x) not in seen and not seen.add(str(x))):
         out.append(("x_pip" if i == 0 else "x_pip2", "pip 설치 캐시", pp, "파이썬 부품을 받을 때 쌓인 캐시예요. 지워도 안전해요.", "x_pip" if i == 0 else "x_pip2"))
     if la:
         out.append(("x_uv", "uv 캐시", la / "uv" / "cache", "음성 모델 환경을 만들 때 쌓인 캐시예요. 지워도 안전해요.", "x_uv"))
@@ -4474,6 +4643,7 @@ def disk_paths():
              ("backup", "업데이트 되돌리기용 백업", ROOT / "backup", "가장 최근 1개만 남기고 지워요.", "backup", ()),
              ("logs", "로그", LOGS, "지워도 안전해요.", "logs", ()),
              ("cache", "작업용 캐시 (이 프로그램 폴더의 cache)", ROOT / "cache", "갤러리 미리보기, 내려받다 만 확장, 음성 임시 파일이에요. 지워도 다시 만들어져요.", "cache", ()),
+             ("cache_in", "옮겨 둔 바깥 캐시 (engine\\cache)", CACHE_IN, "HuggingFace·PyTorch·pip 캐시를 이 폴더에 모아 둔 곳이에요. 지워도 다음에 필요할 때 다시 받아요.", "cache_in", ()),
              ("tts_env", "음성 모델 환경 (TTS)", ROOT / "engine" / "tts", "음성 만들기용 모델 엔진이에요. [설치한 확장·부품 관리]에서 지울 수 있어요.", None, ()),
              ("comfy_engine", "ComfyUI 엔진 (python_embeded)", HOME / "python_embeded", "엔진 본체라 지우면 안 돼요.", None, ()),
              ("comfy_app", "ComfyUI 프로그램·확장 (custom_nodes 포함)", COMFY, "엔진 본체예요. 확장은 [설치한 확장·부품 관리]에서 하나씩 지울 수 있어요.", None,
@@ -4645,6 +4815,19 @@ def clean_item(what):
                 if f.is_file():
                     rm(f)
         rm(ROOT / "cache" / "extension-node-map.json")
+    elif what == "cache_in":
+        if busy_count():
+            return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
+        if CACHE_JOB["state"] == "running":
+            return {"error": "캐시를 옮기는 중이에요."}
+        freed += dir_size(CACHE_IN) if CACHE_IN.is_dir() else 0
+        for ch in (list(CACHE_IN.iterdir()) if CACHE_IN.is_dir() else []):
+            for sub in (list(ch.iterdir()) if ch.is_dir() else []):
+                try:
+                    shutil.rmtree(sub) if sub.is_dir() and not sub.is_symlink() else sub.unlink()
+                except OSError:
+                    pass
+        freed -= dir_size(CACHE_IN) if CACHE_IN.is_dir() else 0
     elif what in ("x_hf", "x_torch", "x_pip", "x_pip2", "x_uv"):
         if any(t.get("state") in ("running", "queued") for t in TASKS) or busy_count():
             return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
@@ -4901,6 +5084,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(model_tidy())
         if u == "/api/disk":
             return self.send_json(disk_report())
+        if u == "/api/faceswap/model":
+            return self.send_json(swap_status())
+        if u == "/api/cachein":
+            return self.send_json(cache_status())
         if u == "/api/parts":
             return self.send_json(parts_list())
         if u == "/api/gallery":
@@ -5075,6 +5262,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(describe_image(p))
         if u == "/api/gallery/fav":
             return self.send_json(gal_fav(p))
+        if u == "/api/faceswap/model":
+            return self.send_json(swap_download())
+        if u == "/api/cachein":
+            return self.send_json(cache_set(p.get("on")) if "on" in p else cache_status())
+        if u == "/api/cachein/move":
+            return self.send_json(cache_move())
         if u == "/api/parts/delete":
             return self.send_json(part_delete(p))
         if u == "/api/disk/open":
@@ -5185,6 +5378,7 @@ def main():
     sys.stdout.reconfigure(errors="replace")
     GPU = gpu()
     register_root()
+    apply_cache_env()
     start_engines()
     ws_start()
     threading.Thread(target=worker, daemon=True).start()
