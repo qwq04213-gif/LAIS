@@ -34,6 +34,13 @@
    "gb": 14.3,
    "desc": "한국어를 공식 지원하는 다국어 모델의 검열 해제판. 롤플레이·소설에 쓸 만한 표현력. VRAM 16GB 이상 권장. 주소가 바뀌었다면 '직접 추가'를 쓰세요.",
    "ollama": "huihui_ai/mistral-small-abliterated:24b"
+  },
+  {
+   "id": "qwen25vl-7b",
+   "name": "Qwen2.5-VL 7B (이미지를 보는 모델)",
+   "gb": 6.0,
+   "desc": "사진을 보고 설명하거나 이미지 생성용 프롬프트를 뽑아 줘요('프롬프트' 탭의 이미지→프롬프트). 대화에도 쓸 수 있어요. VRAM 8GB 이상 권장.",
+   "ollama": "qwen2.5vl:7b"
   }
  ],
  "image": [
@@ -243,6 +250,37 @@
     {
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_raw_fp8_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan-common",
+   "name": "Wan 영상 공용 파일 (UMT5 텍스트 인코더 + Wan 2.2 VAE)",
+   "gb": 8.2,
+   "desc": "Wan 2.2 영상 모델이 쓰는 텍스트 인코더(fp8)와 VAE. 아래 Wan 모델을 고르면 자동으로 함께 설치돼요.",
+   "files": [
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan2.2_vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan22-ti2v-5b",
+   "name": "Wan 2.2 영상 5B (글→영상, 이미지→영상)",
+   "gb": 10.0,
+   "requires": [
+    "wan-common"
+   ],
+   "desc": "글만으로, 또는 올린 이미지에서 시작해 몇 초짜리 영상을 만들어요. 한 모델로 둘 다 돼요. VRAM 12GB 이상 권장(8GB는 짧고 작게). 영상 한 편에 몇 분 걸려요. ComfyUI 를 최신으로 유지하세요. Apache-2.0 라이선스.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors"
     }
    ]
   },

@@ -9,12 +9,16 @@
 <body>
 <aside id="rail">
   <div class="brand">로컬 AI 스튜디오<small id="ver"></small></div>
+  <div id="gbars" hidden></div>
   <nav>
     <button data-v="chat" class="on">대화</button>
     <i class="sep"></i>
     <button data-v="edit">이미지 편집</button>
     <button data-v="gen">이미지 생성</button>
     <button data-v="up">업스케일</button>
+    <button data-v="vid">영상 만들기</button>
+    <button data-v="gal">기록 갤러리</button>
+    <button data-v="lib">프롬프트</button>
     <i class="sep"></i>
     <button data-v="info">이미지 정보</button>
     <button data-v="feat">기능 모음</button>
@@ -367,6 +371,95 @@
   </div>
 </section>
 
+<!-- 영상 만들기 -->
+<section class="view split" id="v-vid">
+  <form id="f-vid" autocomplete="off" novalidate>
+    <button class="go">영상 만들기</button>
+    <p class="warn" id="w-vid" hidden>Wan 2.2 영상 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Wan 2.2 영상 5B'를 설치해 주세요. (약 18GB, 영상 한 편에 몇 분 걸려요)</p>
+    <p class="hint plain">글만 쓰면 새 영상을, 시작 이미지를 올리면 그 이미지가 움직이는 영상을 만들어요. 처음 한 번은 모델을 불러오느라 오래 걸려요.</p>
+    <label class="f">장면 설명<textarea name="prompt" rows="5" placeholder="예: 비 오는 밤 네온 거리를 걸어가는 여자, 카메라가 천천히 따라간다, 영화 같은 조명"></textarea></label>
+    <p class="hint plain">무엇이 <b>어떻게 움직이는지</b>를 문장으로 쓰면 잘 나와요. 카메라 움직임(천천히 다가간다, 오른쪽으로 돈다)도 적어 보세요.</p>
+    <div class="f vstart"><span>시작 이미지 (선택)</span>
+      <div class="vdrop"><label class="ghost vpick">이미지 고르기<input type="file" accept="image/*" hidden id="vid-file"></label><img id="vid-thumb" alt="시작 이미지" hidden><button type="button" class="ghost" id="vid-clear" hidden>지우기</button></div>
+    </div>
+    <label class="chk" id="vid-ratio-row" hidden><input type="checkbox" name="keep_ratio" checked> 이미지 비율 따라가기</label>
+    <div class="row">
+      <label class="f">크기<select name="size"><option value="832x480">가로 480p (기본)</option><option value="480x832">세로 480p</option><option value="640x640">정사각</option><option value="1280x704">가로 720p (VRAM 많이 필요)</option></select></label>
+      <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option></select></label>
+    </div>
+    <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
+    <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
+    <details><summary>고급 설정</summary>
+      <label class="f">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 Wan 기본 문구를 써요"></textarea></label>
+      <div class="row">
+        <label class="f">단계 수<input type="number" name="steps" value="20" min="1" max="60"></label>
+        <label class="f">CFG<input type="number" name="cfg" value="5" min="1" max="20" step="0.5"></label>
+      </div>
+      <div class="row">
+        <label class="f">초당 프레임<input type="number" name="fps" value="24" min="8" max="30"></label>
+        <label class="f">움직임 강도(shift)<input type="number" name="shift" value="8" min="1" max="20" step="0.5"></label>
+      </div>
+      <p class="hint plain">길이·크기를 키울수록 VRAM과 시간이 크게 늘어요. 메모리 부족 오류가 나면 길이를 줄이거나 크기를 낮춰 보세요.</p>
+    </details>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"></div>
+  </div>
+</section>
+
+<!-- 기록 갤러리 -->
+<section class="view" id="v-gal">
+  <h2>기록 갤러리</h2>
+  <p class="hint plain">지금까지 만든 이미지와 영상을 한곳에서 봐요. 프롬프트로 검색하고, ★로 즐겨찾기를 해 두고, 마음에 드는 건 같은 설정으로 다시 만들 수 있어요.</p>
+  <div class="galbar">
+    <input id="gal-q" type="search" placeholder="프롬프트나 파일 이름으로 검색">
+    <select id="gal-kind"><option value="">전체</option><option>생성</option><option>편집</option><option>업스케일</option><option>워크플로</option><option>기능</option><option>영상</option></select>
+    <label class="chk"><input type="checkbox" id="gal-fav"> ★ 즐겨찾기만</label>
+    <span class="mute" id="gal-n"></span>
+  </div>
+  <div id="gal-grid" class="galgrid"></div>
+  <p class="mute" id="gal-empty" hidden>아직 만든 결과가 없어요. 이미지 생성이나 영상 만들기에서 만들면 여기에 쌓여요.</p>
+  <button type="button" class="ghost" id="gal-more" hidden>더 보기</button>
+</section>
+
+<!-- 프롬프트 -->
+<section class="view" id="v-lib">
+  <h2>프롬프트</h2>
+  <details class="fold" id="fold-plib" open><summary>프롬프트 보관함</summary>
+    <p class="hint plain">자주 쓰는 프롬프트를 저장해 두면 이미지 생성·편집·영상 화면의 [📚 보관함에서 넣기]로 바로 불러와요.</p>
+    <div class="plbar"><input id="pl-q" type="search" placeholder="보관함 검색"><button type="button" class="ghost" id="pl-new">+ 새로 만들기</button></div>
+    <div id="pl-list"></div>
+    <form id="pl-form" hidden autocomplete="off">
+      <label class="f">이름<input name="name" maxlength="60"></label>
+      <label class="f">프롬프트<textarea name="text" rows="4"></textarea></label>
+      <label class="f">제외할 요소 (선택)<textarea name="negative" rows="2"></textarea></label>
+      <label class="f">태그 (쉼표로 구분, 선택)<input name="tags" placeholder="예: 인물, 배경"></label>
+      <div class="actions"><button class="go" type="submit">저장</button><button class="ghost" type="button" id="pl-cancel">취소</button></div>
+    </form>
+  </details>
+  <details class="fold" id="fold-wc"><summary>와일드카드 편집</summary>
+    <p class="hint plain">와일드카드는 후보 목록이에요. 프롬프트에 <b>__이름__</b>이라고 쓰면 만들 때마다 그 목록에서 한 줄이 무작위로 들어가요. (생성 화면의 '다이나믹 프롬프트'를 켜야 해요.) 한 줄에 후보 하나씩 적어요.</p>
+    <div id="wc-list" class="chips"></div>
+    <form id="wc-form" autocomplete="off">
+      <label class="f">이름 (글자·숫자·_ - 만)<input name="name" placeholder="예: hair_color"></label>
+      <label class="f">후보 목록 (한 줄에 하나)<textarea name="text" rows="6" placeholder="black hair&#10;blonde hair&#10;red hair"></textarea></label>
+      <div class="actions"><button class="go" type="submit">저장</button><button class="ghost" type="button" id="wc-del">이 와일드카드 삭제</button></div>
+    </form>
+  </details>
+  <details class="fold" id="fold-i2p"><summary>이미지에서 프롬프트 뽑기</summary>
+    <p class="hint plain">사진을 올리면 이미지를 볼 수 있는 대화 모델이 그림을 설명해서 프롬프트로 만들어 줘요. 마음에 드는 그림의 분위기를 따라 만들고 싶을 때 써요.</p>
+    <p class="warn" id="w-i2p" hidden>이미지를 볼 수 있는 대화 모델이 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Qwen2.5-VL 7B'를 설치해 주세요.</p>
+    <div class="vdrop"><label class="ghost vpick">이미지 고르기<input type="file" accept="image/*" hidden id="i2p-file"></label><img id="i2p-thumb" alt="" hidden></div>
+    <div class="row"><label class="f">만들 형식<select id="i2p-style"><option value="sentence">문장형 (FLUX·Krea·Qwen 계열)</option><option value="tags">태그형 (NoobAI·Illustrious 계열)</option><option value="video">영상용 (움직임 포함)</option></select></label>
+    <label class="f">사용할 모델<select id="i2p-model"></select></label></div>
+    <div class="actions"><button class="go" type="button" id="i2p-go">프롬프트 만들기</button><span class="mute" id="i2p-st"></span></div>
+    <textarea id="i2p-out" rows="5" hidden></textarea>
+    <div class="actions" id="i2p-act" hidden><button class="ghost" type="button" data-i2p="gen">이미지 생성에 넣기</button><button class="ghost" type="button" data-i2p="vid">영상 만들기에 넣기</button><button class="ghost" type="button" data-i2p="save">보관함에 저장</button></div>
+  </details>
+</section>
+
 <!-- 이미지 정보 -->
 <section class="view" id="v-info">
   <h2>이미지 정보</h2>
@@ -420,6 +513,11 @@
     <dt>어떤 설정이 좋은지 비교해 보고 싶어요</dt><dd><b>기능 모음 → 설정 비교표</b>. 같은 시드로 CFG·단계 수만 바꿔 한 장에 모아 줘요.</dd>
     <dt>인터넷에서 받은 ComfyUI 워크플로를 돌려 보고 싶어요</dt><dd><b>워크플로</b> 탭 → [파일 열기]에 JSON이나 PNG를 올려요. 없는 노드가 있으면 알려 줘요.</dd>
     <dt>새 모델·LoRA 파일을 폴더에 직접 넣었어요</dt><dd>왼쪽 아래 <b>[↻ 모델 목록 새로고침]</b>을 누르면 바로 목록에 나와요.</dd>
+    <dt>그림을 영상으로 움직이고 싶어요</dt><dd><b>영상 만들기</b> 탭 → 시작 이미지를 고르고 어떻게 움직일지 적어요. 이미지 결과 아래 <b>[영상으로]</b> 버튼을 눌러도 돼요. 영상 한 편에 몇 분 걸려요.</dd>
+    <dt>예전에 만든 그림을 찾고 싶어요</dt><dd><b>기록 갤러리</b> 탭 → 프롬프트나 종류로 검색하고, ★로 즐겨찾기를 해 둬요. 마음에 드는 건 ↻로 같은 설정으로 다시 만들 수 있어요.</dd>
+    <dt>좋아하는 프롬프트를 저장해 두고 싶어요</dt><dd><b>프롬프트</b> 탭 → 보관함. 생성·편집·영상 화면의 [📚 보관함에서 넣기]로 불러와요. 후보를 무작위로 바꿔 넣는 <b>와일드카드</b>도 여기서 만들어요.</dd>
+    <dt>마음에 든 사진과 비슷하게 만들고 싶어요</dt><dd><b>프롬프트</b> 탭 → [이미지에서 프롬프트 뽑기]. 사진을 올리면 설명(프롬프트)을 만들어 줘요. 이미지를 보는 대화 모델(Qwen2.5-VL)이 필요해요.</dd>
+    <dt>GPU가 얼마나 쓰이는지 보고 싶어요</dt><dd>왼쪽 위 버전 아래에 VRAM·사용률·온도·전력이 막대로 보여요. 막대가 주황·빨강이면 여유가 거의 없는 거예요.</dd>
     <dt>디스크가 가득 찼어요</dt><dd><b>설치와 모델</b> 탭 → [저장 공간 점검]에서 큰 파일과 임시 파일을 찾아 정리해요.</dd>
   </dl>
   <h3>ComfyUI 기능을 여기서 쓸 수 있나요?</h3>
@@ -440,7 +538,10 @@
     <tr><td>크기 바꾸기 · 비율 자르기 · 회전 · 밝기/색 보정</td><td class="y">지원</td><td>기능 모음</td></tr>
     <tr><td>LoRA 가 어느 모델용인지 확인</td><td class="y">지원</td><td>이미지 생성·편집·업스케일의 LoRA 칸</td></tr>
     <tr><td>SD3 · HiDream · Lumina · 그 밖의 모델 계열</td><td class="p">준비 중</td><td>—</td></tr>
-    <tr><td>영상 (이미지→영상, 글→영상)</td><td class="p">준비 중</td><td>—</td></tr>
+    <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
+    <tr><td>만든 결과 모아 보기 · 검색 · 즐겨찾기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
+    <tr><td>프롬프트 보관함 · 와일드카드 편집 · 이미지에서 프롬프트 뽑기</td><td class="y">지원</td><td>프롬프트</td></tr>
+    <tr><td>워크플로의 없는 커스텀 노드 설치</td><td class="y">지원</td><td>워크플로 (노드 도우미)</td></tr>
     <tr><td>IP-Adapter · 얼굴 교체 · SAM 같은 커스텀 노드 기능</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
     <tr><td>오디오 · 3D 생성</td><td class="n">미지원</td><td>ComfyUI 고급 화면</td></tr>
   </tbody></table>
@@ -528,15 +629,19 @@
     <button type="button" class="ghost" data-open="logs">로그</button>
     <button type="button" class="ghost" data-open="root">설치 폴더</button>
   </div>
-  <h3>대화 모델</h3><div id="cat-llm"></div>
-  <h3>이미지 모델</h3><div id="cat-img"></div>
-  <h3>저장 공간 점검</h3>
-  <p class="hint plain">어디에서 용량을 쓰는지 폴더별로 보여 주고, 지워도 안전한 임시 파일만 골라서 정리해 줘요. 모델과 결과 이미지는 자동으로 지우지 않아요.</p>
-  <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button><span class="mute" id="disk-st"></span></div>
-  <div id="disk"></div>
-  <h3>설치된 파일 관리</h3>
-  <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>
-  <div id="manage"></div>
+  <details class="fold" id="fold-rec" open><summary>추천 모델</summary>
+    <h4>대화 모델</h4><div id="cat-llm"></div>
+    <h4>이미지 모델</h4><div id="cat-img"></div>
+  </details>
+  <details class="fold" id="fold-disk"><summary>저장 공간 점검</summary>
+    <p class="hint plain">어디에서 용량을 쓰는지 폴더별로 보여 주고, 지워도 안전한 임시 파일만 골라서 정리해 줘요. 모델과 결과 이미지는 자동으로 지우지 않아요.</p>
+    <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button><span class="mute" id="disk-st"></span></div>
+    <div id="disk"></div>
+  </details>
+  <details class="fold" id="fold-manage"><summary>설치된 모델</summary>
+    <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>
+    <div id="manage"></div>
+  </details>
   <h3>진행 상황</h3><div id="tasks"></div>
 </section>
 </main>

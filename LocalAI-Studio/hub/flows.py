@@ -256,6 +256,35 @@ def wf_qwen(q, img, refs, plus):
     return w.n
 
 
+# ───────────────────────── 영상 (Wan 2.2 TI2V 5B) ─────────────────────────
+WAN_NEG = ("色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，"
+           "多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走")
+
+
+def wf_video(q, start=None):
+    """Wan 2.2 5B: 글→영상, start(입력 이미지 파일명)가 있으면 그 이미지에서 시작하는 이미지→영상. 결과는 SaveVideo(mp4)."""
+    w = WF()
+    unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
+    clip = w.add("CLIPLoader", clip_name=q["te"], type="wan", device="default")
+    vae = w.add("VAELoader", vae_name=q["vae"])
+    model = [unet, 0]
+    for name, wt in q.get("loras", []):
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    model = [w.add("ModelSamplingSD3", model=model, shift=q["shift"]), 0]
+    pos = w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, 0])
+    neg = w.add("CLIPTextEncode", text=q["negative"], clip=[clip, 0])
+    lat_in = dict(vae=[vae, 0], width=q["w"], height=q["h"], length=q["frames"], batch_size=1)
+    if start:
+        lat_in["start_image"] = [w.add("LoadImage", image=start), 0]
+    lat = w.add("Wan22ImageToVideoLatent", **lat_in)
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
+              scheduler=q["scheduler"], positive=[pos, 0], negative=[neg, 0], latent_image=[lat, 0], denoise=1.0)
+    img = w.add("VAEDecode", samples=[k, 0], vae=[vae, 0])
+    vid = w.add("CreateVideo", images=[img, 0], fps=q["fps"])
+    w.add("SaveVideo", video=[vid, 0], filename_prefix="video/hub", format="auto", codec="auto")
+    return w.n
+
+
 def wf_upscale(model, img, half):
     w = WF()
     li = w.add("LoadImage", image=img)

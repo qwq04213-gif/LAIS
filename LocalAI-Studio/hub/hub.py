@@ -38,6 +38,8 @@ for _k in ("llm", "image"):
     CATALOG[_k] = [m for m in CATALOG[_k] if m["id"] not in REMOVED_IDS]
 CIVITAI = os.environ.get("CIVITAI_URL", "https://civitai.com")
 HFURL = os.environ.get("HF_URL", "https://huggingface.co")
+GHURL = os.environ.get("GITHUB_URL", "https://github.com")
+NODEMAP_URL = os.environ.get("NODEMAP_URL", "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json")
 PROFILES = json.loads((HUB / "profiles.json").read_text(encoding="utf-8"))
 FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam"}
 EXT = (".safetensors", ".ckpt", ".pth", ".pt", ".gguf", ".bin")
@@ -121,6 +123,45 @@ def gpu():
 
 
 GPU = None
+_LIVE = {"t": 0.0, "v": None}
+
+
+def _num(x):
+    try:
+        return float(x)
+    except Exception:
+        return None
+
+
+def gpu_live():
+    """실시간 GPU 상태(VRAM·사용률·온도·전력). nvidia-smi 우선, 안 되면 ComfyUI /system_stats."""
+    now = time.time()
+    if now - _LIVE["t"] < 1.5:
+        return _LIVE["v"]
+    v = None
+    try:
+        o = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw,power.limit",
+             "--format=csv,noheader,nounits"], text=True, timeout=4).splitlines()[0]
+        a = [_num(x.strip()) for x in o.split(",")]
+        a += [None] * (6 - len(a))
+        if a[0] is not None and a[1]:
+            v = {"used_mb": int(a[0]), "total_mb": int(a[1]), "util": None if a[2] is None else int(a[2]),
+                 "temp": None if a[3] is None else int(a[3]),
+                 "power": None if a[4] is None else round(a[4]), "power_max": None if a[5] is None else round(a[5])}
+    except Exception:
+        v = None
+    if v is None:
+        try:
+            d = (json.load(urllib.request.urlopen(CUI + "/system_stats", timeout=2)).get("devices") or [{}])[0]
+            tot, free = d.get("vram_total"), d.get("vram_free")
+            if tot:
+                v = {"used_mb": int((tot - free) / 1048576), "total_mb": int(tot / 1048576),
+                     "util": None, "temp": None, "power": None, "power_max": None}
+        except Exception:
+            v = None
+    _LIVE["t"], _LIVE["v"] = now, v
+    return v
 
 
 def files(sub):
@@ -740,7 +781,8 @@ def set_progress(J, frac, est=False):
     J["pest"] = est
 
 
-def run_wf(wf, J):
+def run_wf(wf, J, raw=False):
+    """raw=True 이면 이미지 대신 결과 파일(영상) 바이트를 [(파일명, 바이트)] 로 돌려줘요."""
     check_cancel(J)
     try:
         pid = http(CUI + "/prompt", {"prompt": wf, "client_id": CID}, 30)["prompt_id"]
@@ -771,11 +813,12 @@ def run_wf(wf, J):
             imgs = []
             for o in h.get("outputs", {}).values():
                 for im in o.get("images", []):
-                    with urllib.request.urlopen(CUI + "/view?" + urllib.parse.urlencode(im), timeout=60) as f:
-                        imgs.append(Image.open(io.BytesIO(f.read())).convert("RGB"))
-                    if im.get("type") == "temp":   # 미리보기 파일은 읽은 즉시 지워요 (안 그러면 temp 폴더에 계속 쌓여요)
+                    with urllib.request.urlopen(CUI + "/view?" + urllib.parse.urlencode(im), timeout=300 if raw else 60) as f:
+                        data = f.read()
+                    imgs.append((Path(im["filename"]).name, data) if raw else Image.open(io.BytesIO(data)).convert("RGB"))
+                    if im.get("type") in ("temp", "output") and (raw or im.get("type") == "temp"):   # 미리보기·영상 파일은 읽은 즉시 지워요 (안 그러면 계속 쌓여요)
                         try:
-                            (COMFY / "temp" / im.get("subfolder", "") / Path(im["filename"]).name).unlink(missing_ok=True)
+                            (COMFY / im["type"] / im.get("subfolder", "") / Path(im["filename"]).name).unlink(missing_ok=True)
                         except OSError:
                             pass
             try:   # ComfyUI 메모리에 쌓이는 기록도 바로 비워요
@@ -783,7 +826,7 @@ def run_wf(wf, J):
             except Exception:
                 pass
             if not imgs:
-                raise RuntimeError("결과 이미지가 없습니다.")
+                raise RuntimeError("결과 영상이 없습니다." if raw else "결과 이미지가 없습니다.")
             return imgs
         J["elapsed"] = int(time.time() - t0)
         time.sleep(0.3)
@@ -1413,7 +1456,7 @@ def do_wf(p, J):
     return [(im, dict(kind="wf"), g) for im in run_wf(g, J)]
 
 
-OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능"}
+OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상"}
 
 
 def out_path(rel):
@@ -1424,16 +1467,89 @@ def out_path(rel):
     return OUT / Path(parts[-1] if parts else "x").name
 
 
+WAN_SIZES = {"832x480": "가로 480p", "480x832": "세로 480p", "640x640": "정사각", "1280x704": "가로 720p (VRAM 많이 필요)"}
+
+
+def wan_models():
+    return [n for n in files("diffusion_models") if "wan" in n.lower()]
+
+
+def wan_parts(p=None):
+    te, va = files("text_encoders"), files("vae")
+    r = dict(unet=next((n for n in wan_models() if "ti2v" in n.lower()), None),
+             te=next((n for n in te if "umt5" in n.lower()), None),
+             vae=next((n for n in va if "wan2.2" in n.lower() or "wan2_2" in n.lower()), None))
+    if p:
+        for key, field, lst in (("unet", "wan_model", wan_models()), ("te", "wan_te", te), ("vae", "wan_vae", va)):
+            if p.get(field) and p[field] in lst:
+                r[key] = p[field]
+    return r
+
+
+def do_vid(p, J):
+    """Wan 2.2 5B 로 영상 만들기(글→영상, 이미지를 올리면 그 이미지에서 시작). 결과: [(바이트, 확장자, 정보)]"""
+    for node, why in (("Wan22ImageToVideoLatent", "Wan 2.2 영상 노드"), ("CreateVideo", "영상 만들기 노드"), ("SaveVideo", "영상 저장 노드")):
+        if not has_node(node):
+            raise RuntimeError(f"이 ComfyUI 에는 {why}({node})가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    ct = caps().get("clip_types") or []
+    if ct and "wan" not in ct:
+        raise RuntimeError("이 ComfyUI 는 Wan 텍스트 인코더 형식을 지원하지 않아요. ComfyUI 를 업데이트해 주세요.")
+    f = wan_parts(p)
+    miss = [n for n, k in (("Wan 2.2 5B 모델", "unet"), ("UMT5 텍스트 인코더", "te"), ("Wan 2.2 VAE", "vae")) if not f[k]]
+    if miss:
+        raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭에서 'Wan 2.2 영상'을 설치해 주세요.")
+    rng = random.Random(seed_of(p))
+    text, _ = prep(p, J, "caption", rng)
+    if not text.strip():
+        raise ValueError("어떤 영상을 만들지 프롬프트를 적어 주세요.")
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    try:
+        w, h = (int(x) for x in (p.get("size") or "832x480").split("x"))
+    except ValueError:
+        w, h = 832, 480
+    img = load_img(p["image"]) if p.get("image") else None
+    if img is not None and p.get("keep_ratio"):      # 올린 이미지의 가로세로 비율을 따라가요 (면적은 고른 크기와 비슷하게)
+        k = (w * h / (img.width * img.height)) ** 0.5
+        w, h = img.width * k, img.height * k
+    w, h = (clamp(int(round(x / 32)) * 32, 256, 1280) for x in (w, h))
+    fps = clamp(num(p, "fps", 24, int), 8, 30)
+    sec = clamp(num(p, "sec", 3.0), 1.0, 10.0)
+    frames = clamp(int(round(sec * fps / 4)) * 4 + 1, 9, 241)
+    seed = seed_of(p)
+    vram = (GPU or {}).get("vram_gb", 0)
+    if vram and w * h * frames > 832 * 480 * 49 * (2.6 if vram >= 16 else 1.7 if vram >= 12 else 1.0):
+        warn(J, f"이 길이·크기는 VRAM {vram}GB 에 버거울 수 있어요. 메모리 부족 오류가 나면 길이를 줄이거나 크기를 낮춰 보세요.")
+    q = dict(unet=f["unet"], te=f["te"], vae=f["vae"], prompt=text, negative=(p.get("negative") or "").strip() or flows.WAN_NEG,
+             seed=seed, w=w, h=h, frames=frames, fps=fps, steps=clamp(num(p, "steps", 20, int), 1, 60), cfg=clamp(num(p, "cfg", 5.0), 1.0, 20.0),
+             sampler=p.get("sampler") or "uni_pc", scheduler=p.get("scheduler") or "simple", shift=clamp(num(p, "shift", 8.0), 1.0, 20.0))
+    if q["sampler"] not in (caps()["samplers"] or [q["sampler"]]):
+        q["sampler"] = "euler"
+    start = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J) if img is not None else None
+    J["msg"] = f"영상 만드는 중 ({w}×{h}, {frames}프레임) — 몇 분 걸릴 수 있어요"
+    res = run_wf(flows.wf_video(q, start), J, raw=True)
+    info = dict(kind="vid", prompt=text, negative=q["negative"], seed=seed, w=w, h=h, steps=q["steps"], cfg=q["cfg"], model=f["unet"],
+                frames=frames, fps=fps, start_image=bool(start))
+    return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
+
+
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
         wait_comfy()
         claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat}[p["kind"]](p, J)
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid}[p["kind"]](p, J)
         sub = OUT_SUB.get(p["kind"], "기타")
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
         for i, (im, info, graph) in enumerate(items):
+            if p["kind"] == "vid":      # 영상: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
+                name = f'{stamp}-{uuid.uuid4().hex[:4]}-vid-{i}{graph}'
+                (OUT / sub / name).write_bytes(im)
+                (OUT / sub / (name + ".json")).write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+                J["images"].append("/out/" + urllib.parse.quote(sub) + "/" + name)
+                J.setdefault("used", []).append(info.get("prompt", ""))
+                continue
             name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"]}-{i}.png'
             im.save(OUT / sub / name, "PNG", pnginfo=meta.pnginfo(info, graph) if embed else None)
             J["images"].append("/out/" + urllib.parse.quote(sub) + "/" + name)
@@ -1450,6 +1566,371 @@ def job_thread(J, p):
                 f.unlink()
             except OSError:
                 pass
+
+
+# ───────────────────────── 프롬프트 보관함 · 와일드카드 · 이미지→프롬프트 ─────────────────────────
+PROMPTS_FILE = ROOT / "prompts.json"
+_PLOCK = threading.Lock()
+
+
+def prompts_load():
+    try:
+        d = json.loads(PROMPTS_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def prompts_api(p):
+    """보관함: save(id 가 있으면 덮어쓰기) / delete."""
+    with _PLOCK:
+        items = prompts_load()
+        act = p.get("action")
+        if act == "save":
+            text = str(p.get("text") or "").strip()
+            name = str(p.get("name") or "").strip()[:60] or text[:30]
+            if not text:
+                return {"error": "저장할 프롬프트가 비어 있어요."}
+            it = {"id": str(p.get("id") or uuid.uuid4().hex[:8]), "name": name, "text": text[:8000],
+                  "negative": str(p.get("negative") or "").strip()[:4000], "tags": [str(t).strip()[:20] for t in (p.get("tags") or []) if str(t).strip()][:8]}
+            items = [x for x in items if x.get("id") != it["id"]] + [it]
+        elif act == "delete":
+            items = [x for x in items if x.get("id") != p.get("id")]
+        elif act != "list":
+            return {"error": "알 수 없는 동작"}
+        if act != "list":
+            PROMPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            PROMPTS_FILE.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+        return {"items": items}
+
+
+WC_NAME = re.compile(r"^[\w\-.]{1,60}$")
+
+
+def wildcards_api(p):
+    """와일드카드 파일(wildcards/이름.txt) 읽기·저장·삭제. act: list / get / save / delete"""
+    d = ROOT / "wildcards"
+    act, name = p.get("action"), str(p.get("name") or "")
+    if act == "list":
+        return {"items": sorted(x.stem for x in d.glob("*.txt")) if d.is_dir() else []}
+    if not WC_NAME.match(name) or ".." in name:
+        return {"error": "이름은 글자·숫자·- _ . 만 쓸 수 있어요."}
+    f = d / (name + ".txt")
+    if act == "get":
+        return {"name": name, "text": f.read_text(encoding="utf-8", errors="replace") if f.is_file() else ""}
+    if act == "save":
+        d.mkdir(parents=True, exist_ok=True)
+        f.write_text(str(p.get("text") or "")[:200000].replace("\r\n", "\n"), encoding="utf-8")
+        return {"ok": True}
+    if act == "delete":
+        f.unlink(missing_ok=True)
+        return {"ok": True}
+    return {"error": "알 수 없는 동작"}
+
+
+_VIS = {}
+
+
+def vision_models():
+    """설치된 Ollama 모델 중 이미지를 볼 수 있는 것(능력 목록에 vision 이 있는 것)."""
+    out = []
+    for n in llms():
+        if n not in _VIS:
+            try:
+                _VIS[n] = "vision" in (http(OLLAMA + "/api/show", {"model": n}, 10).get("capabilities") or [])
+            except Exception:
+                _VIS[n] = False
+        if _VIS[n]:
+            out.append(n)
+    return out
+
+
+DESCRIBE = {
+    "tags": "Describe this image as a comma-separated list of short English tags (like Danbooru tags): subject count, hair, eyes, clothing, pose, expression, background, lighting, art style. Output only the tags.",
+    "sentence": "Write a detailed English prompt for an image generator that would recreate this image: subject, clothing, pose, expression, setting, lighting, camera angle and style, in 2-4 sentences. Output only the prompt text.",
+    "video": "Write a single English paragraph prompt for a video generator that starts from this image as the first frame: describe the scene, then how the subject and the camera move over a few seconds. Output only the prompt text.",
+}
+
+
+def describe_image(p):
+    mods = vision_models()
+    if not mods:
+        return {"error": "이미지를 볼 수 있는 대화 모델이 없어요. '설치와 모델' 탭에서 'Qwen2.5-VL 7B(이미지 보는 모델)'를 설치해 주세요."}
+    model = p.get("model") if p.get("model") in mods else mods[0]
+    style = p.get("style") if p.get("style") in DESCRIBE else "sentence"
+    try:
+        img = load_img(p["image"])
+    except Exception:
+        return {"error": "이미지를 읽을 수 없어요."}
+    img.thumbnail((1344, 1344))
+    b = io.BytesIO()
+    img.save(b, "JPEG", quality=90)
+    claim("chat")
+    try:
+        r = http(OLLAMA + "/api/chat", {"model": model, "stream": False, "keep_alive": "2m",
+                                       "messages": [{"role": "user", "content": DESCRIBE[style], "images": [base64.b64encode(b.getvalue()).decode()]}]}, 300)
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.loads(e.read()).get("error", "")
+        except Exception:
+            msg = f"HTTP {e.code}"
+        return {"error": msg or "설명을 만들지 못했어요."}
+    except Exception:
+        return {"error": "대화 엔진(Ollama)에 연결할 수 없어요."}
+    text = re.sub(r"<think>.*?</think>", "", (r.get("message") or {}).get("content", ""), flags=re.S).strip()
+    return {"text": text, "model": model} if text else {"error": "모델이 빈 답을 돌려줬어요. 다른 모델로 다시 해 보세요."}
+
+
+# ───────────────────────── 기록 갤러리 ─────────────────────────
+GAL_FILE = ROOT / "gallery.json"
+GAL_EXT = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm"}
+_GMETA = {}
+
+
+def gal_favs():
+    try:
+        return set(json.loads(GAL_FILE.read_text(encoding="utf-8")).get("favs", []))
+    except (OSError, ValueError):
+        return set()
+
+
+def gal_fav(p):
+    rel = str(p.get("file") or "")
+    parts = [x for x in urllib.parse.unquote(rel[5:] if rel.startswith("/out/") else rel).split("/") if x]
+    if len(parts) != 2 or parts[0] not in OUT_SUB.values():
+        return {"error": "알 수 없는 파일"}
+    key = parts[0] + "/" + Path(parts[1]).name
+    with _PLOCK:
+        fav = gal_favs()
+        (fav.add if p.get("on") else fav.discard)(key)
+        GAL_FILE.parent.mkdir(parents=True, exist_ok=True)
+        GAL_FILE.write_text(json.dumps({"favs": sorted(fav)}, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "fav": bool(p.get("on"))}
+
+
+def gal_prompt(path, mtime):
+    """파일에 기록된 프롬프트(검색용). 한 번 읽으면 기억해 둬요."""
+    k = (str(path), mtime)
+    if k in _GMETA:
+        return _GMETA[k]
+    txt = ""
+    try:
+        if path.suffix.lower() == ".png":
+            with Image.open(path) as im:
+                h = im.info.get("hub")
+                txt = json.loads(h).get("prompt", "") if h else ""
+                if not txt and im.info.get("parameters"):
+                    txt = str(im.info["parameters"]).split("\nNegative prompt:")[0]
+        elif path.suffix.lower() in (".mp4", ".webm"):
+            sc = path.with_name(path.name + ".json")
+            txt = json.loads(sc.read_text(encoding="utf-8")).get("prompt", "") if sc.is_file() else ""
+    except Exception:
+        txt = ""
+    if len(_GMETA) > 5000:
+        _GMETA.clear()
+    _GMETA[k] = txt
+    return txt
+
+
+def gallery(q):
+    kind, text, off = (q.get("kind") or [""])[0], (q.get("q") or [""])[0].strip().lower(), int((q.get("offset") or ["0"])[0] or 0)
+    only_fav, lim = (q.get("fav") or [""])[0] == "1", 60
+    favs, rows = gal_favs(), []
+    for sub in OUT_SUB.values():
+        if kind and kind != sub:
+            continue
+        d = OUT / sub
+        if not d.is_dir():
+            continue
+        for f in d.iterdir():
+            if f.suffix.lower() in GAL_EXT and f.is_file():
+                try:
+                    st = f.stat()
+                except OSError:
+                    continue
+                rows.append((st.st_mtime, sub, f))
+    rows.sort(key=lambda r: r[0], reverse=True)
+    out = []
+    for mt, sub, f in rows:
+        key = sub + "/" + f.name
+        if only_fav and key not in favs:
+            continue
+        pr = None
+        if text:
+            pr = gal_prompt(f, mt)
+            if text not in f.name.lower() and text not in pr.lower():
+                continue
+        out.append((mt, sub, f, key, pr))
+    page = out[off:off + lim]
+    items = [{"url": "/out/" + urllib.parse.quote(sub) + "/" + urllib.parse.quote(f.name), "kind": sub, "name": f.name, "time": int(mt),
+              "fav": key in favs, "video": f.suffix.lower() in (".mp4", ".webm"),
+              "prompt": (pr if pr is not None else gal_prompt(f, mt))[:200]} for mt, sub, f, key, pr in page]
+    return {"items": items, "total": len(out), "more": off + lim < len(out)}
+
+
+def thumb_bytes(path, w=320):
+    """갤러리 미리보기(작은 JPEG). 한 번 만들면 cache 폴더에 둬요."""
+    st = path.stat()
+    key = hashlib.sha1(f"{path}|{st.st_mtime_ns}|{w}".encode()).hexdigest()[:20]
+    cp = ROOT / "cache" / "thumbs" / (key + ".jpg")
+    if cp.is_file():
+        return cp.read_bytes()
+    with Image.open(path) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((w, w))
+        b = io.BytesIO()
+        im.save(b, "JPEG", quality=80)
+    cp.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        cp.write_bytes(b.getvalue())
+    except OSError:
+        pass
+    return b.getvalue()
+
+
+# ───────────────────────── 커스텀 노드 도우미 ─────────────────────────
+_NM = {"t": 0.0, "map": None, "idx": None}
+NODE_JOBS = {}
+
+
+def nodemap():
+    """ComfyUI-Manager 가 관리하는 '노드 이름 → 설치 저장소' 목록(하루 동안 기억해요)."""
+    if _NM["map"] is not None and time.time() - _NM["t"] < 86400:
+        return _NM["map"]
+    cp = ROOT / "cache" / "extension-node-map.json"
+    try:
+        if cp.is_file() and time.time() - cp.stat().st_mtime < 86400 * 3:
+            m = json.loads(cp.read_text(encoding="utf-8"))
+        else:
+            with urllib.request.urlopen(NODEMAP_URL, timeout=60) as r:
+                raw = r.read()
+            m = json.loads(raw)
+            cp.parent.mkdir(parents=True, exist_ok=True)
+            cp.write_bytes(raw)
+    except Exception:
+        if cp.is_file():
+            try:
+                m = json.loads(cp.read_text(encoding="utf-8"))
+            except Exception:
+                raise RuntimeError("노드 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.") from None
+        else:
+            raise RuntimeError("노드 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.") from None
+    _NM.update(t=time.time(), map=m, idx=None)
+    return m
+
+
+def _repo_dir(url):
+    return COMFY / "custom_nodes" / Path(urllib.parse.urlparse(url).path).name.removesuffix(".git")
+
+
+def node_sources(missing):
+    """없는 노드 이름들 → 설치할 저장소별로 묶어서 돌려줘요."""
+    m = nodemap()
+    if _NM["idx"] is None:
+        idx = {}
+        for repo, v in m.items():
+            for n in (v[0] if v and isinstance(v[0], list) else []):
+                idx.setdefault(n, []).append(repo)
+        _NM["idx"] = idx
+    by, unknown = {}, []
+    for n in missing:
+        repos = [r for r in _NM["idx"].get(n, []) if r.startswith(GHURL + "/")]
+        if not repos:
+            unknown.append(n)
+            continue
+        r = repos[0]
+        by.setdefault(r, []).append(n)
+    out = [{"repo": r, "title": ((m[r][1] or {}).get("title_aux") if len(m[r]) > 1 else "") or Path(r).name, "nodes": ns,
+            "installed": _repo_dir(r).is_dir(), "state": (NODE_JOBS.get(r) or {}).get("state", "")} for r, ns in by.items()]
+    return {"repos": out, "unknown": unknown}
+
+
+def _node_install(repo):
+    J = NODE_JOBS[repo]
+    try:
+        import zipfile
+        dest = _repo_dir(repo)
+        if dest.exists():
+            raise RuntimeError("이미 설치돼 있어요. ComfyUI 를 다시 시작하면 적용돼요.")
+        J["msg"] = "내려받는 중…"
+        tmp = ROOT / "cache" / "nodes"
+        tmp.mkdir(parents=True, exist_ok=True)
+        zp = tmp / (dest.name + ".zip")
+        with urllib.request.urlopen(repo + "/archive/HEAD.zip", timeout=120) as r, open(zp, "wb") as f:
+            total = 0
+            while True:
+                c = r.read(1 << 20)
+                if not c:
+                    break
+                total += len(c)
+                if total > 300 << 20:
+                    raise RuntimeError("파일이 너무 커서 중단했어요.")
+                f.write(c)
+        J["msg"] = "압축 푸는 중…"
+        (COMFY / "custom_nodes").mkdir(exist_ok=True)
+        stage = tmp / (dest.name + "-x")
+        shutil.rmtree(stage, ignore_errors=True)
+        with zipfile.ZipFile(zp) as z:
+            names = z.namelist()
+            top = names[0].split("/")[0] if names else ""
+            for n in names:
+                t = (stage / n).resolve()
+                if not str(t).startswith(str(stage.resolve())):
+                    raise RuntimeError("압축 파일 경로가 올바르지 않아요.")
+            z.extractall(stage)
+        src = stage / top if top and (stage / top).is_dir() else stage
+        shutil.move(str(src), str(dest))
+        shutil.rmtree(stage, ignore_errors=True)
+        zp.unlink(missing_ok=True)
+        req = dest / "requirements.txt"
+        note = ""
+        if req.is_file():
+            if PY.exists():
+                J["msg"] = "필요한 파이썬 패키지 설치 중…(몇 분 걸릴 수 있어요)"
+                r = subprocess.run([str(PY), "-s", "-m", "pip", "install", "-r", str(req), "--no-warn-script-location"], cwd=HOME,
+                                   capture_output=True, text=True, timeout=1500)
+                if r.returncode:
+                    note = " 다만 필요한 패키지 설치에 실패했어요(logs\\nodes.log 참고). 노드가 동작하지 않으면 ComfyUI Manager 로 설치해 보세요."
+                    LOGS.mkdir(exist_ok=True)
+                    (LOGS / "nodes.log").write_text((r.stdout or "")[-4000:] + (r.stderr or "")[-4000:], encoding="utf-8")
+            else:
+                note = " (python_embeded 를 찾지 못해 패키지 설치는 건너뛰었어요.)"
+        J["state"], J["msg"] = "done", "설치했어요. 아래 [이미지 엔진 다시 시작]을 눌러야 적용돼요." + note
+    except Exception as e:  # noqa: BLE001
+        J["state"], J["msg"] = "error", str(e) or e.__class__.__name__
+        log("[노드 설치 오류]", repr(e))
+
+
+def node_install(p):
+    repo = str(p.get("repo") or "")
+    try:
+        ok = repo in nodemap() and repo.startswith(GHURL + "/")
+    except RuntimeError as e:
+        return {"error": str(e)}
+    if not ok:
+        return {"error": "목록에 없는 주소는 설치하지 않아요."}
+    if NODE_JOBS.get(repo, {}).get("state") == "running":
+        return {"ok": True}
+    NODE_JOBS[repo] = {"state": "running", "msg": "시작해요…"}
+    threading.Thread(target=_node_install, args=(repo,), daemon=True).start()
+    return {"ok": True}
+
+
+def restart_comfy():
+    """허브가 띄운 ComfyUI 를 껐다가 다시 켜요(새로 설치한 노드를 읽게 하려고)."""
+    mine = [pr for pr in procs if any("main.py" in str(a) for a in (pr.args if isinstance(pr.args, (list, tuple)) else [pr.args]))]
+    if not mine and alive(CUI + "/system_stats"):
+        return {"error": "이 ComfyUI 는 스튜디오가 켠 게 아니라서 여기서 다시 시작할 수 없어요. ComfyUI 창을 닫고 다시 실행해 주세요."}
+    for pr in mine:
+        pr.terminate()
+        try:
+            pr.wait(timeout=20)
+        except Exception:
+            pr.kill()
+        procs.remove(pr)
+    start_engines()
+    _CAPS["t"] = 0
+    return {"ok": True}
 
 
 # ───────────────────────── 모델 설치 ─────────────────────────
@@ -2042,7 +2523,7 @@ def clean_item(what):
 
 # ───────────────────────── API 응답 ─────────────────────────
 def status():
-    return {"ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "version": VERSION}
+    return {"ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "gpu_live": gpu_live(), "version": VERSION}
 
 
 FAMILY_CHOICES = ("sd15", "sdxl", "flux", "krea2", "chroma", "qwen", "hidden")
@@ -2112,6 +2593,7 @@ def lists():
             "flux_ready": bool(fp["t5"] and fp["clip_l"] and fp["vae"]),
             "chroma_ready": bool(fp["t5"] and fp["vae"]),
             "krea2_ready": bool(kp["te"] and kp["vae"]),
+            "wanmodels": wan_models(), "wan_ready": bool(wan_parts()["te"] and wan_parts()["vae"]),
             "wildcards": sorted(p.stem for p in wc.glob("*.txt")) if wc.is_dir() else [],
             "qwen": bool(find("diffusion_models", "qwen_image_edit") and find("text_encoders", "qwen_2.5_vl")
                          and find("vae", "qwen_image_vae"))}
@@ -2141,6 +2623,7 @@ def folder_map():
     return m
 
 
+MEDIA = {".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 
@@ -2179,6 +2662,34 @@ class Handler(BaseHTTPRequestHandler):
             hdr["Content-Encoding"] = "gzip"
         self.send_bytes(data, ctype, extra=hdr)
 
+    def send_media(self, path, ctype):
+        """영상 파일: 브라우저가 중간으로 건너뛰며 볼 수 있게 Range 요청을 처리해요."""
+        if not path.is_file():
+            return self.send_json({"error": "not found"}, 404)
+        size = path.stat().st_size
+        a, b, code = 0, size - 1, 200
+        m = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range") or "")
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                a = int(m.group(1))
+                b = int(m.group(2)) if m.group(2) else size - 1
+            else:
+                a = max(0, size - int(m.group(2)))
+            b = min(b, size - 1)
+            if a > b:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                return self.end_headers()
+            code = 206
+        with open(path, "rb") as f:
+            f.seek(a)
+            data = f.read(b - a + 1)
+        extra = {"Accept-Ranges": "bytes", "Cache-Control": "no-cache"}
+        if code == 206:
+            extra["Content-Range"] = f"bytes {a}-{b}/{size}"
+        self.send_bytes(data, ctype, code, extra)
+
     def guard(self):
         """다른 웹사이트가 로컬 서버를 호출하지 못하게 Host / Origin 을 검사합니다."""
         host = (self.headers.get("Host") or "").split(":")[0]
@@ -2195,7 +2706,10 @@ class Handler(BaseHTTPRequestHandler):
         if u in STATIC:
             return self.send_file(WEB / STATIC[u][0], STATIC[u][1])
         if u.startswith("/out/"):
-            return self.send_file(out_path(u[5:]), "image/png")
+            fp = out_path(u[5:])
+            if fp.suffix.lower() in MEDIA:
+                return self.send_media(fp, MEDIA[fp.suffix.lower()])
+            return self.send_file(fp, "image/png")
         routes = {"/api/features": features, "/api/status": status, "/api/lists": lists, "/api/catalog": catalog, "/api/caps": caps_info,
                   "/api/profiles": lambda: PROFILES}
         if u in routes:
@@ -2208,6 +2722,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(token_state())
         if u == "/api/disk":
             return self.send_json(disk_report())
+        if u == "/api/gallery":
+            return self.send_json(gallery(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)))
+        if u.startswith("/thumb/"):
+            fp = out_path(u[7:])
+            if fp.suffix.lower() not in GAL_EXT or fp.suffix.lower() in (".mp4", ".webm") or not fp.is_file():
+                return self.send_json({"error": "not found"}, 404)
+            try:
+                return self.send_bytes(thumb_bytes(fp), "image/jpeg", extra={"Cache-Control": "max-age=3600"})
+            except Exception:
+                return self.send_json({"error": "thumb failed"}, 500)
+        if u == "/api/nodes/status":
+            return self.send_json({r: {"state": j["state"], "msg": j["msg"]} for r, j in NODE_JOBS.items()})
+        if u == "/api/vision":
+            return self.send_json({"models": vision_models()})
         if u == "/api/manage":
             return self.send_json(manage())
         if u.startswith("/api/job/"):
@@ -2228,7 +2756,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/chat":
             return self.chat(p)
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if len(JOBS) > 50:
                 del JOBS[next(iter(JOBS))]
@@ -2264,6 +2792,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": f"선택하지 못했어요 ({type(e).__name__}: {e})"})
         if u == "/api/family":
             return self.send_json(set_family(p))
+        if u == "/api/nodes/sources":
+            try:
+                return self.send_json(node_sources([str(x) for x in (p.get("missing") or [])][:200]))
+            except RuntimeError as e:
+                return self.send_json({"error": str(e)})
+        if u == "/api/nodes/install":
+            return self.send_json(node_install(p))
+        if u == "/api/engine/restart":
+            return self.send_json(restart_comfy())
+        if u == "/api/prompts":
+            return self.send_json(prompts_api(p))
+        if u == "/api/wildcards":
+            return self.send_json(wildcards_api(p))
+        if u == "/api/describe":
+            return self.send_json(describe_image(p))
+        if u == "/api/gallery/fav":
+            return self.send_json(gal_fav(p))
         if u == "/api/clean":
             return self.send_json(clean_item(str(p.get("what", ""))))
         if u == "/api/delete":

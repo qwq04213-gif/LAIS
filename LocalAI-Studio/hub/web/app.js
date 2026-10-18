@@ -255,6 +255,7 @@ $$('.mini[data-img]').forEach(b=>mini(b));
 function show(v){
   $$('#rail nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   $$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  if(v==='gal')galLoad();else if(v==='lib')libShow();
   if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide')loadLists();
 }
 $$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
@@ -273,11 +274,22 @@ addEventListener('focus',debounce(()=>{
 },400));
 
 /* ══════════ 상태 / 목록 / 기능 조회 ══════════ */
+function gbar(label,pct,txt,warn,hot){const c=pct>=hot?'hot':pct>=warn?'warm':'';
+  return `<div class="gb"><div class="gt"><span>${label}</span><b>${txt}</b></div><div class="gl"><i class="${c}" style="width:${Math.max(2,Math.min(100,pct))}%"></i></div></div>`}
+function gbars(g){const box=$('#gbars');if(!box)return;
+  if(!g){box.hidden=true;return}
+  const gb=x=>(x/1024).toFixed(1);
+  let h=gbar('VRAM',g.used_mb/g.total_mb*100,`${gb(g.used_mb)} / ${gb(g.total_mb)} GB`,80,92);
+  if(g.util!=null)h+=gbar('GPU 사용률',g.util,g.util+'%',85,98);
+  if(g.temp!=null)h+=gbar('온도',g.temp,g.temp+'°C',75,85);
+  if(g.power!=null&&g.power_max)h+=gbar('전력',g.power/g.power_max*100,`${g.power} / ${g.power_max} W`,85,98);
+  box.innerHTML=h;box.hidden=false}
 async function stat(){
   try{const s=await api('/api/status');GPU=s.gpu;
     if(s.version)$('#ver').textContent='버전 '+s.version;
     $('#d-ol').className=s.ollama?'on':'';$('#d-cu').className=s.comfy?'on':'';
     $('#gpu').textContent=s.gpu?`${s.gpu.name}, VRAM ${s.gpu.vram_gb}GB`:'NVIDIA GPU 없음';
+    gbars(s.gpu_live);
     if(s.comfy&&!CAPS.samplers.length)loadCaps();
   }catch{$('#d-ol').className=$('#d-cu').className=''}
 }
@@ -311,7 +323,7 @@ function warn(){
   const parts=g==='flux'?LISTS.flux_ready:g==='krea2'?LISTS.krea2_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
   w.hidden=ok;
   if(!ok)w.innerHTML=(g==='sdxl'?'체크포인트가 아직 없어요. ':g==='krea2'?'Krea 2 모델이나 공용 파일(Qwen3-VL 텍스트 인코더, Qwen Image VAE)이 아직 없어요. ':g==='flux'?'FLUX·Krea 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':'Chroma 모델이나 공용 파일(T5 텍스트 인코더, VAE)이 아직 없어요. ')+'<a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.';
-  $('#w-up').hidden=LISTS.upscalers.length>0;$('#w-chat').hidden=LISTS.llm.length>0;
+  $('#w-vid').hidden=!!LISTS.wan_ready&&(LISTS.wanmodels||[]).length>0;$('#w-up').hidden=LISTS.upscalers.length>0;$('#w-chat').hidden=LISTS.llm.length>0;
 }
 let listsAt=0;
 async function loadLists(force){
@@ -701,12 +713,19 @@ addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])][0],on=$('
   if(on.id==='v-info')infoRead(f);else if(IV[on.id.slice(2)])IV[on.id.slice(2)].read(f)});
 
 /* ══════════ 이미지 작업 실행 / 결과 ══════════ */
+function addVideoResults(sec,j){
+  const used=(j.used||[]).filter(Boolean);
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig"><video src="${u}" controls loop muted playsinline preload="metadata"></video><figcaption><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="folder" title="이 영상이 저장된 폴더를 열어요">출력 폴더 열기</button></figcaption></figure>`).join('')}${
+    used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
+  const v=$('.res .batch video',sec);if(v){v.scrollIntoView({block:'nearest'});v.play().catch(()=>{})}
+}
 function addResults(sec,j,kind){
+  if(kind==='vid')return addVideoResults(sec,j);
   const first=kind==='edit'?'이어서 편집':'편집으로';
   const used=(j.used||[]).filter(Boolean);
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
     j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="edit">${first}</button>${
-    kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}${kind==='gen'?`<button type="button" data-u="${u}" data-to="regen" title="이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요">같은 설정으로 생성</button>`:''}<button type="button" data-u="${u}" data-to="info">정보</button><button type="button" data-u="${u}" data-to="folder" title="이 사진이 저장된 폴더를 열어요">출력 폴더 열기</button>${
+    kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}${kind==='gen'?`<button type="button" data-u="${u}" data-to="regen" title="이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요">같은 설정으로 생성</button>`:''}<button type="button" data-u="${u}" data-to="vid" title="이 이미지를 시작 장면으로 영상을 만들어요">영상으로</button><button type="button" data-u="${u}" data-to="info">정보</button><button type="button" data-u="${u}" data-to="folder" title="이 사진이 저장된 폴더를 열어요">출력 폴더 열기</button>${
     COMPARE[u]?`<button type="button" data-u="${u}" data-to="cmp">겹쳐서 비교</button>`:''}</figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
@@ -753,6 +772,18 @@ async function run(kind,form,extra={}){
   }catch(e){setBar(view,e.message,'bad')}
   go.disabled=false;
 }
+/* ── 영상 만들기 ── */
+let VID_IMG=null;
+(()=>{const f=$('#f-vid');if(!f)return;
+  const save=()=>ls.set('form:f-vid',formVals(f));
+  const o=ls.get('form:f-vid',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e||e.type==='file')continue;if(e.type==='checkbox')e.checked=!!v;else e.value=v}
+  f.addEventListener('change',save);f.addEventListener('input',debounce(save,400));
+  const setImg=u=>{VID_IMG=u;$('#vid-thumb').hidden=$('#vid-clear').hidden=$('#vid-ratio-row').hidden=!u;if(u)$('#vid-thumb').src=u};
+  $('#vid-file').onchange=async e=>{const fl=e.target.files[0];if(fl)setImg(await toDataURL(fl));e.target.value=''};
+  $('#vid-clear').onclick=()=>setImg(null);
+  f.onsubmit=e=>{e.preventDefault();if(!f.prompt.value.trim())return need(f,'어떤 영상을 만들지 장면 설명을 적어 주세요.');run('vid',f,VID_IMG?{image:VID_IMG}:{})};
+  window.vidSetImage=setImg;
+})();
 const need=(f,t)=>setBar(f.closest('.view'),t,'bad');
 document.addEventListener('click',e=>{const b=e.target.closest('.seed-rand,.seed-pick');if(!b)return;const i=b.parentElement.querySelector('input');
   i.value=b.classList.contains('seed-rand')?-1:Math.floor(Math.random()*2147483647);i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}))});
@@ -788,6 +819,7 @@ document.addEventListener('click',async e=>{
     try{const r=await api('/api/meta',{image:await urlToDataURL(u)});
       if(r.error||!r.gen||!r.gen.prompt){toast('이 이미지에는 생성 정보가 없어요. (설정의 "결과 PNG에 생성 정보 기록"이 꺼져 있었을 수 있어요.)');return}
       INFO={r,dataUrl:u,name:u.split('/').pop()};sendToGen()}catch{toast('설정을 읽지 못했어요.')}return}
+  if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
   IV[to].set(await urlToDataURL(u));show(to);
 });
@@ -910,6 +942,24 @@ async function stripInfo(){
  sec.ondragover=e=>{e.preventDefault();d.classList.add('over')};sec.ondragleave=()=>d.classList.remove('over');
  sec.ondrop=e=>{e.preventDefault();d.classList.remove('over');infoRead(e.dataTransfer.files[0])}}
 
+/* ══════════ 커스텀 노드 도우미 ══════════ */
+let NODE_POLL=null;
+async function nodeHelp(missing){
+  const box=$('#nodelist');if(!box)return;
+  let r;try{r=await api('/api/nodes/sources',{missing})}catch{box.textContent='목록을 불러오지 못했어요.';return}
+  if(r.error){box.textContent=r.error;return}
+  const rows=r.repos.map(x=>`<div class="nrow" data-repo="${esc(x.repo)}"><div><b>${esc(x.title)}</b> <span class="mute">(${x.nodes.map(esc).join(', ')})</span><br><a href="${esc(x.repo)}" target="_blank" rel="noopener">${esc(x.repo)}</a><div class="nst mute"></div></div>${x.installed?'<span class="badge">설치됨</span>':'<button type="button" class="ghost ninst">설치</button>'}</div>`).join('');
+  box.className='';box.innerHTML=(rows||'<p class="mute">설치할 곳을 찾지 못했어요.</p>')+(r.unknown.length?`<p class="mute">찾지 못한 노드: ${r.unknown.map(esc).join(', ')} — ComfyUI 화면의 Manager에서 검색해 보세요.</p>`:'')+
+    (r.repos.length?'<div class="actions"><button type="button" class="ghost" id="node-restart">이미지 엔진 다시 시작</button><span class="mute">설치한 노드는 엔진을 다시 시작해야 적용돼요. 그 뒤 [분석]을 다시 눌러 확인하세요.</span></div>':'');
+}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('.ninst');if(b){const row=b.closest('.nrow'),repo=row.dataset.repo;
+    if(!confirm('이 커스텀 노드의 코드를 내려받아 설치해요.\n커스텀 노드는 컴퓨터에서 프로그램처럼 실행되니, 믿을 수 있는 출처인지 확인하세요.\n\n'+repo+'\n\n설치할까요?'))return;
+    b.disabled=true;const r=await api('/api/nodes/install',{repo});if(r.error){$('.nst',row).textContent=r.error;b.disabled=false;return}
+    clearInterval(NODE_POLL);NODE_POLL=setInterval(async()=>{const s=(await api('/api/nodes/status'))[repo];if(!s)return;$('.nst',row).textContent=s.msg;
+      if(s.state!=='running'){clearInterval(NODE_POLL);b.disabled=false;if(s.state==='done')b.replaceWith(Object.assign(document.createElement('span'),{className:'badge',textContent:'설치됨'}))}},1000);return}
+  if(e.target.id==='node-restart'){e.target.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 [분석]을 다시 눌러 주세요.');e.target.disabled=false}
+});
 /* ══════════ 워크플로 실행 ══════════ */
 const WFX={a:null};
 async function wfAnalyze(){
@@ -921,13 +971,14 @@ async function wfAnalyze(){
 function renderWF(){
   const a=WFX.a;
   $('#wf-fields').innerHTML=[
-    a.missing.length?`<p class="warn">이 컴퓨터의 ComfyUI에 없는 노드가 있어요: ${a.missing.map(esc).join(', ')}. ComfyUI 화면의 Manager에서 설치해야 실행돼요.</p>`:'',
+    a.missing.length?`<div class="warn" id="nodebox"><b>이 컴퓨터의 ComfyUI에 없는 노드가 있어요:</b> ${a.missing.map(esc).join(', ')}<div id="nodelist" class="mute">설치할 수 있는 곳을 찾는 중…</div></div>`:'',
     a.texts.length?'<h3>프롬프트와 텍스트</h3>'+a.texts.map(t=>`<label class="f">${esc(t.role||'텍스트')} (${esc(t.class)} #${esc(t.id)})<textarea data-k="${esc(t.key)}" rows="3">${esc(t.value)}</textarea></label>`).join(''):'',
     a.images.length?'<h3>입력 이미지</h3>'+a.images.map(i=>`<div class="f">${esc(i.class)} #${esc(i.id)} (기본값 ${esc(i.value)})<div class="mini" data-id="${esc(i.id)}"></div></div>`).join(''):'',
     a.seeds.length?'<h3>시드</h3><label class="chk"><input type="checkbox" id="wf-rand" checked> 실행할 때마다 시드를 무작위로 바꾸기</label>'+a.seeds.map(s=>`<label class="f">${esc(s.class)} #${esc(s.id)}<input type="number" data-seed="${esc(s.key)}" value="${s.value}"></label>`).join(''):'',
     a.sizes.length?'<h3>이미지 크기</h3>'+a.sizes.map(z=>`<div class="row"><label class="f">가로 (#${esc(z.id)})<input type="number" data-w="${esc(z.id)}" value="${z.w}" step="8"></label><label class="f">세로<input type="number" data-h="${esc(z.id)}" value="${z.h}" step="8"></label></div>`).join(''):'',
     `<p class="hint">출력 노드 ${a.outputs.length}개. 이미지 결과만 표시돼요(영상·GIF는 ComfyUI 화면에서 확인하세요).</p>`].join('');
   $$('#wf-fields .mini').forEach(m=>mini(m,'이미지 바꾸기 (선택)'));
+  if(a.missing.length)nodeHelp(a.missing);
 }
 $('#wf-an').onclick=wfAnalyze;$('#wf-file').onclick=()=>$('#wf-fin').click();
 $('#wf-fin').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
@@ -1186,3 +1237,86 @@ if(!localStorage.ack){
   $('#ackc').onchange=e=>{$('#ackb').disabled=!e.target.checked};
   $('#ackb').onclick=()=>{localStorage.ack='1'};
 }
+
+/* ══════════ 프롬프트 보관함 · 와일드카드 · 이미지→프롬프트 ══════════ */
+let PL=[];
+async function plLoad(){try{PL=(await api('/api/prompts',{action:'list'})).items||[]}catch{PL=[]}plFill();plRender()}
+function plFill(){$$('.plib-sel').forEach(sel=>{sel.innerHTML='<option value="">📚 보관함에서 넣기…</option>'+PL.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')})}
+function plRender(){const box=$('#pl-list');if(!box)return;const q=($('#pl-q').value||'').trim().toLowerCase();
+  const list=PL.filter(x=>!q||(x.name+' '+x.text+' '+(x.tags||[]).join(' ')).toLowerCase().includes(q));
+  box.innerHTML=list.length?list.map(x=>`<div class="plitem" data-id="${esc(x.id)}"><div class="plh"><b>${esc(x.name)}</b>${(x.tags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join('')}</div><p class="plt">${esc(x.text.slice(0,160))}${x.text.length>160?'…':''}</p><div class="plb"><button type="button" class="ghost" data-pl="gen">생성에 넣기</button><button type="button" class="ghost" data-pl="edit">편집에 넣기</button><button type="button" class="ghost" data-pl="vid">영상에 넣기</button><button type="button" class="ghost" data-pl="edt">수정</button><button type="button" class="ghost" data-pl="del">삭제</button></div></div>`).join(''):`<p class="mute">${PL.length?'검색 결과가 없어요.':'보관함이 비어 있어요. 아래 [새로 만들기]나 각 화면의 [보관함에 저장]으로 추가해 보세요.'}</p>`}
+function plInsert(form,it){const t=form.elements.prompt;if(!t)return;
+  const cur=t.value.trim();t.value=cur?cur.replace(/[\s,]+$/,'')+', '+it.text:it.text;
+  const n=form.elements.negative;if(n&&it.negative&&!n.value.trim())n.value=it.negative;
+  t.dispatchEvent(new Event('input',{bubbles:true}));if(n)n.dispatchEvent(new Event('input',{bubbles:true}));toast(`'${it.name}' 을(를) 넣었어요.`)}
+const PLF={gen:'#f-gen',edit:'#f-edit',vid:'#f-vid'};
+function plAddRows(){['#f-gen','#f-edit','#f-vid'].forEach(id=>{const f=$(id),t=f&&f.elements.prompt;if(!t||f.querySelector('.plib-row'))return;
+  const lab=t.closest('label');lab.insertAdjacentHTML('afterend','<div class="plib-row"><select class="plib-sel" aria-label="프롬프트 보관함"></select><button type="button" class="ghost plib-save">보관함에 저장</button></div>')})}
+plAddRows();
+document.addEventListener('change',e=>{const sel=e.target.closest('.plib-sel');if(!sel||!sel.value)return;
+  const it=PL.find(x=>x.id===sel.value);if(it)plInsert(sel.closest('form'),it);sel.value=''});
+document.addEventListener('click',async e=>{
+  const sv=e.target.closest('.plib-save');if(sv){const f=sv.closest('form'),text=f.elements.prompt.value.trim();
+    if(!text)return toast('저장할 프롬프트를 먼저 적어 주세요.');
+    const name=prompt('보관함에 저장할 이름',text.slice(0,24));if(name===null)return;
+    const r=await api('/api/prompts',{action:'save',name:name||text.slice(0,24),text,negative:f.elements.negative?f.elements.negative.value:''});
+    if(r.error)return toast(r.error);PL=r.items;plFill();plRender();toast('보관함에 저장했어요.');return}
+  const b=e.target.closest('[data-pl]');if(b){const id=b.closest('.plitem').dataset.id,it=PL.find(x=>x.id===id),act=b.dataset.pl;if(!it)return;
+    if(PLF[act]){plInsert($(PLF[act]),it);show(act);return}
+    if(act==='del'){if(!confirm(`'${it.name}' 을(를) 보관함에서 지울까요?`))return;PL=(await api('/api/prompts',{action:'delete',id})).items;plFill();plRender();return}
+    if(act==='edt')plEdit(it);return}
+  const ig=e.target.closest('[data-i2p]');if(ig){const t=$('#i2p-out').value.trim(),a=ig.dataset.i2p;if(!t)return;
+    if(a==='save'){const name=prompt('보관함에 저장할 이름',t.slice(0,24));if(name===null)return;const r=await api('/api/prompts',{action:'save',name:name||t.slice(0,24),text:t});PL=r.items||PL;plFill();plRender();toast('보관함에 저장했어요.');return}
+    const f=$(a==='gen'?'#f-gen':'#f-vid');f.elements.prompt.value=t;f.elements.prompt.dispatchEvent(new Event('input',{bubbles:true}));show(a);return}
+  const wc=e.target.closest('#wc-list .chip');if(wc){wcOpen(wc.dataset.n);return}
+});
+function plEdit(it){const f=$('#pl-form');f.hidden=false;f.dataset.id=it?it.id:'';f.name.value=it?it.name:'';f.text.value=it?it.text:'';f.negative.value=it?it.negative||'':'';f.tags.value=it?(it.tags||[]).join(', '):'';f.name.focus()}
+$('#pl-new').onclick=()=>plEdit(null);$('#pl-cancel').onclick=()=>{$('#pl-form').hidden=true};$('#pl-q').oninput=plRender;
+$('#pl-form').onsubmit=async e=>{e.preventDefault();const f=e.target;
+  const r=await api('/api/prompts',{action:'save',id:f.dataset.id||undefined,name:f.name.value,text:f.text.value,negative:f.negative.value,tags:f.tags.value.split(',')});
+  if(r.error)return toast(r.error);PL=r.items;plFill();plRender();f.hidden=true;toast('저장했어요.')};
+async function wcLoad(){const r=await api('/api/wildcards',{action:'list'});
+  $('#wc-list').innerHTML=(r.items||[]).map(n=>`<button type="button" class="chip" data-n="${esc(n)}">__${esc(n)}__</button>`).join('')||'<span class="mute">아직 와일드카드가 없어요. 아래에서 만들어 보세요.</span>'}
+async function wcOpen(n){const r=await api('/api/wildcards',{action:'get',name:n});const f=$('#wc-form');f.name.value=n;f.text.value=r.text||''}
+$('#wc-form').onsubmit=async e=>{e.preventDefault();const f=e.target,n=f.name.value.trim();if(!n)return toast('이름을 적어 주세요.');
+  const r=await api('/api/wildcards',{action:'save',name:n,text:f.text.value});if(r.error)return toast(r.error);toast('저장했어요. 프롬프트에 __'+n+'__ 로 쓰세요.');wcLoad();listsAt=0;loadLists(true)};
+$('#wc-del').onclick=async()=>{const n=$('#wc-form').name.value.trim();if(!n||!confirm(`와일드카드 '${n}' 을(를) 지울까요?`))return;
+  const r=await api('/api/wildcards',{action:'delete',name:n});if(r.error)return toast(r.error);$('#wc-form').reset();wcLoad();listsAt=0;loadLists(true)};
+let I2P=null;
+$('#i2p-file').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;I2P=await toDataURL(fl);$('#i2p-thumb').src=I2P;$('#i2p-thumb').hidden=false;e.target.value=''};
+async function i2pInit(){let m=[];try{m=(await api('/api/vision')).models}catch{}
+  $('#w-i2p').hidden=m.length>0;$('#i2p-model').innerHTML=m.map(x=>`<option>${esc(x)}</option>`).join('')}
+$('#i2p-go').onclick=async()=>{if(!I2P)return toast('먼저 이미지를 골라 주세요.');const b=$('#i2p-go'),st=$('#i2p-st');
+  b.disabled=true;st.textContent='이미지를 보고 있어요… (처음엔 모델을 불러오느라 오래 걸려요)';
+  try{const r=await api('/api/describe',{image:I2P,style:$('#i2p-style').value,model:$('#i2p-model').value});
+    if(r.error){st.textContent=r.error;return}
+    st.textContent='완료 ('+r.model+')';$('#i2p-out').value=r.text;$('#i2p-out').hidden=$('#i2p-act').hidden=false}
+  catch{st.textContent='설명을 만들지 못했어요.'}b.disabled=false};
+function libShow(){plLoad();wcLoad();i2pInit()}
+
+/* ══════════ 기록 갤러리 ══════════ */
+let GAL={off:0,items:[]};
+async function galLoad(more){
+  if(!more){GAL={off:0,items:[]};$('#gal-grid').innerHTML=''}
+  const qs=new URLSearchParams({q:$('#gal-q').value.trim(),kind:$('#gal-kind').value,fav:$('#gal-fav').checked?'1':'',offset:GAL.off});
+  let r;try{r=await api('/api/gallery?'+qs)}catch{return}
+  GAL.items.push(...r.items);GAL.off+=r.items.length;
+  const fmt=t=>new Date(t*1000).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  $('#gal-grid').insertAdjacentHTML('beforeend',r.items.map(x=>{const tn=x.url.replace('/out/','/thumb/');
+    return `<figure class="gt" data-u="${x.url}">${x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
+    <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
+    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="같은 설정으로 생성">↻</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로">✎</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button></span></figcaption></figure>`}).join(''));
+  $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value);
+}
+$('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=()=>galLoad();$('#gal-more').onclick=()=>galLoad(true);
+$('#gal-grid').addEventListener('click',async e=>{
+  const st=e.target.closest('[data-star]');if(st){const on=!st.classList.contains('on'),r=await api('/api/gallery/fav',{file:st.dataset.star,on});
+    if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
+  const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>!x.video),u=im.closest('.gt').dataset.u;
+    lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name})),Math.max(0,imgs.findIndex(x=>x.url===u)))}
+});
+
+/* 접이식 섹션: 열고 닫은 상태 기억 */
+$$('details.fold').forEach(d=>{
+  try{const v=localStorage.getItem('fold:'+d.id);if(v==='1')d.open=true;else if(v==='0')d.open=false}catch{}
+  d.addEventListener('toggle',()=>{try{localStorage.setItem('fold:'+d.id,d.open?'1':'0')}catch{}})});
