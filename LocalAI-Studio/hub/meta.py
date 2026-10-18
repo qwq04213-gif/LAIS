@@ -166,6 +166,14 @@ def comfy_norm(g):
             p["model"] = i.get("ckpt_name")
         if c == "UNETLoader" and "model" not in p:
             p["model"] = i.get("unet_name")
+        if c == "VAELoader" and "vae" not in p:
+            p["vae"] = i.get("vae_name")
+        if c == "FluxGuidance" and "guidance" not in p:
+            p["guidance"] = _num(i.get("guidance"))
+        if c == "CLIPLoader" and i.get("type") in ("chroma", "krea2"):
+            p["family"] = i["type"]
+        elif c == "DualCLIPLoader" and i.get("type") == "flux" and "family" not in p:
+            p["family"] = "flux"
         if c == "CLIPSetLastLayer" and _num(i.get("stop_at_clip_layer"), int):
             p["clip_skip"] = -_num(i.get("stop_at_clip_layer"), int)
         if isinstance(i.get("lora_name"), str):
@@ -315,6 +323,18 @@ def read(data):
             pass
     if "hub" in texts:
         out["kind"] = "hub"
+        try:        # 이 프로그램이 직접 넣은 정보가 가장 정확해서(모델·LoRA·계열·세부 설정) 이걸 우선 써요
+            h = json.loads(texts["hub"])
+            if isinstance(h, dict) and h.get("prompt") is not None:
+                k = str(h.get("kind", ""))
+                fam = k.split("-", 1)[1] if k.startswith("gen-") else ("sdxl" if k in ("gen", "edit-sdxl") else "")
+                ex = h.get("extra") if isinstance(h.get("extra"), dict) else {}
+                out["gen"] = {"prompt": h.get("prompt", ""), "negative": h.get("negative", ""), "raw": {a: str(b) for a, b in ex.items()},
+                              "params": {"steps": h.get("steps"), "cfg": h.get("cfg"), "seed": h.get("seed"), "sampler": h.get("sampler"),
+                                         "scheduler": h.get("scheduler"), "w": h.get("w"), "h": h.get("h"), "model": h.get("model"),
+                                         "clip_skip": h.get("clip_skip"), "loras": h.get("loras") or [], "family": fam, "extra": ex}}
+        except ValueError:
+            pass
     out["text"] = {k: v[:MAXTXT] for k, v in texts.items() if k not in ("chara", "ccv3")}
     out["text_truncated"] = [k for k, v in texts.items() if len(v) > MAXTXT]
     return out

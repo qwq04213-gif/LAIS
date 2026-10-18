@@ -254,8 +254,30 @@ BLOCK_MSG = "미성년자와 관련된 성적 내용은 지원하지 않습니�
 
 
 # ───────────────────────── 엔진 실행 / VRAM 관리 ─────────────────────────
+def tidy():
+    """실행할 때마다 쌓이는 찌꺼기를 치워요: 커진 로그 파일 교체, 남은 임시 이미지·미리보기 삭제(결과물·모델은 건드리지 않아요)."""
+    now = time.time()
+    try:
+        for n in ("ollama.log", "comfyui.log", "hub.log"):
+            f = LOGS / n
+            if f.is_file() and f.stat().st_size > 10 * 1024 * 1024:
+                old = LOGS / (n + ".old")
+                old.unlink(missing_ok=True)
+                f.replace(old)
+    except OSError:
+        pass
+    for folder, pat, age in ((COMFY / "input", "hub_*.png", 3600), (COMFY / "temp", "*", 2 * 86400)):
+        try:
+            for f in folder.glob(pat):
+                if f.is_file() and now - f.stat().st_mtime > age:
+                    f.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def start_engines():
     LOGS.mkdir(exist_ok=True)
+    tidy()
     if OLLAMA_EXE.exists() and not alive(OLLAMA + "/api/version"):
         env = {**os.environ, "OLLAMA_MODELS": str(ROOT / "models" / "llm")}
         procs.append(subprocess.Popen([str(OLLAMA_EXE), "serve"], cwd=OLLAMA_EXE.parent, env=env,
@@ -318,7 +340,7 @@ def translate(text, style):
 
 
 # ───────────────────────── ComfyUI 기능 조회 ─────────────────────────
-_CAPS = {"t": 0.0, "nodes": set(), "samplers": [], "schedulers": []}
+_CAPS = {"t": 0.0, "nodes": set(), "samplers": [], "schedulers": [], "clip_types": []}
 
 
 def caps(force=False):
@@ -326,8 +348,9 @@ def caps(force=False):
         try:
             o = http(CUI + "/object_info", timeout=60)
             ks = o.get("KSampler", {}).get("input", {}).get("required", {})
+            ct = o.get("CLIPLoader", {}).get("input", {}).get("required", {}).get("type", [[]])
             _CAPS.update(t=time.time(), nodes=set(o), samplers=list(ks.get("sampler_name", [[]])[0]),
-                         schedulers=list(ks.get("scheduler", [[]])[0]))
+                         schedulers=list(ks.get("scheduler", [[]])[0]), clip_types=list(ct[0]) if ct and isinstance(ct[0], list) else [])
         except Exception:
             pass
     return _CAPS
@@ -946,7 +969,7 @@ def do_feat(p, J):
 
 
 def do_gen(p, J):
-    if p.get("gengine") in ("flux", "chroma"):
+    if p.get("gengine") in ("flux", "chroma", "krea2"):
         return do_gen_flux(p, J)
     base = seed_of(p)
     n = clamp(num(p, "n", 1, int), 1, 8)
@@ -1015,30 +1038,57 @@ def flux_parts(p=None):
     return r
 
 
-def do_gen_flux(p, J):
-    """FLUX.1 dev / Krea dev / Chroma 등 FLUX 계열 생성(이미지→이미지, LoRA, 다이나믹 프롬프트 지원)."""
-    fam = p["gengine"]
+def krea2_parts(p=None):
+    """Krea 2 공용 파일: Qwen3-VL 텍스트 인코더 + Qwen Image VAE. 화면에서 직접 고른 파일(k2_te/k2_vae)이 우선이에요."""
+    te, va = files("text_encoders"), files("vae")
+    r = dict(te=next((n for n in te if "qwen3" in n.lower() and "vl" in n.lower()), None) or next((n for n in te if "qwen3" in n.lower()), None),
+             vae=next((n for n in va if "qwen_image_vae" in n.lower()), None) or next((n for n in va if "qwen" in n.lower()), None))
+    if p:
+        for key, field, lst in (("te", "k2_te", te), ("vae", "k2_vae", va)):
+            if p.get(field) and p[field] in lst:
+                r[key] = p[field]
+    return r
+
+
+def flux_setup(p, J, fam):
+    """FLUX·Chroma·Krea 2 가 쓸 파일(모델, 텍스트 인코더, VAE)을 찾아서 (파일들, 올인원 여부, 스케줄러)를 돌려줘요."""
     sel = p.get("fx_model") or None
-    allin = bool(sel and sel.startswith("ckpt::"))     # 체크포인트 폴더의 올인원 FLUX/Chroma
-    if allin:
+    allin = bool(sel and sel.startswith("ckpt::")) and fam != "krea2"     # 체크포인트 폴더의 올인원 FLUX/Chroma
+    if fam == "krea2":
+        ct = caps().get("clip_types") or []
+        if ct and "krea2" not in ct:
+            raise RuntimeError("이 ComfyUI 는 Krea 2 를 아직 지원하지 않아요(버전 0.26.0 이상 필요). ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+        kp = krea2_parts(p)
+        f = dict(unet=sel, t5=kp["te"], clip_l=None, vae=kp["vae"])
+        miss = [n for n, k in (("Krea 2 모델", "unet"), ("Qwen3-VL 텍스트 인코더", "t5"), ("Qwen Image VAE", "vae")) if not f[k]]
+        if miss:
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭에서 설치하거나, 설정의 '모델 파일 직접 고르기'에서 골라 주세요.")
+    elif allin:
         sel = sel[6:]
         if sel not in files("checkpoints"):
             raise RuntimeError("선택한 체크포인트 파일을 찾을 수 없어요.")
         f = dict(unet=sel, t5=None, clip_l=None, vae=None)
     else:
         f = dict(unet=sel, **flux_parts(p))
-    if not allin and not all(f[k] for k in (["unet", "t5", "vae"] + (["clip_l"] if fam == "flux" else []))):
+    if fam != "krea2" and not allin and not all(f[k] for k in (["unet", "t5", "vae"] + (["clip_l"] if fam == "flux" else []))):
         names = {"unet": "FLUX 모델", "t5": "T5 텍스트 인코더", "vae": "VAE", "clip_l": "CLIP-L 텍스트 인코더"}
         miss = [names[k] for k in ["unet", "t5", "vae"] + (["clip_l"] if fam == "flux" else []) if not f[k]]
         raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭에서 설치하거나, 설정의 '모델 파일 직접 고르기'에서 골라 주세요.")
-    base, n = seed_of(p), clamp(num(p, "n", 1, int), 1, 8)
-    w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
-    init = load_img(p["init"]) if p.get("init") else None
     sch = p.get("fx_scheduler") or ("beta" if fam == "chroma" else "simple")
     have = caps()["schedulers"]
     if have and sch not in have:
         warn(J, f"이 ComfyUI 에는 스케줄러 '{sch}' 가 없어 simple 로 바꿨어요.")
         sch = "simple"
+    return f, allin, sch
+
+
+def do_gen_flux(p, J):
+    """FLUX.1 dev / Krea dev / Chroma / Krea 2 생성(이미지→이미지, LoRA, 다이나믹 프롬프트 지원)."""
+    fam = p["gengine"]
+    f, allin, sch = flux_setup(p, J, fam)
+    base, n = seed_of(p), clamp(num(p, "n", 1, int), 1, 8)
+    w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
+    init = load_img(p["init"]) if p.get("init") else None
     out = []
     for i in range(n):
         rng = random.Random(base + i)
@@ -1046,13 +1096,15 @@ def do_gen_flux(p, J):
         if blocked(text):
             raise ValueError(BLOCK_MSG)
         neg = ""
-        if fam == "chroma":
+        if fam == "krea2":
+            neg = (p.get("negative") or "").strip()
+        elif fam == "chroma":
             neg = (p.get("negative") or "").strip() or CHROMA_NEG
             if flows_sex(text):
                 neg += ", child, loli, shota, underage, aged down"
         q = dict(family=fam, allin=allin, **f, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=base + i, w=w, h=h,
                  guidance=clamp(num(p, "fx_guidance", 3.5), 0.0, 20.0), steps=clamp(num(p, "fx_steps", 20, int), 1, 100),
-                 cfg=clamp(num(p, "fx_cfg", 4.0), 0.0, 20.0) if fam == "chroma" else 1.0,
+                 cfg=clamp(num(p, "fx_cfg", 4.0), 0.0, 20.0) if fam in ("chroma", "krea2") else 1.0,
                  sampler=p.get("fx_sampler") or "euler", scheduler=sch)
         if init is not None:
             q["init"] = put_input(fit_area(init, w, h), J)
@@ -1075,7 +1127,7 @@ def do_gen_flux(p, J):
     return out
 
 
-def refine_tiles(img, q, tile, overlap, J):
+def refine_tiles(img, q, tile, overlap, J, build=None, mult=8):
     """큰 이미지를 겹치는 타일로 나눠 각각 낮은 denoise 로 다시 그린 뒤 부드럽게 이어 붙입니다."""
     xs, ys = spans(img.width, tile, overlap), spans(img.height, tile, overlap)
     canvas, n, total = img.copy(), 0, len(xs) * len(ys)
@@ -1086,8 +1138,9 @@ def refine_tiles(img, q, tile, overlap, J):
             J["msg"] = f"타일 리파인 {n}/{total}"
             J["pi"], J["pn"] = n - 1, total
             t = img.crop((x0, y0, x1, y1))
-            s8 = (max(64, round(t.width / 8) * 8), max(64, round(t.height / 8) * 8))
-            res = run_wf(flows.wf_refine(q, put_input(t.resize(s8, RS.LANCZOS) if s8 != t.size else t, J)), J)[0]
+            s8 = (max(64, round(t.width / mult) * mult), max(64, round(t.height / mult) * mult))
+            name = put_input(t.resize(s8, RS.LANCZOS) if s8 != t.size else t, J)
+            res = run_wf(build(name) if build else flows.wf_refine(q, name), J)[0]
             if res.size != t.size:
                 res = res.resize(t.size, RS.LANCZOS)
             canvas.paste(res, (x0, y0), ramp(t.size, overlap, xi > 0, yi > 0))
@@ -1104,6 +1157,27 @@ def do_up(p, J):
     if p.get("mode") != "refine":
         return [(big, dict(kind="upscale", extra={"Upscaler": p.get("upm") or "auto", "Scale": scale}), None)]
     rng = random.Random(num(p, "seed", -1, int))
+    fam = p.get("rengine") if p.get("rengine") in ("flux", "chroma", "krea2") else "sdxl"
+    if fam != "sdxl":      # 실사 등 FLUX 계열 모델로 타일을 다시 그려요
+        f, allin, sch = flux_setup(p, J, fam)
+        text, tags = prep(p, J, "caption", rng) if (p.get("prompt") or "").strip() else ("high quality photo, sharp focus, fine detail, natural skin texture", [])
+        if blocked(text):
+            raise ValueError(BLOCK_MSG)
+        neg = (p.get("negative") or "").strip() if fam in ("krea2", "chroma") else ""
+        if fam == "chroma" and not neg:
+            neg = CHROMA_NEG
+        den = clamp(num(p, "rdenoise", 0.3), 0.05, 0.8)
+        q = dict(family=fam, allin=allin, **f, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=seed_of(p), w=1024, h=1024,
+                 guidance=clamp(num(p, "fx_guidance", 3.5), 0.0, 20.0), steps=clamp(num(p, "fx_steps", 20, int), 1, 100),
+                 cfg=clamp(num(p, "fx_cfg", 4.0), 0.0, 20.0) if fam in ("chroma", "krea2") else 1.0,
+                 sampler=p.get("fx_sampler") or "euler", scheduler=sch, init_denoise=den)
+        tile = clamp(num(p, "tile", 1024, int) // 16 * 16, 512, 1536)
+        out = refine_tiles(big, q, tile, clamp(num(p, "overlap", 128, int), 32, tile // 2), J,
+                           build=lambda n: flows.wf_flux({**q, "init": n}), mult=16)
+        info = dict(kind="upscale-refine", prompt=text, negative=neg, steps=q["steps"], cfg=q["guidance"] if fam == "flux" else q["cfg"],
+                    sampler=q["sampler"], scheduler=sch, seed=q["seed"], w=out.width, h=out.height, model=f["unet"],
+                    loras=[[a, b] for a, b in q["loras"]], extra={"Family": fam, "Denoising strength": den, "Tile": tile})
+        return [(out, info, None)]
     text, tags = prep(p, J, "tags", rng) if (p.get("prompt") or "").strip() else ("highly detailed, sharp focus", [])
     q = sd(p, text, tags, J)
     q["denoise"] = clamp(num(p, "rdenoise", 0.3), 0.05, 0.8)
@@ -1616,7 +1690,7 @@ def status():
     return {"ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "version": VERSION}
 
 
-FAMILY_CHOICES = ("sd15", "sdxl", "flux", "chroma", "qwen", "hidden")
+FAMILY_CHOICES = ("sd15", "sdxl", "flux", "krea2", "chroma", "qwen", "hidden")
 
 
 def model_family(folder, name):
@@ -1645,8 +1719,8 @@ def set_family(p):
 
 
 def sorted_models():
-    """모델 파일을 탭별로 나눠요: SDXL 탭 / FLUX 탭 / Chroma 탭. (체크포인트 폴더의 FLUX 올인원은 'ckpt::이름')"""
-    sdxl, flux, chroma, info = [], [], [], {}
+    """모델 파일을 탭별로 나눠요: SDXL / FLUX / Chroma / Krea 2. (체크포인트 폴더의 FLUX 올인원은 'ckpt::이름')"""
+    sdxl, flux, chroma, krea2, info = [], [], [], [], {}
     for n in files("checkpoints"):
         fam, allin, how = model_family("checkpoints", n)
         info["checkpoints/" + n] = dict(family=fam, all_in_one=allin, how=how)
@@ -1661,21 +1735,26 @@ def sorted_models():
     for n in files("diffusion_models"):
         fam, allin, how = model_family("diffusion_models", n)
         info["diffusion_models/" + n] = dict(family=fam, all_in_one=allin, how=how)
-        if fam in ("hidden", "qwen", "sd15", "sdxl", "sd3") or (fam == "unknown" and "qwen" in n.lower()):
+        if fam == "krea2":
+            krea2.append(n)
+        elif fam in ("hidden", "qwen", "sd15", "sdxl", "sd3") or (fam == "unknown" and "qwen" in n.lower()):
             continue
-        (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)
-    return sdxl, flux, chroma, info
+        else:
+            (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)
+    return sdxl, flux, chroma, krea2, info
 
 
 def lists():
     wc = ROOT / "wildcards"
-    sdxl, flux, chroma, info = sorted_models()
+    sdxl, flux, chroma, krea2, info = sorted_models()
+    fp, kp = flux_parts(), krea2_parts()      # 폴더를 한 번씩만 훑어요
     return {"llm": llms(), "checkpoints": sdxl, "loras": files("loras"), "families": info,
             "upscalers": files("upscale_models"), "controlnets": files("controlnet"),
             "vaes": files("vae"), "text_encoders": files("text_encoders"), "diffusion": files("diffusion_models"),
-            "fluxmodels": flux, "chromamodels": chroma,
-            "flux_ready": bool(flux_parts()["t5"] and flux_parts()["clip_l"] and flux_parts()["vae"]),
-            "chroma_ready": bool(flux_parts()["t5"] and flux_parts()["vae"]),
+            "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2,
+            "flux_ready": bool(fp["t5"] and fp["clip_l"] and fp["vae"]),
+            "chroma_ready": bool(fp["t5"] and fp["vae"]),
+            "krea2_ready": bool(kp["te"] and kp["vae"]),
             "wildcards": sorted(p.stem for p in wc.glob("*.txt")) if wc.is_dir() else [],
             "qwen": bool(find("diffusion_models", "qwen_image_edit") and find("text_encoders", "qwen_2.5_vl")
                          and find("vae", "qwen_image_vae"))}

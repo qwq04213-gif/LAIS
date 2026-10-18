@@ -94,6 +94,18 @@
    ]
   },
   {
+   "id": "realvisxl5",
+   "name": "RealVisXL V5.0 (실사 SDXL, fp16)",
+   "gb": 6.9,
+   "desc": "사진 같은 인물·풍경에 강한 SDXL 체크포인트예요. 문장형 프롬프트가 잘 맞아요. 이미지 생성과, 업스케일 '디테일 재생성'에서 실사용으로 쓰기 좋아요. 라이선스(CreativeML OpenRAIL++-M)를 확인하세요.",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/SG161222/RealVisXL_V5.0/resolve/main/RealVisXL_V5.0_fp16.safetensors"
+    }
+   ]
+  },
+  {
    "id": "esrgan",
    "name": "Real-ESRGAN x4plus",
    "gb": 0.07,
@@ -185,6 +197,52 @@
     {
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/FLUX.1-Krea-dev_ComfyUI/resolve/main/split_files/diffusion_models/flux1-krea-dev_fp8_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "krea2-common",
+   "name": "Krea 2 공용 파일 (Qwen3-VL 텍스트 인코더 + VAE)",
+   "gb": 5.5,
+   "desc": "Krea 2 가 쓰는 텍스트 인코더(fp8)와 Qwen Image VAE. 아래 Krea 2 모델을 고르면 자동으로 함께 설치돼요. Qwen 이미지 편집용 VAE 와 같은 파일이라 이미 있으면 다시 받지 않아요.",
+   "files": [
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "krea2-turbo",
+   "name": "Krea 2 Turbo (fp8, 8단계)",
+   "gb": 13.1,
+   "requires": [
+    "krea2-common"
+   ],
+   "desc": "12B 새 모델. 8단계만에 빠르게 그려요. 긴 문장형 프롬프트가 잘 맞아요. VRAM 16GB 이상 권장. ComfyUI 0.26.0 이상이 필요하고, Krea 커뮤니티 라이선스를 확인하세요.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "krea2-raw",
+   "name": "Krea 2 Raw (fp8, 증류 전 원본)",
+   "gb": 13.1,
+   "requires": [
+    "krea2-common"
+   ],
+   "desc": "증류하지 않은 원본이라 LoRA 학습·미세 조정용이에요. 그리려면 단계 수를 많이(25~35) 쓰고 CFG 3~5로 올려요. 처음엔 Turbo 를 권장해요.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_raw_fp8_scaled.safetensors"
     }
    ]
   },

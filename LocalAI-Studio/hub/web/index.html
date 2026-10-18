@@ -80,7 +80,7 @@
     <label class="f">원하는 변화<textarea name="prompt" rows="4"></textarea></label>
     <p class="hint qwen">문장으로 지시하세요. 예: <b>재킷을 붉은 가죽으로 바꿔줘</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 참조 이미지는 <b>이미지 2의 옷을 입혀줘</b>처럼 번호로 불러요.</p>
     <p class="hint sdxl">칠한 영역에 그릴 내용만 영어 태그로 적어요. 예: <b>black silk robe, natural skin texture</b></p>
-    <div class="exprs" title="[얼굴] 자동 선택으로 얼굴을 고른 뒤 눌러 보세요. 얼굴 생김새는 그대로, 표정만 바뀌어요.">
+    <div class="exprs" title="바꿀 얼굴 부분을 [선택 도구]로 클릭하거나 칠한 뒤 눌러 보세요. 얼굴 생김새는 그대로, 표정만 바뀌어요.">
       <span>표정 바꾸기</span>
       <button type="button" class="chip" data-t="smile, happy, open mouth" data-s="환하게 웃는 얼굴로">웃음</button>
       <button type="button" class="chip" data-t="blush, embarrassed, shy" data-s="얼굴이 붉어진 부끄러운 표정으로">부끄러움</button>
@@ -117,7 +117,7 @@
         <label class="f">Qwen 편집 모델<select name="q_unet"></select></label>
         <label class="f">텍스트 인코더<select name="q_te"></select></label>
         <label class="f">VAE<select name="q_vae"></select></label>
-        <p class="hint plain">'자동'이면 이름으로 찾아요. 못 찾을 때만 직접 고르세요.</p>
+        <p class="hint plain"></p>
       </details>
       <div class="row">
         <label class="f">처리 해상도(메가픽셀)<select name="q_mp"><option>0.6</option><option selected>1.0</option><option>1.5</option><option>2.0</option></select></label>
@@ -184,6 +184,10 @@
         <button type="button" class="ghost am-bg">배경</button>
         <button type="button" class="ghost am-inv">선택 반전</button>
         <button type="button" class="ghost am-undo">되돌리기</button>
+        <span class="growbox" title="칠한 영역을 사방으로 넓히거나 줄여요. 인페인트는 주변을 조금 더 칠해야 경계가 자연스러워요.">
+          <button type="button" class="ghost am-grow">주변 넓히기</button><button type="button" class="ghost am-shrink">줄이기</button>
+          <input type="number" class="grow-px" value="16" min="1" max="300" aria-label="넓히는 폭(픽셀)">px
+        </span>
         <span class="sam-on" hidden>
           <label class="seltool" title="켜고 이미지를 클릭하면 클릭한 물체·옷·부위가 한 번에 선택돼요."><input type="checkbox" class="wand"> <b>선택 도구</b> (클릭한 곳 자동 선택)</label>
           <label>범위 <select class="sam-level"><option value="0">작게</option><option value="1" selected>보통</option><option value="2">크게</option></select></label>
@@ -210,16 +214,19 @@
         <option value="sdxl">SD1.5 · SDXL · Illustrious · Pony 계열</option>
         <option value="flux">FLUX.1 · Krea 계열</option>
         <option value="chroma">Chroma (무검열 FLUX 계열)</option>
+        <option value="krea2">Krea 2 (새 12B 모델)</option>
       </select></label>
     <div data-for="sdxl" data-blk="sd-main"></div>
-    <div data-for="flux chroma">
-      <label class="f">FLUX 계열 모델<select name="fx_model"></select></label>
+    <div data-for="flux chroma krea2">
+      <label class="f">모델 파일<select name="fx_model"></select></label>
       <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button></p>
       <details><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
-        <label class="f">VAE<select name="fx_vae"></select></label>
-        <label class="f">T5 텍스트 인코더<select name="fx_t5"></select></label>
+        <label class="f" data-for="flux chroma">VAE<select name="fx_vae"></select></label>
+        <label class="f" data-for="flux chroma">T5 텍스트 인코더<select name="fx_t5"></select></label>
+        <label class="f" data-for="krea2">Qwen Image VAE<select name="k2_vae"></select></label>
+        <label class="f" data-for="krea2">Qwen3-VL 텍스트 인코더<select name="k2_te"></select></label>
         <label class="f" data-for="flux">CLIP-L 텍스트 인코더<select name="fx_clip"></select></label>
-        <p class="hint plain">'자동'이면 이름으로 알아서 찾아요. 파일 이름이 달라 못 찾을 때만 직접 고르세요. <button type="button" class="link" data-open="vae">VAE 폴더</button> <button type="button" class="link" data-open="text_encoders">텍스트 인코더 폴더</button></p>
+        <p class="hint plain"><button type="button" class="link" data-open="vae">VAE 폴더</button> <button type="button" class="link" data-open="text_encoders">텍스트 인코더 폴더</button></p>
       </details>
     </div>
     <label class="f">프롬프트<textarea name="prompt" rows="5"></textarea></label>
@@ -227,8 +234,8 @@
       <p class="hint">NoobAI·Illustrious·Pony는 <b>쉼표로 구분한 태그</b>(1girl, red jacket)로, 사실적 SDXL은 <b>문장</b>으로 써요.<br>(단어:1.2)로 강조해요.<br>성인 캐릭터는 <b>adult</b>, <b>mature female</b>처럼 나이를 분명히 적어요.</p>
       <p class="hint" id="wcs"></p>
     </details>
-    <p class="hint" data-for="flux chroma">FLUX 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
-    <label class="f" data-for="sdxl chroma">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <p class="hint" data-for="flux chroma krea2">FLUX·Krea 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
+    <label class="f" data-for="sdxl chroma krea2">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <div class="row">
       <label class="f">가로<input type="number" name="w" value="1024" step="8" min="256" max="2048"></label>
       <label class="f">세로<input type="number" name="h" value="1024" step="8" min="256" max="2048"></label>
@@ -238,7 +245,6 @@
       <button type="button" class="chip" data-r="3:2">3:2</button><button type="button" class="chip" data-r="2:3">2:3</button><button type="button" class="chip" data-r="16:9">16:9</button>
       <button type="button" class="chip" data-r="9:16">9:16</button><button type="button" class="chip" data-r="21:9">21:9</button><button type="button" class="chip" data-r="swap" title="가로와 세로를 바꿔요">↔</button>
     </div>
-    <p class="hint plain">가로·세로는 8의 배수로 자동 맞춰요(FLUX 계열은 16). 원하는 숫자를 직접 적어도 돼요.</p>
     <div class="row">
       <label class="f">크기 프리셋<select id="size-preset"><option value="">선택</option><option value="832x1216">세로 832×1216</option><option value="1216x832">가로 1216×832</option><option value="1024x1024">정사각 1024×1024</option><option value="768x1344">세로 길게 768×1344</option><option value="1344x768">가로 길게 1344×768</option></select></label>
       <label class="f">장수<input type="number" name="n" value="1" min="1" max="8"></label>
@@ -269,11 +275,11 @@
       </div>
     </details>
     <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
-    <details data-for="flux chroma" open><summary>FLUX 샘플링</summary>
+    <details data-for="flux chroma krea2" open><summary>FLUX·Krea 샘플링</summary>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
         <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.5" min="0" max="20"></label>
-        <label class="f" data-for="chroma">CFG<input type="number" name="fx_cfg" value="4" step="0.5" min="0" max="20"></label>
+        <label class="f" data-for="chroma krea2">CFG<input type="number" name="fx_cfg" value="4" step="0.5" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
@@ -298,7 +304,7 @@
 
 <!-- 업스케일 -->
 <section class="view split" id="v-up">
-  <form id="f-up" data-m="esrgan" autocomplete="off">
+  <form id="f-up" data-m="esrgan" data-re="sdxl" autocomplete="off">
     <div class="presets" data-presets></div>
     <button class="go">업스케일 실행</button>
     <p class="warn" id="w-up" hidden>업스케일 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 Real-ESRGAN을 설치해 주세요.</p>

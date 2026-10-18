@@ -9,7 +9,7 @@ import struct
 from pathlib import Path
 
 FAMILIES = {"sd15": "SD 1.5 계열", "sdxl": "SDXL · Illustrious · Pony · NoobAI", "sd3": "SD3 / SD3.5",
-            "flux": "FLUX · Krea", "chroma": "Chroma", "qwen": "Qwen-Image", "unknown": "알 수 없음"}
+            "flux": "FLUX · Krea(FLUX.1)", "krea2": "Krea 2", "chroma": "Chroma", "qwen": "Qwen-Image", "unknown": "알 수 없음"}
 _CACHE = {}
 
 
@@ -48,7 +48,7 @@ def classify(keys):
 
 def by_name(name):
     n = name.lower()
-    for fam, pat in (("chroma", ("chroma",)), ("qwen", ("qwen",)), ("flux", ("flux", "krea")), ("sd3", ("sd3",)),
+    for fam, pat in (("krea2", ("krea2", "krea-2", "krea_2")), ("chroma", ("chroma",)), ("qwen", ("qwen",)), ("flux", ("flux", "krea")), ("sd3", ("sd3",)),
                      ("sdxl", ("sdxl", "illustrious", "noobai", "pony")), ("sd15", ("sd15", "sd1.5", "v1-5"))):
         if any(p in n for p in pat):
             return fam
@@ -65,7 +65,9 @@ def detect(path):
     if key in _CACHE:
         return _CACHE[key]
     out = None
-    if p.suffix.lower() == ".safetensors":
+    if by_name(p.name) == "krea2":     # Krea 2 는 FLUX 와 구조가 달라서 이름을 먼저 믿어요
+        out = {"family": "krea2", "all_in_one": False, "how": "name"}
+    elif p.suffix.lower() == ".safetensors":
         try:
             fam, allin = classify(read_keys(p))
             if fam != "unknown":

@@ -145,7 +145,9 @@ def wf_flux(q):
         clip_idx = 1
     else:
         unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
-        if q["family"] == "chroma":
+        if q["family"] == "krea2":
+            clip = w.add("CLIPLoader", clip_name=q["t5"], type="krea2", device="default")
+        elif q["family"] == "chroma":
             clip = w.add("CLIPLoader", clip_name=q["t5"], type="chroma", device="default")
         else:
             clip = w.add("DualCLIPLoader", clip_name1=q["clip_l"], clip_name2=q["t5"], type="flux", device="default")
@@ -155,7 +157,10 @@ def wf_flux(q):
     for name, wt in q["loras"]:
         model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
     enc = w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, clip_idx])
-    if q["family"] == "chroma":
+    if q["family"] == "krea2":      # cfg 1(Turbo)이면 비운 네거티브, 1보다 크면 실제 네거티브
+        pos = [enc, 0]
+        neg = [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, clip_idx]), 0] if q["cfg"] > 1.0 else [w.add("ConditioningZeroOut", conditioning=[enc, 0]), 0]
+    elif q["family"] == "chroma":
         pos, neg = [enc, 0], [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, clip_idx]), 0]
     else:
         neg = [w.add("ConditioningZeroOut", conditioning=[enc, 0]), 0]
@@ -165,7 +170,7 @@ def wf_flux(q):
         li = w.add("LoadImage", image=q["init"])
         lat, denoise = [w.add("VAEEncode", pixels=[li, 0], vae=vae), 0], q["init_denoise"]
     else:
-        lat = [w.add("EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+        lat = [w.add("EmptyLatentImage" if q["family"] == "krea2" else "EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
     k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
               scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat, denoise=denoise)
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
