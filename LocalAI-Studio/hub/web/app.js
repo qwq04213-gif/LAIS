@@ -280,9 +280,9 @@ function show(v){
   if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
 }
 $$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
-function toast(t,ms){
+function toast(t,ms,go){
   let b=$('#toast');if(!b){b=document.createElement('div');b.id='toast';b.setAttribute('role','status');document.body.append(b)}
-  b.textContent=t;b.hidden=false;clearTimeout(b._t);b._t=setTimeout(()=>{b.hidden=true},ms||3500);
+  b.textContent=t;b.hidden=false;clearTimeout(b._t);b.classList.toggle('go-toast',!!go);b.onclick=go?()=>{b.hidden=true;go()}:null;if(go)b.title='누르면 결과 화면으로 이동해요';else b.removeAttribute('title');b._t=setTimeout(()=>{b.hidden=true},ms||Math.round(ls.get('opt:toast',3.5)*1000));
 }
 async function openFolder(which){
   try{const r=await api('/api/open',{which});toast(r.error?r.error:'폴더를 열었어요: '+r.path)}
@@ -1641,8 +1641,9 @@ function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
   try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=window.QCTX||(window.QCTX=new A());if(c.state==='suspended')c.resume();
     [[880,0],[1175,.16]].forEach(([f,t])=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);
       const t0=c.currentTime+t;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.18,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.3);o.start(t0);o.stop(t0+.32)})}catch{}}
+function qGo(r){const v=QVIEW[r.kind];if(!v)return;show(v);if(v==='feat'&&r.feature&&typeof featForm==='function')setTimeout(()=>featForm(r.feature,true),400)}
 function qNotify(r){const ok=r.state==='done',t=ok?`✔ ${r.label} — 끝났어요`:`⚠ ${r.label} — 실패했어요`+(r.error?`: ${r.error}`:'');
-  toast(t,7000);qBeep();
+  toast(t+(r.kind?'  (누르면 이동)':''),7000,r.kind&&QVIEW[r.kind]?()=>qGo(r):null);qBeep();
   if(qDesk()&&document.hidden&&window.Notification&&Notification.permission==='granted'){try{new Notification(ok?'작업이 끝났어요':'작업에 실패했어요',{body:r.label+(ok||!r.error?'':'\n'+r.error)})}catch{}}}
 function qRender(q){const L=$('#qlist');if(!L)return;
   if(!q.items.length){L.innerHTML='<p class="mute">지금 진행 중이거나 기다리는 작업이 없어요.</p>';return}
@@ -1654,6 +1655,7 @@ async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
   const n=q.running+q.queued,c=$('#qcount');c.hidden=!n;c.textContent=n;$('#qbtn').classList.toggle('busy',n>0);
   {const run=q.items.find(r=>r.state==='running'),pc=run&&typeof run.progress==='number'?Math.round(run.progress*100):null,F=$('#qfloat');
    F.classList.toggle('busy',n>0);$('#qftext').textContent=run?`${run.label}${pc!==null?' · '+pc+'%':''}`:n?`대기 ${q.queued}개`:'작업 대기열';
+   {const S=$('#qside');S.classList.toggle('busy',n>0);$('#qstext').textContent=$('#qftext').textContent;$('#qscount').hidden=n<2;$('#qscount').textContent=n;$('#qsbar').hidden=pc===null;$('#qsbar').style.width=(pc||0)+'%'}
    $('#qfcount').hidden=n<2;$('#qfcount').textContent=n;$('#qfbar').hidden=pc===null;$('#qfbar').style.width=(pc||0)+'%'}
   for(const r of q.items){const was=QSEEN.get(r.id);
     if(QINIT&&(r.state==='done'||r.state==='error')&&was!=='done'&&was!=='error')qNotify(r);
@@ -1661,17 +1663,18 @@ async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
     QSEEN.set(r.id,r.state)}
   QINIT=true;qApply(q)}
 function qApply(q){const p=$('#qpanel');if(!p)return;q=q||QLAST;
-  const want=QUSER==='open'?true:QUSER==='closed'?false:!!(qPin()&&q&&q.items.some(r=>r.state==='running'||r.state==='queued'));
+  const want=QUSER==='open'?true:QUSER==='closed'?false:!!(qPin()&&document.documentElement.dataset.qpos!=='side'&&q&&q.items.some(r=>r.state==='running'||r.state==='queued'));
   const was=!p.hidden;p.hidden=!want;p.classList.toggle('pinned',qPin());
   if(want){$('#q-sound').checked=qSound();$('#q-desk').checked=qDesk();$('#q-pin').checked=qPin();if(q)qRender(q)}
-  $('#qfloat').classList.toggle('open',want)}
+  $('#qfloat').classList.toggle('open',want);$('#qside').classList.toggle('open',want);if(typeof qPlace==='function')qPlace()}
 const qToggle=()=>{QUSER=$('#qpanel').hidden?'open':'closed';qApply();if(QUSER==='open')qPoll()};
-$('#qbtn').onclick=qToggle;$('#qfloat').onclick=qToggle;
+$('#qbtn').onclick=qToggle;$('#qfloat').onclick=qToggle;$('#qside').onclick=qToggle;
 $('#qpanel .qx').onclick=()=>{QUSER='closed';qApply()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#qpanel').hidden){QUSER='closed';qApply()}});
 $('#q-pin').onchange=e=>{ls.set('q:pin',e.target.checked);QUSER=e.target.checked?null:'open';qApply()};
+
 $('#qlist').addEventListener('click',async e=>{const row=e.target.closest('.qrow');
-  if(row&&!e.target.closest('[data-q]')){const v=row.dataset.view;if(v){show(v);if(v==='feat'&&row.dataset.feature&&typeof featForm==='function')setTimeout(()=>featForm(row.dataset.feature,true),400);if(!qPin()){QUSER='closed';qApply()}}return}
+  if(row&&!e.target.closest('[data-q]')){const v=row.dataset.view;if(v){qGo({kind:row.dataset.kind||Object.keys(QVIEW).find(k=>QVIEW[k]===v),feature:row.dataset.feature});if(!qPin()){QUSER='closed';qApply()}}return}
   const b=e.target.closest('[data-q]');if(!b)return;const id=b.closest('.qrow').dataset.id;
   try{const r=b.dataset.q==='cancel'?await api('/api/job/cancel',{id}):await api('/api/queue/move',{id,to:b.dataset.q});if(r.error)toast(r.error)}catch{}qPoll()});
 $('#q-sound').onchange=e=>{ls.set('q:sound',e.target.checked);if(e.target.checked)qBeep()};
@@ -1931,7 +1934,12 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
  pick('opt-chatfs','opt:chatfs',1,v=>D.style.setProperty('--chatfs',v));
  pick('opt-galsz','opt:galsz',190,v=>D.style.setProperty('--galmin',v));
  pick('opt-ressz','opt:ressz',420,v=>D.style.setProperty('--resh',v));
- pick('opt-qpos','opt:qpos','left',v=>{D.dataset.qpos=v});
+ pick('opt-sbw','opt:sbw',208,v=>D.style.setProperty('--sbw',v));
+ pick('opt-bubw','opt:bubw',72,v=>D.style.setProperty('--bubw',v));
+ pick('opt-toast','opt:toast',3.5);
+ tog('opt-gosticky','opt:gosticky',true,v=>{if(v)delete D.dataset.gosticky;else D.dataset.gosticky='off'});
+ pick('opt-qpos','opt:qpos','side',v=>{D.dataset.qpos=v;qApply();qPlace()});
+ $('#opt-qreset').onclick=()=>{ls.set('opt:qxy',null);ls.set('opt:qpos','side');D.dataset.qpos='side';$('#opt-qpos').value='side';qPlace();toast('대기열 위치를 사이드바 위쪽으로 되돌렸어요.')};
  pick('opt-home','opt:home','');
  /* 강조 색 */
  {const cur=ls.get('opt:accent','');$$('#accent-pick input').forEach(i=>{i.checked=i.value===cur});
@@ -2049,3 +2057,28 @@ async function cachePanel(){const box=$('#cachein');clearTimeout(cacheT);if(!box
     const x=await api('/api/cachein/move',{});if(x.error)return toast(x.error,6000);cachePanel()};
   const tg=$('#cache-tog');if(tg)tg.onclick=async()=>{const x=await api('/api/cachein',{on:!r.on});toast(x.error||'바꿨어요. 적용하려면 프로그램을 다시 시작해 주세요.',6000);cachePanel();diskScan()}}
 $('#fold-disk').addEventListener('toggle',e=>{if(e.target.open)cachePanel()});
+
+/* ── 작업 대기열 자리: 맨 왼쪽/오른쪽 아래, 만들기 버튼 아래(따라다녀요), 직접 끌어서 옮긴 자리 ── */
+function qPlace(){const D=document.documentElement,pill=$('#qfloat'),pan=$('#qpanel');if(!pill||!pan)return;
+  const mode=D.dataset.qpos,clr=el=>['left','top','right','bottom','maxHeight'].forEach(k=>el.style[k]='');
+  if(mode==='side'&&innerWidth>860){clr(pill);if(!pan.hidden){const r=$('#qside').getBoundingClientRect();Object.assign(pan.style,{left:(r.right+8)+'px',top:Math.max(8,r.top)+'px',right:'auto',bottom:'auto',maxHeight:(innerHeight-Math.max(8,r.top)-16)+'px'})}return}
+  if((mode!=='dock'&&mode!=='free')||innerWidth<=860){clr(pill);clr(pan);return}
+  const pw=pill.offsetWidth||200,ph=pill.offsetHeight||40,cl=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  let x,y;
+  if(mode==='free'){const s=ls.get('opt:qxy',null)||{x:16,y:innerHeight-ph-16};x=s.x;y=s.y}
+  else{const b=[...document.querySelectorAll('.view.on form .go')].find(e=>e.offsetParent&&e.getBoundingClientRect().width>0);
+    if(b){const r=b.getBoundingClientRect();x=r.left;y=r.bottom+6}else{x=16;y=innerHeight-ph-16}}
+  x=cl(x,0,Math.max(0,innerWidth-pw));y=cl(y,0,Math.max(0,innerHeight-ph));
+  Object.assign(pill.style,{left:x+'px',top:y+'px',right:'auto',bottom:'auto'});
+  if(!pan.hidden){const w=pan.offsetWidth;pan.style.left=cl(x,8,Math.max(8,innerWidth-w-8))+'px';pan.style.right='auto';
+    if(y>innerHeight/2){pan.style.bottom=(innerHeight-y+8)+'px';pan.style.top='auto'}else{pan.style.top=(y+ph+8)+'px';pan.style.bottom='auto'}}}
+{let raf=0;const kick=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;qPlace()})};
+ addEventListener('scroll',kick,true);addEventListener('resize',kick);setInterval(()=>{if(document.documentElement.dataset.qpos==='dock')qPlace()},400);qPlace();
+ const pill=$('#qfloat');let st=null,dragged=false;
+ pill.addEventListener('pointerdown',e=>{if(e.button!==0||innerWidth<=860)return;const r=pill.getBoundingClientRect();st={dx:e.clientX-r.left,dy:e.clientY-r.top,x0:e.clientX,y0:e.clientY,on:false};try{pill.setPointerCapture(e.pointerId)}catch{}});
+ pill.addEventListener('pointermove',e=>{if(!st)return;if(!st.on){if(Math.hypot(e.clientX-st.x0,e.clientY-st.y0)<6)return;st.on=true;pill.classList.add('drag');
+   const D=document.documentElement;D.dataset.qpos='free';ls.set('opt:qpos','free');const sel=$('#opt-qpos');if(sel)sel.value='free'}
+  ls.set('opt:qxy',{x:Math.round(e.clientX-st.dx),y:Math.round(e.clientY-st.dy)});qPlace()});
+ const end=()=>{if(st&&st.on){dragged=true;setTimeout(()=>dragged=false,50)}pill.classList.remove('drag');st=null};
+ pill.addEventListener('pointerup',end);pill.addEventListener('pointercancel',end);
+ pill.addEventListener('click',e=>{if(dragged){e.stopImmediatePropagation();e.preventDefault()}},true)}

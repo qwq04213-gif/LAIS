@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
-<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','left')}catch(e){}</script>
+<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','side');D.style.setProperty('--sbw',g('opt:sbw',208));D.style.setProperty('--bubw',g('opt:bubw',72));if(!g('opt:gosticky',true))D.dataset.gosticky='off'}catch(e){}</script>
 <script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}try{var z=parseFloat(localStorage.getItem('ui:scale'));if(z>=0.8&&z<=1.6)document.documentElement.style.setProperty('--ui',z)}catch(e){}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <aside id="rail">
   <div class="brand">로컬 AI 스튜디오<small id="ver" role="button" tabindex="0" title="버전별 변경 사항 보기"></small></div>
+  <button id="qside" type="button" class="qside" aria-haspopup="dialog" title="작업 대기열 — 사이드바 위쪽에 고정돼 있어요. 누르면 목록을 열고 닫아요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span id="qstext">작업 대기열</span><em id="qscount" hidden>0</em><i class="qfbar" id="qsbar" hidden></i></button>
   <div id="gbars" hidden></div>
   <nav>
     <div class="ng"><span class="ngt">처음</span>
@@ -891,7 +892,11 @@
 <div class="card"><h3>시작과 목록</h3>
 <div class="row"><div class="rl"><b>시작할 때 열 화면</b><span>스튜디오를 열 때 맨 처음 보이는 화면이에요.</span></div><div class="rc"><select id="opt-home"><option value="">대화 (기본)</option><option value="start">시작하기</option><option value="gen">이미지 생성</option><option value="edit">이미지 편집</option><option value="vid">영상 만들기</option><option value="music">음악 만들기</option><option value="gal">기록 갤러리</option><option value="feat">기능 모음</option></select></div></div>
 <div class="row"><div class="rl"><b>생성 결과 그림 크기</b><span>이미지 생성·편집 화면에서 결과 그림이 보이는 크기예요. 누르면 크게 볼 수 있어요.</span></div><div class="rc"><select id="opt-ressz"><option value="300">작게</option><option value="420">보통</option><option value="640">크게</option><option value="900">아주 크게</option></select></div></div>
-<div class="row"><div class="rl"><b>작업 대기열 위치</b><span>화면에 떠 있는 작업 대기열 버튼과 목록이 놓이는 쪽이에요.</span></div><div class="rc"><select id="opt-qpos"><option value="left">왼쪽</option><option value="right">오른쪽</option></select></div></div>
+<div class="row"><div class="rl"><b>작업 대기열 위치</b><span>화면에 떠 있는 작업 대기열 버튼과 목록이 놓이는 곳이에요. 버튼을 끌어서 옮기면 [직접 옮긴 자리]로 바뀌고 기억돼요. ‘사이드바 위쪽’은 만들기 버튼처럼 사이드바 위에 고정돼 있어요. ‘만들기 버튼 아래’는 만들기 버튼 바로 밑에서 따라와요.</span></div><div class="rc"><select id="opt-qpos"><option value="side">사이드바 위쪽(만들기 버튼처럼 고정)</option><option value="left">왼쪽 아래(맨 왼쪽)</option><option value="right">오른쪽 아래</option><option value="dock">만들기 버튼 아래</option><option value="free">직접 옮긴 자리</option></select> <button type="button" class="ghost sm" id="opt-qreset">자리 되돌리기</button></div></div>
+<div class="row"><div class="rl"><b>왼쪽 메뉴 너비</b><span>왼쪽 메뉴(사이드바)의 폭이에요.</span></div><div class="rc"><select id="opt-sbw"><option value="176">좁게</option><option value="208">보통</option><option value="248">넓게</option></select></div></div>
+<div class="row"><div class="rl"><b>대화 말풍선 너비</b><span>대화 답변이 한 줄에 놓이는 최대 폭이에요.</span></div><div class="rc"><select id="opt-bubw"><option value="56">좁게</option><option value="72">보통</option><option value="96">넓게</option><option value="130">아주 넓게</option></select></div></div>
+<div class="row"><div class="rl"><b>알림 메시지 표시 시간</b><span>화면 아래에 잠깐 뜨는 안내 문구가 머무는 시간이에요.</span></div><div class="rc"><select id="opt-toast"><option value="2">짧게(2초)</option><option value="3.5">보통(3.5초)</option><option value="7">길게(7초)</option><option value="12">아주 길게(12초)</option></select></div></div>
+<div class="row"><div class="rl"><b>만들기 버튼 고정</b><span>입력 칸을 내려도 [만들기] 버튼이 위에 따라와요. 끄면 제자리에 있어요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-gosticky"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>갤러리 미리보기 크기</b><span>기록 갤러리의 그림 크기예요.</span></div><div class="rc"><select id="opt-galsz"><option value="150">작게</option><option value="190">보통</option><option value="250">크게</option><option value="340">아주 크게</option></select></div></div>
 </div></div>
   <div class="cpane" id="fold-input"><div class="card"><h3>프롬프트 입력</h3>

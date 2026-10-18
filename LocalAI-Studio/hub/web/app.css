@@ -6,7 +6,7 @@ font-family:"Pretendard Variable","Pretendard","Noto Sans KR","Malgun Gothic","A
 :root[data-theme=light]{--table:#f3f3f1;--chrome:#ffffff;--raised:#e9e9e6;--line:#d3d3ce;--tx:#1e1e20;--mute:#64646c;
 --acc:#4458d6;--acc-tx:#ffffff;--mask:#e0306f;--bad:#c0392b;--ok:#1f8a4c;--chk1:#e4e4e1;--chk2:#d6d6d2;color-scheme:light}
 *{box-sizing:border-box}[hidden]{display:none!important}
-body{margin:0;height:100vh;display:grid;grid-template-columns:calc(208px*var(--ui,1)) 1fr;background:var(--table);color:var(--tx);font-size:calc(14px*var(--ui,1));line-height:1.55}
+body{margin:0;height:100vh;display:grid;grid-template-columns:calc(var(--sbw,208)*1px*var(--ui,1)) 1fr;background:var(--table);color:var(--tx);font-size:calc(14px*var(--ui,1));line-height:1.55}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 a{color:var(--acc)}
@@ -138,7 +138,7 @@ figcaption button,figcaption a{background:none;border:0;color:var(--acc);cursor:
 .sysd{border:0;padding:0}.sysd textarea{margin-top:8px}
 #log{flex:1;overflow:auto;display:flex;flex-direction:column;gap:18px;padding:8px 2px}
 .m{display:flex}.m.user{justify-content:flex-end}
-.bub{max-width:min(72ch,88%);overflow-wrap:anywhere}
+.bub{max-width:min(calc(var(--bubw,72)*1ch),88%);overflow-wrap:anywhere}
 .m.user .bub{background:var(--raised);padding:9px 14px;border-radius:14px 14px 4px 14px}
 .bub pre{background:var(--chrome);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow:auto;line-height:1.45}
 .bub code{background:var(--chrome);padding:1px 5px;border-radius:4px}.bub pre code{padding:0;background:none}
@@ -492,5 +492,18 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 #qpanel.pinned{max-height:46vh;width:min(360px,calc(100vw - 32px));bottom:64px}.qfloat.open{background:var(--chrome)}
 body:has(#lb:not([hidden])) .qfloat,body:has(#lb:not([hidden])) #qpanel,body:has(#restarting:not([hidden])) .qfloat,body:has(#restarting:not([hidden])) #qpanel{display:none}
 
-html[data-qpos=left] .qfloat,html[data-qpos=left] #qpanel{right:auto;left:calc(208px*var(--ui,1) + 16px)}
-@media(max-width:860px){html[data-qpos=left] .qfloat,html[data-qpos=left] #qpanel{left:16px}}
+
+html[data-qpos=left] .qfloat,html[data-qpos=left] #qpanel{right:auto;left:16px}
+html[data-qpos=free] .qfloat,html[data-qpos=dock] .qfloat,html[data-qpos=free] #qpanel,html[data-qpos=dock] #qpanel{right:auto;bottom:auto}
+html[data-gosticky=off] form .go{position:static;box-shadow:none}
+.qfloat{touch-action:none}.qfloat.drag{cursor:grabbing;opacity:.9}
+@media(max-width:860px){html[data-qpos=free] .qfloat,html[data-qpos=dock] .qfloat{left:auto!important;top:auto!important;right:16px!important;bottom:16px!important}html[data-qpos=free] #qpanel,html[data-qpos=dock] #qpanel{left:16px!important;right:16px!important;top:auto!important;bottom:64px!important}}
+#toast.go-toast{cursor:pointer;border-color:var(--acc)}#toast.go-toast:hover{background:#1a1a20}
+
+.qside{display:none}
+html[data-qpos=side] .qside{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:6;width:100%;margin:2px 0 8px;padding:8px 12px;background:var(--raised);color:var(--tx);border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:calc(13px*var(--ui,1));text-align:left;overflow:hidden;box-shadow:0 6px 10px -6px rgba(0,0,0,.45)}
+.qside:hover{background:var(--chrome)}.qside .ico{flex:none}.qside span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.qside em{font-style:normal;flex:none;background:var(--acc);color:#10131a;border-radius:10px;font-size:calc(11px*var(--ui,1));font-weight:700;padding:0 7px}
+.qside.busy{border-color:var(--acc)}.qside.busy .ico{stroke:var(--acc)}.qside .qfbar{position:absolute;left:0;bottom:0;height:3px;background:var(--acc);width:0;transition:width .4s}
+html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:auto;bottom:auto}
+@media(max-width:860px){html[data-qpos=side] .qside{display:none}html[data-qpos=side] .qfloat{display:flex}html[data-qpos=side] #qpanel{left:16px!important;right:16px!important;top:auto!important;bottom:64px!important}}
