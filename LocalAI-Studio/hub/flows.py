@@ -139,18 +139,24 @@ def wf_flux(q):
     flux  : DualCLIP(clip_l+T5) + FluxGuidance, 네거티브는 ConditioningZeroOut, cfg 1.
     chroma: T5 단독 CLIPLoader(type=chroma) + 실제 네거티브 프롬프트, cfg 사용."""
     w = WF()
-    unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
-    if q["family"] == "chroma":
-        clip = w.add("CLIPLoader", clip_name=q["t5"], type="chroma", device="default")
+    if q.get("allin"):       # 텍스트 인코더·VAE 까지 들어 있는 올인원 체크포인트
+        ck = w.add("CheckpointLoaderSimple", ckpt_name=q["unet"])
+        unet, clip, vae = ck, ck, [ck, 2]
+        clip_idx = 1
     else:
-        clip = w.add("DualCLIPLoader", clip_name1=q["clip_l"], clip_name2=q["t5"], type="flux", device="default")
-    vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+        unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
+        if q["family"] == "chroma":
+            clip = w.add("CLIPLoader", clip_name=q["t5"], type="chroma", device="default")
+        else:
+            clip = w.add("DualCLIPLoader", clip_name1=q["clip_l"], clip_name2=q["t5"], type="flux", device="default")
+        vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+        clip_idx = 0
     model = [unet, 0]
     for name, wt in q["loras"]:
         model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
-    enc = w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, 0])
+    enc = w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, clip_idx])
     if q["family"] == "chroma":
-        pos, neg = [enc, 0], [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, 0]), 0]
+        pos, neg = [enc, 0], [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, clip_idx]), 0]
     else:
         neg = [w.add("ConditioningZeroOut", conditioning=[enc, 0]), 0]
         pos = [w.add("FluxGuidance", conditioning=[enc, 0], guidance=q["guidance"]), 0]

@@ -14,9 +14,10 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 # ComfyUI 포터블의 python_embeded 는 ._pth 설정 때문에 스크립트 폴더를 import 경로에 넣지 않으므로 직접 추가
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import automask
 import flows
 import meta
+import modelinfo
+import sam
 
 RS = Image.Resampling
 HUB = Path(__file__).resolve().parent
@@ -38,7 +39,7 @@ for _k in ("llm", "image"):
 CIVITAI = os.environ.get("CIVITAI_URL", "https://civitai.com")
 HFURL = os.environ.get("HF_URL", "https://huggingface.co")
 PROFILES = json.loads((HUB / "profiles.json").read_text(encoding="utf-8"))
-FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings"}
+FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam"}
 EXT = (".safetensors", ".ckpt", ".pth", ".pt", ".gguf", ".bin")
 DEFAULT_NEG = ("lowres, bad anatomy, bad hands, extra digits, missing fingers, worst quality, "
                "jpeg artifacts, watermark, text, signature")
@@ -216,12 +217,16 @@ def _safe(f, *a):
         log("[창 앞으로 가져오기 실패]", e)
 
 
-def open_folder(p):
+def open_folder(p, select=None):
+    """폴더를 열어요. select 파일이 있으면(Windows) 그 파일을 선택한 채로 열어요."""
     p.mkdir(parents=True, exist_ok=True)
     try:
         if os.name == "nt":
             before = _explorer_windows()
-            os.startfile(str(p))  # noqa
+            if select is not None and Path(select).is_file():
+                subprocess.Popen(["explorer", "/select,", str(select)])
+            else:
+                os.startfile(str(p))  # noqa
             threading.Thread(target=lambda: _safe(_front_window, p.name or str(p), before), daemon=True).start()
         else:
             subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(p)])
@@ -1013,13 +1018,21 @@ def flux_parts(p=None):
 def do_gen_flux(p, J):
     """FLUX.1 dev / Krea dev / Chroma 등 FLUX 계열 생성(이미지→이미지, LoRA, 다이나믹 프롬프트 지원)."""
     fam = p["gengine"]
-    f = dict(unet=p.get("fx_model") or None, **flux_parts(p))
-    if not all(f[k] for k in (["unet", "t5", "vae"] + (["clip_l"] if fam == "flux" else []))):
+    sel = p.get("fx_model") or None
+    allin = bool(sel and sel.startswith("ckpt::"))     # 체크포인트 폴더의 올인원 FLUX/Chroma
+    if allin:
+        sel = sel[6:]
+        if sel not in files("checkpoints"):
+            raise RuntimeError("선택한 체크포인트 파일을 찾을 수 없어요.")
+        f = dict(unet=sel, t5=None, clip_l=None, vae=None)
+    else:
+        f = dict(unet=sel, **flux_parts(p))
+    if not allin and not all(f[k] for k in (["unet", "t5", "vae"] + (["clip_l"] if fam == "flux" else []))):
         names = {"unet": "FLUX 모델", "t5": "T5 텍스트 인코더", "vae": "VAE", "clip_l": "CLIP-L 텍스트 인코더"}
         miss = [names[k] for k in ["unet", "t5", "vae"] + (["clip_l"] if fam == "flux" else []) if not f[k]]
         raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭에서 설치하거나, 설정의 '모델 파일 직접 고르기'에서 골라 주세요.")
     base, n = seed_of(p), clamp(num(p, "n", 1, int), 1, 8)
-    w, h = (clamp(num(p, k, 1024, int) // 8 * 8, 256, 2048) for k in ("w", "h"))
+    w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
     init = load_img(p["init"]) if p.get("init") else None
     sch = p.get("fx_scheduler") or ("beta" if fam == "chroma" else "simple")
     have = caps()["schedulers"]
@@ -1037,7 +1050,7 @@ def do_gen_flux(p, J):
             neg = (p.get("negative") or "").strip() or CHROMA_NEG
             if flows_sex(text):
                 neg += ", child, loli, shota, underage, aged down"
-        q = dict(family=fam, **f, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=base + i, w=w, h=h,
+        q = dict(family=fam, allin=allin, **f, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=base + i, w=w, h=h,
                  guidance=clamp(num(p, "fx_guidance", 3.5), 0.0, 20.0), steps=clamp(num(p, "fx_steps", 20, int), 1, 100),
                  cfg=clamp(num(p, "fx_cfg", 4.0), 0.0, 20.0) if fam == "chroma" else 1.0,
                  sampler=p.get("fx_sampler") or "euler", scheduler=sch)
@@ -1258,7 +1271,7 @@ def worker():
             continue
         t["state"] = "running"
         try:
-            pull(t) if t["kind"] == "ollama" else download(t)
+            pull(t) if t["kind"] == "ollama" else sam_run_install(t) if t["kind"] == "sam" else download(t)
             t["state"], t["msg"] = "done", t["msg"] if t["msg"] == "이미 설치되어 있어요" else "완료"
         except Exception as e:
             t["state"], t["msg"] = "error", str(e)
@@ -1479,21 +1492,70 @@ def dl_get(p):
     return {"ok": True}
 
 
-# ───────────────────────── 자동 마스크(얼굴) ─────────────────────────
-def auto_mask(p):
-    img = load_img(p["image"])
-    kinds = {"anime": ["anime", "real"], "real": ["real", "anime"], "both": ["anime", "real"]}.get(p.get("kind"), ["anime", "real"])
-    files = [(k, f) for k in kinds for f in [automask.fetch(k, MODELS / "misc", OPENER)] if f]
-    if not files:
-        return {"error": "얼굴 찾기 파일을 받지 못했어요. 인터넷 연결을 확인해 주세요(GitHub에서 한 번만 받아요)."}
-    boxes = automask.find_faces(img, files)
-    if not boxes:
-        return {"error": "얼굴을 찾지 못했어요. 정면에 가까운 얼굴이 아니거나 너무 작을 수 있어요. 마법봉이나 브러시로 선택해 보세요.", "count": 0}
-    pad = {"face": 0.12, "head": 0.55}.get(p.get("part"), 0.12)
-    m = automask.face_mask(img, boxes, pad)
+# ───────────────────────── 선택 도구 (MobileSAM) ─────────────────────────
+SAM = {"engine": None}
+SAM_LOCK = threading.Lock()
+
+
+def sam_status():
+    busy = any(t.get("kind") == "sam" and t["state"] in ("queued", "running") for t in TASKS)
+    files_ok, ort = sam.installed(MODELS / "sam"), sam.have_ort()
+    return {"ort": ort, "files": files_ok, "ready": ort and files_ok, "busy": busy, "mb": 45}
+
+
+def sam_install():
+    if any(t.get("kind") == "sam" and t["state"] in ("queued", "running") for t in TASKS):
+        return {"ok": True}
+    if shutil.disk_usage(ROOT).free < 1e9:
+        return {"error": "디스크 여유 공간이 부족해요."}
+    add_task("선택 도구 설치 (MobileSAM)", kind="sam")
+    return {"ok": True}
+
+
+def sam_run_install(t):
+    if not sam.have_ort():
+        t["msg"] = "분석 엔진(onnxruntime) 설치 중"
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "--no-warn-script-location", "onnxruntime"],
+                           capture_output=True, text=True, timeout=1200)
+        if r.returncode != 0:
+            log("[pip 오류]", (r.stdout + r.stderr)[-600:])
+            raise RuntimeError("onnxruntime 설치에 실패했어요. 인터넷 연결을 확인하거나 스튜디오 창의 오류 내용을 알려 주세요.")
+        import importlib
+        importlib.invalidate_caches()
+        if not sam.have_ort():
+            raise RuntimeError("onnxruntime 설치 후에도 불러오지 못했어요. 스튜디오를 다시 시작해 보세요.")
+    for name in (sam.ENCODER, sam.DECODER):
+        t.update(url=sam.REPO + name, dir="sam", name=None, msg=f"{name} 받는 중", done=0, total=0)
+        download(t)
+    SAM["engine"] = None
+
+
+def sam_segment(p):
+    st = sam_status()
+    if not st["ready"]:
+        return {"error": "선택 도구가 아직 설치되지 않았어요.", "need": True}
+    with SAM_LOCK:
+        if SAM["engine"] is None:
+            SAM["engine"] = sam.Sam(MODELS / "sam", SAM.get("factory"))
+        eng = SAM["engine"]
+        key = p.get("id")
+        if key not in eng.cache:
+            if not p.get("image"):
+                return {"error": "이미지를 다시 보내 주세요.", "resend": True}
+            key = eng.embed(load_img(p["image"]))
+        pts = []
+        for x, y, l in (p.get("points") or [])[:20]:
+            pts.append((clamp(float(x), 0.0, 1.0), clamp(float(y), 0.0, 1.0), 1 if l else 0))
+        if not pts:
+            return {"error": "점이 없어요."}
+        m = eng.segment(key, pts, num(p, "level", 1, int))
+    im = Image.fromarray((m * 255).astype("uint8"), "L")
+    if max(im.size) > 1024:
+        k = 1024 / max(im.size)
+        im = im.resize((round(im.width * k), round(im.height * k)), RS.NEAREST)
     bio = io.BytesIO()
-    m.save(bio, "PNG")
-    return {"count": len(boxes), "mask": "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode()}
+    im.save(bio, "PNG")
+    return {"id": key, "mask": "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode()}
 
 
 # ───────────────────────── 설치된 파일 관리(삭제) ─────────────────────────
@@ -1510,6 +1572,11 @@ def manage():
         base = MODELS / d
         out["folders"][d] = sorted(({"name": f.name, "size": fsize(f)} for f in base.iterdir()
                                     if f.is_file() and (f.suffix.lower() in EXT or f.suffix == ".part")), key=lambda x: x["name"].lower()) if base.is_dir() else []
+        if d in ("checkpoints", "diffusion_models"):
+            for e in out["folders"][d]:
+                if not e["name"].endswith(".part"):
+                    fam, allin, how = model_family(d, e["name"])
+                    e.update(family=fam, all_in_one=allin, how=how, override=settings().get("families", {}).get(f"{d}/{e['name']}", "auto"))
     try:
         out["llm"] = [{"name": m["name"], "size": m.get("size", 0)} for m in http(OLLAMA + "/api/tags", timeout=3).get("models", [])]
     except Exception:
@@ -1549,12 +1616,64 @@ def status():
     return {"ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "version": VERSION}
 
 
+FAMILY_CHOICES = ("sd15", "sdxl", "flux", "chroma", "qwen", "hidden")
+
+
+def model_family(folder, name):
+    """(계열, 올인원 여부, 판단 방법). 사용자가 직접 지정한 값이 있으면 그걸 써요."""
+    d = modelinfo.detect(MODELS / folder / name)
+    ov = settings().get("families", {}).get(f"{folder}/{name}")
+    if ov in FAMILY_CHOICES:
+        return ov, d["all_in_one"], "manual"
+    return d["family"], d["all_in_one"], d["how"]
+
+
+def set_family(p):
+    folder, name, fam = p.get("folder"), str(p.get("name", "")), p.get("family") or "auto"
+    if folder not in ("checkpoints", "diffusion_models") or Path(name).name != name or not (MODELS / folder / name).is_file():
+        return {"error": "파일을 찾을 수 없어요."}
+    if fam != "auto" and fam not in FAMILY_CHOICES:
+        return {"error": "알 수 없는 계열이에요."}
+    d = settings()
+    d.setdefault("families", {})
+    if fam == "auto":
+        d["families"].pop(f"{folder}/{name}", None)
+    else:
+        d["families"][f"{folder}/{name}"] = fam
+    save_settings(d)
+    return {"ok": True}
+
+
+def sorted_models():
+    """모델 파일을 탭별로 나눠요: SDXL 탭 / FLUX 탭 / Chroma 탭. (체크포인트 폴더의 FLUX 올인원은 'ckpt::이름')"""
+    sdxl, flux, chroma, info = [], [], [], {}
+    for n in files("checkpoints"):
+        fam, allin, how = model_family("checkpoints", n)
+        info["checkpoints/" + n] = dict(family=fam, all_in_one=allin, how=how)
+        if fam == "hidden":
+            continue
+        if fam == "flux":
+            flux.append("ckpt::" + n)
+        elif fam == "chroma":
+            chroma.append("ckpt::" + n)
+        elif fam in ("sd15", "sdxl", "unknown"):
+            sdxl.append(n)
+    for n in files("diffusion_models"):
+        fam, allin, how = model_family("diffusion_models", n)
+        info["diffusion_models/" + n] = dict(family=fam, all_in_one=allin, how=how)
+        if fam in ("hidden", "qwen", "sd15", "sdxl", "sd3") or (fam == "unknown" and "qwen" in n.lower()):
+            continue
+        (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)
+    return sdxl, flux, chroma, info
+
+
 def lists():
     wc = ROOT / "wildcards"
-    return {"llm": llms(), "checkpoints": files("checkpoints"), "loras": files("loras"),
+    sdxl, flux, chroma, info = sorted_models()
+    return {"llm": llms(), "checkpoints": sdxl, "loras": files("loras"), "families": info,
             "upscalers": files("upscale_models"), "controlnets": files("controlnet"),
             "vaes": files("vae"), "text_encoders": files("text_encoders"), "diffusion": files("diffusion_models"),
-            "fluxmodels": [f for f in files("diffusion_models") if "qwen" not in f.lower()],
+            "fluxmodels": flux, "chromamodels": chroma,
             "flux_ready": bool(flux_parts()["t5"] and flux_parts()["clip_l"] and flux_parts()["vae"]),
             "chroma_ready": bool(flux_parts()["t5"] and flux_parts()["vae"]),
             "wildcards": sorted(p.stem for p in wc.glob("*.txt")) if wc.is_dir() else [],
@@ -1647,6 +1766,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(routes[u]())
         if u == "/api/install":
             return self.send_json([{k: v for k, v in t.items() if k not in ("url", "token")} for t in TASKS[-40:]])
+        if u == "/api/sam/status":
+            return self.send_json(sam_status())
         if u == "/api/dl/tokens":
             return self.send_json(token_state())
         if u == "/api/manage":
@@ -1695,12 +1816,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(dl_get(p))
         if u == "/api/dl/token":
             return self.send_json(set_token(p.get("name"), p.get("value")))
-        if u == "/api/automask":
+        if u == "/api/sam/install":
+            return self.send_json(sam_install())
+        if u == "/api/sam/segment":
             try:
-                return self.send_json(auto_mask(p))
+                return self.send_json(sam_segment(p))
             except Exception as e:  # noqa: BLE001
-                log("[자동 마스크 오류]", repr(e))
-                return self.send_json({"error": f"자동 선택에 실패했어요 ({type(e).__name__}: {e})"})
+                log("[선택 도구 오류]", repr(e))
+                return self.send_json({"error": f"선택하지 못했어요 ({type(e).__name__}: {e})"})
+        if u == "/api/family":
+            return self.send_json(set_family(p))
         if u == "/api/delete":
             return self.send_json(delete_item(p))
         if u == "/api/meta":
@@ -1722,10 +1847,13 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, TypeError) as e:
                 return self.send_json({"error": str(e) if isinstance(e, ValueError) else "JSON 형식이 올바르지 않아요."})
         if u == "/api/open":
-            path = folder_map().get(p.get("which") or "outputs")
+            path, sel = folder_map().get(p.get("which") or "outputs"), None
+            if p.get("file") and str(p["file"]).startswith("/out/"):   # 결과 이미지가 들어 있는 폴더 (예: outputs\\생성)
+                sel = out_path(str(p["file"])[5:])
+                path = sel.parent
             if not path:
                 return self.send_json({"error": "알 수 없는 폴더"}, 400)
-            open_folder(path)
+            open_folder(path, sel)
             return self.send_json({"ok": True, "path": str(path)})
         if u == "/api/job/cancel":
             J = JOBS.get(p.get("id"))

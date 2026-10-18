@@ -245,16 +245,17 @@ function fillCaps(){
 }
 async function loadCaps(){try{CAPS=await api('/api/caps');fillCaps()}catch{}}
 /* FLUX 종류에 맞는 모델만 목록에 보여 줘요 (이름에 chroma 가 있으면 Chroma) */
-const fxModels=g=>(LISTS.fluxmodels||[]).filter(n=>/chroma/i.test(n)===(g==='chroma'));
+const fxModels=g=>(g==='chroma'?LISTS.chromamodels:LISTS.fluxmodels)||[];
+const fxLabel=x=>x.startsWith('ckpt::')?x.slice(6)+' (올인원 체크포인트)':x;
 function fillFx(){
   const f=$('#f-gen'),s=f.elements.fx_model,g=f.dataset.g==='chroma'?'chroma':'flux',arr=fxModels(g),cur=s.value;
-  s.innerHTML=arr.length?arr.map(x=>`<option>${esc(x)}</option>`).join(''):'<option value="">(설치된 모델 없음)</option>';
+  s.innerHTML=arr.length?arr.map(x=>`<option value="${esc(x)}">${esc(fxLabel(x))}</option>`).join(''):'<option value="">(설치된 모델 없음)</option>';
   if(arr.includes(cur))s.value=cur;
 }
 function warn(){
   const fe=$('#f-edit');$('#w-edit').hidden=fe.dataset.e==='qwen'?(LISTS.qwen||!!(fe.q_unet.value&&fe.q_te.value&&fe.q_vae.value)):LISTS.checkpoints.length>0;
   const g=$('#f-gen').dataset.g||'sdxl',w=$('#w-gen');
-  const ok=g==='sdxl'?LISTS.checkpoints.length>0:(g==='flux'?!!LISTS.flux_ready&&fxModels('flux').length>0:!!LISTS.chroma_ready&&fxModels('chroma').length>0);
+  const parts=g==='flux'?LISTS.flux_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
   w.hidden=ok;
   if(!ok)w.innerHTML=(g==='sdxl'?'체크포인트가 아직 없어요. ':g==='flux'?'FLUX·Krea 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':'Chroma 모델이나 공용 파일(T5 텍스트 인코더, VAE)이 아직 없어요. ')+'<a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.';
   $('#w-up').hidden=LISTS.upscalers.length>0;$('#w-chat').hidden=LISTS.llm.length>0;
@@ -465,7 +466,7 @@ function painter(v){
   const style=()=>{c.globalCompositeOperation=erase.checked?'destination-out':'source-over';
     c.strokeStyle=c.fillStyle='#ff4d8d';c.lineCap=c.lineJoin='round';c.lineWidth=lw()};
   /* ── 자동 선택: 마법봉(비슷한 색), 배경, 반전, 얼굴 ── */
-  const imEl=$('.stage img',sec),W=()=>cv.width,Hh=()=>cv.height,pvw=$('.pvw',sec),stage=$('.stage',sec);
+  const imEl=$('.stage img',sec),W=()=>cv.width,Hh=()=>cv.height,stage=$('.stage',sec);
   const paintSel=(sel,sw,sh)=>{ // sel: 분석 해상도(sw×sh)의 0/1 배열 → 분홍색으로 칠하거나(지우개면 지움)
     const t=document.createElement('canvas');t.width=sw;t.height=sh;const x=t.getContext('2d'),d=x.createImageData(sw,sh);
     for(let i=0;i<sel.length;i++)if(sel[i]){d.data[i*4]=255;d.data[i*4+1]=77;d.data[i*4+2]=141;d.data[i*4+3]=255}
@@ -508,35 +509,53 @@ function painter(v){
     for(let pass=0;pass<2;pass++){const prev=out.slice();for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;let s1=0;
       for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)s1+=prev[i+dy*w+dx];out[i]=s1>=5?1:0}}
     return out};
-  const tol=()=>+$('.tol',sec).value,sens=()=>+$('.edge',sec).value;
+  /* ── 선택 도구 (SAM): 클릭하면 그 물체·옷·부위가 선택돼요 ── */
   const rel=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]};
-  const wand=e=>{const an=analyze();paintSel(region(an,[rel(e)],tol(),sens(),$('.wand-all',sec).checked),an.w,an.h);pvClear()};
-  /* 마우스를 올리면 선택될 영역을 미리 보여 줘요 */
-  const pvClear=()=>{pvw.getContext('2d').clearRect(0,0,pvw.width,pvw.height)};
-  let pvT=0;
-  const preview=e=>{clearTimeout(pvT);pvT=setTimeout(()=>{if(!$('.wand',sec).checked||!v.img)return;
-    const an=analyze(),sel=region(an,[rel(e)],tol(),sens(),$('.wand-all',sec).checked);pvw.width=an.w;pvw.height=an.h;
-    const x=pvw.getContext('2d'),d=x.createImageData(an.w,an.h);
-    for(let i=0;i<sel.length;i++)if(sel[i]){d.data[i*4]=90;d.data[i*4+1]=200;d.data[i*4+2]=255;d.data[i*4+3]=150}
-    x.putImageData(d,0,0)},50)};
-  cv.addEventListener('pointermove',e=>{if($('.wand',sec).checked)preview(e)});
-  cv.addEventListener('pointerleave',()=>{clearTimeout(pvT);pvClear()});
-  $('.wand',sec).onchange=e=>{stage.classList.toggle('sel',e.target.checked);if(!e.target.checked)pvClear()};
   const note=t=>setBar(sec,t,'note');
-  $('.am-bg',sec).onclick=()=>{const an=analyze();paintSel(region(an,[[0.01,0.01],[0.99,0.01],[0.01,0.99],[0.99,0.99]],tol(),sens(),false),an.w,an.h);note('배경을 선택했어요. 인물을 바꾸려면 [선택 반전]을 누르세요.')};
-  $('.am-inv',sec).onclick=()=>{const d=c.getImageData(0,0,W(),Hh()).data,sel=new Uint8Array(W()*Hh());
-    for(let i=0;i<sel.length;i++)sel[i]=d[i*4+3]<40?1:0;c.clearRect(0,0,W(),Hh());erase.checked=false;paintSel(sel,W(),Hh())};
-  $('.am-face',sec).onclick=async()=>{
-    if(!v.img)return;const b=$('.am-face',sec);b.disabled=true;note('얼굴을 찾는 중이에요… (처음엔 검출 파일을 받느라 조금 걸려요)');
-    try{
-      const r=await api('/api/automask',{image:v.img,part:$('.am-part',sec).value,kind:'both'});
+  let samId=null,samImg=null,undo=[],last1=null,busy=false;
+  const snap=()=>{undo.push(c.getImageData(0,0,W(),Hh()));if(undo.length>15)undo.shift()};
+  const fromMask=async url=>{const im=new Image();await new Promise(ok=>{im.onload=ok;im.src=url});
+    const t=document.createElement('canvas');t.width=im.width;t.height=im.height;const x=t.getContext('2d');x.drawImage(im,0,0);
+    const d=x.getImageData(0,0,t.width,t.height).data,sel=new Uint8Array(t.width*t.height);for(let i=0;i<sel.length;i++)sel[i]=d[i*4]>127?1:0;return{sel,w:t.width,h:t.height}};
+  const samCall=async(points,level)=>{
+    const body={points,level,id:samImg===v.img?samId:null};if(!body.id)body.image=v.img;
+    let r=await api('/api/sam/segment',body);
+    if(r.resend){body.image=v.img;r=await api('/api/sam/segment',body)}
+    if(r.id){samId=r.id;samImg=v.img}return r};
+  const samDo=async(points,level,label)=>{
+    if(busy)return;busy=true;note('선택하는 중… (이미지를 처음 분석할 때는 몇 초 걸려요)');
+    try{const r=await samCall(points,level);
+      if(r.need){samState.ready=false;showSam();return}
       if(r.error){setBar(sec,r.error,'bad');return}
-      const im=new Image();await new Promise(ok=>{im.onload=ok;im.src=r.mask});
-      const t=document.createElement('canvas');t.width=W();t.height=Hh();const x=t.getContext('2d');x.drawImage(im,0,0,W(),Hh());
-      const d=x.getImageData(0,0,W(),Hh()).data,sel=new Uint8Array(W()*Hh());for(let i=0;i<sel.length;i++)sel[i]=d[i*4]>127?1:0;
-      paintSel(sel,W(),Hh());note(`얼굴 ${r.count}개를 선택했어요. 브러시나 지우개로 다듬을 수 있어요.`);
-    }catch(e){setBar(sec,'자동 선택에 실패했어요: '+(e&&e.message||e),'bad')}
-    b.disabled=false};
+      const m=await fromMask(r.mask);snap();paintSel(m.sel,m.w,m.h);note(label||'선택했어요. 더 넓히려면 [크게], 틀리면 [되돌리기]를 누르세요.')}
+    catch(e){setBar(sec,'선택하지 못했어요: '+(e&&e.message||e),'bad')}
+    finally{busy=false}};
+  const wand=e=>{const[x,y]=rel(e);last1=[[x,y,1]];samDo(last1,+$('.sam-level',sec).value||1)};
+  $('.sam-level',sec).onchange=async()=>{ // 단계를 바꾸면 방금 선택을 같은 점으로 다시
+    if(!last1||!undo.length)return;const prev=undo.pop();c.putImageData(prev,0,0);samDo(last1,+$('.sam-level',sec).value)};
+  $('.am-undo',sec).onclick=()=>{const p=undo.pop();if(p){c.putImageData(p,0,0);note('되돌렸어요.')}};
+  /* 설치 상태: 설치 전에는 [설치] 버튼, 설치 후에는 도구를 보여 줘요 */
+  const samState={ready:false};
+  const showSam=()=>{$('.sam-on',sec).hidden=!samState.ready;$('.sam-off',sec).hidden=samState.ready;if(!samState.ready)$('.wand',sec).checked=false;stage.classList.toggle('sel',samState.ready&&$('.wand',sec).checked)};
+  v.samRefresh=async()=>{try{const st=await api('/api/sam/status');samState.ready=st.ready;samState.mb=st.mb;samState.busy=st.busy;showSam();return st}catch{}};
+  $('.sam-install',sec).onclick=async()=>{
+    const r=await api('/api/sam/install',{});if(r.error){setBar(sec,r.error,'bad');return}
+    note('선택 도구를 설치하고 있어요… 아래 [설치와 모델]의 진행 상황에서도 볼 수 있어요.');
+    for(let i=0;i<600;i++){await sleep(2000);const t=(await api('/api/install')).filter(x=>x.kind==='sam'||/MobileSAM/.test(x.label)).pop();
+      if(t){note('선택 도구 설치: '+(t.msg||'')+(t.total?` ${Math.round(t.done/t.total*100)}%`:''));
+        if(t.state==='error'){setBar(sec,'설치하지 못했어요: '+t.msg,'bad');return}
+        if(t.state==='done'){await v.samRefresh();note('설치했어요! [선택 도구]를 켜고 이미지를 클릭해 보세요.');return}}}};
+  v.samRefresh();
+  const bgOld=()=>{const an=analyze();paintSel(region(an,[[0.01,0.01],[0.99,0.01],[0.01,0.99],[0.99,0.99]],25,50,false),an.w,an.h);snap();note('배경을 선택했어요. 인물을 바꾸려면 [선택 반전]을 누르세요.')};
+  $('.am-bg',sec).onclick=async()=>{
+    if(!samState.ready)return bgOld();
+    const pts=[[0.02,0.02],[0.98,0.02],[0.02,0.98],[0.98,0.98]];busy=false;
+    note('배경을 찾는 중…');
+    try{for(const [x,y] of pts){const r=await samCall([[x,y,1]],2);if(r.error){setBar(sec,r.error,'bad');return}const m=await fromMask(r.mask);snap();paintSel(m.sel,m.w,m.h)}
+      note('배경을 선택했어요. 인물을 바꾸려면 [선택 반전]을 누르세요.')}catch(e){bgOld()}};
+  $('.am-inv',sec).onclick=()=>{snap();const d=c.getImageData(0,0,W(),Hh()).data,sel=new Uint8Array(W()*Hh());
+    for(let i=0;i<sel.length;i++)sel[i]=d[i*4+3]<40?1:0;c.clearRect(0,0,W(),Hh());erase.checked=false;paintSel(sel,W(),Hh())};
+  $('.wand',sec).onchange=e=>{stage.classList.toggle('sel',e.target.checked)};
   cv.onpointerdown=e=>{if($('.wand',sec).checked){wand(e);return}down=true;cv.setPointerCapture(e.pointerId);last=pos(e);style();
     c.beginPath();c.arc(last[0],last[1],lw()/2,0,7);c.fill()};
   cv.onpointermove=e=>{
@@ -587,10 +606,11 @@ function addResults(sec,j,kind){
   const used=(j.used||[]).filter(Boolean);
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
     j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="edit">${first}</button>${
-    kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}<button type="button" data-u="${u}" data-to="info">정보</button>${
+    kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}<button type="button" data-u="${u}" data-to="info">정보</button><button type="button" data-u="${u}" data-to="folder" title="이 사진이 저장된 폴더를 열어요">출력 폴더 열기</button>${
     COMPARE[u]?`<button type="button" data-u="${u}" data-to="cmp">전후 비교</button>`:''}</figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
-  $('.res .batch',sec).scrollIntoView({block:'nearest'});
+  const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
+  bt.querySelectorAll('img').forEach(i=>{if(!i.complete)i.addEventListener('load',goto,{once:true})}); // 사진이 다 불러와진 뒤 높이가 커져도 다시 맞춰요
 }
 /* 진행 표시줄: 이미지 아래에 상태를 보여 주고, 실행 중에는 [중단] 버튼을 보여 줘요 */
 function setBar(view,text,mode){
@@ -639,6 +659,10 @@ $('.exprs').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const f=$
   let cur=f.prompt.value;if(f.dataset.expr&&cur.includes(f.dataset.expr))cur=cur.replace(f.dataset.expr,'').replace(/^[,\s]+|[,\s]+$/g,'');
   f.dataset.expr=add;f.prompt.value=sd?(cur?cur+', ':'')+add:add;
   if(sd&&+f.denoise.value>0.65)f.denoise.value=0.55};
+$('#ratios').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const f=$('#f-gen'),W=f.elements.w,H=f.elements.h;
+  if(b.dataset.r==='swap'){[W.value,H.value]=[H.value,W.value];return}
+  const[a,c]=b.dataset.r.split(':').map(Number),area=Math.max(500000,Math.min(1.2e6,(+W.value||1024)*(+H.value||1024))),k=Math.sqrt(area/(a*c)),q=f.dataset.g==='sdxl'?8:16;
+  W.value=Math.round(a*k/q)*q;H.value=Math.round(c*k/q)*q;f.dispatchEvent(new Event('input',{bubbles:true}))};
 $('#f-edit').onsubmit=e=>{e.preventDefault();const f=e.target,v=IV.edit;
   if(!v.img)return need(f,'먼저 이미지를 올려 주세요.');
   const m=v.hasMask()?v.maskData():null;
@@ -655,6 +679,7 @@ document.addEventListener('click',async e=>{
   const im=e.target.closest('.res figure img');if(im){openFrom(im);return}
   const b=e.target.closest('button[data-u]');if(!b)return;
   const to=b.dataset.to,u=b.dataset.u;
+  if(to==='folder'){try{const r=await api('/api/open',{file:u});toast(r.error?r.error:'폴더를 열었어요: '+r.path)}catch{toast('폴더를 열지 못했어요.')}return}
   if(to==='info'){show('info');infoLoad(await urlToDataURL(u),u.split('/').pop());return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
   IV[to].set(await urlToDataURL(u));show(to);
@@ -867,12 +892,17 @@ const fmtSize=b=>b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(0)+' MB';
 const DIRN={checkpoints:'체크포인트',loras:'LoRA',embeddings:'임베딩',controlnet:'ControlNet',vae:'VAE',upscale_models:'업스케일',diffusion_models:'디퓨전 모델',text_encoders:'텍스트 인코더',clip_vision:'CLIP Vision',unet:'UNet',clip:'CLIP'};
 async function loadManage(){
   let m;try{m=await api('/api/manage')}catch{return}
-  const card=(f,kind,d)=>`<div class="mcard"><b title="${esc(f.name)}">${esc(f.name)}</b><small>${f.name.endsWith('.part')?'받다 만 파일 · ':''}${fmtSize(f.size)}</small><button type="button" class="ghost del" data-kind="${kind}" data-dir="${esc(d||'')}" data-name="${esc(f.name)}">삭제</button></div>`;
+  const FAMN={auto:'자동',sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea',chroma:'Chroma',qwen:'Qwen',hidden:'목록에서 숨김'};
+  const HOW={header:'파일 내용으로 확인',name:'이름으로 추정',manual:'직접 지정'};
+  const famSel=f=>f.family?`<label class="famsel">계열 <select class="fam" data-dir="${esc(f.dirname||'')}" data-name="${esc(f.name)}">${Object.entries(FAMN).map(([k,v])=>`<option value="${k}"${(f.override||'auto')===k?' selected':''}>${v}</option>`).join('')}</select></label><small>${f.override&&f.override!=='auto'?'직접 지정':'자동 판별'}: ${esc(FAMN[f.family]||f.family)} (${HOW[f.how]||''})${f.all_in_one?' · 올인원':''}</small>`:'';
+  const card=(f,kind,d)=>`<div class="mcard"><b title="${esc(f.name)}">${esc(f.name)}</b><small>${f.name.endsWith('.part')?'받다 만 파일 · ':''}${fmtSize(f.size)}</small>${famSel({...f,dirname:d})}<button type="button" class="ghost del" data-kind="${kind}" data-dir="${esc(d||'')}" data-name="${esc(f.name)}">삭제</button></div>`;
   const grp=(title,list,kind,d)=>list.length?`<section class="mgrp"><h4>${esc(title)} <small>${list.length}개 · ${fmtSize(list.reduce((a,f)=>a+f.size,0))}</small></h4><div class="mgrid">${list.map(f=>card(f,kind,d)).join('')}</div></section>`:'';
   const h=[grp('대화 모델 (Ollama)',m.llm,'ollama')];
   for(const [d,fs] of Object.entries(m.folders))h.push(grp(DIRN[d]||d,fs,'file',d));
   $('#manage').innerHTML=h.join('')||'<p class="empty">설치된 파일이 없어요.</p>';
 }
+$('#manage').onchange=async e=>{const s=e.target.closest('.fam');if(!s)return;
+  const r=await api('/api/family',{folder:s.dataset.dir,name:s.dataset.name,family:s.value});toast(r.error||'계열을 바꿨어요. 이미지 생성 탭 목록에 반영돼요.');loadManage();loadLists()};
 $('#manage').onclick=async e=>{
   const b=e.target.closest('.del');if(!b)return;
   if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;

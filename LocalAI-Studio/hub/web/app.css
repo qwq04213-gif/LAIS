@@ -240,3 +240,5 @@ form .go{position:sticky;top:0;z-index:5;width:100%;box-shadow:0 6px 10px -6px r
 .gloss{display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:8px 18px;margin:10px 0}.gloss dt{font-weight:600}.gloss dd{margin:0;color:var(--mute);line-height:1.6}.gloss dd b{color:var(--tx);font-weight:600}
 .cov{border-collapse:collapse;width:100%;font-size:13px}.cov th,.cov td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left}.cov .y{color:#5fd38d}.cov .p{color:#e7b84b}.cov .n{color:var(--mute)}
 @media(max-width:800px){.gloss{grid-template-columns:1fr}}
+.ratios{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;color:var(--mute);margin:6px 0}
+.famsel{display:flex;gap:6px;align-items:center;font-size:12.5px}.famsel select{flex:1;min-width:0}

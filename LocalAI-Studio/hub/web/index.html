@@ -162,7 +162,7 @@
     <div class="work" hidden>
       <div class="pane">
         <div class="phead">원본 <small>마스크를 칠할 수 있어요</small></div>
-        <div class="stage"><img alt="편집할 이미지"><canvas></canvas><canvas class="pvw"></canvas><div class="ring"></div></div>
+        <div class="stage"><img alt="편집할 이미지"><canvas></canvas><div class="ring"></div></div>
       </div>
       <div class="pane outp" hidden>
         <div class="phead">결과</div>
@@ -181,14 +181,16 @@
       <label><input type="checkbox" class="erase"> 지우개</label>
       <button type="button" class="ghost clr">마스크 지우기</button>
       <span class="autosel"><b>자동 선택</b>
-        <button type="button" class="ghost am-face">얼굴</button>
-        <select class="am-part"><option value="face">얼굴만</option><option value="head">머리카락까지</option></select>
         <button type="button" class="ghost am-bg">배경</button>
         <button type="button" class="ghost am-inv">선택 반전</button>
-        <label class="seltool" title="켜고 이미지를 클릭하면 같은 옷·같은 부위가 자동으로 선택돼요. 마우스를 올리면 선택될 영역이 파랗게 미리 보여요."><input type="checkbox" class="wand"> <b>선택 도구</b> (클릭한 옷·부위 자동 선택)</label>
-        <label>허용치 <input type="range" class="tol" min="3" max="80" value="25"></label>
-        <label>경계 민감도 <input type="range" class="edge" min="0" max="100" value="50"></label>
-        <label><input type="checkbox" class="wand-all"> 같은 색 전체</label>
+        <button type="button" class="ghost am-undo">되돌리기</button>
+        <span class="sam-on" hidden>
+          <label class="seltool" title="켜고 이미지를 클릭하면 클릭한 물체·옷·부위가 한 번에 선택돼요."><input type="checkbox" class="wand"> <b>선택 도구</b> (클릭한 곳 자동 선택)</label>
+          <label>범위 <select class="sam-level"><option value="0">작게</option><option value="1" selected>보통</option><option value="2">크게</option></select></label>
+        </span>
+        <span class="sam-off">
+          <button type="button" class="ghost sam-install" title="작은 AI 모델(MobileSAM, 약 45MB)과 실행 도구(onnxruntime)를 한 번만 설치해요.">선택 도구 설치 (약 45MB)</button>
+        </span>
       </span>
       <button type="button" class="ghost zoom">원본 크게 보기</button>
       <button type="button" class="ghost swap">다른 이미지</button>
@@ -199,7 +201,7 @@
 
 <!-- 이미지 생성 -->
 <section class="view split" id="v-gen">
-  <form id="f-gen" data-g="sdxl" autocomplete="off">
+  <form id="f-gen" data-g="sdxl" autocomplete="off" novalidate>
     <div class="presets" data-presets></div>
     <button class="go">이미지 생성</button>
     <p class="warn" id="w-gen" hidden></p>
@@ -228,9 +230,15 @@
     <p class="hint" data-for="flux chroma">FLUX 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
     <label class="f" data-for="sdxl chroma">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <div class="row">
-      <label class="f">가로<input type="number" name="w" value="1024" step="64" min="256" max="2048"></label>
-      <label class="f">세로<input type="number" name="h" value="1024" step="64" min="256" max="2048"></label>
+      <label class="f">가로<input type="number" name="w" value="1024" step="8" min="256" max="2048"></label>
+      <label class="f">세로<input type="number" name="h" value="1024" step="8" min="256" max="2048"></label>
     </div>
+    <div class="ratios" id="ratios"><span>비율</span>
+      <button type="button" class="chip" data-r="1:1">1:1</button><button type="button" class="chip" data-r="4:3">4:3</button><button type="button" class="chip" data-r="3:4">3:4</button>
+      <button type="button" class="chip" data-r="3:2">3:2</button><button type="button" class="chip" data-r="2:3">2:3</button><button type="button" class="chip" data-r="16:9">16:9</button>
+      <button type="button" class="chip" data-r="9:16">9:16</button><button type="button" class="chip" data-r="21:9">21:9</button><button type="button" class="chip" data-r="swap" title="가로와 세로를 바꿔요">↔</button>
+    </div>
+    <p class="hint plain">가로·세로는 8의 배수로 자동 맞춰요(FLUX 계열은 16). 원하는 숫자를 직접 적어도 돼요.</p>
     <div class="row">
       <label class="f">크기 프리셋<select id="size-preset"><option value="">선택</option><option value="832x1216">세로 832×1216</option><option value="1216x832">가로 1216×832</option><option value="1024x1024">정사각 1024×1024</option><option value="768x1344">세로 길게 768×1344</option><option value="1344x768">가로 길게 1344×768</option></select></label>
       <label class="f">장수<input type="number" name="n" value="1" min="1" max="8"></label>
