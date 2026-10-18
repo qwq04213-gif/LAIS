@@ -42,7 +42,7 @@ HFURL = os.environ.get("HF_URL", "https://huggingface.co")
 GHURL = os.environ.get("GITHUB_URL", "https://github.com")
 NODEMAP_URL = os.environ.get("NODEMAP_URL", "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json")
 PROFILES = json.loads((HUB / "profiles.json").read_text(encoding="utf-8"))
-FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg"}
+FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg", "ultralytics/bbox", "ipadapter", "clip_vision"}
 EXT = (".safetensors", ".ckpt", ".pth", ".pt", ".gguf", ".bin")
 DEFAULT_NEG = ("lowres, bad anatomy, bad hands, extra digits, missing fingers, worst quality, "
                "jpeg artifacts, watermark, text, signature")
@@ -942,7 +942,7 @@ def do_edit(p, J):
             if canny and not has_node("Canny"):
                 warn(J, "이 ComfyUI 에는 Canny 노드가 없어 전처리 없이 사용했어요.")
                 canny = False
-            q["cn"] = dict(model=p["cn_model"], image=put_input(cc, J), canny=canny,
+            q["cn"] = dict(model=p["cn_model"], image=put_input(cc, J), canny=canny, union=cn_union(p),
                            strength=clamp(num(p, "cn_strength", 0.7), 0.0, 2.0),
                            start=clamp(num(p, "cn_start", 0.0), 0.0, 1.0), end=clamp(num(p, "cn_end", 1.0), 0.0, 1.0))
             extra["ControlNet"] = f'{p["cn_model"]} {q["cn"]["strength"]}'
@@ -1172,15 +1172,172 @@ def feat_color(p, J):
     return [(img, dict(kind="feat-color", extra={"Adjust": f"밝기 {vals['bright']:.0f} 대비 {vals['contrast']:.0f} 채도 {vals['sat']:.0f} 선명도 {vals['sharp']:.0f} 흐림 {blur:.0f}"}), None)]
 
 
+def fill_node(node, given):
+    """ComfyUI 노드의 필수 입력을 /object_info 에서 읽어, 내가 준 값(given)은 그대로 쓰고 나머지는 기본값으로 채워요.
+    (확장 노드는 버전마다 입력이 달라서, 이름을 외워 두지 않고 설치된 노드에 맞춰요.)"""
+    ins = dict(given)
+    spec_all = (caps()["info"].get(node) or {}).get("input", {})
+    for k, spec in {**(spec_all.get("required") or {})}.items():
+        if k in ins or not isinstance(spec, list) or not spec:
+            continue
+        t, o = spec[0], (spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {})
+        if t == "COMBO":
+            opts = o.get("options") or []
+            ins[k] = o.get("default", opts[0] if opts else "")
+        elif isinstance(t, list):
+            ins[k] = t[0] if t else ""
+        elif "default" in o:
+            ins[k] = o["default"]
+        elif t == "BOOLEAN":
+            ins[k] = True
+        elif t == "STRING":
+            ins[k] = ""
+    return ins
+
+
+def combo_opts(node, key):
+    """노드 입력 한 칸이 고르기(콤보)일 때 선택지 목록 (없으면 빈 목록)."""
+    spec = ((caps()["info"].get(node) or {}).get("input", {}).get("required") or {}).get(key)
+    if not isinstance(spec, list) or not spec:
+        return []
+    if isinstance(spec[0], list):
+        return spec[0]
+    if spec[0] == "COMBO" and len(spec) > 1 and isinstance(spec[1], dict):
+        return spec[1].get("options") or []
+    return []
+
+
+def feat_detailer(p, J):
+    """얼굴·손 자동 보정. 감지 모델을 /object_info 에서 찾아 부위별로 FaceDetailer 를 이어 붙여요."""
+    img = load_img(p["image"]).convert("RGB")
+    if max(img.size) > 2048:
+        k = 2048 / max(img.size)
+        img = img.resize((round(img.width * k), round(img.height * k)), RS.LANCZOS)
+    dets = combo_opts("UltralyticsDetectorProvider", "model_name")
+    target = p.get("target") if p.get("target") in ("face", "hand", "both") else "face"
+    base = {"face": "detailed face, beautiful detailed eyes", "hand": "detailed hands, five fingers"}
+    user = (p.get("prompt") or "").strip()
+    passes = []
+    for part in (("face", "hand") if target == "both" else (target,)):
+        det = next((d for d in dets if part in d.lower() and d.lower().startswith("bbox")), None) or next((d for d in dets if part in d.lower()), None)
+        if not det:
+            raise RuntimeError(f"{'얼굴' if part == 'face' else '손'}을 찾는 감지 모델이 없어요. '설치와 모델' 탭의 "
+                               f"'{'얼굴' if part == 'face' else '손'} 감지 모델'을 설치한 뒤 ComfyUI 를 다시 시작해 주세요.")
+        passes.append((det, (base[part] + (", " + user if user else "")).strip()))
+    for _, t in passes:
+        if blocked(t):
+            raise ValueError(BLOCK_MSG)
+    q = sd(dict(p, denoise=clamp(num(p, "denoise", 0.4), 0.1, 0.8)), passes[0][1], [], J)
+    q["seed"] = seed_of(p)
+    J["msg"] = "얼굴·손 찾아서 다시 그리는 중"
+    g = flows.wf_detailer(q, put_input(img, J), passes, fill_node)
+    res = run_wf(g, J)[0]
+    return [(res, info_sd(q, res.size, "feat-detailer", Detailer=" + ".join(d for d, _ in passes)), g)]
+
+
+def feat_ipadapter(p, J):
+    """참고 이미지로 그리기(IPAdapter plus). 스타일/얼굴 중 무엇을 따를지에 따라 프리셋을 골라요."""
+    ref = load_img(p["image"]).convert("RGB")
+    mode = "face" if p.get("mode") == "face" else "style"
+    presets = combo_opts("IPAdapterUnifiedLoader", "preset")
+    up = [(x, x.upper()) for x in presets]
+    if mode == "face":
+        preset = next((x for x, u in up if "PLUS" in u and "FACE" in u), None) or next((x for x, u in up if "FACE" in u), None)
+    else:
+        preset = next((x for x, u in up if u.startswith("PLUS (HIGH")), None) or next((x for x, u in up if "PLUS" in u and "FACE" not in u), None)
+    preset = preset or (presets[0] if presets else ("PLUS FACE (portraits)" if mode == "face" else "PLUS (high strength)"))
+    wts = combo_opts("IPAdapter", "weight_type")
+    wtype = "style transfer" if mode == "style" and "style transfer" in wts else ("linear" if "linear" in wts or not wts else wts[0])
+    weight = clamp(num(p, "weight", 0.7), 0.1, 1.5)
+    w, h = (clamp(num(p, k, 1024, int) // 8 * 8, 256, 2048) for k in ("w", "h"))
+    rng = random.Random(num(p, "seed", -1, int))
+    q = sd(p, *prep(p, J, "tags", rng), J)
+    J["msg"] = "참고 이미지를 보며 그리는 중"
+    g = flows.wf_ipadapter(q, put_input(ref, J), preset, wtype, weight, w, h, fill_node)
+    res = run_wf(g, J)[0]
+    return [(res, info_sd(q, res.size, "feat-ipadapter", IPAdapter=f"{preset} / {wtype} / {weight}"), g)]
+
+
 def do_feat(p, J):
-    fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color}.get(p.get("feature"))
+    fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color,
+          "detailer": feat_detailer, "ipadapter": feat_ipadapter}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
     miss = [n for n in spec.get("needs", {}).get("nodes", []) if caps()["nodes"] and n not in caps()["nodes"]]
     if miss:
-        raise RuntimeError("이 ComfyUI 에는 필요한 노드가 없어요: " + ", ".join(miss) + ". ComfyUI 를 업데이트해 주세요.")
+        pack = spec.get("needs", {}).get("pack")
+        raise RuntimeError("이 ComfyUI 에는 필요한 노드가 없어요: " + ", ".join(miss) + ". " +
+                           (f"확장 '{pack}' 을(를) 설치하고 ComfyUI 를 다시 시작해 주세요." if pack else "ComfyUI 를 업데이트해 주세요."))
     return fn(p, J)
+
+
+CN_UNION = {"pose": "openpose", "depth": "depth", "canny": "canny/lineart/anime_lineart/mlsd", "lineart": "canny/lineart/anime_lineart/mlsd"}
+CN_PREP = {"canny": ["Canny"], "pose": ["DWPreprocessor", "OpenposePreprocessor"],
+           "depth": ["DepthAnythingV2Preprocessor", "DepthAnythingPreprocessor", "Zoe-DepthMapPreprocessor", "MiDaS-DepthMapPreprocessor"],
+           "lineart": ["LineArtPreprocessor", "AnimeLineArtPreprocessor"]}
+
+
+def cn_union(p):
+    """쉬운 모드에서 고른 지도 종류 → 통합(union) ControlNet 모델에 알려 줄 값. 통합 모델이 아니거나 노드가 없으면 None."""
+    t = CN_UNION.get(str(p.get("cn_type") or ""))
+    name = str(p.get("cn_model") or "").lower()
+    return t if t and ("union" in name or "promax" in name) and has_node("SetUnionControlNetType") else None
+
+
+def control_prep(p):
+    """사진 한 장에서 ControlNet 용 지도(포즈·윤곽선·깊이·선화)를 뽑아 미리보기로 돌려줘요."""
+    kind = str(p.get("type") or "")
+    if kind not in CN_PREP:
+        return {"error": "알 수 없는 종류예요."}
+    try:
+        img = load_img(p["image"])
+    except Exception:
+        return {"error": "이미지를 읽을 수 없어요."}
+    if max(img.size) > 1536:
+        k = 1536 / max(img.size)
+        img = img.resize((round(img.width * k), round(img.height * k)), RS.LANCZOS)
+    try:
+        wait_comfy()
+    except RuntimeError as e:
+        return {"error": str(e)}
+    node = next((n for n in CN_PREP[kind] if has_node(n)), None)
+    if not node:
+        return {"error": "이 ComfyUI 에는 이 지도를 만드는 노드가 없어요." if kind == "canny" else
+                "이 지도를 만드는 확장(ComfyUI's ControlNet Auxiliary Preprocessors)이 설치되어 있지 않아요.",
+                "missing": CN_PREP[kind][0], "need_pack": kind != "canny"}
+    claim("image")
+    J = {"id": "prep", "state": "running", "msg": "", "images": [], "tmp": []}
+    w = flows.WF()
+    li = w.add("LoadImage", image=put_input(img, J))
+    ins = {"image": [li, 0]}
+    res = clamp(max(img.size) // 64 * 64, 512, 1024)
+    for k, spec in ((caps()["info"].get(node) or {}).get("input", {}).get("required", {}) or {}).items():
+        if k == "image" or not isinstance(spec, list) or not spec:
+            continue
+        t, o = spec[0], (spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {})
+        if isinstance(t, list):
+            ins[k] = "enable" if "enable" in t else (t[0] if t else "")
+        elif k == "resolution":
+            ins[k] = res
+        elif "default" in o:
+            ins[k] = o["default"]
+        elif t == "BOOLEAN":
+            ins[k] = True
+    if node == "Canny":
+        ins.setdefault("low_threshold", 0.4)
+        ins.setdefault("high_threshold", 0.8)
+    out = w.add(node, **ins)
+    w.add("PreviewImage", images=[out, 0])
+    try:
+        r = run_wf(w.n, J)[0]
+    except RuntimeError as e:
+        return {"error": f"지도를 만들지 못했어요: {e}"}
+    finally:
+        _clean_tmp(J)
+    b = io.BytesIO()
+    r.save(b, "PNG")
+    return {"image": "data:image/png;base64," + base64.b64encode(b.getvalue()).decode(), "node": node, "w": r.width, "h": r.height}
 
 
 def do_gen(p, J):
@@ -1209,7 +1366,7 @@ def do_gen(p, J):
             if prep_canny and not has_node("Canny"):
                 warn(J, "이 ComfyUI 에는 Canny 노드가 없어 전처리 없이 사용했어요.")
                 prep_canny = False
-            q["cn"] = dict(model=p["cn_model"], image=put_input(cover(cnimg, (w0, h0)), J), canny=prep_canny,
+            q["cn"] = dict(model=p["cn_model"], image=put_input(cover(cnimg, (w0, h0)), J), canny=prep_canny, union=cn_union(p),
                            strength=clamp(num(p, "cn_strength", 0.7), 0.0, 2.0),
                            start=clamp(num(p, "cn_start", 0.0), 0.0, 1.0), end=clamp(num(p, "cn_end", 1.0), 0.0, 1.0))
             extra["ControlNet"] = f'{p["cn_model"]} {q["cn"]["strength"]}'
@@ -1457,11 +1614,12 @@ def do_wf(p, J):
     have = caps()["nodes"]
     miss = sorted({n["class_type"] for n in g.values() if have and n["class_type"] not in have})
     if miss:
-        raise RuntimeError("설치되지 않은 노드가 있어요: " + ", ".join(miss) + " (ComfyUI 화면의 Manager 에서 설치하세요)")
+        raise RuntimeError("설치되지 않은 노드가 있어요: " + ", ".join(miss) + " ([워크플로] 탭에서 [분석]을 누르면 설치할 곳을 찾아 줘요)")
     J["msg"] = "워크플로 실행 중"
     return [(im, dict(kind="wf"), g) for im in run_wf(g, J)]
 
 
+DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄"}
 
 
@@ -1470,6 +1628,8 @@ def out_path(rel):
     parts = [x for x in urllib.parse.unquote(rel).split("/") if x]
     if len(parts) == 2 and parts[0] in OUT_SUB.values() or parts[:1] == ["기타"] and len(parts) == 2:
         return OUT / parts[0] / Path(parts[1]).name
+    if len(parts) == 3 and parts[0] in OUT_SUB.values() and DATE_RX.match(parts[1]):      # 날짜별로 정리한 폴더
+        return OUT / parts[0] / parts[1] / Path(parts[2]).name
     return OUT / Path(parts[-1] if parts else "x").name
 
 
@@ -1477,7 +1637,27 @@ WAN_SIZES = {"832x480": "가로 480p", "480x832": "세로 480p", "640x640": "정
 
 
 def wan_models():
-    return [n for n in files("diffusion_models") if "wan" in n.lower()]
+    return [n for n in files("diffusion_models") if "wan" in n.lower() and "14b" not in n.lower()]
+
+
+def wan14_parts(i2v):
+    """Wan 2.2 14B 에 필요한 파일을 이름으로 찾아요: 고노이즈/저노이즈 모델, UMT5, Wan 2.1 VAE, (있으면) 4단계 가속 LoRA."""
+    dm, te, va, lo = files("diffusion_models"), files("text_encoders"), files("vae"), files("loras")
+    kind = "i2v" if i2v else "t2v"
+    pick = lambda lst, *keys: next((n for n in lst if all(k in n.lower() for k in keys)), None)
+    fast = lambda side: pick(lo, "lightx2v", kind, side) or pick(lo, "lightning", kind, side)
+    return dict(high=pick(dm, "14b", kind, "high"), low=pick(dm, "14b", kind, "low"), te=pick(te, "umt5"),
+                vae=pick(va, "wan_2.1") or pick(va, "wan2.1") or pick(va, "wan_2_1"),
+                lora_high=fast("high"), lora_low=fast("low"))
+
+
+def wan14_state():
+    out = {}
+    for kind in ("i2v", "t2v"):
+        f = wan14_parts(kind == "i2v")
+        out[kind] = bool(f["high"] and f["low"] and f["te"] and f["vae"])
+        out["fast_" + kind] = bool(f["lora_high"] and f["lora_low"])
+    return out
 
 
 def wan_parts(p=None):
@@ -1492,7 +1672,65 @@ def wan_parts(p=None):
     return r
 
 
+def do_vid14(p, J):
+    """Wan 2.2 14B (고노이즈 + 저노이즈 2단계). 시작 이미지가 있으면 이미지→영상, 없으면 글→영상. ※ 실제 PC 로 검증하지 못한 기능이에요."""
+    for node in ("KSamplerAdvanced", "CreateVideo", "SaveVideo", "ModelSamplingSD3"):
+        if not has_node(node):
+            raise RuntimeError(f"이 ComfyUI 에는 필요한 노드({node})가 없어요. ComfyUI 를 업데이트해 주세요.")
+    img = load_img(p["image"]) if p.get("image") else None
+    need = "WanImageToVideo" if img is not None else "EmptyHunyuanLatentVideo"
+    if not has_node(need):
+        raise RuntimeError(f"이 ComfyUI 에는 영상 노드({need})가 없어요. ComfyUI 를 업데이트해 주세요.")
+    ct = caps().get("clip_types") or []
+    if ct and "wan" not in ct:
+        raise RuntimeError("이 ComfyUI 는 Wan 텍스트 인코더 형식을 지원하지 않아요. ComfyUI 를 업데이트해 주세요.")
+    f = wan14_parts(img is not None)
+    kind = "이미지→영상" if img is not None else "글→영상"
+    miss = [n for n, k in ((f"Wan 2.2 14B {kind} 고노이즈 모델", "high"), (f"Wan 2.2 14B {kind} 저노이즈 모델", "low"),
+                           ("UMT5 텍스트 인코더", "te"), ("Wan 2.1 VAE", "vae")) if not f[k]]
+    if miss:
+        raise RuntimeError("없는 파일: " + ", ".join(miss) + f". '설치와 모델' 탭에서 'Wan 2.2 14B {kind}'를 설치해 주세요.")
+    fast = bool(p.get("fast"))
+    if fast and not (f["lora_high"] and f["lora_low"]):
+        warn(J, "4단계 가속 LoRA 가 없어 일반 단계로 만들어요. '설치와 모델'에서 'Wan 2.2 4단계 가속 LoRA'를 설치하면 빨라져요.")
+        fast = False
+    rng = random.Random(seed_of(p))
+    text, _ = prep(p, J, "caption", rng)
+    if not text.strip():
+        raise ValueError("어떤 영상을 만들지 프롬프트를 적어 주세요.")
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    try:
+        w, h = (int(x) for x in (p.get("size") or "832x480").split("x"))
+    except ValueError:
+        w, h = 832, 480
+    if img is not None and p.get("keep_ratio"):
+        k = (w * h / (img.width * img.height)) ** 0.5
+        w, h = img.width * k, img.height * k
+    w, h = (clamp(int(round(x / 16)) * 16, 256, 1280) for x in (w, h))
+    fps = clamp(num(p, "fps", 16, int), 8, 30)
+    sec = clamp(num(p, "sec", 3.0), 1.0, 8.0)
+    frames = clamp(int(round(sec * fps / 4)) * 4 + 1, 9, 161)
+    steps = 4 if fast else clamp(num(p, "steps", 20, int), 4, 60)
+    cfg = 1.0 if fast else clamp(num(p, "cfg", 3.5), 1.0, 20.0)
+    vram = (GPU or {}).get("vram_gb", 0)
+    if vram and vram < 16:
+        warn(J, f"14B 모델은 VRAM {vram}GB 에서는 매우 느리거나 메모리 부족이 날 수 있어요. 안 되면 5B 로 바꿔 보세요.")
+    q = dict(high=f["high"], low=f["low"], te=f["te"], vae=f["vae"], prompt=text, negative=(p.get("negative") or "").strip() or flows.WAN_NEG,
+             seed=seed_of(p), w=w, h=h, frames=frames, fps=fps, steps=steps, cfg=cfg, split=max(1, steps // 2),
+             sampler="euler" if "euler" in (caps()["samplers"] or ["euler"]) else (caps()["samplers"] or ["euler"])[0], scheduler="simple",
+             shift=clamp(num(p, "shift", 5.0), 1.0, 20.0), lora_high=f["lora_high"] if fast else None, lora_low=f["lora_low"] if fast else None)
+    start = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J) if img is not None else None
+    J["msg"] = f"14B 영상 만드는 중 ({w}×{h}, {frames}프레임, 2단계) — 꽤 오래 걸려요"
+    res = run_wf(flows.wf_video14(q, start), J, raw=True)
+    info = dict(kind="vid", prompt=text, negative=q["negative"], seed=q["seed"], w=w, h=h, steps=steps, cfg=cfg, model=f"{f['high']} + {f['low']}",
+                frames=frames, fps=fps, start_image=bool(start), fast=fast)
+    return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
+
+
 def do_vid(p, J):
+    if p.get("wan_ver") == "14b":
+        return do_vid14(p, J)
     """Wan 2.2 5B 로 영상 만들기(글→영상, 이미지를 올리면 그 이미지에서 시작). 결과: [(바이트, 확장자, 정보)]"""
     for node, why in (("Wan22ImageToVideoLatent", "Wan 2.2 영상 노드"), ("CreateVideo", "영상 만들기 노드"), ("SaveVideo", "영상 저장 노드")):
         if not has_node(node):
@@ -1723,7 +1961,7 @@ def batch_scan(p):
         d = batch_folder(p)
     except ValueError as e:
         return {"error": str(e)}
-    fs = batch_files(d, bool(p.get("sub")))
+    fs = batch_files(d, bool(p.get("sub") or p.get("outsub")))
     return {"folder": str(d), "count": len(fs), "names": [f.name for f in fs[:4]], "mb": round(sum(fsize(f) for f in fs) / 1048576, 1), "over": len(fs) > BATCH_MAX}
 
 
@@ -1818,7 +2056,7 @@ def do_batch(p, J):
     op = p.get("op")
     if op not in BATCH_OPS:
         raise ValueError("알 수 없는 처리예요.")
-    imgs = batch_files(batch_folder(p), bool(p.get("sub")))[:BATCH_MAX]
+    imgs = batch_files(batch_folder(p), bool(p.get("sub") or p.get("outsub")))[:BATCH_MAX]
     if not imgs:
         raise ValueError("처리할 이미지가 없어요. (png · jpg · webp · bmp)")
     jpg = p.get("fmt") == "jpg"
@@ -2008,9 +2246,9 @@ def gal_favs():
 def gal_fav(p):
     rel = str(p.get("file") or "")
     parts = [x for x in urllib.parse.unquote(rel[5:] if rel.startswith("/out/") else rel).split("/") if x]
-    if len(parts) != 2 or parts[0] not in OUT_SUB.values():
+    if len(parts) not in (2, 3) or parts[0] not in OUT_SUB.values() or (len(parts) == 3 and not DATE_RX.match(parts[1])):
         return {"error": "알 수 없는 파일"}
-    key = parts[0] + "/" + Path(parts[1]).name
+    key = parts[0] + "/" + Path(parts[-1]).name
     with _PLOCK:
         fav = gal_favs()
         (fav.add if p.get("on") else fav.discard)(key)
@@ -2043,6 +2281,94 @@ def gal_prompt(path, mtime):
     return txt
 
 
+def out_files(d):
+    """결과 하위 폴더(예: 생성)의 이미지·영상 파일. 날짜별로 정리한 폴더(2026-10-18)도 한 단계 들여다봐요."""
+    try:
+        for f in d.iterdir():
+            if f.is_file():
+                if f.suffix.lower() in GAL_EXT:
+                    yield f
+            elif f.is_dir() and DATE_RX.match(f.name):
+                for g in f.iterdir():
+                    if g.is_file() and g.suffix.lower() in GAL_EXT:
+                        yield g
+    except OSError:
+        return
+
+
+def gal_delete(p):
+    """갤러리에서 고른 파일을 컴퓨터에서 지워요(영상의 설정 파일·즐겨찾기 표시도 함께). 복구할 수 없어요."""
+    gone, bad = 0, 0
+    keys = []
+    for rel in [str(x) for x in (p.get("files") or [])][:200]:
+        if not rel.startswith("/out/"):
+            bad += 1
+            continue
+        parts = [x for x in urllib.parse.unquote(rel[5:]).split("/") if x]
+        fp = out_path(rel[5:])
+        if not (len(parts) in (2, 3) and parts[0] in OUT_SUB.values() and fp.suffix.lower() in GAL_EXT and fp.is_file()):
+            bad += 1
+            continue
+        try:
+            fp.unlink()
+            side = fp.with_name(fp.name + ".json")
+            if side.is_file():
+                side.unlink()
+            keys.append(parts[0] + "/" + fp.name)
+            gone += 1
+        except OSError:
+            bad += 1
+        if len(parts) == 3:      # 비어 버린 날짜 폴더는 치워요
+            try:
+                fp.parent.rmdir()
+            except OSError:
+                pass
+    if keys:
+        with _PLOCK:
+            fav = gal_favs()
+            if fav & set(keys):
+                GAL_FILE.write_text(json.dumps({"favs": sorted(fav - set(keys))}, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "deleted": gone, "failed": bad}
+
+
+def organize_outputs(p):
+    """결과 폴더(생성·편집 …)에 쌓인 파일을 만든 날짜별 폴더(예: 생성/2026-10-18)로 옮겨요. 이동만 하고 지우지 않아요."""
+    run = p.get("mode") == "run"
+    keep_today = bool(p.get("keep_today", True))
+    today = time.strftime("%Y-%m-%d")
+    plan, total = {}, 0
+    for sub in OUT_SUB.values():
+        d = OUT / sub
+        if not d.is_dir():
+            continue
+        for f in d.iterdir():
+            if not (f.is_file() and f.suffix.lower() in GAL_EXT):
+                continue
+            day = time.strftime("%Y-%m-%d", time.localtime(f.stat().st_mtime))
+            if keep_today and day == today:
+                continue
+            plan.setdefault(sub, {}).setdefault(day, []).append(f)
+            total += 1
+    if not run:
+        return {"total": total, "days": {s: {d: len(v) for d, v in sorted(m.items())} for s, m in plan.items()}}
+    moved = failed = 0
+    for sub, m in plan.items():
+        for day, fs in m.items():
+            dd = OUT / sub / day
+            dd.mkdir(exist_ok=True)
+            for f in fs:
+                try:
+                    dst = _unique(dd / f.name)
+                    side = f.with_name(f.name + ".json")
+                    f.rename(dst)
+                    if side.is_file():
+                        side.rename(dst.with_name(dst.name + ".json"))
+                    moved += 1
+                except OSError:
+                    failed += 1
+    return {"ok": True, "moved": moved, "failed": failed}
+
+
 def gallery(q):
     kind, text, off = (q.get("kind") or [""])[0], (q.get("q") or [""])[0].strip().lower(), int((q.get("offset") or ["0"])[0] or 0)
     only_fav, lim = (q.get("fav") or [""])[0] == "1", 60
@@ -2053,13 +2379,12 @@ def gallery(q):
         d = OUT / sub
         if not d.is_dir():
             continue
-        for f in d.iterdir():
-            if f.suffix.lower() in GAL_EXT and f.is_file():
-                try:
-                    st = f.stat()
-                except OSError:
-                    continue
-                rows.append((st.st_mtime, sub, f))
+        for f in out_files(d):
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            rows.append((st.st_mtime, sub, f))
     rows.sort(key=lambda r: r[0], reverse=True)
     out = []
     for mt, sub, f in rows:
@@ -2073,7 +2398,7 @@ def gallery(q):
                 continue
         out.append((mt, sub, f, key, pr))
     page = out[off:off + lim]
-    items = [{"url": "/out/" + urllib.parse.quote(sub) + "/" + urllib.parse.quote(f.name), "kind": sub, "name": f.name, "time": int(mt),
+    items = [{"url": "/out/" + "/".join(urllib.parse.quote(x) for x in f.relative_to(OUT).parts), "kind": sub, "name": f.name, "time": int(mt),
               "fav": key in favs, "video": f.suffix.lower() in (".mp4", ".webm"),
               "prompt": (pr if pr is not None else gal_prompt(f, mt))[:200]} for mt, sub, f, key, pr in page]
     return {"items": items, "total": len(out), "more": off + lim < len(out)}
@@ -2659,8 +2984,13 @@ def worker():
             log("[설치 오류]", t["label"], t["msg"])
 
 
+def cat_name(x):
+    """카탈로그 파일이 저장될 이름 (이름을 바꿔 저장해야 하는 파일은 name 이 있어요)."""
+    return x.get("name") or Path(urllib.parse.urlparse(x["url"]).path).name
+
+
 def img_installed(m):
-    return all((MODELS / x["dir"] / Path(urllib.parse.urlparse(x["url"]).path).name).exists() for x in m["files"])
+    return all((MODELS / x["dir"] / cat_name(x)).exists() for x in m["files"])
 
 
 def expand_ids(ids):
@@ -2687,8 +3017,8 @@ def install(p):
             add_task(m["name"], kind="ollama", model=m["ollama"])
         else:
             for x in m["files"]:
-                add_task(f'{m["name"]} ({Path(urllib.parse.urlparse(x["url"]).path).name})',
-                         kind="file", url=x["url"], dir=x["dir"])
+                add_task(f'{m["name"]} ({cat_name(x)})',
+                         kind="file", url=x["url"], dir=x["dir"], name=x.get("name"))
     c = p.get("custom") or {}
     if str(c.get("url", "")).startswith("http") and c.get("dir") in FOLDERS:
         add_task("직접 추가: " + c["url"][:60], kind="file", url=c["url"], dir=c["dir"],
@@ -3210,7 +3540,7 @@ def lists():
             "flux_ready": bool(fp["t5"] and fp["clip_l"] and fp["vae"]),
             "chroma_ready": bool(fp["t5"] and fp["vae"]),
             "krea2_ready": bool(kp["te"] and kp["vae"]),
-            "wanmodels": wan_models(), "wan_ready": bool(wan_parts()["te"] and wan_parts()["vae"]),
+            "wanmodels": wan_models(), "wan_ready": bool(wan_parts()["te"] and wan_parts()["vae"]), "wan14": wan14_state(),
             "wildcards": sorted(p.stem for p in wc.glob("*.txt")) if wc.is_dir() else [],
             "qwen": bool(find("diffusion_models", "qwen_image_edit") and find("text_encoders", "qwen_2.5_vl")
                          and find("vae", "qwen_image_vae"))}
@@ -3423,7 +3753,7 @@ class Handler(BaseHTTPRequestHandler):
                         break
             if p["kind"] == "batch":
                 try:
-                    p["count"] = len(batch_files(batch_folder(p), bool(p.get("sub")))[:BATCH_MAX])
+                    p["count"] = len(batch_files(batch_folder(p), bool(p.get("sub") or p.get("outsub")))[:BATCH_MAX])
                 except ValueError as e:
                     return self.send_json({"error": str(e)})
                 if not p["count"]:
@@ -3475,6 +3805,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(node_install(p))
         if u == "/api/engine/restart":
             return self.send_json(restart_comfy())
+        if u == "/api/control/prep":
+            return self.send_json(control_prep(p))
+        if u == "/api/gallery/delete":
+            return self.send_json(gal_delete(p))
+        if u == "/api/gallery/organize":
+            return self.send_json(organize_outputs(p))
         if u == "/api/backup/import":
             return self.send_json(backup_import(p))
         if u == "/api/lora/user":
@@ -3508,6 +3844,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 g = flows.parse_graph(p.get("graph"), caps()["info"])
                 return self.send_json({"ok": True, **flows.analyze(g, caps()["nodes"] or None)})
+            except flows.MissingNodes as e:      # 화면용(UI) 워크플로에 없는 노드가 있으면, 어디서 설치할지 도와줄 수 있게 목록을 같이 돌려줘요
+                return self.send_json({"error": str(e), "missing": e.nodes})
             except (ValueError, TypeError) as e:
                 return self.send_json({"error": str(e) if isinstance(e, ValueError) else "JSON 형식이 올바르지 않아요."})
         if u == "/api/open":

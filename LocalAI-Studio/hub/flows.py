@@ -44,19 +44,26 @@ def ksampler(w, q, model, pos, neg, lat, denoise=1.0, steps=None):
                  latent_image=lat, denoise=denoise)
 
 
+def cn_apply(w, cn, pos, neg, vae):
+    """ControlNet 한 개를 positive/negative 에 걸어요. cn: model, image, canny(전처리), union(통합 모델의 종류), strength/start/end."""
+    img = [w.add("LoadImage", image=cn["image"]), 0]
+    if cn.get("canny"):
+        img = [w.add("Canny", image=img, low_threshold=0.4, high_threshold=0.8), 0]
+    loader = [w.add("ControlNetLoader", control_net_name=cn["model"]), 0]
+    if cn.get("union"):      # xinsir union 같은 '여러 종류를 한 모델로' 모델은 지도 종류를 알려 줘야 해요
+        loader = [w.add("SetUnionControlNetType", control_net=loader, type=cn["union"]), 0]
+    ap = w.add("ControlNetApplyAdvanced", positive=pos, negative=neg, control_net=loader, image=img,
+               strength=cn["strength"], start_percent=cn["start"], end_percent=cn["end"], vae=vae)
+    return [ap, 0], [ap, 1]
+
+
 def wf_gen(q):
     """텍스트→이미지. 옵션: 이미지→이미지(init), ControlNet(cn), 하이레스 픽스(hires)."""
     w = WF()
     model, pos, neg, vae = sd_stack(w, q)
     cn = q.get("cn")
     if cn:
-        img = [w.add("LoadImage", image=cn["image"]), 0]
-        if cn.get("canny"):
-            img = [w.add("Canny", image=img, low_threshold=0.4, high_threshold=0.8), 0]
-        loader = w.add("ControlNetLoader", control_net_name=cn["model"])
-        ap = w.add("ControlNetApplyAdvanced", positive=pos, negative=neg, control_net=[loader, 0], image=img,
-                   strength=cn["strength"], start_percent=cn["start"], end_percent=cn["end"], vae=vae)
-        pos, neg = [ap, 0], [ap, 1]
+        pos, neg = cn_apply(w, cn, pos, neg, vae)
     denoise = 1.0
     if q.get("init"):
         li = w.add("LoadImage", image=q["init"])
@@ -79,13 +86,7 @@ def wf_inpaint(q, img, msk):
     lm = w.add("LoadImageMask", image=msk, channel="red")
     cn = q.get("cn")
     if cn:   # 칠한 영역 주변 조각에 ControlNet 을 걸어 윤곽·포즈를 유지해요
-        cim = [w.add("LoadImage", image=cn["image"]), 0]
-        if cn.get("canny"):
-            cim = [w.add("Canny", image=cim, low_threshold=0.4, high_threshold=0.8), 0]
-        loader = w.add("ControlNetLoader", control_net_name=cn["model"])
-        ap = w.add("ControlNetApplyAdvanced", positive=pos, negative=neg, control_net=[loader, 0], image=cim,
-                   strength=cn["strength"], start_percent=cn["start"], end_percent=cn["end"], vae=vae)
-        pos, neg = [ap, 0], [ap, 1]
+        pos, neg = cn_apply(w, cn, pos, neg, vae)
     ic = w.add("InpaintModelConditioning", positive=pos, negative=neg, vae=vae,
                pixels=[li, 0], mask=[lm, 0], noise_mask=True)
     dd = w.add("DifferentialDiffusion", model=model)
@@ -129,6 +130,38 @@ def wf_refine(q, img):
     li = w.add("LoadImage", image=img)
     lat = w.add("VAEEncode", pixels=[li, 0], vae=vae)
     k = ksampler(w, q, model, pos, neg, [lat, 0], q["denoise"])
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
+def wf_detailer(q, img, passes, fill):
+    """얼굴·손 보정(ADetailer 방식): 감지 모델로 부위를 찾아 그 부분만 다시 그려요(Impact Pack 의 FaceDetailer).
+    passes: [(감지 모델 이름, 그 부위 프롬프트)], fill(node, given): 노드의 나머지 입력을 /object_info 로 채워 주는 함수."""
+    w = WF()
+    model, pos, neg, vae = sd_stack(w, q)
+    cur = [w.add("LoadImage", image=img), 0]
+    for det, text in passes:
+        p2 = [w.add("CLIPTextEncode", text=text, clip=w.clip), 0]
+        bd = w.add("UltralyticsDetectorProvider", model_name=det)
+        ins = fill("FaceDetailer", dict(image=cur, model=model, clip=w.clip, vae=vae, positive=p2, negative=neg,
+                                        bbox_detector=[bd, 0], seed=q["seed"], steps=q["steps"], cfg=q["cfg"],
+                                        sampler_name=q["sampler"], scheduler=q["scheduler"], denoise=q["denoise"],
+                                        wildcard=""))
+        cur = [w.add("FaceDetailer", **ins), 0]
+    w.add("PreviewImage", images=cur)
+    return w.n
+
+
+def wf_ipadapter(q, ref, preset, weight_type, weight, width, height, fill):
+    """참고 이미지(IPAdapter plus): 스타일 또는 얼굴을 따라 새로 그려요."""
+    w = WF()
+    model, pos, neg, vae = sd_stack(w, q)
+    li = w.add("LoadImage", image=ref)
+    ld = w.add("IPAdapterUnifiedLoader", model=model, preset=preset)
+    ins = fill("IPAdapter", dict(model=[ld, 0], ipadapter=[ld, 1], image=[li, 0], weight=weight, weight_type=weight_type))
+    ip = w.add("IPAdapter", **ins)
+    lat = [w.add("EmptyLatentImage", width=width, height=height, batch_size=1), 0]
+    k = ksampler(w, q, [ip, 0], pos, neg, lat, 1.0)
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
     return w.n
 
@@ -285,6 +318,37 @@ def wf_video(q, start=None):
     return w.n
 
 
+def wf_video14(q, start=None):
+    """Wan 2.2 14B: 고노이즈 모델이 앞 단계(큰 구도·움직임)를, 저노이즈 모델이 뒷 단계(디테일)를 맡는 2단계 샘플링.
+    start 가 있으면 이미지→영상(WanImageToVideo), 없으면 글→영상(EmptyHunyuanLatentVideo)."""
+    w = WF()
+    clip = w.add("CLIPLoader", clip_name=q["te"], type="wan", device="default")
+    vae = w.add("VAELoader", vae_name=q["vae"])
+    models = []
+    for key, lkey in (("high", "lora_high"), ("low", "lora_low")):
+        m = [w.add("UNETLoader", unet_name=q[key], weight_dtype="default"), 0]
+        if q.get(lkey):      # 4단계 가속(LightX2V) LoRA
+            m = [w.add("LoraLoaderModelOnly", model=m, lora_name=q[lkey], strength_model=1.0), 0]
+        models.append([w.add("ModelSamplingSD3", model=m, shift=q["shift"]), 0])
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, 0]), 0]
+    neg = [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, 0]), 0]
+    if start:
+        iv = w.add("WanImageToVideo", positive=pos, negative=neg, vae=[vae, 0], width=q["w"], height=q["h"], length=q["frames"],
+                   batch_size=1, start_image=[w.add("LoadImage", image=start), 0])
+        pos, neg, lat = [iv, 0], [iv, 1], [iv, 2]
+    else:
+        lat = [w.add("EmptyHunyuanLatentVideo", width=q["w"], height=q["h"], length=q["frames"], batch_size=1), 0]
+    common = dict(steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"], positive=pos, negative=neg)
+    k1 = w.add("KSamplerAdvanced", model=models[0], add_noise="enable", noise_seed=q["seed"], latent_image=lat,
+               start_at_step=0, end_at_step=q["split"], return_with_leftover_noise="enable", **common)
+    k2 = w.add("KSamplerAdvanced", model=models[1], add_noise="disable", noise_seed=0, latent_image=[k1, 0],
+               start_at_step=q["split"], end_at_step=10000, return_with_leftover_noise="disable", **common)
+    img = w.add("VAEDecode", samples=[k2, 0], vae=[vae, 0])
+    vid = w.add("CreateVideo", images=[img, 0], fps=q["fps"])
+    w.add("SaveVideo", video=[vid, 0], filename_prefix="video/hub", format="auto", codec="auto")
+    return w.n
+
+
 def wf_upscale(model, img, half):
     w = WF()
     li = w.add("LoadImage", image=img)
@@ -300,6 +364,13 @@ def wf_upscale(model, img, half):
 TEXT_KEYS = ("text", "prompt", "text_g", "text_l")
 IMG_CLASSES = ("LoadImage", "LoadImageMask", "LoadImageOutput")
 SEED_KEYS = ("seed", "noise_seed")
+
+
+class MissingNodes(ValueError):
+    """워크플로에 이 ComfyUI 에 없는 노드가 있어요. .nodes 에 노드 이름 목록이 들어 있어요."""
+    def __init__(self, nodes, msg):
+        super().__init__(msg)
+        self.nodes = list(nodes)
 
 
 def parse_graph(obj, info=None):
@@ -355,7 +426,7 @@ def ui_to_api(ui, info):
     unknown = sorted({n["type"] for n in nodes.values() if n.get("type") not in info and n.get("type") not in _SKIP_TYPES
                       and n.get("type") not in ("Reroute", "PrimitiveNode") and n.get("mode") not in (2,)})
     if unknown:
-        raise ValueError("설치되지 않은 노드가 있어요: " + ", ".join(unknown) + " (ComfyUI 고급 화면의 Manager 에서 설치한 뒤 다시 시도해 주세요)")
+        raise MissingNodes(unknown, "설치되지 않은 노드가 있어요: " + ", ".join(unknown))
 
     def resolve(ref, depth=0):
         """(노드번호, 슬롯) 이 Reroute/우회/Primitive 이면 실제 출발점이나 값으로 따라가요. 반환: ('link', id, slot) 또는 ('val', 값)."""

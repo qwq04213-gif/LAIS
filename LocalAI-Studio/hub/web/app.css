@@ -366,3 +366,7 @@ details.fold h4{margin:16px 0 6px;font-size:13px}
 .s-running .qs{background:var(--acc);color:#10131a}.s-done .qs{color:#4cc38a}.s-error .qs{color:#e5736a}.s-done,.s-cancelled,.s-error{opacity:.75}
 .qn{display:grid;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
 @media(max-width:860px){#qpanel{left:16px;bottom:16px}.qbtn span{display:none}.qbtn{padding:8px 10px}}
+
+.galgrid.sel .gt{cursor:pointer}.galgrid .gt.picked{outline:3px solid var(--acc);outline-offset:-3px}.galgrid.sel .gt img{pointer-events:none}.gb2 button[data-del]:hover{color:#e5736a}
+
+.cn-easy{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}.cn-easy .row{align-items:end}.cn-easy .mini.cn-src{min-width:140px}.cn-node{margin:6px 0}

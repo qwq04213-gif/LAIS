@@ -183,6 +183,7 @@
       </div>
     </details>
     <details class="sdxl"><summary>ControlNet (윤곽·포즈 유지)</summary>
+      <div data-blk="cn-easy"></div>
       <label class="f">모델<select name="cn_model"></select></label>
       <p class="hint plain">제어 이미지를 올리지 않으면 <b>원본 이미지의 윤곽</b>을 따라가요. <button type="button" class="link" data-open="controlnet">ControlNet 폴더 열기</button></p>
       <div class="mini" data-img="cn_image"></div>
@@ -316,6 +317,7 @@
       <label class="f">변화 강도 (낮을수록 원본 유지)<input type="number" name="init_denoise" value="0.7" step="0.05" min="0.05" max="1"></label>
     </details>
     <details data-for="sdxl"><summary>ControlNet (구도·포즈 고정)</summary>
+      <div data-blk="cn-easy"></div>
       <label class="f">모델<select name="cn_model"></select></label>
       <p class="hint plain"><button type="button" class="link" data-open="controlnet">ControlNet 폴더 열기</button></p>
       <div class="mini" data-img="cn_image"></div>
@@ -415,6 +417,10 @@
       <label class="f">크기<select name="size"><option value="832x480">가로 480p (기본)</option><option value="480x832">세로 480p</option><option value="640x640">정사각</option><option value="1280x704">가로 720p (VRAM 많이 필요)</option></select></label>
       <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option></select></label>
     </div>
+    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림 (미검증)</option></select></label>
+    <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. <b>※ 만든 쪽에서 실제 PC로 검증하지 못한 기능이에요.</b> 안 되면 5B 를 쓰세요.</p>
+    <p class="warn" id="w-vid14" hidden></p>
+    <label class="chk" id="vid-fast-row" hidden><input type="checkbox" name="fast"> 4단계 가속 (LoRA — 몇 배 빨라요) <span class="mute" id="vid-fast-hint"></span></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
     <details><summary>고급 설정</summary>
@@ -446,7 +452,15 @@
     <select id="gal-kind"><option value="">전체</option><option>생성</option><option>편집</option><option>업스케일</option><option>워크플로</option><option>기능</option><option>영상</option><option>일괄</option></select>
     <label class="chk"><input type="checkbox" id="gal-fav"> ★ 즐겨찾기만</label>
     <span class="mute" id="gal-n"></span>
+    <button type="button" class="ghost sm" id="gal-sel">선택</button>
+    <button type="button" class="ghost sm" id="gal-delsel" hidden>선택한 파일 삭제 (0)</button>
   </div>
+  <details class="fold" id="fold-org"><summary>결과 폴더 날짜별로 정리</summary>
+    <p class="hint plain">결과 폴더(생성·편집 등)에 쌓인 파일을 만든 날짜별 폴더(예: 생성\2026-10-18)로 옮겨요. <b>이동만 하고 지우지 않아요.</b> 갤러리·즐겨찾기는 그대로 보여요.</p>
+    <label class="chk"><input type="checkbox" id="org-today" checked> 오늘 만든 파일은 그대로 두기</label>
+    <div class="actions"><button type="button" class="ghost" id="org-prev">미리보기</button><button type="button" class="go" id="org-run" hidden>정리 실행</button></div>
+    <p class="hint plain" id="org-info"></p>
+  </details>
   <div id="gal-grid" class="galgrid"></div>
   <p class="mute" id="gal-empty" hidden>아직 만든 결과가 없어요. 이미지 생성이나 영상 만들기에서 만들면 여기에 쌓여요.</p>
   <button type="button" class="ghost" id="gal-more" hidden>더 보기</button>
@@ -569,13 +583,17 @@
     <tr><td>LoRA 가 어느 모델용인지 확인</td><td class="y">지원</td><td>이미지 생성·편집·업스케일의 LoRA 칸</td></tr>
     <tr><td>SD3 · HiDream · Lumina · 그 밖의 모델 계열</td><td class="p">준비 중</td><td>—</td></tr>
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
+    <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
+    <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
+    <tr><td>결과 삭제 · 날짜별 폴더 정리</td><td class="y">지원</td><td>기록 갤러리</td></tr>
     <tr><td>만든 결과 모아 보기 · 검색 · 즐겨찾기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
     <tr><td>프롬프트 보관함 · 와일드카드 편집 · 이미지에서 프롬프트 뽑기</td><td class="y">지원</td><td>프롬프트</td></tr>
     <tr><td>처음 쓰는 사람을 위한 안내 (준비 상태 점검, 하고 싶은 일별 순서, 문제 해결집)</td><td class="y">지원</td><td>시작하기</td></tr>
     <tr><td>LoRA 트리거 단어·학습 정보·미리보기 보기</td><td class="y">지원</td><td>설치와 모델 → LoRA·모델 정보, LoRA 칸 아래</td></tr>
     <tr><td>프로그램 다시 시작 · 설치 위치 옮기기</td><td class="y">지원</td><td>왼쪽 아래 버튼, 설치와 모델 → 프로그램 관리</td></tr>
     <tr><td>워크플로의 없는 커스텀 노드 설치</td><td class="y">지원</td><td>워크플로 (노드 도우미)</td></tr>
-    <tr><td>IP-Adapter · 얼굴 교체 · SAM 같은 커스텀 노드 기능</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
+    <tr><td>얼굴·손 자동 보정 · 참고 이미지(IP-Adapter)로 스타일·얼굴 유지</td><td class="p">미검증</td><td>기능 모음 (확장 설치 도우미 포함, 만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
+    <tr><td>얼굴 교체 · SD3 · HiDream · Lumina · 서브그래프 워크플로</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
     <tr><td>오디오 · 3D 생성</td><td class="n">미지원</td><td>ComfyUI 고급 화면</td></tr>
   </tbody></table>
   <p class="hint plain">빠진 기능은 왼쪽 아래 <b>ComfyUI 고급 화면 열기</b>에서 노드를 직접 연결해 쓸 수 있어요. 만든 워크플로는 <b>Save (API Format)</b>으로 저장해 워크플로 탭에서 실행하세요.</p>

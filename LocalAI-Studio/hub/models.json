@@ -298,6 +298,119 @@
      "url": "https://huggingface.co/lodestones/Chroma1-HD/resolve/main/Chroma1-HD.safetensors"
     }
    ]
+  },
+  {
+   "id": "adetailer",
+   "name": "얼굴·손 감지 모델 (ADetailer)",
+   "gb": 0.1,
+   "desc": "기능 모음의 '얼굴·손 자동 보정'에 쓰는 감지 모델 두 개. ComfyUI 확장 'ComfyUI-Impact-Pack'과 'ComfyUI-Impact-Subpack'도 필요해요(설치 후 ComfyUI 재시작). ※ 미검증",
+   "files": [
+    {
+     "dir": "ultralytics/bbox",
+     "url": "https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov8m.pt"
+    },
+    {
+     "dir": "ultralytics/bbox",
+     "url": "https://huggingface.co/Bingsu/adetailer/resolve/main/hand_yolov8s.pt"
+    }
+   ]
+  },
+  {
+   "id": "ipadapter-sdxl",
+   "name": "IP-Adapter SDXL (스타일·얼굴 참고)",
+   "gb": 3.1,
+   "desc": "기능 모음의 '참고 이미지로 그리기'에 쓰는 모델(IP-Adapter plus / plus-face + CLIP 이미지 인코더). ComfyUI 확장 'ComfyUI_IPAdapter_plus'도 필요해요. ※ 미검증",
+   "files": [
+    {
+     "dir": "ipadapter",
+     "url": "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors"
+    },
+    {
+     "dir": "ipadapter",
+     "url": "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors"
+    },
+    {
+     "dir": "clip_vision",
+     "url": "https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors",
+     "name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan21-vae",
+   "name": "Wan 2.1 VAE (14B 영상용)",
+   "gb": 0.25,
+   "desc": "Wan 2.2 14B 모델이 쓰는 VAE예요(5B 용 Wan 2.2 VAE와 달라요). 14B 영상을 고르면 자동으로 함께 설치돼요.",
+   "files": [
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan22-14b-t2v",
+   "name": "Wan 2.2 14B 글→영상 (고화질, 미검증)",
+   "gb": 28.6,
+   "requires": [
+    "wan-common",
+    "wan21-vae"
+   ],
+   "desc": "5B보다 훨씬 선명하고 움직임이 자연스러운 글→영상 모델(고노이즈+저노이즈 두 파일). 용량이 크고 VRAM 16GB 이상 권장, 영상 한 편에 오래 걸려요. ※ 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
+    },
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan22-14b-i2v",
+   "name": "Wan 2.2 14B 이미지→영상 (고화질, 미검증)",
+   "gb": 28.6,
+   "requires": [
+    "wan-common",
+    "wan21-vae"
+   ],
+   "desc": "올린 이미지가 자연스럽게 움직이는 고화질 영상 모델(고노이즈+저노이즈 두 파일). 용량이 크고 VRAM 16GB 이상 권장. ※ 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+    },
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan22-lightning",
+   "name": "Wan 2.2 4단계 가속 LoRA (14B용, 미검증)",
+   "gb": 2.4,
+   "desc": "14B 영상을 20단계 대신 4단계로 만들어 몇 배 빨라지는 LoRA(LightX2V). 영상 만들기 화면의 '4단계 가속'을 켜면 쓰여요. 14B 모델 설치가 필요해요.",
+   "files": [
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
+    },
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
+    },
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors"
+    },
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors"
+    }
+   ]
   }
  ]
 }

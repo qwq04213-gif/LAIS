@@ -29,6 +29,12 @@ const T={
   <label class="chk"><input type="checkbox" name="vpred"> V-Prediction 모델 (NoobAI Vpred 등)</label>
   <div class="row"><label class="f">CFG 재조정 (0=끔)<input type="number" name="rescale" value="0" step="0.05" min="0" max="1"></label><label class="f">PAG 강도 (0=끔)<input type="number" name="pag" value="0" step="0.5" min="0" max="10"></label></div>
 `,
+ cnEasy:()=>`<div class="cn-easy"><b>쉬운 모드 — 사진에서 포즈·윤곽·깊이 뽑기</b>
+  <p class="hint plain">① 따라 하고 싶은 사진을 고르고 ② 뽑을 종류를 정해 [추출]을 눌러요. ③ 아래에 나온 지도가 마음에 들면 프롬프트만 적고 생성하세요. <b>포즈</b>를 고르면 사진 속 사람과 같은 자세로 새 인물을 그려요. (모델·강도는 자동으로 맞춰 줘요)</p>
+  <div class="row"><div class="mini cn-src"></div><label class="f">뽑을 종류<select class="cn-kind"><option value="pose">포즈 (사람 자세)</option><option value="canny">윤곽선</option><option value="depth">깊이 (앞뒤 거리)</option><option value="lineart">선화</option></select></label></div>
+  <div class="actions"><button type="button" class="ghost cn-go">추출</button></div>
+  <p class="hint plain cn-st"></p><div class="cn-node" hidden></div>
+  <input type="hidden" name="cn_type" value=""></div>`,
  lora:()=>`<div class="loras"></div><div class="lora-acts"><button type="button" class="ghost lora-add">+ LoRA 추가</button><button type="button" class="link" data-open="loras">LoRA 폴더 열기</button></div><p class="hint">${LORA_NOTE}</p>`,
 };
 T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
@@ -334,7 +340,7 @@ function warn(){
   const parts=g==='flux'?LISTS.flux_ready:g==='krea2'?LISTS.krea2_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
   w.hidden=ok;
   if(!ok)w.innerHTML=(g==='sdxl'?'체크포인트가 아직 없어요. ':g==='krea2'?'Krea 2 모델이나 공용 파일(Qwen3-VL 텍스트 인코더, Qwen Image VAE)이 아직 없어요. ':g==='flux'?'FLUX·Krea 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':'Chroma 모델이나 공용 파일(T5 텍스트 인코더, VAE)이 아직 없어요. ')+'<a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.';
-  $('#w-vid').hidden=!!LISTS.wan_ready&&(LISTS.wanmodels||[]).length>0;$('#w-up').hidden=LISTS.upscalers.length>0;$('#w-chat').hidden=LISTS.llm.length>0;
+  $('#w-vid').hidden=!!LISTS.wan_ready&&(LISTS.wanmodels||[]).length>0;if(window.vidSync)vidSync();$('#w-up').hidden=LISTS.upscalers.length>0;$('#w-chat').hidden=LISTS.llm.length>0;
 }
 let listsAt=0;
 async function loadLists(force){
@@ -789,11 +795,22 @@ let VID_IMG=null;
   const save=()=>ls.set('form:f-vid',formVals(f));
   const o=ls.get('form:f-vid',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e||e.type==='file')continue;if(e.type==='checkbox')e.checked=!!v;else e.value=v}
   f.addEventListener('change',save);f.addEventListener('input',debounce(save,400));
-  const setImg=u=>{VID_IMG=u;$('#vid-thumb').hidden=$('#vid-clear').hidden=$('#vid-ratio-row').hidden=!u;if(u)$('#vid-thumb').src=u};
+  const W14={fps:16,steps:20,cfg:3.5,shift:5},W5={fps:24,steps:20,cfg:5,shift:8};
+  const vidSync=()=>{const big=f.elements.wan_ver.value==='14b',st=LISTS.wan14||{},k=VID_IMG?'i2v':'t2v';
+    $('#vid-fast-row').hidden=!big;$('#vid-14-note').hidden=!big;
+    $('#w-vid').hidden=big||(!!LISTS.wan_ready&&(LISTS.wanmodels||[]).length>0);
+    const w=$('#w-vid14');w.hidden=!big||!!st[k];
+    w.textContent=`Wan 2.2 14B ${VID_IMG?'이미지→영상':'글→영상'} 모델이 아직 없어요. '설치와 모델'에서 'Wan 2.2 14B ${VID_IMG?'이미지→영상':'글→영상'}'를 설치해 주세요. (약 29GB)`;
+    const fs=f.elements.fast;fs.disabled=big&&!st['fast_'+k];$('#vid-fast-hint').textContent=fs.disabled?'(4단계 가속 LoRA 가 없어요 — 설치와 모델에서 받을 수 있어요)':'';if(fs.disabled)fs.checked=false;
+    for(const n of ['steps','cfg'])f.elements[n].disabled=big&&fs.checked};
+  window.vidSync=vidSync;
+  f.elements.wan_ver.addEventListener('change',()=>{const d=f.elements.wan_ver.value==='14b'?W14:W5;for(const[k,v]of Object.entries(d))f.elements[k].value=v;vidSync()});
+  f.elements.fast.addEventListener('change',vidSync);
+  const setImg=u=>{VID_IMG=u;$('#vid-thumb').hidden=$('#vid-clear').hidden=$('#vid-ratio-row').hidden=!u;if(u)$('#vid-thumb').src=u;vidSync()};
   $('#vid-file').onchange=async e=>{const fl=e.target.files[0];if(fl)setImg(await toDataURL(fl));e.target.value=''};
   $('#vid-clear').onclick=()=>setImg(null);
   f.onsubmit=e=>{e.preventDefault();if(!f.prompt.value.trim())return need(f,'어떤 영상을 만들지 장면 설명을 적어 주세요.');run('vid',f,VID_IMG?{image:VID_IMG}:{})};
-  window.vidSetImage=setImg;
+  window.vidSetImage=setImg;vidSync();
 })();
 const need=(f,t)=>setBar(f.closest('.view'),t,'bad');
 document.addEventListener('click',e=>{const b=e.target.closest('.seed-rand,.seed-pick');if(!b)return;const i=b.parentElement.querySelector('input');
@@ -955,13 +972,13 @@ async function stripInfo(){
 
 /* ══════════ 커스텀 노드 도우미 ══════════ */
 let NODE_POLL=null;
-async function nodeHelp(missing){
-  const box=$('#nodelist');if(!box)return;
+async function nodeHelp(missing,box){
+  box=box||$('#nodelist');if(!box)return;
   let r;try{r=await api('/api/nodes/sources',{missing})}catch{box.textContent='목록을 불러오지 못했어요.';return}
   if(r.error){box.textContent=r.error;return}
   const rows=r.repos.map(x=>`<div class="nrow" data-repo="${esc(x.repo)}"><div><b>${esc(x.title)}</b> <span class="mute">(${x.nodes.map(esc).join(', ')})</span><br><a href="${esc(x.repo)}" target="_blank" rel="noopener">${esc(x.repo)}</a><div class="nst mute"></div></div>${x.installed?'<span class="badge">설치됨</span>':'<button type="button" class="ghost ninst">설치</button>'}</div>`).join('');
   box.className='';box.innerHTML=(rows||'<p class="mute">설치할 곳을 찾지 못했어요.</p>')+(r.unknown.length?`<p class="mute">찾지 못한 노드: ${r.unknown.map(esc).join(', ')} — ComfyUI 화면의 Manager에서 검색해 보세요.</p>`:'')+
-    (r.repos.length?'<div class="actions"><button type="button" class="ghost" id="node-restart">이미지 엔진 다시 시작</button><span class="mute">설치한 노드는 엔진을 다시 시작해야 적용돼요. 그 뒤 [분석]을 다시 눌러 확인하세요.</span></div>':'');
+    (r.repos.length?'<div class="actions"><button type="button" class="ghost node-restart'+(box.id==='nodelist'?'" id="node-restart':'')+'">이미지 엔진 다시 시작</button><span class="mute">설치한 노드는 엔진을 다시 시작해야 적용돼요. 그 뒤 [분석]을 다시 눌러 확인하세요.</span></div>':'');
 }
 document.addEventListener('click',async e=>{
   const b=e.target.closest('.ninst');if(b){const row=b.closest('.nrow'),repo=row.dataset.repo;
@@ -969,14 +986,16 @@ document.addEventListener('click',async e=>{
     b.disabled=true;const r=await api('/api/nodes/install',{repo});if(r.error){$('.nst',row).textContent=r.error;b.disabled=false;return}
     clearInterval(NODE_POLL);NODE_POLL=setInterval(async()=>{const s=(await api('/api/nodes/status'))[repo];if(!s)return;$('.nst',row).textContent=s.msg;
       if(s.state!=='running'){clearInterval(NODE_POLL);b.disabled=false;if(s.state==='done')b.replaceWith(Object.assign(document.createElement('span'),{className:'badge',textContent:'설치됨'}))}},1000);return}
-  if(e.target.id==='node-restart'){e.target.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 [분석]을 다시 눌러 주세요.');e.target.disabled=false}
+  const rb=e.target.closest('.node-restart');if(rb){rb.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 화면을 새로 열거나 [분석]을 다시 눌러 주세요.');rb.disabled=false}
 });
 /* ══════════ 워크플로 실행 ══════════ */
 const WFX={a:null};
 async function wfAnalyze(){
   const txt=$('#wf-json').value.trim(),st=$('#wf-st');if(!txt)return;
   const a=await api('/api/wf/analyze',{graph:txt});
-  if(a.error){st.className='st bad';st.textContent=a.error;$('#wf-fields').innerHTML='';WFX.a=null;$('#wf-go').disabled=true;return}
+  if(a.error){st.className='st bad';st.textContent=a.error;WFX.a=null;$('#wf-go').disabled=true;
+    $('#wf-fields').innerHTML=(a.missing&&a.missing.length)?`<div class="warn" id="nodebox"><b>이 컴퓨터의 ComfyUI에 없는 노드:</b> ${a.missing.map(esc).join(', ')}<div id="nodelist" class="mute">설치할 수 있는 곳을 찾는 중…</div></div>`:'';
+    if(a.missing&&a.missing.length)nodeHelp(a.missing);return}
   WFX.a=a;renderWF();$('#wf-go').disabled=false;st.className='st';st.textContent=`노드 ${a.nodes}개를 읽었어요.`;
 }
 function renderWF(){
@@ -1043,11 +1062,13 @@ function featForm(id,keep){
   $('#feat-form').innerHTML=`<h3>${esc(f.title)}</h3><p class="hint plain">${esc(f.summary)}</p>
     <ol class="steps">${f.steps.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>
     ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. <a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.</p>`:''}
+    ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?`<div class="warn feat-nodes"><b>필요한 확장:</b> ${esc(f.needs.pack)}<div class="fn-list mute">설치할 수 있는 곳을 찾는 중…</div></div>`:''}
     <button class="go">만들기</button>
     <input type="hidden" name="feature" value="${esc(id)}">
     ${main.map(fieldHTML).join('')}
     ${adv.length?`<details><summary>고급 설정</summary>${adv.map(fieldHTML).join('')}</details>`:''}`;
   $$('#feat-form .mini[data-img]').forEach(b=>{mini(b);if(keepImgs[b.dataset.img])b.set(keepImgs[b.dataset.img])});
+  {const fl=$('#feat-form .fn-list');if(fl)nodeHelp(f.missing_nodes,fl)}
   if(keep)for(const [k,v] of Object.entries(keepVals)){const el=$('#f-feat').elements[k];if(el&&el.type!=='file'&&v!=='')el.value=v}
 }
 $('#feat-pick').onclick=e=>{const b=e.target.closest('.fcard');if(b)featForm(b.dataset.f)};
@@ -1316,11 +1337,29 @@ async function galLoad(more){
   $('#gal-grid').insertAdjacentHTML('beforeend',r.items.map(x=>{const tn=x.url.replace('/out/','/thumb/');
     return `<figure class="gt" data-u="${x.url}">${x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
-    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="같은 설정으로 생성">↻</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로">✎</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button></span></figcaption></figure>`}).join(''));
+    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="같은 설정으로 생성">↻</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로">✎</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
   $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value);
 }
 $('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=()=>galLoad();$('#gal-more').onclick=()=>galLoad(true);
+let GSEL=false,GPICK=new Set();
+const galSelUi=()=>{$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?'선택 끝내기':'선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
+  $$('#gal-grid .gt').forEach(t=>t.classList.toggle('picked',GPICK.has(t.dataset.u)))};
+async function galDelete(urls){if(!urls.length)return;
+  if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;
+  const r=await api('/api/gallery/delete',{files:urls});if(r.error)return toast(r.error);
+  const set=new Set(urls);$$('#gal-grid .gt').forEach(t=>{if(set.has(t.dataset.u))t.remove()});GAL.items=GAL.items.filter(x=>!set.has(x.url));urls.forEach(u=>GPICK.delete(u));
+  $('#gal-n').textContent=$$('#gal-grid .gt').length+'개 표시 중';galSelUi();toast(`${r.deleted}개를 지웠어요.`+(r.failed?` (${r.failed}개는 지우지 못했어요)`:''))}
+$('#gal-sel').onclick=()=>{GSEL=!GSEL;GPICK.clear();galSelUi()};
+$('#gal-delsel').onclick=()=>galDelete([...GPICK]);
+$('#org-prev').onclick=async()=>{const r=await api('/api/gallery/organize',{mode:'preview',keep_today:$('#org-today').checked}),I=$('#org-info');
+  if(!r.total){I.textContent='옮길 파일이 없어요.';$('#org-run').hidden=true;return}
+  I.textContent=`${r.total}개를 옮겨요: `+Object.entries(r.days).map(([s,m])=>`${s} ${Object.entries(m).map(([d,n])=>`${d}(${n})`).join(' ')}`).join(' / ');$('#org-run').hidden=false};
+$('#org-run').onclick=async()=>{if(!confirm('날짜별 폴더로 옮길까요? (파일은 지워지지 않아요)'))return;
+  const r=await api('/api/gallery/organize',{mode:'run',keep_today:$('#org-today').checked});if(r.error)return toast(r.error);
+  $('#org-info').textContent=`${r.moved}개를 옮겼어요.`+(r.failed?` (${r.failed}개는 다른 프로그램이 쓰고 있어서 못 옮겼어요)`:'');$('#org-run').hidden=true;galLoad()};
 $('#gal-grid').addEventListener('click',async e=>{
+  const dl=e.target.closest('[data-del]');if(dl)return void await galDelete([dl.dataset.del]);
+  if(GSEL){const t=e.target.closest('.gt');if(t&&!e.target.closest('button')){e.preventDefault();const u=t.dataset.u;GPICK.has(u)?GPICK.delete(u):GPICK.add(u);galSelUi();return}}
   const st=e.target.closest('[data-star]');if(st){const on=!st.classList.contains('on'),r=await api('/api/gallery/fav',{file:st.dataset.star,on});
     if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
   const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>!x.video),u=im.closest('.gt').dataset.u;
@@ -1476,6 +1515,30 @@ $('#q-desk').onchange=async e=>{if(!e.target.checked){ls.set('q:desk',false);ret
   ls.set('q:desk',true);toast('이제 다른 창을 보고 있을 때 작업이 끝나면 알려 드려요.')};
 $('#q-test').onclick=()=>qNotify({state:'done',label:'알림 시험',error:''});
 qPoll();setInterval(qPoll,2500);
+/* ══════════ ControlNet 쉬운 모드 ══════════ */
+const CN_PICK={pose:['openpose','pose','union','promax'],canny:['canny','lineart','union','promax'],lineart:['lineart','canny','union','promax'],depth:['depth','union','promax']},
+  CN_STR={pose:0.8,canny:0.7,lineart:0.7,depth:0.65};
+$$('.cn-easy').forEach(box=>{const f=box.closest('form'),src=$('.cn-src',box),st=$('.cn-st',box);mini(src,'따라 할 사진 고르기');
+  $('.cn-go',box).onclick=async()=>{const kind=$('.cn-kind',box).value;if(!src.value)return void(st.textContent='먼저 사진을 골라 주세요.');
+    const names=(LISTS.controlnets||[]),pick=(CN_PICK[kind]||[]).map(k=>names.find(n=>n.toLowerCase().includes(k))).find(Boolean);
+    $('.cn-go',box).disabled=true;st.textContent='지도를 만드는 중… (처음엔 모델을 불러와서 오래 걸릴 수 있어요)';$('.cn-node',box).hidden=true;
+    let r;try{r=await api('/api/control/prep',{image:src.value,type:kind})}catch{r={error:'서버와 연결되지 않았어요.'}}
+    $('.cn-go',box).disabled=false;
+    if(r.error){st.textContent=r.error;if(r.need_pack)cnPack(box,r.missing);return}
+    const cm=$('.mini[data-img=cn_image]',f);cm.set(r.image);f.elements.cn_prep.value='none';f.elements.cn_type.value=kind;f.elements.cn_strength.value=CN_STR[kind]||0.7;
+    if(pick){f.elements.cn_model.value=pick}
+    st.innerHTML=pick?`✔ ${esc({pose:'포즈',canny:'윤곽선',depth:'깊이',lineart:'선화'}[kind])} 지도를 만들어 아래 [제어 이미지]에 넣었어요. ControlNet 모델은 <b>${esc(pick)}</b> 로 맞췄어요.`
+      :`✔ 지도를 아래 [제어 이미지]에 넣었어요. 그런데 이 종류에 맞는 ControlNet 모델이 없어요 — <a href="#" data-go="setup">설치와 모델</a>에서 'ControlNet union'을 설치해 주세요.`;
+    saveForm(f)};
+  $('.cn-node',box).addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.a==='inst'){if(!confirm('이 커스텀 노드의 코드를 내려받아 설치해요.\n커스텀 노드는 컴퓨터에서 프로그램처럼 실행되니, 믿을 수 있는 출처인지 확인하세요.\n\n계속할까요?'))return;
+      b.disabled=true;const r=await api('/api/nodes/install',{repo:b.dataset.repo});if(r.error){st.textContent=r.error;b.disabled=false;return}
+      for(let i=0;i<120;i++){await sleep(2000);const s=(await api('/api/nodes/status'))[b.dataset.repo];if(s){st.textContent=s.msg;if(s.state!=='running'){b.disabled=false;if(s.state==='done'){$('.cn-node',box).innerHTML='<button type="button" class="ghost" data-a="rs">이미지 엔진 다시 시작</button>'}return}}}}
+    if(b.dataset.a==='rs'){b.disabled=true;const r=await api('/api/engine/restart',{});st.textContent=r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 [추출]을 다시 눌러 주세요.'}})});
+async function cnPack(box,node){const n=$('.cn-node',box);let r;try{r=await api('/api/nodes/sources',{missing:[node]})}catch{return}
+  if(r.error||!r.repos||!r.repos.length){n.hidden=false;n.innerHTML='<p class="mute">설치할 곳을 찾지 못했어요. ComfyUI 에 \'ComfyUI\'s ControlNet Auxiliary Preprocessors\' 확장을 직접 설치해 주세요.</p>';return}
+  const x=r.repos[0];n.hidden=false;n.innerHTML=x.installed?'<button type="button" class="ghost" data-a="rs">이미지 엔진 다시 시작</button> <span class="mute">이미 설치돼 있어요. 엔진을 다시 시작하면 적용돼요.</span>'
+    :`<button type="button" class="ghost" data-a="inst" data-repo="${esc(x.repo)}">${esc(x.title)} 설치</button> <a href="${esc(x.repo)}" target="_blank" rel="noopener">출처 보기</a>`}
 /* ══════════ 일괄 처리 ══════════ */
 (()=>{const f=$('#f-batch'),view=$('#v-batch');if(!f)return;
   let FILES=[],info=$('#bt-info');const mode=()=>f.elements.srcm.value,op=()=>f.elements.op.value;

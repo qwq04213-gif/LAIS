@@ -564,5 +564,218 @@
     "step": 1
    }
   ]
+ },
+ {
+  "id": "detailer",
+  "title": "얼굴·손 자동 보정 (미검증)",
+  "icon": "☺",
+  "summary": "그림 속 얼굴이나 손을 자동으로 찾아 그 부분만 다시 그려 또렷하게 만들어요(ADetailer 방식). ComfyUI 확장 'Impact Pack'과 감지 모델이 필요해요. ※ 이 기능은 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+  "steps": [
+   "보정할 이미지를 올려요",
+   "얼굴 / 손 / 둘 다 중에서 골라요",
+   "[만들기] — 원본과 비교해 보고 마음에 안 들면 세기를 줄여 보세요"
+  ],
+  "needs": {
+   "nodes": [
+    "FaceDetailer",
+    "UltralyticsDetectorProvider"
+   ],
+   "lists": [
+    "checkpoints"
+   ],
+   "pack": "ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack"
+  },
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "보정할 이미지",
+    "required": true
+   },
+   {
+    "name": "target",
+    "type": "select",
+    "label": "고칠 곳",
+    "options": [
+     [
+      "face",
+      "얼굴"
+     ],
+     [
+      "hand",
+      "손"
+     ],
+     [
+      "both",
+      "얼굴 + 손"
+     ]
+    ],
+    "default": "face"
+   },
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "덧붙일 설명 (선택)",
+    "hint": "비워 두면 '또렷한 얼굴/손'만 요청해요. 예: blue eyes, smiling"
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "checkpoints",
+    "label": "모델",
+    "hint": "그림을 만든 것과 같은 SDXL 계열 체크포인트가 좋아요."
+   },
+   {
+    "name": "denoise",
+    "type": "number",
+    "label": "고치는 세기",
+    "default": 0.4,
+    "min": 0.1,
+    "max": 0.8,
+    "step": 0.05,
+    "hint": "높을수록 많이 바뀌어요. 0.3~0.5가 무난해요."
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.5,
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "ipadapter",
+  "title": "참고 이미지로 그리기 — 스타일·얼굴 유지 (미검증)",
+  "icon": "❖",
+  "summary": "참고 이미지의 분위기(스타일)나 인물 얼굴 느낌을 따라 새 그림을 만들어요(IP-Adapter). ComfyUI 확장 'IPAdapter plus'와 모델이 필요해요. ※ 이 기능은 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+  "steps": [
+   "참고할 이미지를 올려요",
+   "스타일을 따를지, 얼굴을 따를지 고르고 새 그림 내용을 적어요",
+   "[만들기] — 닮는 정도는 '따르는 세기'로 조절해요"
+  ],
+  "needs": {
+   "nodes": [
+    "IPAdapterUnifiedLoader",
+    "IPAdapter"
+   ],
+   "lists": [
+    "checkpoints"
+   ],
+   "pack": "ComfyUI_IPAdapter_plus"
+  },
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "참고 이미지",
+    "required": true
+   },
+   {
+    "name": "mode",
+    "type": "select",
+    "label": "무엇을 따를까요",
+    "options": [
+     [
+      "style",
+      "스타일·분위기"
+     ],
+     [
+      "face",
+      "인물 얼굴"
+     ]
+    ],
+    "default": "style"
+   },
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "그릴 내용",
+    "hint": "NoobAI·Pony 등은 영어 태그로 적어요. 예: 1girl, standing, city street",
+    "required": true
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "checkpoints",
+    "label": "모델",
+    "hint": "SDXL 계열 체크포인트를 골라요."
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "label": "따르는 세기",
+    "default": 0.7,
+    "min": 0.1,
+    "max": 1.5,
+    "step": 0.05,
+    "hint": "높을수록 참고 이미지를 더 닮고 프롬프트는 덜 따라요. 0.5~0.8이 무난해요."
+   },
+   {
+    "name": "w",
+    "type": "number",
+    "label": "가로 (px)",
+    "default": 1024,
+    "min": 512,
+    "max": 2048,
+    "step": 64,
+    "advanced": true
+   },
+   {
+    "name": "h",
+    "type": "number",
+    "label": "세로 (px)",
+    "default": 1024,
+    "min": 512,
+    "max": 2048,
+    "step": 64,
+    "advanced": true
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.5,
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
  }
 ]
