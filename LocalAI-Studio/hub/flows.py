@@ -217,6 +217,8 @@ def wf_flux(q):
     chroma: T5 단독 CLIPLoader(type=chroma) + 실제 네거티브 프롬프트, cfg 사용."""
     w = WF()
     model, pos, neg, vae = flux_stack(w, q)
+    if q.get("cn"):      # FLUX.1 dev 계열 ControlNet (Union Pro 2.0 등): positive/negative 에 지도를 걸어요
+        pos, neg = cn_apply(w, q["cn"], pos, neg, vae)
     denoise = 1.0
     if q.get("init"):
         li = w.add("LoadImage", image=q["init"])
@@ -315,6 +317,28 @@ def wf_video(q, start=None):
     img = w.add("VAEDecode", samples=[k, 0], vae=[vae, 0])
     vid = w.add("CreateVideo", images=[img, 0], fps=q["fps"])
     w.add("SaveVideo", video=[vid, 0], filename_prefix="video/hub", format="auto", codec="auto")
+    return w.n
+
+
+def wf_vpost(op, q):
+    """만든 영상 다듬기: 영상을 불러와 프레임으로 풀고(GetVideoComponents) → 보간(RIFE)·업스케일·WebP 저장.
+    op: interp(프레임 2배) / upscale(업스케일 모델) / webp(움직이는 WebP)"""
+    w = WF()
+    vid = w.add("LoadVideo", file=q["file"])
+    comp = w.add("GetVideoComponents", video=[vid, 0])
+    img, fps = [comp, 0], [comp, 2]
+    if op == "interp":
+        img = [w.add("RIFE VFI", ckpt_name=q.get("ckpt") or "rife47.pth", frames=img, clear_cache_after_n_frames=10, multiplier=2,
+                     fast_mode=True, ensemble=True, scale_factor=1.0), 0]
+        fps = q["fps"] * 2
+    elif op == "upscale":
+        m = w.add("UpscaleModelLoader", model_name=q["model"])
+        img = [w.add("ImageUpscaleWithModel", upscale_model=[m, 0], image=img), 0]
+    if op == "webp":
+        w.add("SaveAnimatedWEBP", images=img, filename_prefix="video/hub", fps=fps, lossless=False, quality=88, method="default")
+    else:
+        out = w.add("CreateVideo", images=img, fps=fps)
+        w.add("SaveVideo", video=[out, 0], filename_prefix="video/hub", format="auto", codec="auto")
     return w.n
 
 

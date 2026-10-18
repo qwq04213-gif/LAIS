@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
+<script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -76,7 +77,8 @@
     <select id="persona" title="역할"></select>
     <label>창의성 <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.8"><b id="tv">0.8</b></label>
     <label>기억 길이 <select id="ctx"><option value="4096">짧게</option><option value="8192" selected>보통</option><option value="16384">길게</option><option value="32768">아주 길게</option></select></label>
-    <button class="ghost" id="newchat" type="button">새 대화</button>
+    <button class="ghost sm" id="cl-toggle" type="button" title="왼쪽 대화 목록을 보이거나 숨겨요">대화 목록</button>
+    <button class="ghost sm" id="cl-export" type="button" title="지금 대화를 마크다운(.md) 파일로 저장해요">내보내기</button>
   </div>
   <details class="sysd"><summary>역할 지침과 고급 옵션</summary>
     <textarea id="sys" rows="3"></textarea>
@@ -91,11 +93,23 @@
     </div>
     <p class="hint">캐릭터 카드(PNG)는 이미지 정보 탭에서 열어 바로 적용할 수 있어요.</p>
   </details>
-  <div id="log"></div>
-  <p class="st bad" id="cerr" hidden></p>
-  <div class="compose">
-    <textarea id="msg" rows="2" placeholder="메시지를 입력하세요. Enter로 보내고 Shift+Enter로 줄을 바꿔요."></textarea>
-    <button class="go" id="send" type="button">보내기</button>
+  <div class="chatwrap">
+    <aside id="clist" aria-label="대화 목록">
+      <div class="clh"><button class="go" id="cl-new" type="button">+ 새 대화</button></div>
+      <input id="cl-q" type="search" placeholder="대화 검색">
+      <div id="cl-list"></div>
+    </aside>
+    <div class="chatmain">
+      <div id="log"></div>
+    <p class="st bad" id="cerr" hidden></p>
+    <div id="c-thumbs" hidden></div>
+    <div class="compose">
+      <button class="ghost sm" id="c-attach" type="button" title="사진을 붙여서 물어봐요 (끌어다 놓거나 Ctrl+V 로 붙여 넣어도 돼요). 이미지를 볼 수 있는 모델이 필요해요.">사진</button>
+      <input type="file" id="c-file" accept="image/*" multiple hidden>
+      <textarea id="msg" rows="2" placeholder="메시지를 입력하세요. Enter로 보내고 Shift+Enter로 줄을 바꿔요."></textarea>
+      <button class="go" id="send" type="button">보내기</button>
+    </div>
+    </div>
   </div>
 </section>
 
@@ -316,9 +330,10 @@
       <div class="mini" data-img="init"></div>
       <label class="f">변화 강도 (낮을수록 원본 유지)<input type="number" name="init_denoise" value="0.7" step="0.05" min="0.05" max="1"></label>
     </details>
-    <details data-for="sdxl"><summary>ControlNet (구도·포즈 고정)</summary>
+    <details data-for="sdxl flux"><summary>ControlNet (구도·포즈 고정)</summary>
       <div data-blk="cn-easy"></div>
       <label class="f">모델<select name="cn_model"></select></label>
+      <p class="hint plain cn-fam" hidden></p>
       <p class="hint plain"><button type="button" class="link" data-open="controlnet">ControlNet 폴더 열기</button></p>
       <div class="mini" data-img="cn_image"></div>
       <div class="row">
@@ -580,6 +595,7 @@
     <tr><td>FLUX · Krea · Chroma</td><td class="y">지원</td><td>이미지 생성</td></tr>
     <tr><td>이미지→이미지, 하이레스 픽스, LoRA 여러 개, 임베딩</td><td class="y">지원</td><td>이미지 생성</td></tr>
     <tr><td>ControlNet (생성 / 칠해서 편집)</td><td class="y">지원</td><td>이미지 생성, 이미지 편집</td></tr>
+    <tr><td>ControlNet — FLUX.1 · Krea(FLUX.1) 계열</td><td class="p">미검증</td><td>이미지 생성 (FLUX 계열 선택 시). Chroma·Krea 2 는 호환 모델이 없어요</td></tr>
     <tr><td>인페인트 (칠해서 편집), Qwen 말로 편집, 참조 이미지</td><td class="y">지원</td><td>이미지 편집</td></tr>
     <tr><td>자동 선택 (얼굴·배경·색 영역)</td><td class="y">지원</td><td>이미지 편집</td></tr>
     <tr><td>업스케일 (모델 / 타일 재생성)</td><td class="y">지원</td><td>업스케일</td></tr>
@@ -597,6 +613,10 @@
     <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
     <tr><td>결과 삭제 · 날짜별 폴더 정리 · 날짜별로 보기 · outputs 폴더 열기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
     <tr><td>버전별 변경 사항 보기</td><td class="y">지원</td><td>왼쪽 위 버전 표시를 누르거나 설치와 모델 → 프로그램 관리</td></tr>
+    <tr><td>대화 목록 저장 · 검색 · 내보내기, 대화에 사진 붙여 묻기 (이미지 보는 모델 필요)</td><td class="y">지원</td><td>대화</td></tr>
+    <tr><td>태그 자동완성 (내 프롬프트 · LoRA 트리거 · 와일드카드 포함)</td><td class="y">지원</td><td>프롬프트 칸 (끄기: 설치와 모델 → 화면 설정)</td></tr>
+    <tr><td>영상 이어서 만들기 (마지막 장면에서 시작)</td><td class="y">지원</td><td>영상 결과 카드</td></tr>
+    <tr><td>영상 프레임 늘리기 · 업스케일 · 움직이는 WebP 변환</td><td class="p">미검증</td><td>영상 결과 카드 → 더 보기 (프레임 늘리기는 확장 필요)</td></tr>
     <tr><td>만든 결과 모아 보기 · 검색 · 즐겨찾기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
     <tr><td>프롬프트 보관함 · 와일드카드 편집 · 이미지에서 프롬프트 뽑기</td><td class="y">지원</td><td>프롬프트</td></tr>
     <tr><td>처음 쓰는 사람을 위한 안내 (준비 상태 점검, 하고 싶은 일별 순서, 문제 해결집)</td><td class="y">지원</td><td>시작하기</td></tr>
@@ -754,6 +774,21 @@
     <p class="hint plain">설치된 LoRA와 모델이 어느 계열용인지, 파일 안에 적힌 트리거 단어·자주 쓰인 태그가 무엇인지 보여 줘요. LoRA 파일 옆에 같은 이름의 그림 파일(예: 이름.preview.png)이 있으면 미리보기로 써요. 이미지 생성·편집 화면에서 LoRA를 고르면 같은 정보가 칸 아래에 나오고, 단어를 누르면 프롬프트에 들어가요.</p>
     <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">👤 캐릭터</option><option value="style">🎨 스타일</option><option value="background">🏞 배경·풍경</option><option value="other">✦ 기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
     <div id="mi-list"></div>
+  </details>
+  <details class="fold" id="fold-ui"><summary>화면 설정 · 단축키</summary>
+    <h4>화면 색</h4>
+    <div class="theme-pick" id="theme-pick"><label><input type="radio" name="theme" value="auto"> 컴퓨터 설정에 맞춤</label><label><input type="radio" name="theme" value="dark"> 어둡게</label><label><input type="radio" name="theme" value="light"> 밝게</label></div>
+    <h4>프롬프트 입력</h4>
+    <label class="chk"><input type="checkbox" id="tag-on"> 태그 자동완성 — 프롬프트 칸에 두 글자 이상 쓰면 아래에 후보를 보여줘요</label>
+    <p class="hint plain">기본 태그에 더해 내가 저장한 프롬프트, LoRA 트리거 단어, <code>__와일드카드__</code>도 나와요. <kbd>↓</kbd><kbd>↑</kbd>로 고르고 <kbd>Tab</kbd>이나 <kbd>Enter</kbd>로 넣어요. danbooru 형식 태그 목록(csv)을 <b>tags</b> 폴더에 넣으면 그것도 같이 써요. <button type="button" class="mini" data-open="tags">tags 폴더 열기</button></p>
+    <h4>단축키</h4>
+    <table class="keys"><tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>지금 화면의 [만들기·실행] 버튼을 눌러요 (Mac은 <kbd>⌘</kbd>)</td></tr>
+    <tr><td><kbd>/</kbd></td><td>기록 갤러리·프롬프트 화면에서 검색 칸으로 이동해요</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>열린 창(확대 보기, 대기열)을 닫아요</td></tr></table>
+  </details>
+  <details class="fold" id="fold-diag"><summary>문제가 생겼을 때 — 진단 파일 만들기</summary>
+    <p class="hint plain">안 되는 기능이 있을 때 원인을 찾는 데 필요한 정보(버전, 그래픽카드, 설치된 확장·모델 파일 이름, 최근 오류, 로그 끝부분)를 zip 하나로 묶어요. <b>프롬프트·만든 이미지·API 키는 들어가지 않아요.</b> 보내기 전에 안의 txt 파일을 열어 확인할 수 있어요.</p>
+    <div class="actions"><button type="button" class="ghost" id="diag-go">진단 파일 저장</button></div>
   </details>
   <details class="fold" id="fold-backup"><summary>설정 백업 · 복원</summary>
     <p class="hint plain">프롬프트 보관함, 와일드카드, 즐겨찾기, 내가 적은 LoRA 정보(트리거 단어·종류), 화면별 프리셋을 파일 하나로 저장하거나 되살려요. 다른 PC로 옮기거나 재설치 전에 쓰면 좋아요. 모델·결과 이미지는 용량이 커서 포함하지 않아요.</p>

@@ -1,0 +1,737 @@
+masterpiece|품질
+best quality|품질
+very aesthetic|품질
+absurdres|품질
+highres|품질
+newest|품질
+amazing quality|품질
+high quality|품질
+ultra detailed|품질
+detailed|품질
+sharp focus|품질
+official art|품질
+volumetric lighting|품질
+depth of field|품질
+professional lighting|품질
+score_9|품질
+score_8_up|품질
+score_7_up|품질
+source_anime|품질
+rating_safe|품질
+rating_general|품질
+1girl|인원
+1boy|인원
+2girls|인원
+2boys|인원
+3girls|인원
+solo|인원
+multiple girls|인원
+multiple boys|인원
+1other|인원
+couple|인원
+group|인원
+crowd|인원
+solo focus|인원
+6+girls|인원
+long hair|머리
+short hair|머리
+medium hair|머리
+very long hair|머리
+twintails|머리
+ponytail|머리
+side ponytail|머리
+low twintails|머리
+braid|머리
+twin braids|머리
+single braid|머리
+french braid|머리
+bob cut|머리
+hime cut|머리
+bangs|머리
+blunt bangs|머리
+swept bangs|머리
+parted bangs|머리
+hair between eyes|머리
+ahoge|머리
+sidelocks|머리
+hair over one eye|머리
+hair bun|머리
+double bun|머리
+messy hair|머리
+wavy hair|머리
+curly hair|머리
+straight hair|머리
+drill hair|머리
+hair ribbon|머리
+hair ornament|머리
+hairband|머리
+hair flower|머리
+hairclip|머리
+hair bow|머리
+headband|머리
+blonde hair|머리
+black hair|머리
+brown hair|머리
+blue hair|머리
+pink hair|머리
+silver hair|머리
+white hair|머리
+red hair|머리
+green hair|머리
+purple hair|머리
+orange hair|머리
+grey hair|머리
+aqua hair|머리
+light brown hair|머리
+dark blue hair|머리
+multicolored hair|머리
+two-tone hair|머리
+gradient hair|머리
+streaked hair|머리
+colored inner hair|머리
+bald|머리
+blue eyes|눈
+red eyes|눈
+green eyes|눈
+brown eyes|눈
+purple eyes|눈
+yellow eyes|눈
+golden eyes|눈
+pink eyes|눈
+orange eyes|눈
+aqua eyes|눈
+grey eyes|눈
+black eyes|눈
+heterochromia|눈
+closed eyes|눈
+half-closed eyes|눈
+wide eyes|눈
+looking at viewer|눈
+looking away|눈
+looking back|눈
+looking up|눈
+looking down|눈
+looking to the side|눈
+eye contact|눈
+glowing eyes|눈
+sparkling eyes|눈
+tsurime|눈
+tareme|눈
+slit pupils|눈
+one eye closed|눈
+wink|눈
+long eyelashes|눈
+eyelashes|눈
+eyeshadow|눈
+crying with eyes open|눈
+smile|표정
+light smile|표정
+grin|표정
+happy|표정
+laughing|표정
+open mouth|표정
+closed mouth|표정
+:d|표정
+:o|표정
+:3|표정
+;)|표정
+blush|표정
+embarrassed|표정
+shy|표정
+nervous|표정
+surprised|표정
+angry|표정
+sad|표정
+crying|표정
+tears|표정
+serious|표정
+expressionless|표정
+smirk|표정
+sleepy|표정
+pout|표정
+tongue out|표정
+fang|표정
+fangs|표정
+bored|표정
+annoyed|표정
+determined|표정
+worried|표정
+scared|표정
+closed eyes smile|표정
+parted lips|표정
+:t|표정
+;d|표정
+naughty face|표정
+seductive smile|표정
+evil smile|표정
+breasts|신체
+small breasts|신체
+medium breasts|신체
+large breasts|신체
+flat chest|신체
+cleavage|신체
+collarbone|신체
+bare shoulders|신체
+bare arms|신체
+bare legs|신체
+thighs|신체
+thick thighs|신체
+navel|신체
+midriff|신체
+slim|신체
+muscular|신체
+tall|신체
+petite|신체
+tan|신체
+tanlines|신체
+pale skin|신체
+dark skin|신체
+freckles|신체
+mole|신체
+mole under eye|신체
+fang out|신체
+pointy ears|신체
+animal ears|신체
+cat ears|신체
+fox ears|신체
+wolf ears|신체
+rabbit ears|신체
+dog ears|신체
+elf ears|신체
+tail|신체
+cat tail|신체
+fox tail|신체
+wolf tail|신체
+wings|신체
+angel wings|신체
+demon wings|신체
+horns|신체
+halo|신체
+glasses|신체
+round eyewear|신체
+sunglasses|신체
+eyepatch|신체
+scar|신체
+tattoo|신체
+school uniform|의상
+serafuku|의상
+sailor collar|의상
+pleated skirt|의상
+skirt|의상
+miniskirt|의상
+long skirt|의상
+plaid skirt|의상
+shirt|의상
+white shirt|의상
+t-shirt|의상
+blouse|의상
+sweater|의상
+turtleneck|의상
+cardigan|의상
+hoodie|의상
+jacket|의상
+coat|의상
+trench coat|의상
+leather jacket|의상
+blazer|의상
+vest|의상
+dress|의상
+white dress|의상
+black dress|의상
+sundress|의상
+summer dress|의상
+evening gown|의상
+wedding dress|의상
+kimono|의상
+yukata|의상
+japanese clothes|의상
+hakama|의상
+chinese clothes|의상
+china dress|의상
+hanfu|의상
+maid|의상
+maid headdress|의상
+apron|의상
+gothic lolita|의상
+lolita fashion|의상
+witch hat|의상
+hat|의상
+beret|의상
+cap|의상
+baseball cap|의상
+bonnet|의상
+ribbon|의상
+bowtie|의상
+necktie|의상
+scarf|의상
+choker|의상
+necklace|의상
+earrings|의상
+bracelet|의상
+gloves|의상
+fingerless gloves|의상
+thighhighs|의상
+pantyhose|의상
+stockings|의상
+kneehighs|의상
+socks|의상
+white thighhighs|의상
+black thighhighs|의상
+shoes|의상
+boots|의상
+high heels|의상
+sneakers|의상
+loafers|의상
+sandals|의상
+bikini|의상
+swimsuit|의상
+one-piece swimsuit|의상
+school swimsuit|의상
+shorts|의상
+jeans|의상
+pants|의상
+leggings|의상
+tank top|의상
+crop top|의상
+off shoulder|의상
+sleeveless|의상
+long sleeves|의상
+short sleeves|의상
+detached sleeves|의상
+wide sleeves|의상
+armor|의상
+knight|의상
+cape|의상
+cloak|의상
+hooded cloak|의상
+uniform|의상
+military uniform|의상
+suit|의상
+tuxedo|의상
+lab coat|의상
+pajamas|의상
+nightgown|의상
+bandages|의상
+mask|의상
+headphones|의상
+cat ear headphones|의상
+backpack|의상
+bag|의상
+umbrella|의상
+holding umbrella|의상
+sword|의상
+holding sword|의상
+staff|의상
+bow (weapon)|의상
+gun|의상
+holding gun|의상
+book|의상
+holding book|의상
+cup|의상
+holding cup|의상
+flower|의상
+holding flower|의상
+phone|의상
+holding phone|의상
+guitar|의상
+microphone|의상
+fan|의상
+lantern|의상
+standing|포즈
+sitting|포즈
+lying|포즈
+kneeling|포즈
+squatting|포즈
+walking|포즈
+running|포즈
+jumping|포즈
+crouching|포즈
+leaning forward|포즈
+leaning back|포즈
+on back|포즈
+on stomach|포즈
+on side|포즈
+arms up|포즈
+arms behind back|포즈
+arms behind head|포즈
+hand on hip|포즈
+hands on hips|포즈
+hand up|포즈
+hand on own chest|포즈
+hand on own face|포즈
+hand to own mouth|포즈
+own hands together|포즈
+clasped hands|포즈
+crossed arms|포즈
+outstretched arms|포즈
+outstretched hand|포즈
+reaching|포즈
+waving|포즈
+peace sign|포즈
+v|포즈
+thumbs up|포즈
+pointing|포즈
+finger to mouth|포즈
+salute|포즈
+stretching|포즈
+hugging|포즈
+holding hands|포즈
+head tilt|포즈
+from side|포즈
+from behind|포즈
+from above|포즈
+from below|포즈
+from front|포즈
+dutch angle|포즈
+cowboy shot|포즈
+full body|포즈
+upper body|포즈
+portrait|포즈
+close-up|포즈
+head out of frame|포즈
+wide shot|포즈
+pov|포즈
+selfie|포즈
+straight-on|포즈
+profile|포즈
+three-quarter view|포즈
+fisheye|포즈
+dynamic angle|포즈
+dynamic pose|포즈
+fighting stance|포즈
+sitting on chair|포즈
+sitting on bed|포즈
+lying on bed|포즈
+seiza|포즈
+wariza|포즈
+indian style|포즈
+yokozuwari|포즈
+back|포즈
+looking over shoulder|포즈
+simple background|배경
+white background|배경
+black background|배경
+grey background|배경
+gradient background|배경
+transparent background|배경
+blurry background|배경
+blurry|배경
+outdoors|배경
+indoors|배경
+day|배경
+night|배경
+sunset|배경
+sunrise|배경
+evening|배경
+twilight|배경
+blue sky|배경
+cloudy sky|배경
+starry sky|배경
+night sky|배경
+moon|배경
+full moon|배경
+sun|배경
+stars|배경
+rain|배경
+snow|배경
+wind|배경
+cherry blossoms|배경
+petals|배경
+falling petals|배경
+flower field|배경
+forest|배경
+tree|배경
+garden|배경
+beach|배경
+ocean|배경
+water|배경
+waves|배경
+river|배경
+lake|배경
+mountain|배경
+cliff|배경
+city|배경
+cityscape|배경
+street|배경
+alley|배경
+rooftop|배경
+bridge|배경
+building|배경
+school|배경
+classroom|배경
+library|배경
+bedroom|배경
+bed|배경
+kitchen|배경
+cafe|배경
+restaurant|배경
+shop|배경
+train station|배경
+train interior|배경
+bus stop|배경
+shrine|배경
+torii|배경
+temple|배경
+castle|배경
+ruins|배경
+fantasy|배경
+futuristic|배경
+cyberpunk|배경
+neon lights|배경
+steampunk|배경
+space|배경
+planet|배경
+spacecraft|배경
+desert|배경
+field|배경
+grass|배경
+cloud|배경
+fog|배경
+mist|배경
+lightning|배경
+fire|배경
+smoke|배경
+bubbles|배경
+sparkle|배경
+light particles|배경
+confetti|배경
+balloons|배경
+fireworks|배경
+bokeh|배경
+window|배경
+curtains|배경
+sunlight|배경
+sunbeam|배경
+light rays|배경
+backlighting|배경
+rim lighting|배경
+soft lighting|배경
+dramatic lighting|배경
+cinematic lighting|배경
+dim lighting|배경
+moonlight|배경
+candlelight|배경
+neon|배경
+shadow|배경
+silhouette|배경
+lens flare|배경
+chromatic aberration|배경
+film grain|배경
+motion blur|배경
+vignetting|배경
+anime|화풍
+anime coloring|화풍
+anime screencap|화풍
+cel shading|화풍
+flat color|화풍
+watercolor|화풍
+oil painting|화풍
+sketch|화풍
+lineart|화풍
+monochrome|화풍
+greyscale|화풍
+sepia|화풍
+realistic|화풍
+photorealistic|화풍
+3d|화풍
+pixel art|화풍
+chibi|화풍
+manga|화풍
+comic|화풍
+retro artstyle|화풍
+1980s (style)|화풍
+1990s (style)|화풍
+vaporwave|화풍
+impressionism|화풍
+ukiyo-e|화풍
+concept art|화풍
+illustration|화풍
+painterly|화풍
+soft focus|화풍
+vibrant colors|화풍
+pastel colors|화풍
+muted colors|화풍
+high contrast|화풍
+colorful|화풍
+dark|화풍
+bright|화풍
+warm colors|화풍
+cool colors|화풍
+limited palette|화풍
+traditional media|화풍
+digital media|화풍
+graphite (medium)|화풍
+ink (medium)|화풍
+marker (medium)|화풍
+colored pencil (medium)|화풍
+no lineart|화풍
+thick lineart|화풍
+thin lineart|화풍
+bloom|화풍
+shiny|화풍
+glossy|화풍
+matte|화풍
+text|기타
+english text|기타
+speech bubble|기타
+signature|기타
+watermark|기타
+artist name|기타
+logo|기타
+border|기타
+letterboxed|기타
+copyright name|기타
+character name|기타
+translated|기타
+no humans|기타
+scenery|기타
+still life|기타
+food|기타
+cake|기타
+sweets|기타
+ice cream|기타
+fruit|기타
+drink|기타
+coffee|기타
+tea|기타
+bread|기타
+sandwich|기타
+ramen|기타
+sushi|기타
+cat|기타
+dog|기타
+bird|기타
+fox|기타
+wolf|기타
+rabbit|기타
+fish|기타
+butterfly|기타
+dragon|기타
+horse|기타
+deer|기타
+bear|기타
+owl|기타
+rose|기타
+sunflower|기타
+lily|기타
+spider lily|기타
+hydrangea|기타
+plant|기타
+leaf|기타
+car|기타
+motorcycle|기타
+bicycle|기타
+train|기타
+ship|기타
+airplane|기타
+robot|기타
+mecha|기타
+android|기타
+cyborg|기타
+ghost|기타
+vampire|기타
+demon|기타
+angel|기타
+witch|기타
+elf|기타
+orc|기타
+catgirl|기타
+foxgirl|기타
+wolfgirl|기타
+bunny girl|기타
+magical girl|기타
+idol|기타
+nurse|기타
+teacher|기타
+student|기타
+office lady|기타
+schoolgirl|기타
+soldier|기타
+pirate|기타
+ninja|기타
+samurai|기타
+princess|기타
+queen|기타
+wizard|기타
+cowboy|기타
+detective|기타
+doctor|기타
+scientist|기타
+musician|기타
+singer|기타
+dancer|기타
+athlete|기타
+swimmer|기타
+gamer|기타
+cooking|기타
+eating|기타
+drinking|기타
+reading|기타
+writing|기타
+sleeping|기타
+singing|기타
+dancing|기타
+playing guitar|기타
+playing piano|기타
+shopping|기타
+studying|기타
+working|기타
+exercising|기타
+swimming|기타
+riding|기타
+flying|기타
+fishing|기타
+camping|기타
+picnic|기타
+party|기타
+festival|기타
+summer festival|기타
+christmas|기타
+halloween|기타
+valentine|기타
+new year|기타
+birthday|기타
+wedding|기타
+lowres|제외(네거티브)
+bad anatomy|제외(네거티브)
+bad hands|제외(네거티브)
+bad proportions|제외(네거티브)
+extra digits|제외(네거티브)
+fewer digits|제외(네거티브)
+extra fingers|제외(네거티브)
+missing fingers|제외(네거티브)
+extra limbs|제외(네거티브)
+missing limbs|제외(네거티브)
+deformed|제외(네거티브)
+disfigured|제외(네거티브)
+mutated hands|제외(네거티브)
+poorly drawn hands|제외(네거티브)
+poorly drawn face|제외(네거티브)
+worst quality|제외(네거티브)
+low quality|제외(네거티브)
+normal quality|제외(네거티브)
+jpeg artifacts|제외(네거티브)
+cropped|제외(네거티브)
+username|제외(네거티브)
+error|제외(네거티브)
+duplicate|제외(네거티브)
+ugly|제외(네거티브)
+morbid|제외(네거티브)
+mutilated|제외(네거티브)
+out of frame|제외(네거티브)
+long neck|제외(네거티브)
+fused fingers|제외(네거티브)
+too many fingers|제외(네거티브)
+bad feet|제외(네거티브)
+extra legs|제외(네거티브)
+cloned face|제외(네거티브)
+gross proportions|제외(네거티브)
+worst aesthetic|제외(네거티브)
+bad quality|제외(네거티브)
+displeasing|제외(네거티브)
+very displeasing|제외(네거티브)
+oldest|제외(네거티브)
+unfinished|제외(네거티브)
+censored|제외(네거티브)
+bar censor|제외(네거티브)
+mosaic censoring|제외(네거티브)

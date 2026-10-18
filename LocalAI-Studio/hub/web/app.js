@@ -348,7 +348,7 @@ async function loadLists(force){
   if(!force&&Date.now()-listsAt<8000&&LISTS.llm)return;   // 탭을 오갈 때마다 서버를 다시 훑지 않아요(파일을 넣고 돌아오면 focus 로 새로고침)
   try{LISTS=await api('/api/lists');listsAt=Date.now()}catch{return}
   fill('#llm',LISTS.llm);fill('select[name=ckpt]',LISTS.checkpoints);fill('select[name=vae]',LISTS.vaes,'체크포인트 내장');
-  $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');
+  $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');$$('select[name=cn_model]').forEach(s=>s.form&&cnFilter(s.form));
   fill('select[name=fx_vae],select[name=q_vae],select[name=k2_vae]',LISTS.vaes,'자동');fill('select[name=fx_t5],select[name=fx_clip],select[name=q_te],select[name=k2_te]',LISTS.text_encoders||[],'자동');fill('select[name=q_unet]',LISTS.diffusion||[],'자동');
   fillFx();
   if(LISTS.llm.includes(localStorage.llm))$('#llm').value=localStorage.llm;
@@ -383,8 +383,14 @@ function applyFields(f,o){
   if($('.loras',f))setLoras(f,o);   // LoRA 칸도 프리셋 그대로(없으면 비움)
   for(const[k,v]of Object.entries(o)){if(/^lora\d+(_w)?$/.test(k))continue;setv(f,k,v)}
   sync(f)}
+/* ControlNet 모델 목록: FLUX 계열을 고르면 이름에 FLUX 가 든 모델만, 그 밖에는 FLUX 용을 뺀 것만 보여 줘요 */
+function cnFilter(f){const s=f.elements.cn_model;if(!s)return;
+  const fx=f.elements.gengine&&f.elements.gengine.value==='flux';let n=0;
+  [...s.options].forEach(o=>{if(!o.value)return;const is=/flux/i.test(o.value),ok=fx?is:!is;o.hidden=o.disabled=!ok;if(ok)n++});
+  if(s.selectedOptions[0]&&s.selectedOptions[0].disabled)s.value='';
+  const t=$('.cn-fam',f);if(t){t.hidden=!(fx&&!n);t.innerHTML=fx&&!n?`FLUX 용 ControlNet 이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'FLUX ControlNet Union Pro 2.0'을 설치해 주세요. (약 4.3GB)`:''}}
 function sync(f){if(f.elements.engine)f.dataset.e=f.elements.engine.value;if(f.elements.mode)f.dataset.m=f.elements.mode.value;
-  if(f.elements.gengine)f.dataset.g=f.elements.gengine.value;if(f.elements.rengine)f.dataset.re=f.elements.rengine.value;if(f.elements.fengine)f.dataset.fe=f.elements.fengine.value;warn()}
+  if(f.elements.gengine)f.dataset.g=f.elements.gengine.value;if(f.elements.rengine)f.dataset.re=f.elements.rengine.value;if(f.elements.fengine)f.dataset.fe=f.elements.fengine.value;cnFilter(f);warn()}
 function presetsUI(f){
   const box=$('[data-presets]',f);if(!box)return;
   box.innerHTML='<select class="pre-sel"></select><button type="button" class="ghost pre-save">현재 설정 저장</button><button type="button" class="ghost pre-del">삭제</button><button type="button" class="ghost refresh-models" title="폴더에 새로 넣거나 지운 모델·LoRA 파일을 목록에 바로 반영해요.">↻ 모델 새로고침</button>';
@@ -487,7 +493,7 @@ const PERSONAS={
  '기본 어시스턴트':'당신은 솔직하고 유능한 한국어 어시스턴트입니다. 질문에 정확하고 구체적으로 답합니다.',
  '창작·롤플레이 파트너':'당신은 성인 사용자와 함께 소설과 롤플레이를 쓰는 창작 파트너입니다. 모든 등장인물은 성인입니다. 장면, 감정, 대사를 생생하게 묘사하고 사용자가 이끄는 방향을 존중하며 이야기를 이어 갑니다.',
  '이미지 프롬프트 도우미':'사용자의 설명을 이미지 생성용 영어 프롬프트로 바꿔 줍니다. SDXL용 태그 형식과 자연어 문장 형식을 둘 다 출력합니다. 인물은 성인으로 명확히 표현합니다.'};
-const Chat={hist:ls.get('chat',[]),ctl:null};
+const Chat={hist:[],ctl:null,id:null,list:[],pics:[]};
 const OPTS=['top_p','top_k','min_p','repeat_penalty','num_predict','seed'];
 $('#persona').innerHTML=Object.keys(PERSONAS).map(k=>`<option>${k}</option>`).join('')+'<option value="">사용자 지정</option>';
 $('#sys').value=localStorage.sys||Object.values(PERSONAS)[0];
@@ -511,7 +517,7 @@ function md(t){
   return t.replace(/\u0000(\d+)\u0000/g,(_,i)=>'<pre><code>'+blocks[i]+'</code></pre>');
 }
 const wait=m=>`<span class="mute">${m.think?'생각하는 중…':'…'}</span>`;
-const bubble=m=>`<div class="m ${m.role}"><div class="bub">${md(m.content)||wait(m)}</div></div>`;
+const bubble=m=>`<div class="m ${m.role}"><div class="bub">${m.images?.length?`<div class="cthumbs">${m.images.map(u=>`<img src="${u}" alt="붙인 사진">`).join('')}</div>`:''}${md(m.content)||(m.images?.length&&m.role==='user'?'':wait(m))}</div></div>`;
 function paint(){const l=$('#log');
   l.innerHTML=Chat.hist.map(bubble).join('')||'<p class="empty">무엇이든 물어보세요. 모든 대화는 이 컴퓨터 안에서만 처리돼요.</p>';
   l.scrollTop=l.scrollHeight}
@@ -519,14 +525,19 @@ function paintLast(){const l=$('#log'),b=$$('.bub',l).at(-1);
   if(b){const m=Chat.hist.at(-1);b.innerHTML=md(m.content)||wait(m);l.scrollTop=l.scrollHeight}}
 async function send(){
   if(Chat.ctl){Chat.ctl.abort();return}
-  const text=$('#msg').value.trim();if(!text)return;
+  const pics=Chat.pics.slice(),text=$('#msg').value.trim()||(pics.length?'이 사진을 설명해 줘.':'');if(!text)return;
   const sys=$('#sys').value.trim(),ce=$('#cerr');ce.hidden=true;
   if(!$('#llm').value){ce.textContent='대화 모델이 아직 없어요. [설치와 모델]에서 설치해 주세요.';ce.hidden=false;return}
-  Chat.hist.push({role:'user',content:text},{role:'assistant',content:''});
-  $('#msg').value='';paint();
+  if(pics.length||Chat.hist.some(m=>m.images?.length)){      // 사진이 있으면 이미지를 볼 수 있는 모델이어야 해요
+    let vm=[];try{vm=(await api('/api/vision')).models||[]}catch{}
+    if(pics.length&&!vm.includes($('#llm').value)){
+      if(!vm.length){ce.innerHTML='이미지를 볼 수 있는 대화 모델이 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 \'Qwen2.5-VL 7B (이미지 보는 모델)\'를 설치해 주세요.';ce.hidden=false;return}
+      $('#llm').value=vm[0];localStorage.llm=vm[0];toast(`사진을 볼 수 있는 모델(${vm[0]})로 바꿨어요.`,5000)}}
+  Chat.hist.push({role:'user',content:text,...(pics.length?{images:pics}:{})},{role:'assistant',content:''});
+  $('#msg').value='';Chat.pics=[];picsPaint();paint();
   Chat.ctl=new AbortController();$('#send').textContent='멈춤';
   const body={model:$('#llm').value,stream:true,
-    messages:[...(sys?[{role:'system',content:sys}]:[]),...Chat.hist.slice(0,-1).map(({role,content})=>({role,content}))],
+    messages:[...(sys?[{role:'system',content:sys}]:[]),...Chat.hist.slice(0,-1).map(({role,content,images})=>({role,content,...(images?.length?{images:images.map(u=>u.split(',')[1])}:{})}))],
     options:chatOptions()};
   try{
     const r=await fetch('/api/chat',{method:'POST',body:JSON.stringify(body),signal:Chat.ctl.signal});
@@ -543,16 +554,67 @@ async function send(){
   }catch(e){
     if(e.name!=='AbortError'){
       if(Chat.hist.at(-1).content){Chat.hist.at(-1).content+=`\n\n⚠ ${e.message}`}
-      else{Chat.hist.splice(-2);$('#msg').value=text;ce.textContent=e.message;ce.hidden=false}  // 실패한 턴은 기록에서 빼고 입력창에 되돌림
+      else{Chat.hist.splice(-2);$('#msg').value=pics.length&&text==='이 사진을 설명해 줘.'?'':text;Chat.pics=pics;picsPaint();ce.textContent=e.message;ce.hidden=false}  // 실패한 턴은 기록에서 빼고 입력창에 되돌림
     }
   }
   Chat.ctl=null;$('#send').textContent='보내기';
-  ls.set('chat',Chat.hist.slice(-60));paint();
+  paint();chatSave();
 }
 $('#send').onclick=send;
 $('#msg').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send()}};
-$('#newchat').onclick=()=>{Chat.ctl?.abort();Chat.hist=[];ls.set('chat',[]);paint()};
+/* ── 사진 붙여서 묻기: 크기를 줄여(긴 변 1344px, JPEG) 대화에 같이 저장해요 ── */
+const MAXPICS=4;
+function picsPaint(){const t=$('#c-thumbs');t.hidden=!Chat.pics.length;
+  t.innerHTML=Chat.pics.map((u,i)=>`<span class="ct"><img src="${u}" alt="붙인 사진 ${i+1}"><button type="button" data-rm="${i}" aria-label="사진 빼기">×</button></span>`).join('')+`<small class="mute">${Chat.pics.length}/${MAXPICS}장 · 이미지를 볼 수 있는 모델이 답해요</small>`}
+function shrink(file){return new Promise((ok,bad)=>{const u=URL.createObjectURL(file),i=new Image();i.onerror=()=>{URL.revokeObjectURL(u);bad()};
+  i.onload=()=>{const k=Math.min(1,1344/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);
+    const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.88))};i.src=u})}
+async function addPics(files){const fl=[...files].filter(f=>f.type.startsWith('image/'));if(!fl.length)return;
+  for(const f of fl){if(Chat.pics.length>=MAXPICS){toast(`사진은 한 번에 ${MAXPICS}장까지 붙일 수 있어요.`);break}
+    try{Chat.pics.push(await shrink(f))}catch{toast('이 파일은 이미지로 읽지 못했어요.')}}
+  picsPaint();$('#msg').focus()}
+$('#c-attach').onclick=()=>$('#c-file').click();
+$('#c-file').onchange=e=>{addPics(e.target.files);e.target.value=''};
+$('#c-thumbs').onclick=e=>{const b=e.target.closest('[data-rm]');if(b){Chat.pics.splice(+b.dataset.rm,1);picsPaint()}};
+$('#msg').addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])].filter(x=>x.type.startsWith('image/'));if(f.length){e.preventDefault();addPics(f)}});
+{const cm=$('#v-chat .chatmain');['dragover','dragenter'].forEach(ev=>cm.addEventListener(ev,e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();cm.classList.add('drop')}}));
+ ['dragleave','drop'].forEach(ev=>cm.addEventListener(ev,e=>{if(ev==='drop'||e.target===cm)cm.classList.remove('drop')}));
+ cm.addEventListener('drop',e=>{if(e.dataTransfer?.files?.length){e.preventDefault();addPics(e.dataTransfer.files)}})}
+$('#log').addEventListener('click',e=>{const i=e.target.closest('.cthumbs img');if(i)window.open(i.src,'_blank')});
 paint();
+/* ── 대화 목록: 대화마다 파일에 저장하고, 새 대화를 시작해도 이전 대화는 남아요 ── */
+async function chatSave(){const msgs=Chat.hist.filter(m=>m.content||m.images?.length).map(({role,content,images})=>({role,content,...(images?.length?{images}:{})}));
+  if(!msgs.length)return;
+  try{const r=await api('/api/chats/save',{id:Chat.id,msgs,model:$('#llm').value,sys:$('#sys').value,persona:$('#persona').value});
+    if(r.error){toast(r.error);return}Chat.id=r.id;chatList()}catch{}}
+const chatDay=t=>{const d=new Date(t*1000),n=new Date(),z=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime(),diff=Math.round((z(n)-z(d))/864e5);
+  return diff===0?d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}):diff===1?'어제':d.toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})};
+async function chatList(){const q=$('#cl-q').value.trim();let r;try{r=await api('/api/chats?q='+encodeURIComponent(q))}catch{return}
+  Chat.list=r.items;$('#cl-list').innerHTML=r.items.length?r.items.map(c=>`<div class="ci${c.id===Chat.id?' on':''}" data-id="${esc(c.id)}" tabindex="0" role="button">
+    <b>${esc(c.title)}</b><small>${esc(c.preview)}</small><span class="cm">${chatDay(c.updated)}</span>
+    <span class="ca"><button type="button" data-ren="${esc(c.id)}" title="이름 바꾸기" aria-label="이름 바꾸기">✎</button><button type="button" data-del="${esc(c.id)}" title="삭제" aria-label="삭제">🗑</button></span></div>`).join(''):`<p class="mute">${q?'찾는 대화가 없어요.':'아직 저장된 대화가 없어요.'}</p>`}
+function chatNew(){Chat.ctl?.abort();Chat.id=null;Chat.hist=[];paint();chatList();$('#msg').focus()}
+async function chatOpen(id){const c=await api('/api/chats/'+id);if(c.error)return toast(c.error);Chat.ctl?.abort();Chat.id=c.id;Chat.hist=c.msgs.map(m=>({...m}));
+  if(c.model&&[...$('#llm').options].some(o=>o.value===c.model)){$('#llm').value=c.model;localStorage.llm=c.model}
+  if(c.sys){$('#sys').value=c.sys;localStorage.sys=c.sys;$('#persona').value=c.persona&&PERSONAS[c.persona]?c.persona:''}
+  paint();chatList()}
+$('#cl-new').onclick=chatNew;$('#cl-q').oninput=debounce(chatList,250);
+$('#cl-list').onclick=async e=>{const rn=e.target.closest('[data-ren]'),dl=e.target.closest('[data-del]'),it=e.target.closest('.ci');
+  if(rn){e.stopPropagation();const c=Chat.list.find(x=>x.id===rn.dataset.ren),t=prompt('대화 이름',c?c.title:'');if(t===null)return;
+    await api('/api/chats/rename',{id:rn.dataset.ren,title:t});chatList();return}
+  if(dl){e.stopPropagation();const c=Chat.list.find(x=>x.id===dl.dataset.del);if(!confirm(`'${c?c.title:'이 대화'}' 대화를 지울까요?\n(되돌릴 수 없어요)`))return;
+    await api('/api/chats/delete',{ids:[dl.dataset.del]});if(Chat.id===dl.dataset.del)chatNew();else chatList();return}
+  if(it)chatOpen(it.dataset.id)};
+$('#cl-list').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('ci')){e.preventDefault();e.target.click()}};
+$('#cl-toggle').onclick=()=>{const on=!$('#v-chat').classList.contains('nolist');$('#v-chat').classList.toggle('nolist',on);ls.set('chat:nolist',on)};
+$('#v-chat').classList.toggle('nolist',ls.get('chat:nolist',innerWidth<1100));
+$('#cl-export').onclick=()=>{if(!Chat.hist.length)return toast('내보낼 대화가 없어요.');const c=Chat.list.find(x=>x.id===Chat.id),title=c?c.title:'대화';
+  const md=`# ${title}\n\n`+Chat.hist.filter(m=>m.content).map(m=>`**${m.role==='user'?'나':'AI'}**\n\n${m.images?.length?`(사진 ${m.images.length}장 첨부)\n\n`:''}${m.content.replace(/<think>[\s\S]*?<\/think>\s*/g,'')}\n`).join('\n---\n\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([md],{type:'text/markdown'}));a.download=title.replace(/[\\/:*?"<>|]/g,'_')+'.md';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('대화를 파일로 저장했어요.')};
+(async()=>{let r;try{r=await api('/api/chats')}catch{return}
+  const old=ls.get('chat',[]);      // 예전 버전이 브라우저에 저장해 둔 대화 하나를 목록으로 옮겨요
+  if(old.length&&!r.items.length){try{const s=await api('/api/chats/save',{msgs:old.map(({role,content})=>({role,content}))});if(!s.error){ls.set('chat',[]);r=await api('/api/chats')}}catch{}}
+  if(r.items.length&&!Chat.hist.length)await chatOpen(r.items[0].id);else chatList()})();
 
 /* ══════════ 이미지 불러오기 / 마스크 칠하기 ══════════ */
 function painter(v){
@@ -732,19 +794,27 @@ addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])][0],on=$('
 
 /* ══════════ 이미지 작업 실행 / 결과 ══════════ */
 function addVideoResults(sec,j){
-  const used=(j.used||[]).filter(Boolean);
-  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig"><video src="${u}" controls loop muted playsinline preload="metadata"></video><figcaption><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="folder" title="이 영상이 저장된 폴더를 열어요">출력 폴더 열기</button></figcaption></figure>`).join('')}${
+  const used=(j.used||[]).filter(Boolean),mi=(u,to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${tip}"`:''}>${t}</button>`;
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>{const an=/\.webp$/i.test(u);return `<figure class="vfig">${an?`<img src="${u}" alt="움직이는 WebP">`:`<video src="${u}" controls loop muted playsinline preload="metadata"></video>`}<figcaption><a href="${u}" download>저장</a>${an?'':mi(u,'vcont','이어서 만들기','이 영상의 마지막 장면을 시작 이미지로 넣어서, 그다음 장면을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
+    an?'':mi(u,'vp:interp','프레임 늘리기 (부드럽게)','중간 장면을 만들어 넣어 움직임을 2배로 부드럽게 해요 · RIFE 확장 필요(미검증)')+mi(u,'vp:upscale','해상도 키우기','업스케일 모델로 모든 장면을 키워요 (설치와 모델에서 받은 모델 사용) · 미검증')+mi(u,'vp:webp','움직이는 WebP로 저장','용량이 작은 움직이는 그림 파일로 바꿔요 · 미검증')}${mi(u,'folder','출력 폴더 열기','이 파일이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`}).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const v=$('.res .batch video',sec);if(v){v.scrollIntoView({block:'nearest'});v.play().catch(()=>{})}
 }
+/* 영상의 마지막 장면을 이미지로 뽑아요 (같은 서버의 파일이라 캔버스로 바로 읽을 수 있어요) */
+function lastFrame(u){return new Promise((ok,bad)=>{const v=document.createElement('video');v.muted=true;v.preload='auto';v.src=u;
+  const fail=()=>bad(new Error('영상을 읽지 못했어요.'));v.onerror=fail;setTimeout(fail,15000);
+  v.onloadedmetadata=()=>{v.currentTime=Math.max(0,(v.duration||0)-0.05)};
+  v.onseeked=()=>{try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);ok(c.toDataURL('image/png'))}catch{fail()}}})}
 function addResults(sec,j,kind){
-  if(kind==='vid')return addVideoResults(sec,j);
+  if(kind==='vid'||kind==='vpost')return addVideoResults(sec,j);
   const first=kind==='edit'?'이어서 편집':'편집으로';
   const used=(j.used||[]).filter(Boolean);
+  const mi=(u,to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${tip}"`:''}>${t}</button>`;
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
-    j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="edit">${first}</button>${
-    kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}${kind==='gen'?`<button type="button" data-u="${u}" data-to="regen" title="이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요">같은 설정으로 생성</button>`:''}<button type="button" data-u="${u}" data-to="vid" title="이 이미지를 시작 장면으로 영상을 만들어요">영상으로</button><button type="button" data-u="${u}" data-to="info">정보</button><button type="button" data-u="${u}" data-to="folder" title="이 사진이 저장된 폴더를 열어요">출력 폴더 열기</button>${
-    COMPARE[u]?`<button type="button" data-u="${u}" data-to="cmp">겹쳐서 비교</button>`:''}</figcaption></figure>`).join('')}${
+    j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a>${mi(u,'edit',first)}${
+    kind==='up'?'':mi(u,'up','업스케일')}<details class="more"><summary>더 보기</summary><div class="menu">${
+    kind==='gen'?mi(u,'regen','같은 설정으로 생성','이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요')+mi(u,'var','비슷하게 여러 장…','구도는 유지하고 디테일만 조금씩 다른 이미지를 여러 장 만들어요'):''}${
+    mi(u,'vid','영상으로','이 이미지를 시작 장면으로 영상을 만들어요')}${COMPARE[u]?mi(u,'cmp','겹쳐서 비교'):''}${mi(u,'info','정보')}${mi(u,'folder','출력 폴더 열기','이 사진이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
   bt.querySelectorAll('img').forEach(i=>{if(!i.complete)i.addEventListener('load',goto,{once:true})}); // 사진이 다 불러와진 뒤 높이가 커져도 다시 맞춰요
@@ -840,14 +910,21 @@ document.addEventListener('click',async e=>{
   const lx=e.target.closest('.lora-row .x');if(lx){const box=lx.closest('.loras'),f=lx.closest('form');lx.closest('.lora-row').remove();
     if(!$('.lora-row',box))addLora(box);if(f)saveForm(f);return}
   const im=e.target.closest('.res figure img');if(im){openFrom(im);return}
+  const vg=e.target.closest('.v-go');if(vg){const bar=vg.closest('.varbar');vg.disabled=true;
+    try{await run('gen',$('#f-gen'),{init:await urlToDataURL(bar.dataset.u),init_denoise:+$('.v-lv',bar).value,n:+$('.v-n',bar).value,seed:-1})}finally{bar.remove()}return}
+  $$('.more[open]').forEach(d=>{if(!d.contains(e.target))d.open=false});
   const b=e.target.closest('button[data-u]');if(!b)return;
   const to=b.dataset.to,u=b.dataset.u;
+  if(to==='var'){const fig=b.closest('figure'),old=$('.varbar',fig);b.closest('.more').open=false;if(old){old.remove();return}
+    fig.insertAdjacentHTML('beforeend',`<div class="varbar" data-u="${u}"><label>변형 정도 <select class="v-lv"><option value="0.25">약하게</option><option value="0.45" selected>보통</option><option value="0.65">크게</option></select></label><label>장수 <select class="v-n"><option>2</option><option selected>4</option><option>6</option></select></label><button type="button" class="ghost sm v-go">만들기</button><span class="mute">지금 생성 화면의 설정(모델·프롬프트)을 그대로 써요.</span></div>`);return}
   if(to==='folder'){try{const r=await api('/api/open',{file:u});toast(r.error?r.error:'폴더를 열었어요: '+r.path)}catch{toast('폴더를 열지 못했어요.')}return}
   if(to==='info'){show('info');infoLoad(await urlToDataURL(u),u.split('/').pop());return}
   if(to==='regen'){
     try{const r=await api('/api/meta',{image:await urlToDataURL(u)});
       if(r.error||!r.gen||!r.gen.prompt){toast('이 이미지에는 생성 정보가 없어요. (설정의 "결과 PNG에 생성 정보 기록"이 꺼져 있었을 수 있어요.)');return}
       INFO={r,dataUrl:u,name:u.split('/').pop()};sendToGen()}catch{toast('설정을 읽지 못했어요.')}return}
+  if(to==='vcont'){try{b.disabled=true;window.vidSetImage(await lastFrame(u));show('vid');toast('마지막 장면을 시작 이미지로 넣었어요. 장면 설명을 이어지게 바꿔서 [영상 만들기]를 눌러 보세요.',6000)}catch(er){toast(er.message)}b.disabled=false;return}
+  if(to.startsWith('vp:')){b.closest('.more').open=false;run('vpost',$('#f-vid'),{op:to.slice(3),video:u,upm:($('#f-up')&&$('#f-up').elements.upm.value)||''});return}
   if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
   IV[to].set(await urlToDataURL(u));show(to);
@@ -956,7 +1033,7 @@ function cardPrompt(c){
 function applyCard(c){
   $('#sys').value=cardPrompt(c);localStorage.sys=$('#sys').value;$('#persona').value='';
   Chat.hist=c.first_mes?[{role:'assistant',content:c.first_mes.replaceAll('{{char}}',c.name).replaceAll('{{user}}','사용자')}]:[];
-  ls.set('chat',Chat.hist);paint();show('chat');
+  Chat.id=null;paint();show('chat');chatSave();
 }
 async function stripInfo(){
   const r=await api('/api/meta/strip',{image:INFO.dataUrl}),st=$('#info-st');
@@ -1476,7 +1553,7 @@ $('#bk-export').onclick=async()=>{try{const d=await api('/api/backup/export');d.
 $('#bk-file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const d=JSON.parse(await f.text());if(d.app!=='LocalAI-Studio'||d.kind!=='backup')throw 0;BK=d;
     const np=Object.values(d.presets||{}).reduce((a,o)=>a+Object.keys(o||{}).length,0);
-    $('#bk-sum').textContent=`${d.created||''} 에 만든 백업(버전 ${d.version||'?'}): 프롬프트 ${(d.prompts||[]).length}개 · 와일드카드 ${Object.keys(d.wildcards||{}).length}개 · 즐겨찾기 ${(d.favs||[]).length}개 · LoRA 정보 ${Object.keys(d.lora_user||{}).length}개 · 프리셋 ${np}개`;$('#bk-box').hidden=false}
+    $('#bk-sum').textContent=`${d.created||''} 에 만든 백업(버전 ${d.version||'?'}): 프롬프트 ${(d.prompts||[]).length}개 · 와일드카드 ${Object.keys(d.wildcards||{}).length}개 · 즐겨찾기 ${(d.favs||[]).length}개 · LoRA 정보 ${Object.keys(d.lora_user||{}).length}개 · 프리셋 ${np}개 · 대화 ${(d.chats||[]).length}개`;$('#bk-box').hidden=false}
   catch{BK=null;$('#bk-box').hidden=true;toast('이 프로그램의 백업 파일이 아니에요.')}};
 $('#bk-cancel').onclick=()=>{BK=null;$('#bk-box').hidden=true};
 $('#bk-go').onclick=async()=>{if(!BK)return;const mode=$('input[name=bkmode]:checked').value;
@@ -1486,7 +1563,7 @@ $('#bk-go').onclick=async()=>{if(!BK)return;const mode=$('input[name=bkmode]:che
     for(const[n,val]of Object.entries(v)){if(mode==='overwrite'||!(n in cur)){cur[n]=val;np++}}ls.set(k,cur)}
   $$('form[id^=f-]').forEach(f=>{try{const sel=$('.pre-sel',f);if(sel&&f.id){const a=ls.get('preset:'+f.id,{});const v=sel.value;sel.innerHTML='<option value="">내 프리셋 불러오기</option>'+Object.keys(a).map(n=>`<option>${esc(n)}</option>`).join('');sel.value=v}}catch{}});
   const c=r.counts;BK=null;$('#bk-box').hidden=true;
-  toast(`되살렸어요: 프롬프트 ${c.prompts} · 와일드카드 ${c.wildcards} · 즐겨찾기 ${c.favs} · LoRA 정보 ${c.lora_user} · 프리셋 ${np}`,9000);loadLists()};
+  toast(`되살렸어요: 프롬프트 ${c.prompts} · 와일드카드 ${c.wildcards} · 즐겨찾기 ${c.favs} · LoRA 정보 ${c.lora_user} · 프리셋 ${np} · 대화 ${c.chats||0}`,9000);loadLists()};
 /* ══════════ 작업 대기열 · 완료 알림 ══════════ */
 const QST={running:'진행 중',queued:'대기',done:'완료',error:'실패',cancelled:'중단'};
 const qSound=()=>ls.get('q:sound',true),qDesk=()=>ls.get('q:desk',false);
@@ -1700,3 +1777,46 @@ async function logInit(){const box=$('#log-list');
 $('#log-q').oninput=debounce(logInit,250);
 $('#log-open').onclick=()=>$$('#log-list details').forEach(d=>d.open=true);$('#log-close').onclick=()=>$$('#log-list details').forEach(d=>d.open=false);
 $('#ver').onclick=()=>show('log');$('#ver').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('log')}};
+
+/* ══════════ 화면 색 · 단축키 ══════════ */
+{const mq=matchMedia('(prefers-color-scheme: light)'),get=()=>{try{return localStorage.getItem('theme')||'auto'}catch{return 'auto'}};
+ const apply=()=>{const t=get();document.documentElement.dataset.theme=t==='auto'?(mq.matches?'light':'dark'):t};
+ const sync=()=>$$('#theme-pick input').forEach(i=>i.checked=i.value===get());
+ $('#theme-pick').onchange=e=>{try{localStorage.setItem('theme',e.target.value)}catch{}apply()};
+ mq.addEventListener?.('change',()=>{if(get()==='auto')apply()});sync()}
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!e.isComposing){const v=$('.view.on');const b=v&&$('form .go,.compose .go',v);
+    if(b&&!b.disabled&&b.offsetParent){e.preventDefault();b.click()}return}
+  if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)&&!document.activeElement.isContentEditable){
+    const v=$('.view.on');const q=v&&$('input[type=search]',v);if(q){e.preventDefault();q.focus();q.select()}}
+});
+
+/* ══════════ 태그 자동완성 ══════════ */
+{const SEL='#f-gen textarea[name=prompt],#f-gen textarea[name=negative],#f-edit textarea[name=prompt],#f-edit textarea[name=negative],#f-batch textarea[name=prompt],#pl-form textarea[name=text],#pl-form textarea[name=negative]';
+ const on=$('#tag-on');on.checked=!ls.get('tags:off',false);on.onchange=()=>{ls.set('tags:off',!on.checked);close()};
+ const box=document.createElement('div');box.id='tagbox';box.hidden=true;box.setAttribute('role','listbox');document.body.append(box);
+ let ta=null,items=[],sel=-1,seq=0;
+ function close(){box.hidden=true;items=[];sel=-1}
+ function seg(el){const v=el.value,c=el.selectionStart,b=Math.max(v.lastIndexOf(',',c-1),v.lastIndexOf('\n',c-1))+1;
+  const raw=v.slice(b,c),lead=raw.length-raw.trimStart().length,txt=raw.slice(lead).replace(/^[(\[{]+/,'');return{from:b+lead+(raw.slice(lead).length-txt.length),to:c,txt}}
+ function draw(){box.innerHTML=items.map((x,i)=>`<div class="ti${i===sel?' on':''}" data-i="${i}" role="option"><span>${esc(x.t)}</span><em>${esc(x.c)}</em></div>`).join('');
+  const r=ta.getBoundingClientRect();box.style.left=r.left+'px';box.style.top=(r.bottom+2)+'px';box.style.width=Math.min(r.width,420)+'px';box.hidden=!items.length}
+ function pick(i){const x=items[i];if(!x||!ta)return;const s=seg(ta),v=ta.value,after=v.slice(s.to),ins=x.t+(/^\s*[,\n]/.test(after)?'':', ');
+  ta.value=v.slice(0,s.from)+ins+after.replace(/^[ ]+/,'');ta.selectionStart=ta.selectionEnd=s.from+ins.length;ta.dispatchEvent(new Event('input',{bubbles:true}));close();ta.focus()}
+ const ask=debounce(async el=>{const s=seg(el);if(s.txt.length<2||/^[<]/.test(s.txt)||/[.!?]\s/.test(s.txt)||s.txt.length>40)return close();
+  const my=++seq;try{const r=await api('/api/tags?q='+encodeURIComponent(s.txt));if(my!==seq||document.activeElement!==el)return;items=(r.items||[]).slice(0,8);sel=-1;ta=el;draw()}catch{close()}},120);
+ document.addEventListener('input',e=>{const el=e.target;if(!el.matches?.(SEL)||!on.checked||e.isComposing)return;ta=el;ask(el)});
+ document.addEventListener('keydown',e=>{if(box.hidden||e.isComposing||e.target!==ta)return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();sel+=e.key==='ArrowDown'?1:-1;if(sel>=items.length)sel=-1;if(sel<-1)sel=items.length-1;draw()}
+  else if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();pick(sel<0?0:sel)}
+  else if(e.key==='Enter'&&sel>=0&&!e.ctrlKey&&!e.metaKey){e.preventDefault();e.stopImmediatePropagation();pick(sel)}
+  else if(e.key==='Escape'){e.stopPropagation();close()}},true);
+ box.addEventListener('mousedown',e=>{const t=e.target.closest('.ti');if(t){e.preventDefault();pick(+t.dataset.i)}});
+ document.addEventListener('focusout',e=>{if(e.target===ta)setTimeout(close,120)});
+ addEventListener('scroll',()=>{if(!box.hidden)close()},true);addEventListener('resize',close)}
+
+$('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
+  try{const r=await fetch('/api/diag/export');if(!r.ok)throw 0;const blob=await r.blob(),n=new Date(),p=x=>String(x).padStart(2,'0'),
+    name=`LocalAI-진단-${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}.zip`,a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast('진단 파일을 저장했어요: '+name,6000)}
+  catch{toast('진단 파일을 만들지 못했어요.')}b.disabled=false};

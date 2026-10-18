@@ -5,7 +5,7 @@
 역할: Ollama / ComfyUI 실행, 웹 UI 제공, 모델 설치, 이미지 작업(마스크 크롭·합성·타일 리파인) 조율,
       이미지 메타데이터 읽기/제거(meta.py), ComfyUI 그래프 생성·사용자 워크플로 실행(flows.py).
 """
-import base64, hashlib, io, json, os, random, re, shutil, subprocess, sys, tempfile, threading, time, uuid, webbrowser
+import base64, csv, hashlib, io, json, os, random, re, shutil, subprocess, sys, tempfile, threading, time, uuid, webbrowser, zipfile
 import urllib.error, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -1462,6 +1462,16 @@ def do_gen_flux(p, J):
     base, n = seed_of(p), clamp(num(p, "n", 1, int), 1, 8)
     w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
     init = load_img(p["init"]) if p.get("init") else None
+    cnimg = None
+    if p.get("cn_model") and p.get("cn_image"):
+        if fam != "flux":      # Chroma·Krea 2 는 구조가 달라 FLUX.1 용 ControlNet 이 맞지 않아요
+            warn(J, "ControlNet 은 FLUX.1·Krea(FLUX.1) 계열에서만 쓸 수 있어 이번에는 쓰지 않았어요.")
+        else:
+            if not re.search(r"flux", str(p["cn_model"]), re.I):
+                raise ValueError("고른 ControlNet 모델은 FLUX 용이 아닌 것 같아요. 이름에 'FLUX'가 들어간 모델을 고르거나(설치와 모델 → FLUX ControlNet), 사용 안 함으로 바꿔 주세요.")
+            if not has_node("ControlNetApplyAdvanced"):
+                raise RuntimeError("이 ComfyUI 에는 ControlNet 노드가 없어요. ComfyUI 를 업데이트해 주세요.")
+            cnimg = load_img(p["cn_image"])
     out = []
     for i in range(n):
         rng = random.Random(base + i)
@@ -1479,9 +1489,22 @@ def do_gen_flux(p, J):
                  guidance=clamp(num(p, "fx_guidance", 3.5), 0.0, 20.0), steps=clamp(num(p, "fx_steps", 20, int), 1, 100),
                  cfg=clamp(num(p, "fx_cfg", 4.0), 0.0, 20.0) if fam in ("chroma", "krea2") else 1.0,
                  sampler=p.get("fx_sampler") or "euler", scheduler=sch)
+        w0, h0 = w, h
         if init is not None:
-            q["init"] = put_input(fit_area(init, w, h), J)
+            small = fit_area(init, w, h)
+            q["init"] = put_input(small, J)
             q["init_denoise"] = clamp(num(p, "init_denoise", 0.7), 0.05, 1.0)
+            w0, h0 = small.size
+        cn_note = None
+        if cnimg is not None:
+            prep_canny = p.get("cn_prep") == "canny"
+            if prep_canny and not has_node("Canny"):
+                warn(J, "이 ComfyUI 에는 Canny 노드가 없어 전처리 없이 사용했어요.")
+                prep_canny = False
+            q["cn"] = dict(model=p["cn_model"], image=put_input(cover(cnimg, (w0, h0)), J), canny=prep_canny, union=None,
+                           strength=clamp(num(p, "cn_strength", 0.7), 0.0, 2.0),
+                           start=clamp(num(p, "cn_start", 0.0), 0.0, 1.0), end=clamp(num(p, "cn_end", 1.0), 0.0, 1.0))
+            cn_note = f'{p["cn_model"]} {q["cn"]["strength"]}'
         J["msg"] = f"생성 중 ({i + 1}/{n})"
         J["pi"], J["pn"] = i, n
         g = flows.wf_flux(q)
@@ -1495,8 +1518,8 @@ def do_gen_flux(p, J):
         info = dict(kind="gen-" + fam, prompt=text, negative=neg, steps=q["steps"],
                     cfg=q["guidance"] if fam == "flux" else q["cfg"], sampler=q["sampler"], scheduler=sch, seed=q["seed"],
                     w=res.width, h=res.height, model=f["unet"], loras=[[a, b] for a, b in q["loras"]],
-                    extra={"Family": fam, **({"Distilled CFG": q["guidance"]} if fam == "flux" else {})})
-        out.append((res, info, g if init is None else None))
+                    extra={"Family": fam, **({"Distilled CFG": q["guidance"]} if fam == "flux" else {}), **({"ControlNet": cn_note} if cn_note else {})})
+        out.append((res, info, g if init is None and cnimg is None else None))
     return out
 
 
@@ -1778,18 +1801,62 @@ def do_vid(p, J):
     return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
 
 
+VPOST = {"interp": ("RIFE VFI", "ComfyUI-Frame-Interpolation", "프레임 늘리기"), "upscale": ("ImageUpscaleWithModel", "", "업스케일"),
+         "webp": ("SaveAnimatedWEBP", "", "WebP 변환")}
+
+
+def do_vpost(p, J):
+    """만든 영상을 다듬어요: 프레임 늘리기(RIFE)·업스케일·움직이는 WebP. 결과: [(바이트, 정보, 확장자)]"""
+    op = p.get("op")
+    if op not in VPOST:
+        raise ValueError("알 수 없는 영상 작업이에요.")
+    src = out_path(str(p.get("video") or "")[5:] if str(p.get("video") or "").startswith("/out/") else "")
+    if src.suffix.lower() not in (".mp4", ".webm") or not src.is_file():
+        raise ValueError("다듬을 영상을 찾을 수 없어요. (이 앱으로 만든 영상만 다듬을 수 있어요)")
+    node, pack, title = VPOST[op]
+    need = ["LoadVideo", "GetVideoComponents", node] + (["CreateVideo", "SaveVideo"] if op != "webp" else []) + (["UpscaleModelLoader"] if op == "upscale" else [])
+    miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
+    if miss:
+        raise RuntimeError("이 ComfyUI 에는 필요한 노드가 없어요: " + ", ".join(miss) + ". " +
+                           (f"확장 '{pack}' 을(를) 설치하고 ComfyUI 를 다시 시작해 주세요." if pack and node in miss else "ComfyUI 를 업데이트해 주세요."))
+    try:
+        base = json.loads(Path(str(src) + ".json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        base = {}
+    q = dict(fps=clamp(int(num(base, "fps", 24, int)), 1, 60))
+    if op == "upscale":
+        q["model"] = p.get("upm") or (files("upscale_models") or [None])[0]
+        if not q["model"]:
+            raise RuntimeError("업스케일 모델이 없어요. '설치와 모델' 탭에서 업스케일 모델을 설치해 주세요.")
+        if base.get("w") and base.get("h") and base.get("frames") and int(base["w"]) * int(base["h"]) * int(base["frames"]) > 832 * 480 * 130:
+            warn(J, "프레임이 많은 영상은 업스케일 때 메모리가 많이 들어요. 메모리 부족 오류가 나면 2배 모델을 써 보세요.")
+    name = f"hub_{uuid.uuid4().hex[:10]}{src.suffix.lower()}"
+    (COMFY / "input").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, COMFY / "input" / name)
+    J["tmp"].append(COMFY / "input" / name)
+    q["file"] = name
+    J["msg"] = f"{title} 중 — 영상 길이에 따라 몇 분 걸릴 수 있어요"
+    res = run_wf(flows.wf_vpost(op, q), J, raw=True)
+    if not res:
+        raise RuntimeError("결과 영상을 받지 못했어요.")
+    info = dict(base, kind="vid", post=title, source=src.name)
+    if op == "interp":
+        info["fps"] = q["fps"] * 2
+    return [(res[0][1], info, Path(res[0][0]).suffix.lower() or (".webp" if op == "webp" else ".mp4"))]
+
+
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
         if p["kind"] != "batch" or p.get("op") == "upscale":      # 일괄 처리의 배경 지우기·크기 변경은 ComfyUI 가 필요 없어요
             wait_comfy()
             claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "batch": do_batch}[p["kind"]](p, J)
-        sub = OUT_SUB.get(p["kind"], "기타")
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "batch": do_batch}[p["kind"]](p, J)
+        sub = OUT_SUB["vid"] if p["kind"] == "vpost" else OUT_SUB.get(p["kind"], "기타")
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
         for i, (im, info, graph) in enumerate(items):
-            if p["kind"] == "vid":      # 영상: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
+            if p["kind"] in ("vid", "vpost"):      # 영상: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
                 name = f'{stamp}-{uuid.uuid4().hex[:4]}-vid-{i}{graph}'
                 (OUT / sub / name).write_bytes(im)
                 (OUT / sub / (name + ".json")).write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
@@ -1829,7 +1896,7 @@ def _clean_tmp(J):
 QUEUE, QP = [], {}
 _QCV = threading.Condition()
 _QW = {"t": None}
-KIND_NAME = {"edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "batch": "일괄 처리"}
+KIND_NAME = {"edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "batch": "일괄 처리"}
 DONE_STATES = ("done", "error", "cancelled")
 
 
@@ -2447,6 +2514,179 @@ def changelog():
     return {"versions": vers, "current": VERSION}
 
 
+# ───────────────────────── 진단 파일 (문제가 생겼을 때 보내는 zip) ─────────────────────────
+def _redact(text):
+    """로그에서 컴퓨터 사용자 이름·설치 폴더 경로를 가려요."""
+    t = str(text)
+    for real, mask in ((str(ROOT), "<설치폴더>"), (str(ROOT).replace("\\", "/"), "<설치폴더>")):
+        t = t.replace(real, mask)
+    return re.sub(r"(?i)([A-Z]:[\\/]+Users[\\/]+)[^\\/\s\"']+", r"\1<사용자>", t)
+
+
+def _tail(path, n=300):
+    try:
+        return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-n:])
+    except OSError:
+        return ""
+
+
+def diag_export():
+    """버전·GPU·설치된 확장/모델 이름·최근 오류·로그 끝부분을 zip 하나로 묶어요. 프롬프트·이미지·API 키는 넣지 않아요."""
+    import platform
+    info = [f"스튜디오 버전: {VERSION}", f"만든 시각: {time.strftime('%Y-%m-%d %H:%M:%S')}", f"운영체제: {platform.platform()}",
+            f"파이썬: {sys.version.split()[0]}", f"GPU: {json.dumps(GPU, ensure_ascii=False) if GPU else '확인 못 함'}",
+            f"ComfyUI 켜짐: {alive(CUI + '/system_stats')}", f"Ollama 켜짐: {alive(OLLAMA + '/api/version')}"]
+    try:
+        ss = http(CUI + "/system_stats", None, 5)
+        info.append("ComfyUI 정보: " + json.dumps({"system": {k: v for k, v in (ss.get("system") or {}).items() if k in ("comfyui_version", "pytorch_version", "python_version", "argv")},
+                                                 "devices": [{k: d.get(k) for k in ("name", "vram_total", "vram_free")} for d in ss.get("devices", [])]}, ensure_ascii=False))
+    except Exception:  # noqa: BLE001
+        info.append("ComfyUI 정보: 가져오지 못했어요")
+    nodes = sorted(p.name for p in (COMFY / "custom_nodes").iterdir()) if (COMFY / "custom_nodes").is_dir() else []
+    miss = []
+    try:
+        for f in features():
+            if f["missing_nodes"] or f["missing_lists"]:
+                miss.append(f"{f['id']}: 없는 노드 {f['missing_nodes'] or '-'} / 없는 목록 {f['missing_lists'] or '-'}")
+    except Exception as e:  # noqa: BLE001
+        miss.append("확인 실패: " + repr(e))
+    models = []
+    for d in sorted(FOLDERS):
+        base = MODELS / d
+        if base.is_dir():
+            models.append(f"[{d}]")
+            models += [f"  {f.name}  ({fsize(f) // (1024 * 1024)}MB)" for f in sorted(base.iterdir()) if f.is_file() and f.suffix != ".part"]
+    errs = [f"{j.get('kind', '?')}: {j.get('error')}" for j in list(JOBS.values())[-60:] if j.get("state") == "error" and j.get("error")][-30:]
+    note = ("이 파일에는 버전·그래픽카드·설치된 확장과 모델 파일 이름·최근 오류 문구·로그 끝부분이 들어 있어요.\n"
+            "프롬프트, 만든 이미지, API 키(settings.json)는 넣지 않았어요. 컴퓨터 사용자 이름과 설치 폴더 경로는 가렸어요.\n"
+            "다만 오류 문구나 로그에 입력한 문장이 일부 섞일 수 있으니, 보내기 전에 한 번 훑어봐 주세요.\n")
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("안내.txt", note)
+        z.writestr("정보.txt", _redact("\n".join(info)))
+        z.writestr("설치된_확장.txt", "\n".join(nodes) or "(없음)")
+        z.writestr("기능별_빠진것.txt", "\n".join(miss) or "(없음)")
+        z.writestr("모델_파일.txt", "\n".join(models) or "(없음)")
+        z.writestr("최근_오류.txt", _redact("\n".join(errs)) or "(없음)")
+        if LOGS.is_dir():
+            for lf in sorted(LOGS.glob("*.log")):
+                z.writestr("logs/" + lf.name, _redact(_tail(lf)))
+    return b.getvalue()
+
+
+# ───────────────────────── 태그 자동완성 ─────────────────────────
+TAGS_DIR = ROOT / "tags"
+TAG_TYPES = {"0": "일반", "1": "작가", "3": "작품", "4": "캐릭터", "5": "메타"}
+_TAGS = {"sig": None, "rows": []}
+
+
+def _tag_sig():
+    parts = []
+    for f in [HUB / "tags_builtin.txt", PROMPTS_FILE, LORA_USER] + (sorted(TAGS_DIR.glob("*.csv")) if TAGS_DIR.is_dir() else []):
+        try:
+            st = f.stat()
+            parts.append((f.name, st.st_mtime_ns, st.st_size))
+        except OSError:
+            pass
+    wc = ROOT / "wildcards"
+    parts.append(tuple(sorted(p.name for p in wc.glob("*.txt"))) if wc.is_dir() else ())
+    try:
+        parts.append(tuple(sorted(files("loras"))))
+    except Exception:  # noqa: BLE001
+        pass
+    return tuple(parts)
+
+
+def _tag_norm(t):
+    return re.sub(r"\s+", " ", str(t).replace("_", " ")).strip().lower()
+
+
+def tags_rows():
+    """자동완성 후보 목록(캐시). 기본 태그 + 내 프롬프트 보관함 + LoRA 트리거 + 와일드카드 + tags 폴더의 CSV(danbooru 형식)."""
+    sig = _tag_sig()
+    if _TAGS["sig"] == sig:
+        return _TAGS["rows"]
+    rows, seen = [], {}
+
+    def add(shown, cat, weight, key=None):
+        k = _tag_norm(key or shown)
+        if not k or len(k) > 60:
+            return
+        sk = (k, _tag_norm(shown))
+        if sk in seen:
+            if weight > rows[seen[sk]][3]:
+                rows[seen[sk]] = (k, shown, cat, weight)
+            return
+        seen[sk] = len(rows)
+        rows.append((k, shown, cat, weight))
+
+    try:
+        for i, ln in enumerate((HUB / "tags_builtin.txt").read_text(encoding="utf-8").splitlines()):
+            t, _, c = ln.partition("|")
+            if t:
+                add(t, c or "일반", 1000 - i * 0.5)
+    except OSError:
+        pass
+    if TAGS_DIR.is_dir():
+        for f in sorted(TAGS_DIR.glob("*.csv")):
+            try:
+                for ln in f.read_text(encoding="utf-8", errors="replace").splitlines()[:400000]:
+                    c = next(csv.reader([ln]), [])
+                    if not c or not c[0].strip() or c[0].lower() == "tag":
+                        continue
+                    cnt = int(c[2]) if len(c) > 2 and c[2].strip().isdigit() else 0
+                    shown, cat = _tag_norm(c[0]), TAG_TYPES.get(c[1].strip() if len(c) > 1 else "0", "일반")
+                    add(shown, cat, 2000 + cnt / 1000)
+                    for al in (c[3].split(",") if len(c) > 3 else [])[:6]:
+                        if al.strip():
+                            add(shown, cat, 1500 + cnt / 2000, key=al)      # 별칭으로 찾아도 원래 태그를 넣어 줘요
+            except (OSError, ValueError, csv.Error):
+                pass
+    freq = {}
+    for it in prompts_load():
+        for part in re.split(r"[,\n]", str(it.get("text") or "") + "," + str(it.get("negative") or "")):
+            t = re.sub(r"<[^>]*>|[()\[\]{}]", "", part)
+            t = re.sub(r":\s*[\d.]+\s*$", "", t).strip()
+            if 1 < len(t) <= 40 and not t.startswith("__"):
+                freq[t] = freq.get(t, 0) + 1
+    for t, n in freq.items():
+        add(t, "내 프롬프트", 5000 + n * 100)
+    try:
+        for c in model_cards("loras")["items"]:
+            for w in list(c.get("user_trigger") or []) + [x[0] if isinstance(x, (list, tuple)) else x for x in (c.get("trigger") or [])][:12]:
+                if str(w).strip():
+                    add(str(w).strip(), "LoRA 트리거", 6000)
+    except Exception:  # noqa: BLE001
+        pass
+    wc = ROOT / "wildcards"
+    if wc.is_dir():
+        for p in sorted(wc.glob("*.txt")):
+            add(f"__{p.stem}__", "와일드카드", 4000)
+    _TAGS.update(sig=sig, rows=rows)
+    return rows
+
+
+def tags_search(q, limit=10):
+    k = _tag_norm(q)
+    if len(k) < 2:
+        return {"items": []}
+    pre, mid = [], []
+    for key, shown, cat, w in tags_rows():
+        if key.startswith(k):
+            pre.append((w, shown, cat))
+        elif k in key and (f" {k}" in key or len(k) >= 3):
+            mid.append((w, shown, cat))
+    out, seen = [], set()
+    for w, shown, cat in sorted(pre, key=lambda x: -x[0]) + sorted(mid, key=lambda x: -x[0]):
+        if shown.lower() in seen or shown.lower() == k:
+            continue
+        seen.add(shown.lower())
+        out.append({"t": shown, "c": cat})
+        if len(out) >= limit:
+            break
+    return {"items": out}
+
+
 def thumb_bytes(path, w=320):
     """갤러리 미리보기(작은 JPEG). 한 번 만들면 cache 폴더에 둬요."""
     st = path.stat()
@@ -2870,6 +3110,16 @@ def lora_kinds():
 BACKUP_MAX = 30 * 1024 * 1024
 
 
+def chats_export(limit=20 * 1024 * 1024):
+    out, size = [], 0
+    for c in sorted(chats_load(), key=lambda c: c.get("updated", 0), reverse=True):      # 너무 크면 최근 대화부터 담아요
+        size += len(json.dumps(c, ensure_ascii=False))
+        if size > limit:
+            break
+        out.append(c)
+    return out
+
+
 def backup_export():
     """프롬프트 보관함·즐겨찾기·LoRA 내 정보·와일드카드를 한 묶음으로 돌려줘요(프리셋은 화면에서 덧붙여요)."""
     wc = {}
@@ -2881,7 +3131,7 @@ def backup_export():
             except OSError:
                 pass
     return {"app": "LocalAI-Studio", "kind": "backup", "format": 1, "version": VERSION, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "prompts": prompts_load(), "favs": sorted(gal_favs()), "lora_user": lora_user(), "wildcards": wc}
+            "prompts": prompts_load(), "favs": sorted(gal_favs()), "lora_user": lora_user(), "wildcards": wc, "chats": chats_export()}
 
 
 def backup_import(p):
@@ -2896,13 +3146,13 @@ def backup_import(p):
     with _PLOCK:
         snap = ROOT / "backups" / ("before-restore-" + time.strftime("%Y%m%d-%H%M%S"))
         snap.mkdir(parents=True, exist_ok=True)
-        for f in (PROMPTS_FILE, GAL_FILE, LORA_USER):
+        for f in (PROMPTS_FILE, GAL_FILE, LORA_USER, CHATS_FILE):
             if f.is_file():
                 shutil.copy2(f, snap / f.name)
         wd = ROOT / "wildcards"
         if wd.is_dir():
             shutil.copytree(wd, snap / "wildcards", dirs_exist_ok=True)
-        n = {"prompts": 0, "favs": 0, "lora_user": 0, "wildcards": 0}
+        n = {"prompts": 0, "favs": 0, "lora_user": 0, "wildcards": 0, "chats": 0}
         # 보관함
         items = prompts_load()
         have = {x.get("id"): i for i, x in enumerate(items)}
@@ -2945,6 +3195,7 @@ def backup_import(p):
                 n["lora_user"] += 1
         if n["lora_user"]:
             LORA_USER.write_text(json.dumps(lu, ensure_ascii=False, indent=1), encoding="utf-8")
+        n["chats"] = chats_import(d.get("chats"), over)
         # 와일드카드
         for name, text in (d.get("wildcards") or {}).items():
             if not isinstance(name, str) or not WC_NAME.match(name) or ".." in name or not isinstance(text, str):
@@ -2956,6 +3207,138 @@ def backup_import(p):
             f.write_text(text[:200000].replace("\r\n", "\n"), encoding="utf-8")
             n["wildcards"] += 1
     return {"ok": True, "counts": n, "saved_to": str(snap)}
+
+
+# ───────────────────────── 대화 목록 (여러 대화를 파일에 저장) ─────────────────────────
+CHATS_FILE = ROOT / "chats.json"
+_CLOCK = threading.Lock()
+CHAT_MAX_MSGS, CHAT_MAX_BYTES = 2000, 60 * 1024 * 1024
+
+
+def chats_load():
+    try:
+        d = json.loads(CHATS_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def chats_write(items):
+    tmp = CHATS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(CHATS_FILE)
+
+
+def _chat_msgs(raw):
+    out = []
+    for m in (raw or [])[-CHAT_MAX_MSGS:]:
+        if not isinstance(m, dict) or m.get("role") not in ("user", "assistant"):
+            continue
+        c = str(m.get("content") or "")[:200000]
+        imgs = [i for i in (m.get("images") or []) if isinstance(i, str) and i.startswith("data:image/") and len(i) < 3_000_000][:4]
+        if not c.strip() and not imgs:
+            continue
+        out.append({"role": m["role"], "content": c, **({"images": imgs} if imgs else {})})
+    return out
+
+
+def chats_list(q=""):
+    q = (q or "").strip().lower()
+    rows = []
+    for c in chats_load():
+        msgs = c.get("msgs") or []
+        hit = ""
+        if q:
+            if q in str(c.get("title", "")).lower():
+                hit = ""
+            else:
+                m = next((m for m in msgs if q in str(m.get("content", "")).lower()), None)
+                if not m:
+                    continue
+                t, i = str(m["content"]), str(m["content"]).lower().find(q)
+                hit = ("…" if i > 20 else "") + t[max(0, i - 20): i + 50].replace("\n", " ")
+        last = next((str(m.get("content", "")) for m in reversed(msgs) if m.get("content")), "")
+        rows.append({"id": c.get("id"), "title": c.get("title") or "새 대화", "updated": c.get("updated", 0), "n": len(msgs),
+                     "preview": hit or last[:60].replace("\n", " ")})
+    rows.sort(key=lambda r: r["updated"], reverse=True)
+    return {"items": rows}
+
+
+def chats_get(cid):
+    c = next((c for c in chats_load() if c.get("id") == cid), None)
+    return c or {"error": "대화를 찾을 수 없어요."}
+
+
+def chats_save(p):
+    msgs = _chat_msgs(p.get("msgs"))
+    if not msgs:
+        return {"error": "저장할 내용이 없어요."}
+    cid = re.sub(r"[^0-9a-f]", "", str(p.get("id") or ""))[:16]
+    with _CLOCK:
+        items = chats_load()
+        cur = next((c for c in items if cid and c.get("id") == cid), None)
+        if cur is None:
+            cur = {"id": uuid.uuid4().hex[:12], "created": int(time.time()), "title": "", "title_custom": False}
+            items.append(cur)
+        first = next((m["content"] for m in msgs if m["role"] == "user" and m["content"].strip()), "") or msgs[0]["content"]
+        if not cur.get("title_custom"):
+            cur["title"] = re.sub(r"\s+", " ", first).strip()[:30] or "새 대화"
+        cur.update(updated=round(time.time(), 3), msgs=msgs, model=str(p.get("model") or "")[:120], sys=str(p.get("sys") or "")[:20000], persona=str(p.get("persona") or "")[:60])
+        if sum(len(json.dumps(c, ensure_ascii=False)) for c in items) > CHAT_MAX_BYTES:
+            return {"error": "저장된 대화가 너무 많아요. 오래된 대화를 지워 주세요."}
+        chats_write(items)
+    return {"ok": True, "id": cur["id"], "title": cur["title"], "updated": cur["updated"]}
+
+
+def chats_rename(p):
+    t = re.sub(r"\s+", " ", str(p.get("title") or "")).strip()[:60]
+    with _CLOCK:
+        items = chats_load()
+        c = next((c for c in items if c.get("id") == p.get("id")), None)
+        if not c:
+            return {"error": "대화를 찾을 수 없어요."}
+        c["title"], c["title_custom"] = t or "새 대화", bool(t)
+        chats_write(items)
+    return {"ok": True, "title": c["title"]}
+
+
+def chats_delete(p):
+    ids = {str(i) for i in (p.get("ids") or [])}
+    with _CLOCK:
+        items = chats_load()
+        keep = [c for c in items if c.get("id") not in ids]
+        if len(keep) != len(items):
+            chats_write(keep)
+    return {"ok": True, "deleted": len(items) - len(keep)}
+
+
+def chats_import(items_in, over):
+    """백업에서 대화를 합쳐요(같은 id 는 더 최근에 바뀐 쪽을 남기고, overwrite 면 파일 쪽으로 덮어써요). 지우지는 않아요."""
+    n = 0
+    with _CLOCK:
+        items = chats_load()
+        by = {c.get("id"): c for c in items}
+        for c in items_in or []:
+            if not isinstance(c, dict) or not re.fullmatch(r"[0-9a-f]{1,16}", str(c.get("id") or "")):
+                continue
+            msgs = _chat_msgs(c.get("msgs"))
+            if not msgs:
+                continue
+            new = {"id": c["id"], "created": int(c.get("created") or 0), "updated": float(c.get("updated") or 0), "title": str(c.get("title") or "새 대화")[:60],
+                   "title_custom": bool(c.get("title_custom")), "msgs": msgs, "model": str(c.get("model") or "")[:120],
+                   "sys": str(c.get("sys") or "")[:20000], "persona": str(c.get("persona") or "")[:60]}
+            old = by.get(c["id"])
+            if old is None:
+                items.append(new)
+                by[c["id"]] = new
+                n += 1
+            elif over or new["updated"] > float(old.get("updated") or 0):
+                old.clear()
+                old.update(new)
+                n += 1
+        if n:
+            chats_write(items)
+    return n
 
 
 # ───────────────────────── 모델 설치 ─────────────────────────
@@ -3651,7 +4034,7 @@ def caps_info():
 # ───────────────────────── HTTP 서버 ─────────────────────────
 def folder_map():
     m = {"outputs": OUT, "logs": LOGS, "root": ROOT, "llm": ROOT / "models" / "llm", "wildcards": ROOT / "wildcards",
-         "backup": ROOT / "backup"}
+         "backup": ROOT / "backup", "tags": ROOT / "tags"}
     m.update({k: MODELS / k for k in FOLDERS})
     return m
 
@@ -3792,6 +4175,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(queue_view())
         if u == "/api/rmbg/status":
             return self.send_json(rmbg_status())
+        if u == "/api/tags":
+            return self.send_json(tags_search((urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0]))
+        if u == "/api/chats":
+            return self.send_json(chats_list((urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0]))
+        if u.startswith("/api/chats/"):
+            return self.send_json(chats_get(u[11:]))
+        if u == "/api/diag/export":
+            return self.send_bytes(diag_export(), "application/zip", extra={"Content-Disposition": "attachment; filename*=UTF-8''" + urllib.parse.quote("LocalAI-진단-" + time.strftime("%Y%m%d-%H%M") + ".zip")})
         if u == "/api/backup/export":
             return self.send_json(backup_export())
         if u == "/api/models/cards":
@@ -3834,7 +4225,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/chat":
             return self.chat(p)
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "batch"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "batch"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if len(JOBS) > 50:
                 for k, v in list(JOBS.items()):
@@ -3930,6 +4321,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"data": base64.b64encode(data).decode(), "ext": ext, "note": note})
             except Exception as e:
                 return self.send_json({"error": f"처리할 수 없어요: {e}"})
+        if u == "/api/chats/save":
+            return self.send_json(chats_save(p))
+        if u == "/api/chats/rename":
+            return self.send_json(chats_rename(p))
+        if u == "/api/chats/delete":
+            return self.send_json(chats_delete(p))
         if u == "/api/pymod/install":
             return self.send_json(pymod_install(p))
         if u == "/api/wf/analyze":

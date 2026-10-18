@@ -149,6 +149,19 @@
    ]
   },
   {
+   "id": "controlnet-flux-union",
+   "name": "FLUX ControlNet Union Pro 2.0 (포즈·윤곽·깊이 등)",
+   "gb": 4.3,
+   "desc": "이미지 생성 탭에서 'FLUX.1 · Krea 계열'을 고르면 쓸 수 있는 ControlNet 이에요(포즈·캐니·깊이·소프트에지·회색조를 한 모델로). 추천 강도 0.7 안팎. Chroma·Krea 2 에는 쓸 수 없어요. ※ 미검증",
+   "files": [
+    {
+     "dir": "controlnet",
+     "url": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-ControlNet-Union-Pro-2.0/resolve/main/diffusion_pytorch_model.safetensors",
+     "name": "FLUX.1-dev-ControlNet-Union-Pro-2.0.safetensors"
+    }
+   ]
+  },
+  {
    "id": "sdxl-vae-fix",
    "name": "SDXL VAE fp16 fix",
    "gb": 0.34,
