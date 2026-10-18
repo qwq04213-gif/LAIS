@@ -2955,7 +2955,13 @@ def gallery(q):
     return {"items": items, "total": len(out), "more": off + lim < len(out), "days": [[d, n] for d, n in list(days.items())[:400]]}
 
 
-VER_RX = re.compile(r"^\[(\d{4}\.\d{2}\.\d{2}(?:\.\d+)?)([^\]]*)\]\s*(.*)$")
+VER_RX = re.compile(r"^\[(\d{4}\.\d{2}\.\d{2}(?:\.\d+)?|\d{1,3}(?:\.\d+)+)([^\]]*)\]\s*(.*)$")
+
+
+def vkey(v):
+    """버전 정렬 키. 예전 날짜식(2026.10.18.24)은 새 번호식(2.0, 2.0.1)보다 항상 옛 버전으로 쳐요."""
+    n = tuple(int(x) for x in re.findall(r"\d+", v or ""))
+    return ((0,) if n and n[0] >= 1000 else (1,)) + n
 
 
 def changelog():
@@ -2982,8 +2988,7 @@ def changelog():
             cur["items"][-1] += " " + ln.strip()      # 줄바꿈된 항목은 이어 붙여요
         else:
             cur["items"].append(ln.strip())
-    key = lambda v: tuple(int(x) for x in v["version"].split("."))
-    vers.sort(key=key, reverse=True)
+    vers.sort(key=lambda v: vkey(v["version"]), reverse=True)
     return {"versions": vers, "current": VERSION}
 
 
@@ -5053,6 +5058,242 @@ def catalog():
             "image": [{**m, "installed": ok(m)} for m in CATALOG["image"]]}
 
 
+# ───────────────────────── 내 PC 점검 (기능별로 빠진 부품 찾기) ─────────────────────────
+def _row(label, ok, detail="", fix=None, fixlabel="", opt=False):
+    """ok: True 정상 / False 빠짐 / None 확인 못 함. opt=True 면 없어도 큰 문제는 아니에요."""
+    return {"label": label, "ok": ok, "detail": detail, "fix": fix, "fixlabel": fixlabel, "opt": opt}
+
+
+def selfcheck():
+    st = status()
+    c = caps()
+    comfy_up, nodes = bool(st["comfy"]), c["nodes"]
+    try:
+        L = lists()
+    except Exception:
+        L = {}
+    groups = []
+
+    def grp(gid, title, view, rows, note=""):
+        bad = any(r["ok"] is False and not r["opt"] for r in rows)
+        warn_ = any((r["ok"] is False and r["opt"]) or r["ok"] is None for r in rows)
+        groups.append({"id": gid, "title": title, "view": view, "rows": rows, "note": note, "state": "bad" if bad else "warn" if warn_ else "ok"})
+
+    eng = [_row("대화 엔진(Ollama)", bool(st["ollama"]), "" if st["ollama"] else "꺼져 있어요. 아래 [엔진 다시 시작]을 눌러 보세요.", {"a": "restart_all"} if not st["ollama"] else None, "프로그램 다시 시작"),
+           _row("이미지 엔진(ComfyUI)", comfy_up, "" if comfy_up else "꺼져 있어요. 켜지는 데 1~2분 걸릴 수 있어요.", {"a": "restart"} if not comfy_up else None, "이미지 엔진 다시 시작"),
+           _row("내장 파이썬", PY.exists(), "" if PY.exists() else "프로그램 폴더의 python 폴더가 없어요. 설치를 다시 해야 할 수 있어요.")]
+    grp("engines", "엔진", None, eng)
+    have_llm = bool(L.get("llm"))
+    grp("chat", "대화", "chat", [_row("대화 모델", have_llm, f"{len(L.get('llm') or [])}개 있어요" if have_llm else "설치된 대화 모델이 없어요.", None if have_llm else {"a": "view", "v": "setup"}, "설치와 모델 열기")])
+    am = L.get("anymodels") or []
+    grp("image", "이미지 만들기", "gen", [_row("그림 모델(체크포인트)", bool(am), f"{len(am)}개 있어요" if am else "그림 모델이 없어요.", None if am else {"a": "view", "v": "setup"}, "설치와 모델 열기"),
+                                           _row("확대 모델", bool(L.get("upscalers")), "" if L.get("upscalers") else "없어도 기본 확대로 동작해요.", opt=True)])
+    grp("edit", "이미지 편집", "edit", [_row("Qwen 편집 모델 묶음", bool(L.get("qwen")), "" if L.get("qwen") else "편집 모델·텍스트 인코더·VAE 중 빠진 게 있어요.",
+                                            None if L.get("qwen") else {"a": "view", "v": "setup"}, "설치와 모델 열기", opt=True)])
+    wan_ok = bool(L.get("wan_ready") and L.get("wanmodels"))
+    wan14 = L.get("wan14") or {}
+    grp("video", "영상 만들기", "vid", [_row("Wan 영상 모델", wan_ok or wan14.get("i2v") or wan14.get("t2v"), "" if wan_ok or wan14.get("i2v") or wan14.get("t2v") else "영상 모델 묶음이 없어요.",
+                                               None if wan_ok or wan14.get("i2v") or wan14.get("t2v") else {"a": "view", "v": "setup"}, "설치와 모델 열기", opt=True)])
+    mnodes = (None if not comfy_up else bool(L.get("music_nodes")))
+    grp("music", "음악 만들기", "music", [_row("음악 노드", mnodes, "이미지 엔진이 꺼져 있어서 확인할 수 없어요." if mnodes is None else "" if mnodes else "이 ComfyUI 가 오래돼서 음악 노드가 없어요. ComfyUI 를 업데이트해 주세요.", opt=True),
+                                         _row("ACE-Step 모델", bool(L.get("musicmodels")), "" if L.get("musicmodels") else "음악 모델이 없어요.",
+                                              None if L.get("musicmodels") else {"a": "view", "v": "setup"}, "설치와 모델 열기", opt=True)])
+    try:
+        tts = [t for t in tts_models.status(ROOT) if t["installed"]]
+    except Exception:
+        tts = []
+    grp("tts", "음성 만들기", "tts", [_row("음성 엔진", bool(tts), (", ".join(t["title"] for t in tts)) if tts else "설치된 음성 엔진이 없어요.",
+                                           None if tts else {"a": "view", "v": "tts"}, "음성 화면 열기", opt=True)])
+    try:
+        rm = rmbg_status()
+        rm_ok = any(m["installed"] for m in rm["models"].values())
+    except Exception:
+        rm_ok = False
+    grp("rmbg", "배경 지우기", None, [_row("배경 지우기 모델", rm_ok, "" if rm_ok else "처음 쓸 때 화면에서 설치해요.", opt=True)])
+    for f in FEATURES:
+        need = f.get("needs", {})
+        if not need:
+            continue
+        rows = []
+        miss = [n for n in need.get("nodes", []) if nodes and n not in nodes]
+        if need.get("nodes"):
+            if not comfy_up or not nodes:
+                rows.append(_row("필요한 노드", None, "이미지 엔진이 꺼져 있어서 확인할 수 없어요."))
+            elif miss:
+                rows.append(_row("필요한 노드", False, "빠진 노드: " + ", ".join(miss) + (f" (확장: {need['pack']})" if need.get("pack") else ""),
+                                 {"a": "nodes", "missing": miss}, "찾아서 설치"))
+            else:
+                rows.append(_row("필요한 노드", True, "모두 있어요"))
+        for k in need.get("lists", []):
+            ok = bool(L.get(k))
+            rows.append(_row({"checkpoints": "그림 모델", "anymodels": "그림 모델"}.get(k, k), ok, "" if ok else "모델이 없어요.", None if ok else {"a": "view", "v": "setup"}, "설치와 모델 열기"))
+        if f["id"] == "faceswap":
+            sw = swap_status()
+            if sw["pack"] or _repo_dir(REACTOR_REPO).is_dir():
+                dm = [d["pip"] for d in sw["deps_missing"]]
+                rows.append(_row("파이썬 부품", not dm, "" if not dm else "빠진 부품: " + ", ".join(dm), {"a": "pymods", "modules": [{"module": d["module"], "pip": d["pip"]} for d in sw["deps_missing"]]} if dm else None, "부품 설치"))
+                rows.append(_row("얼굴 교체 모델(inswapper_128)", sw["file"], "" if sw["file"] else "모델 파일이 없어요.", None if sw["file"] else {"a": "swap"}, "모델 받기"))
+        grp("feat-" + f["id"], re.sub(r"\s*\(미검증\)", "", f["title"]), "feat:" + f["id"], rows)
+    return {"groups": groups, "comfy": comfy_up, "version": VERSION}
+
+
+# ───────────────────────── 앱 안에서 업데이트 파일 적용 ─────────────────────────
+UPD = {"tok": None, "z": None, "man": None, "t": 0.0}
+UPD_MAX = 40 << 20
+
+
+def _upd_open(text):
+    """update.bat 을 열어 안의 zip 과 manifest 를 읽어요(코드는 실행하지 않아요)."""
+    d = text.encode("utf-8", "ignore") if isinstance(text, str) else bytes(text)
+    if len(d) > UPD_MAX:
+        raise ValueError("파일이 너무 커요. 로컬 AI 스튜디오 업데이트 파일이 맞는지 확인해 주세요.")
+    try:
+        m = d.rindex(b"\n::PAYLOAD_BEGIN")
+        z = zipfile.ZipFile(io.BytesIO(base64.b64decode(d[d.index(b"\n", m + 1) + 1:])))
+        if sum(i.file_size for i in z.infolist()) > 200 << 20:
+            raise ValueError("압축을 풀면 너무 커서 받지 않아요.")
+        man = json.loads(z.read("manifest.json").decode("utf-8"))
+    except ValueError as e:
+        if "너무" in str(e):
+            raise
+        raise ValueError("로컬 AI 스튜디오 업데이트 파일이 아니에요. LocalAI-Studio-update-….bat 파일을 올려 주세요.")
+    except Exception:
+        raise ValueError("로컬 AI 스튜디오 업데이트 파일이 아니에요. LocalAI-Studio-update-….bat 파일을 올려 주세요.")
+    files = man.get("files")
+    if man.get("format") != 1 or not isinstance(files, list) or not str(man.get("version") or "").strip() or not any(f.get("path") == "hub/hub.py" for f in files if isinstance(f, dict)):
+        raise ValueError("이 스튜디오가 이해하는 업데이트 파일이 아니에요. 더 새 버전이면 update.bat 을 직접 실행해 주세요.")
+    return z, man
+
+
+def _upd_run(z, flags):
+    try:
+        import updater
+    except ImportError:
+        raise RuntimeError("설치된 업데이트 적용기(hub\\updater.py)가 없어요. 받은 update.bat 을 직접 실행해 주세요.")
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = updater.main([str(ROOT)] + flags, payload=z, root=ROOT)
+    return code, buf.getvalue()
+
+
+def update_inspect(p):
+    try:
+        z, man = _upd_open(p.get("text") or "")
+        code, log = _upd_run(z, ["--dry-run", "--in-app"] + (["--force"] if p.get("force") else []))
+    except (ValueError, RuntimeError) as e:
+        return {"error": str(e)}
+    tok = uuid.uuid4().hex
+    UPD.update(tok=tok, z=z, man=man, t=time.time())
+    cur = VERSION
+    n = len(re.findall(r"^  (?:추가|교체|합침|유지|삭제)", log, re.M))
+    return {"ok": True, "token": tok, "from": cur, "to": str(man["version"]), "notes": [str(x) for x in man.get("notes", [])][:30], "code": code,
+            "same": code == 0 and "이미 최신" in log, "older": code == 3, "changes": n, "log": log[-6000:], "busy": busy_count()}
+
+
+def update_apply(p):
+    if not UPD["tok"] or p.get("token") != UPD["tok"] or time.time() - UPD["t"] > 1800:
+        return {"error": "업데이트 파일을 다시 올려 주세요."}
+    z = UPD["z"]
+    try:
+        code, log = _upd_run(z, ["--in-app"] + (["--force"] if p.get("force") else []))
+    except RuntimeError as e:
+        return {"error": str(e)}
+    UPD.update(tok=None, z=None, man=None)
+    return {"ok": code == 0, "code": code, "log": log[-6000:]}
+
+
+# ───────────────────────── 캐릭터·스타일 보관함 (프롬프트·LoRA·시드·참고 이미지 묶음) ─────────────────────────
+CHARS_DIR = ROOT / "library"
+CHARS_FILE = CHARS_DIR / "chars.json"
+CHAR_KINDS = ("캐릭터", "스타일", "배경", "기타")
+CHAR_IMG = re.compile(r"^[0-9a-f]{8}-\d{1,2}\.png$")
+_CLOCK = threading.Lock()
+
+
+def chars_load():
+    try:
+        d = json.loads(CHARS_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def char_img_path(name):
+    return CHARS_DIR / "img" / name if CHAR_IMG.match(name or "") else None
+
+
+def _char_clean(p, old, imgs):
+    seed = p.get("seed")
+    try:
+        seed = int(seed) if seed not in (None, "") and int(seed) >= 0 else None
+    except (TypeError, ValueError):
+        seed = None
+    loras = []
+    for x in (p.get("loras") or [])[:6]:
+        try:
+            n, w = (x[0], x[1]) if isinstance(x, (list, tuple)) else (x.get("name"), x.get("weight"))
+            if str(n or "").strip():
+                loras.append([str(n).strip()[:200], round(clamp(float(w if w is not None else 0.8), -2, 2), 2)])
+        except (TypeError, ValueError, AttributeError, IndexError):
+            continue
+    kind = p.get("kind") if p.get("kind") in CHAR_KINDS else "캐릭터"
+    return {"id": old["id"], "name": str(p.get("name") or "").strip()[:60], "kind": kind, "prompt": str(p.get("prompt") or "").strip()[:8000],
+            "negative": str(p.get("negative") or "").strip()[:4000], "seed": seed, "loras": loras, "model": str(p.get("model") or "").strip()[:200],
+            "note": str(p.get("note") or "").strip()[:500], "refs": imgs, "created": old.get("created") or int(time.time())}
+
+
+def chars_api(p):
+    """보관함: list / save(id 가 있으면 덮어쓰기) / delete. 참고 이미지는 library\\img 폴더에 PNG 로 저장해요."""
+    act = p.get("action")
+    with _CLOCK:
+        items = chars_load()
+        if act == "list":
+            return {"items": items, "kinds": list(CHAR_KINDS)}
+        if act == "delete":
+            gone = [x for x in items if x.get("id") == p.get("id")]
+            for g in gone:
+                for n in g.get("refs", []):
+                    f = char_img_path(n)
+                    if f:
+                        f.unlink(missing_ok=True)
+            items = [x for x in items if x.get("id") != p.get("id")]
+        elif act == "save":
+            if not str(p.get("name") or "").strip():
+                return {"error": "이름을 적어 주세요."}
+            old = next((x for x in items if x.get("id") == p.get("id")), None) or {"id": uuid.uuid4().hex[:8]}
+            cur = set(old.get("refs", []))
+            imgs, fresh = [], 0
+            for r in (p.get("refs") or [])[:3]:
+                if isinstance(r, dict) and r.get("keep") in cur and r["keep"] not in imgs:
+                    imgs.append(r["keep"])
+                elif isinstance(r, dict) and r.get("data"):
+                    try:
+                        im = load_img(r["data"])
+                    except Exception:
+                        return {"error": "참고 이미지를 읽을 수 없어요."}
+                    if max(im.size) > 1536:
+                        im.thumbnail((1536, 1536), RS.LANCZOS)
+                    n = next(f"{old['id']}-{i}.png" for i in range(1, 99) if f"{old['id']}-{i}.png" not in cur and f"{old['id']}-{i}.png" not in imgs)
+                    (CHARS_DIR / "img").mkdir(parents=True, exist_ok=True)
+                    im.save(CHARS_DIR / "img" / n, "PNG")
+                    imgs.append(n)
+                    fresh += 1
+            for n in cur - set(imgs):
+                f = char_img_path(n)
+                if f:
+                    f.unlink(missing_ok=True)
+            it = _char_clean(p, old, imgs)
+            items = [x for x in items if x.get("id") != it["id"]] + [it]
+        else:
+            return {"error": "알 수 없는 동작"}
+        CHARS_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CHARS_FILE.with_name(CHARS_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, CHARS_FILE)
+        return {"items": items, "kinds": list(CHAR_KINDS)}
+
+
 def caps_info():
     c = caps()
     return {"samplers": c["samplers"], "schedulers": c["schedulers"],
@@ -5170,7 +5411,7 @@ class Handler(BaseHTTPRequestHandler):
             if fp.suffix.lower() in MEDIA:
                 return self.send_media(fp, MEDIA[fp.suffix.lower()])
             return self.send_file(fp, "image/png")
-        routes = {"/api/features": features, "/api/status": status, "/api/lists": lists, "/api/catalog": catalog, "/api/caps": caps_info,
+        routes = {"/api/features": features, "/api/status": status, "/api/selfcheck": selfcheck, "/api/lists": lists, "/api/catalog": catalog, "/api/caps": caps_info,
                   "/api/profiles": lambda: PROFILES}
         if u in routes:
             return self.send_json(routes[u]())
@@ -5198,6 +5439,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(parts_list())
         if u == "/api/gallery":
             return self.send_json(gallery(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)))
+        if u == "/api/chars/img":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            fp = char_img_path((q.get("f") or [""])[0])
+            if not fp or not fp.is_file():
+                return self.send_json({"error": "not found"}, 404)
+            try:
+                if (q.get("t") or [""])[0]:
+                    return self.send_bytes(thumb_bytes(fp, 240), "image/jpeg", extra={"Cache-Control": "max-age=3600"})
+                return self.send_bytes(fp.read_bytes(), "image/png", extra={"Cache-Control": "max-age=3600"})
+            except Exception:
+                return self.send_json({"error": "image failed"}, 500)
         if u.startswith("/thumb/"):
             fp = out_path(u[7:])
             if fp.suffix.lower() not in GAL_EXT or fp.suffix.lower() in (".mp4", ".webm") or not fp.is_file():
@@ -5334,6 +5586,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(set_family(p))
         if u == "/api/memory/free":
             return self.send_json(memory_free())
+        if u == "/api/update/inspect":
+            return self.send_json(update_inspect(p))
+        if u == "/api/update/apply":
+            return self.send_json(update_apply(p))
         if u == "/api/app/restart":
             return self.send_json(app_restart(p))
         if u == "/api/app/move/check":
@@ -5363,6 +5619,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(lora_preview_api(p))
         if u == "/api/prompts":
             return self.send_json(prompts_api(p))
+        if u == "/api/chars":
+            return self.send_json(chars_api(p))
         if u == "/api/wildcards":
             return self.send_json(wildcards_api(p))
         if u == "/api/describe":

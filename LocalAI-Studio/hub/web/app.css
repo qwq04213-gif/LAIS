@@ -12,7 +12,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--acc)}
 
 /* 왼쪽 메뉴 */
-#rail{background:var(--chrome);border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:4px;overflow:auto}
+#rail{background:var(--chrome);border-right:1px solid var(--line);padding:20px 12px 0;display:flex;flex-direction:column;gap:4px;overflow:auto}
 .brand{font-size:calc(15px*var(--ui,1));font-weight:700;letter-spacing:-.01em;padding:2px 10px 18px}
 nav{display:grid;gap:2px}
 nav .ng{display:flex;flex-direction:column;gap:1px;margin-bottom:6px}.ngt{font-size:calc(11px*var(--ui,1));letter-spacing:.04em;color:var(--mute);opacity:.75;padding:6px 12px 3px}nav .ng+.ng{border-top:1px solid var(--line);padding-top:2px;margin-top:2px}
@@ -22,7 +22,7 @@ nav button.on{background:var(--raised);color:var(--tx);font-weight:600}
 .grow{flex:1}
 .adv{display:block;text-align:left;background:none;border:0;font-size:calc(12.5px*var(--ui,1));color:var(--mute);padding:6px 12px;text-decoration:none;cursor:pointer}
 .adv:hover{color:var(--tx)}
-#stat{border-top:1px solid var(--line);padding:12px 10px 0;font-size:calc(12.5px*var(--ui,1));color:var(--mute);display:grid;gap:4px}
+#stat{margin-bottom:16px;border-top:1px solid var(--line);padding:12px 10px 0;font-size:calc(12.5px*var(--ui,1));color:var(--mute);display:grid;gap:4px}
 #stat i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--line);margin-right:8px}
 #stat i.on{background:var(--ok)}
 
@@ -360,6 +360,11 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 .bt-done{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px}.hint.bad{color:#e5736a}
 /* 작업 대기열 */
 .qbtn{display:flex;align-items:center;gap:10px;background:none;border:0;border-radius:8px;padding:9px 12px;color:var(--mute);cursor:pointer;text-align:left;position:relative}.qbtn:hover{color:var(--tx)}
+/* 만들기 버튼처럼: 메뉴가 길어 사이드바가 스크롤돼도 이 버튼은 아래에 붙어서 계속 보여요 */
+.qwrap{position:sticky;bottom:0;z-index:5;background:var(--chrome);padding:8px 0 10px}
+.qbtn{width:100%;border:1px solid var(--line);overflow:hidden}
+.qbtn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}.qbtn .ico{flex:none}
+.qbtn.busy,.qbtn.open{border-color:var(--acc);color:var(--tx)}.qbtn .qbar{position:absolute;left:0;bottom:0;height:3px;background:var(--acc);width:0;transition:width .4s}
 .qbtn #qcount{font-style:normal;background:var(--acc);color:#10131a;border-radius:10px;font-size:calc(11px*var(--ui,1));font-weight:700;padding:0 7px;margin-left:auto}.qbtn.busy .ico{stroke:var(--acc)}
 #qpanel{position:fixed;right:16px;bottom:64px;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:var(--raised);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);z-index:90;padding:12px 14px}
 #qpanel[hidden]{display:none}.qh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.qx{background:none;border:0;color:var(--mute);font-size:calc(20px*var(--ui,1));cursor:pointer;line-height:1}
@@ -500,10 +505,26 @@ html[data-gosticky=off] form .go{position:static;box-shadow:none}
 @media(max-width:860px){html[data-qpos=free] .qfloat,html[data-qpos=dock] .qfloat{left:auto!important;top:auto!important;right:16px!important;bottom:16px!important}html[data-qpos=free] #qpanel,html[data-qpos=dock] #qpanel{left:16px!important;right:16px!important;top:auto!important;bottom:64px!important}}
 #toast.go-toast{cursor:pointer;border-color:var(--acc)}#toast.go-toast:hover{background:#1a1a20}
 
-.qside{display:none}
-html[data-qpos=side] .qside{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:6;width:100%;margin:2px 0 8px;padding:8px 12px;background:var(--raised);color:var(--tx);border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:calc(13px*var(--ui,1));text-align:left;overflow:hidden;box-shadow:0 6px 10px -6px rgba(0,0,0,.45)}
-.qside:hover{background:var(--chrome)}.qside .ico{flex:none}.qside span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
-.qside em{font-style:normal;flex:none;background:var(--acc);color:#10131a;border-radius:10px;font-size:calc(11px*var(--ui,1));font-weight:700;padding:0 7px}
-.qside.busy{border-color:var(--acc)}.qside.busy .ico{stroke:var(--acc)}.qside .qfbar{position:absolute;left:0;bottom:0;height:3px;background:var(--acc);width:0;transition:width .4s}
 html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:auto;bottom:auto}
-@media(max-width:860px){html[data-qpos=side] .qside{display:none}html[data-qpos=side] .qfloat{display:flex}html[data-qpos=side] #qpanel{left:16px!important;right:16px!important;top:auto!important;bottom:64px!important}}
+@media(max-width:860px){html[data-qpos=side] .qfloat{display:flex}html[data-qpos=side] #qpanel{left:16px!important;right:16px!important;top:auto!important;bottom:64px!important}}
+
+/* 내 PC 점검 */
+#chk{display:grid;gap:10px;margin-top:10px}.chk-g{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.chk-h{display:flex;align-items:center;gap:10px}.chk-h b{flex:1;font-weight:600}.chk-i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:calc(12px*var(--ui,1));font-weight:700;background:var(--raised)}
+.chk-g.s-ok .chk-i{background:var(--ok);color:#10131a}.chk-g.s-bad{border-color:var(--bad)}.chk-g.s-bad .chk-i{background:var(--bad);color:#10131a}.chk-g.s-warn .chk-i{background:#e5c46a;color:#10131a}
+.chk-r{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:6px 0 2px 32px;font-size:calc(13px*var(--ui,1))}.chk-r i{width:8px;height:8px;border-radius:50%;background:var(--line);margin-left:-18px}
+.chk-r.ok i{background:var(--ok)}.chk-r.bad i{background:var(--bad)}.chk-r.opt i{background:#e5c46a}.chk-l{font-weight:500}.chk-d{flex:1;min-width:160px}
+
+#lb-cont>summary{border:1px solid var(--line);border-radius:8px;padding:6px 12px;color:var(--tx);display:inline-block}#lb-cont>summary:hover{background:var(--raised)}
+#lb-cont .menu button{border:0}
+.updlog{white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto;font-size:calc(12px*var(--ui,1));background:var(--table);border-radius:8px;padding:10px;margin:6px 0 0}
+#upd-out{margin-top:10px}
+
+/* 캐릭터·스타일 보관함 */
+.chgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin:10px 0}
+.chcard{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--raised);display:flex;flex-direction:column}
+.chcard>img,.chnoimg{width:100%;height:150px;object-fit:cover;background:var(--table);display:grid;place-items:center;color:var(--mute);font-size:calc(12px*var(--ui,1))}
+.chbody{padding:10px 12px;display:flex;flex-direction:column;gap:6px}.chbody .plb{display:flex;flex-wrap:wrap;gap:6px}
+.chrefs{display:flex;gap:10px;flex-wrap:wrap}.chrefs .mini img{max-height:120px;border-radius:8px}
+.ch-lrow{display:flex;gap:8px;align-items:center;margin-bottom:6px}.ch-lrow select{flex:1;min-width:0}.ch-lrow input{width:80px}
+#ch-form{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}

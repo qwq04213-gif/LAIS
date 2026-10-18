@@ -11,7 +11,6 @@
 <body>
 <aside id="rail">
   <div class="brand">로컬 AI 스튜디오<small id="ver" role="button" tabindex="0" title="버전별 변경 사항 보기"></small></div>
-  <button id="qside" type="button" class="qside" aria-haspopup="dialog" title="작업 대기열 — 사이드바 위쪽에 고정돼 있어요. 누르면 목록을 열고 닫아요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span id="qstext">작업 대기열</span><em id="qscount" hidden>0</em><i class="qfbar" id="qsbar" hidden></i></button>
   <div id="gbars" hidden></div>
   <nav>
     <div class="ng"><span class="ngt">처음</span>
@@ -45,7 +44,7 @@
       <button data-v="conf" title="설정"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 14a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>설정</span></button>
     </div>
   </nav>
-  <button id="qbtn" type="button" class="qbtn" aria-haspopup="dialog" title="진행 중이거나 기다리는 작업을 보고, 순서를 바꾸거나 취소해요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>작업 대기열</span><i id="qcount" hidden>0</i></button>
+  <div class="qwrap"><button id="qbtn" type="button" class="qbtn" aria-haspopup="dialog" title="진행 중이거나 기다리는 작업을 보고, 순서를 바꾸거나 취소해요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span id="qstext">작업 대기열</span><i id="qcount" hidden>0</i><i class="qbar" id="qsbar" hidden></i></button></div>
   <div class="grow"></div>
   <button class="adv" id="refresh-models" type="button" title="폴더에 새로 넣거나 지운 모델·LoRA·VAE 파일을 목록에 바로 반영해요.">↻ 모델 목록 새로고침</button>
   <button class="adv" id="restart-app" type="button" title="스튜디오와 엔진을 껐다가 다시 켜요.">⟳ 프로그램 다시 시작</button>
@@ -575,6 +574,24 @@
 <!-- 프롬프트 -->
 <section class="view" id="v-lib">
   <h2>프롬프트</h2>
+  <details class="fold" id="fold-chars" open><summary>캐릭터·스타일 보관함</summary>
+    <p class="hint plain">자주 쓰는 캐릭터나 그림체를 <b>프롬프트·LoRA(강도 포함)·시드·모델·참고 이미지</b> 묶음으로 저장해 두고, 이미지 생성·편집·참고 이미지 기능에 한 번에 불러와요. 마음에 드는 그림의 [이어서 작업 → 캐릭터·스타일로 저장]이나 이미지 생성 화면의 [캐릭터·스타일로 저장]으로도 만들 수 있어요. 파일은 프로그램 폴더의 <code>library</code> 폴더에 쌓여요.</p>
+    <div class="plbar"><input id="ch-q" type="search" placeholder="보관함 검색"><select id="ch-kind" aria-label="종류"><option value="">전체</option></select><button type="button" class="ghost" id="ch-new">+ 새로 만들기</button><button type="button" class="ghost" id="ch-fromgen" title="지금 이미지 생성 화면에 채워 둔 프롬프트·LoRA·시드·모델을 가져와요">생성 화면에서 가져오기</button></div>
+    <div id="ch-list" class="chgrid"></div>
+    <form id="ch-form" hidden autocomplete="off">
+      <input type="hidden" name="id">
+      <div class="row"><label class="f">이름<input name="name" maxlength="60" placeholder="예: 은발 마법사 리아"></label>
+      <label class="f">종류<select name="kind"></select></label></div>
+      <label class="f">프롬프트<textarea name="prompt" rows="4" placeholder="이 캐릭터·스타일을 나타내는 프롬프트 (LoRA 태그는 아래 LoRA 칸에 넣어 주세요)"></textarea></label>
+      <label class="f">제외할 요소 (선택)<textarea name="negative" rows="2"></textarea></label>
+      <div class="f"><span>LoRA (선택)</span><div id="ch-loras"></div><button type="button" class="ghost sm" id="ch-addl">+ LoRA 줄 추가</button></div>
+      <div class="row"><label class="f">시드 (비워 두면 저장 안 함)<input type="number" name="seed" min="0" placeholder="예: 123456"></label>
+      <label class="f">모델 (선택)<input name="model" list="ch-models" placeholder="체크포인트 이름"><datalist id="ch-models"></datalist></label></div>
+      <div class="f"><span>참고 이미지 (선택, 최대 2장 · 첫 번째가 대표 사진이에요)</span><div class="chrefs"><div class="mini" data-img="chref1"></div><div class="mini" data-img="chref2"></div></div></div>
+      <label class="f">메모 (선택)<input name="note" maxlength="500"></label>
+      <div class="actions"><button class="go" type="submit">저장</button><button class="ghost" type="button" id="ch-cancel">취소</button></div>
+    </form>
+  </details>
   <details class="fold" id="fold-plib" open><summary>프롬프트 보관함</summary>
     <p class="hint plain">자주 쓰는 프롬프트를 저장해 두면 이미지 생성·편집·영상 화면의 [📚 보관함에서 넣기]로 바로 불러와요.</p>
     <div class="plbar"><input id="pl-q" type="search" placeholder="보관함 검색"><button type="button" class="ghost" id="pl-new">+ 새로 만들기</button></div>
@@ -831,6 +848,11 @@
     <button class="ghost" id="rec" type="button">내 GPU에 맞춰 고르기</button>
     <button class="go" id="inst" type="button">선택한 항목 설치</button>
   </div>
+  <details class="fold" id="fold-check"><summary>내 PC 점검 (기능별로 빠진 부품 찾기)</summary>
+    <p class="hint plain">기능마다 필요한 확장·파이썬 부품·모델이 갖춰졌는지 한 번에 보여 줘요. 빠진 것은 옆의 버튼으로 바로 고칠 수 있어요. 아무것도 지우거나 바꾸지 않고, 눌러야만 설치해요.</p>
+    <div class="diskbar"><button type="button" class="ghost" id="chk-run">점검하기</button><span class="mute" id="chk-st"></span></div>
+    <div id="chk"></div>
+  </details>
   <h3>폴더 열기</h3>
   <p class="hint plain">모델 파일을 직접 넣을 때 쓰세요. 파일을 넣고 이 창으로 돌아오면 목록이 자동으로 새로고침돼요.</p>
   <div class="folders">
@@ -892,7 +914,7 @@
 <div class="card"><h3>시작과 목록</h3>
 <div class="row"><div class="rl"><b>시작할 때 열 화면</b><span>스튜디오를 열 때 맨 처음 보이는 화면이에요.</span></div><div class="rc"><select id="opt-home"><option value="">대화 (기본)</option><option value="start">시작하기</option><option value="gen">이미지 생성</option><option value="edit">이미지 편집</option><option value="vid">영상 만들기</option><option value="music">음악 만들기</option><option value="gal">기록 갤러리</option><option value="feat">기능 모음</option></select></div></div>
 <div class="row"><div class="rl"><b>생성 결과 그림 크기</b><span>이미지 생성·편집 화면에서 결과 그림이 보이는 크기예요. 누르면 크게 볼 수 있어요.</span></div><div class="rc"><select id="opt-ressz"><option value="300">작게</option><option value="420">보통</option><option value="640">크게</option><option value="900">아주 크게</option></select></div></div>
-<div class="row"><div class="rl"><b>작업 대기열 위치</b><span>화면에 떠 있는 작업 대기열 버튼과 목록이 놓이는 곳이에요. 버튼을 끌어서 옮기면 [직접 옮긴 자리]로 바뀌고 기억돼요. ‘사이드바 위쪽’은 만들기 버튼처럼 사이드바 위에 고정돼 있어요. ‘만들기 버튼 아래’는 만들기 버튼 바로 밑에서 따라와요.</span></div><div class="rc"><select id="opt-qpos"><option value="side">사이드바 위쪽(만들기 버튼처럼 고정)</option><option value="left">왼쪽 아래(맨 왼쪽)</option><option value="right">오른쪽 아래</option><option value="dock">만들기 버튼 아래</option><option value="free">직접 옮긴 자리</option></select> <button type="button" class="ghost sm" id="opt-qreset">자리 되돌리기</button></div></div>
+<div class="row"><div class="rl"><b>작업 대기열 위치</b><span>화면에 떠 있는 작업 대기열 버튼과 목록이 놓이는 곳이에요. 버튼을 끌어서 옮기면 [직접 옮긴 자리]로 바뀌고 기억돼요. ‘사이드바 버튼’은 왼쪽 메뉴의 [작업 대기열] 버튼을 그 자리에 고정해 두고, 진행 중인 작업을 거기에 보여 줘요. ‘만들기 버튼 아래’는 만들기 버튼 바로 밑에서 따라와요.</span></div><div class="rc"><select id="opt-qpos"><option value="side">사이드바의 작업 대기열 버튼(고정)</option><option value="left">왼쪽 아래(맨 왼쪽)</option><option value="right">오른쪽 아래</option><option value="dock">만들기 버튼 아래</option><option value="free">직접 옮긴 자리</option></select> <button type="button" class="ghost sm" id="opt-qreset">자리 되돌리기</button></div></div>
 <div class="row"><div class="rl"><b>왼쪽 메뉴 너비</b><span>왼쪽 메뉴(사이드바)의 폭이에요.</span></div><div class="rc"><select id="opt-sbw"><option value="176">좁게</option><option value="208">보통</option><option value="248">넓게</option></select></div></div>
 <div class="row"><div class="rl"><b>대화 말풍선 너비</b><span>대화 답변이 한 줄에 놓이는 최대 폭이에요.</span></div><div class="rc"><select id="opt-bubw"><option value="56">좁게</option><option value="72">보통</option><option value="96">넓게</option><option value="130">아주 넓게</option></select></div></div>
 <div class="row"><div class="rl"><b>알림 메시지 표시 시간</b><span>화면 아래에 잠깐 뜨는 안내 문구가 머무는 시간이에요.</span></div><div class="rc"><select id="opt-toast"><option value="2">짧게(2초)</option><option value="3.5">보통(3.5초)</option><option value="7">길게(7초)</option><option value="12">아주 길게(12초)</option></select></div></div>
@@ -934,6 +956,10 @@
   <div class="cpane" id="fold-app"><div class="card"><h3>프로그램 관리</h3>
     <p class="hint plain">지금 설치 위치: <b id="app-root"></b></p>
     <div class="actions"><button class="ghost" id="app-restart" type="button">프로그램 다시 시작</button><button class="ghost" type="button" data-go="log">버전별 변경 사항 보기</button></div>
+    <h4>업데이트 파일 적용</h4>
+    <p class="hint plain">받은 업데이트 파일(<code>LocalAI-Studio-update-….bat</code>)을 아래에 끌어다 놓거나 눌러서 고르세요. 먼저 바뀔 파일을 보여 드리고, 확인하면 적용해요. 적용하기 전에 이전 파일을 <code>backup</code> 폴더에 복사해 두고, 문제가 생기면 <code>rollback.bat</code> 으로 되돌릴 수 있어요. 엔진·모델·결과물·설정은 건드리지 않아요. 믿을 수 있는 곳에서 받은 파일만 쓰세요.</p>
+    <div class="drop compact" id="upd-drop" tabindex="0">업데이트 파일(.bat)을 끌어다 놓거나 클릭해서 고르세요.<input type="file" id="upd-file" accept=".bat" hidden></div>
+    <div id="upd-out"></div>
     <h4>프로그램 위치 옮기기</h4>
     <p class="hint plain">설치 폴더 전체(엔진·모델·결과·설정)를 다른 폴더나 드라이브로 옮겨요. 스튜디오가 잠시 꺼졌다가 새 위치에서 다시 켜져요. 같은 드라이브 안에서는 파일을 복사하지 않고 자리만 바꿔서 몇 초면 끝나요. 다른 드라이브로는 복사한 뒤 확인하고, 원래 폴더는 지우지 않고 남겨요. 중간에 문제가 생기면 원래대로 되돌려요.</p>
     <p class="hint plain" id="app-nest" hidden>지금 폴더 이름이 바깥 폴더와 같아서 한 겹 더 들어가 있는 것 같아요. 아래 버튼으로 바깥 폴더로 올릴 수 있어요.</p>
@@ -971,6 +997,14 @@
     <button type="button" id="lb-fit">화면에 맞춤</button>
     <button type="button" id="lb-one">원본 크기</button>
     <button type="button" id="lb-cmp" hidden title="원본과 결과를 겹쳐 놓고 가운데 선을 움직여 비교해요 (C 키)">겹쳐서 비교</button>
+    <details class="more up" id="lb-cont" hidden><summary>이어서 작업</summary><div class="menu">
+      <button type="button" data-to="regen" title="이 그림을 만든 설정(프롬프트·모델·LoRA·시드)을 생성 화면에 채워 줘요">같은 설정으로 채우기</button>
+      <button type="button" data-to="again" title="같은 설정에 시드만 바꿔 4장을 바로 만들어요">같은 설정으로 새 시드 4장</button>
+      <button type="button" data-to="gvar" title="이 그림을 바탕으로 구도는 비슷하게 4장 변형해요">비슷하게 변형 4장</button>
+      <button type="button" data-to="edit">이미지 편집으로 보내기</button>
+      <button type="button" data-to="up">업스케일로 보내기</button>
+      <button type="button" data-to="vid">영상으로 만들기</button>
+      <button type="button" data-to="chsave" title="이 그림의 프롬프트·LoRA·시드와 사진을 캐릭터·스타일 보관함에 묶어서 저장해요">캐릭터·스타일로 저장</button></div></details>
     <a id="lb-dl" download>저장</a>
     <button type="button" id="lb-meta">이미지 정보</button>
     <button type="button" id="lb-x">닫기</button>

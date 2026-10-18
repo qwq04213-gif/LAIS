@@ -257,7 +257,7 @@ addEventListener('scroll',()=>{if(!tipEl)return;const r=tipEl.getBoundingClientR
 $$('.loras').forEach(b=>addLora(b));
 addTips();
 
-const MINI_LABEL={ref1:'참조 이미지 2 선택',ref2:'참조 이미지 3 선택',init:'시작 이미지 선택',cn_image:'제어 이미지 선택'};
+const MINI_LABEL={chref1:'대표 이미지 선택',chref2:'참고 이미지 선택',ref1:'참조 이미지 2 선택',ref2:'참조 이미지 3 선택',init:'시작 이미지 선택',cn_image:'제어 이미지 선택'};
 function mini(box,label){
   box.innerHTML=`<button type="button" class="ghost">${esc(label||MINI_LABEL[box.dataset.img]||'이미지 선택')}</button><img alt="" hidden><button type="button" class="x" hidden title="제거">×</button><input type="file" accept="image/*" hidden>`;
   const[b,im,x,inp]=[$('.ghost',box),$('img',box),$('.x',box),$('input',box)];box.value=null;
@@ -445,12 +445,14 @@ $('#size-preset').onchange=e=>{const[w,h]=e.target.value.split('x');if(w){setv($
 const LB={list:[],i:0,s:1,tx:0,ty:0,nw:0,nh:0,cmp:false};
 const lbRect=()=>$('#lb-view').getBoundingClientRect();
 function lbOpen(list,i,cmp){LB.list=list;LB.i=i||0;LB.wantCmp=!!cmp;$('#lb').hidden=false;document.body.style.overflow='hidden';lbLoad();$('#lb-x').focus()}
+document.addEventListener('click',e=>{const b=e.target.closest('#lb-cont button[data-to]');if(!b)return;if(b.dataset.busy)return;lbClose()},true);
 function lbClose(){$('#lb').hidden=true;document.body.style.overflow='';$('#lb-img').removeAttribute('src');$('#lb-before').removeAttribute('src')}
 function lbLoad(){
   const it=LB.list[LB.i],im=$('#lb-img');
   LB.cmp=false;$('#lb-before').hidden=$('#lb-line').hidden=$('#lb-split').hidden=true;
   $('#lb-cmp').hidden=!it.before;$('#lb-cmp').textContent='겹쳐서 비교';
   $('#lb-prev').disabled=$('#lb-next').disabled=LB.list.length<2;
+  {const c=$('#lb-cont'),okc=/^\/out\//.test(it.url||'');c.hidden=!okc;c.open=false;$$('button',c).forEach(b=>b.dataset.u=it.url)}
   $('#lb-dl').href=it.url;$('#lb-dl').download=it.name||'image.png';
   im.onload=()=>{LB.nw=im.naturalWidth;LB.nh=im.naturalHeight;im.style.width=LB.nw+'px';im.style.height=LB.nh+'px';lbFit();if(LB.wantCmp){LB.wantCmp=false;lbCmp()}};
   im.src=it.url;
@@ -838,7 +840,7 @@ function addResults(sec,j,kind){
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
     j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a>${mi(u,'edit',first)}${
     kind==='up'?'':mi(u,'up','업스케일')}${kind==='gen'?mi(u,'regen','같은 설정으로','이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요'):''}${mi(u,'vid','영상으로','이 이미지를 시작 장면으로 영상을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
-    kind==='gen'?mi(u,'var','여러 장 변형','구도는 유지하고 디테일만 조금씩 다른 이미지를 여러 장 만들어요'):''}${COMPARE[u]?mi(u,'cmp','비교','원본과 겹쳐서 비교해요'):''}${mi(u,'info','정보')}${mi(u,'folder','폴더 열기','이 사진이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`).join('')}${
+    kind==='gen'?mi(u,'var','여러 장 변형','구도는 유지하고 디테일만 조금씩 다른 이미지를 여러 장 만들어요'):''}${COMPARE[u]?mi(u,'cmp','비교','원본과 겹쳐서 비교해요'):''}${kind==='gen'?mi(u,'chsave','캐릭터·스타일로 저장','이 그림의 프롬프트·LoRA·시드와 사진을 보관함에 묶어서 저장해요'):''}${mi(u,'info','정보')}${mi(u,'folder','폴더 열기','이 사진이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
   bt.querySelectorAll('img').forEach(i=>{if(!i.complete)i.addEventListener('load',goto,{once:true})}); // 사진이 다 불러와진 뒤 높이가 커져도 다시 맞춰요
@@ -938,6 +940,10 @@ $('#f-edit').onsubmit=e=>{e.preventDefault();const f=e.target,v=IV.edit;
   run('edit',f,{image:v.img,mask:m})};
 $('#f-gen').onsubmit=e=>{e.preventDefault();run('gen',e.target,{})};
 $('#f-up').onsubmit=e=>{e.preventDefault();const v=IV.up;if(!v.img)return need(e.target,'먼저 이미지를 올려 주세요.');run('up',e.target,{image:v.img})};
+async function regenFrom(u,quiet){
+  try{const r=await api('/api/meta',{image:await urlToDataURL(u)});
+    if(r.error||!r.gen||!r.gen.prompt){if(!quiet)toast('이 이미지에는 생성 정보가 없어요. (설정의 "결과 PNG에 생성 정보 기록"이 꺼져 있었을 수 있어요.)');return false}
+    INFO={r,dataUrl:u,name:u.split('/').pop()};sendToGen();return true}catch{if(!quiet)toast('설정을 읽지 못했어요.');return false}}
 document.addEventListener('click',async e=>{
   const g=e.target.closest('[data-go]');if(g){e.preventDefault();show(g.dataset.go);return}
   const op=e.target.closest('[data-open]');if(op){e.preventDefault();openFolder(op.dataset.open);return}
@@ -954,10 +960,17 @@ document.addEventListener('click',async e=>{
     fig.insertAdjacentHTML('beforeend',`<div class="varbar" data-u="${u}"><label>변형 정도 <select class="v-lv"><option value="0.25">약하게</option><option value="0.45" selected>보통</option><option value="0.65">크게</option></select></label><label>장수 <select class="v-n"><option>2</option><option selected>4</option><option>6</option></select></label><button type="button" class="ghost sm v-go">만들기</button><span class="mute">지금 생성 화면의 설정(모델·프롬프트)을 그대로 써요.</span></div>`);return}
   if(to==='folder'){try{const r=await api('/api/open',{file:u});toast(r.error?r.error:'폴더를 열었어요: '+r.path)}catch{toast('폴더를 열지 못했어요.')}return}
   if(to==='info'){show('info');infoLoad(await urlToDataURL(u),u.split('/').pop());return}
-  if(to==='regen'){
-    try{const r=await api('/api/meta',{image:await urlToDataURL(u)});
-      if(r.error||!r.gen||!r.gen.prompt){toast('이 이미지에는 생성 정보가 없어요. (설정의 "결과 PNG에 생성 정보 기록"이 꺼져 있었을 수 있어요.)');return}
-      INFO={r,dataUrl:u,name:u.split('/').pop()};sendToGen()}catch{toast('설정을 읽지 못했어요.')}return}
+  if(to==='regen'){await regenFrom(u);return}
+  if(to==='chsave'){chFromImage(u);return}
+  if(to==='again'||to==='gvar'){   // 같은 설정으로 바로 더 만들기(새 시드 4장) / 이 그림을 바탕으로 비슷하게 변형
+    const had=await regenFrom(u,true);
+    if(!had&&to==='again')return toast('이 이미지에는 생성 정보가 없어서 같은 설정으로 만들 수 없어요. (설정의 "결과 PNG에 생성 정보 기록"이 꺼져 있었을 수 있어요.)',6000);
+    if(!had)toast('이 이미지에는 생성 정보가 없어서, 지금 생성 화면의 설정으로 변형해요.',5000);
+    show('gen');const f=$('#f-gen');
+    if(to==='again')await run('gen',f,{n:4,seed:-1})
+    else await run('gen',f,{init:await urlToDataURL(u),init_denoise:.45,n:4,seed:-1});
+    return}
+  if(to==='up'&&b.closest('.gt,#lb')){IV.up.set(await urlToDataURL(u));show('up');return}
   if(to==='vcont'){try{b.disabled=true;window.vidSetImage(await lastFrame(u));show('vid');toast('마지막 장면을 시작 이미지로 넣었어요. 장면 설명을 이어지게 바꿔서 [영상 만들기]를 눌러 보세요.',6000)}catch(er){toast(er.message)}b.disabled=false;return}
   if(to.startsWith('vp:')){b.closest('.more').open=false;run('vpost',$('#f-vid'),{op:to.slice(3),video:u,upm:($('#f-up')&&$('#f-up').elements.upm.value)||''});return}
   if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
@@ -1426,7 +1439,7 @@ function plInsert(form,it){const t=form.elements.prompt;if(!t)return;
   t.dispatchEvent(new Event('input',{bubbles:true}));if(n)n.dispatchEvent(new Event('input',{bubbles:true}));toast(`'${it.name}' 을(를) 넣었어요.`)}
 const PLF={gen:'#f-gen',edit:'#f-edit',vid:'#f-vid'};
 function plAddRows(){['#f-gen','#f-edit','#f-vid'].forEach(id=>{const f=$(id),t=f&&f.elements.prompt;if(!t||f.querySelector('.plib-row'))return;
-  const lab=t.closest('label');lab.insertAdjacentHTML('afterend','<div class="plib-row"><select class="plib-sel" aria-label="프롬프트 보관함"></select><button type="button" class="ghost plib-save">보관함에 저장</button></div>')})}
+  const lab=t.closest('label');lab.insertAdjacentHTML('afterend',`<div class="plib-row"><select class="plib-sel" aria-label="프롬프트 보관함"></select><button type="button" class="ghost plib-save">보관함에 저장</button>${f.id==='f-gen'?'<button type="button" class="ghost ch-save-gen" title="프롬프트·LoRA·시드·모델을 캐릭터·스타일 보관함에 묶어서 저장해요">캐릭터·스타일로 저장</button>':''}</div>`)})}
 plAddRows();
 document.addEventListener('change',e=>{const sel=e.target.closest('.plib-sel');if(!sel||!sel.value)return;
   const it=PL.find(x=>x.id===sel.value);if(it)plInsert(sel.closest('form'),it);sel.value=''});
@@ -1467,7 +1480,7 @@ $('#i2p-go').onclick=async()=>{if(!I2P)return toast('먼저 이미지를 골라 
     if(r.error){st.textContent=r.error;return}
     st.textContent='완료 ('+r.model+')';$('#i2p-out').value=r.text;$('#i2p-out').hidden=$('#i2p-act').hidden=false}
   catch{st.textContent='설명을 만들지 못했어요.'}b.disabled=false};
-function libShow(){plLoad();wcLoad();i2pInit()}
+function libShow(){chLoad();plLoad();wcLoad();i2pInit()}
 
 /* ══════════ 기록 갤러리 ══════════ */
 let GAL={off:0,items:[]};
@@ -1486,7 +1499,7 @@ async function galLoad(more){
     let head='';if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
     return head+`<figure class="gt" data-u="${x.url}">${x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
-    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="같은 설정으로 생성">↻</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로">✎</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
+    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="같은 설정으로 생성">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
   $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value||$('#gal-date').value);
 }
 $('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=$('#gal-date').onchange=()=>galLoad();
@@ -1535,6 +1548,97 @@ $('#restart-app').onclick=()=>{if(confirm('스튜디오와 엔진을 껐다가 �
 $('#app-restart').onclick=()=>{if(confirm('스튜디오와 엔진을 껐다가 다시 켤까요?'))appRestart()};
 let APP_PLAN=null;
 async function appInit(){try{const w=await api('/api/app/where');$('#app-root').textContent=w.root;$('#app-nest').hidden=!w.nested_same_name;$('#app-up').dataset.p=w.parent;$('#app-up').title=w.parent}catch{}}
+
+
+/* ══════════ 캐릭터·스타일 보관함 ══════════ */
+let CH=[],CHKINDS=['캐릭터','스타일','배경','기타'];
+const chImg=(n,t)=>`/api/chars/img?f=${encodeURIComponent(n)}${t?'&t=1':''}`,chName=u=>{try{return new URL(u,location.href).searchParams.get('f')||''}catch{return ''}};
+async function chLoad(){try{const r=await api('/api/chars',{action:'list'});CH=r.items||[];CHKINDS=r.kinds||CHKINDS}catch{CH=[]}
+  const ks=$('#ch-kind'),cur=ks.value;ks.innerHTML='<option value="">전체</option>'+CHKINDS.map(k=>`<option>${esc(k)}</option>`).join('');ks.value=cur;
+  $('#ch-form').elements.kind.innerHTML=CHKINDS.map(k=>`<option>${esc(k)}</option>`).join('');
+  $('#ch-models').innerHTML=(LISTS.checkpoints||[]).map(x=>`<option value="${esc(x)}">`).join('');chRender()}
+function chRender(){const box=$('#ch-list');if(!box)return;const q=($('#ch-q').value||'').trim().toLowerCase(),k=$('#ch-kind').value;
+  const list=CH.filter(x=>(!k||x.kind===k)&&(!q||(x.name+' '+x.prompt+' '+x.note+' '+x.loras.map(l=>l[0]).join(' ')).toLowerCase().includes(q)));
+  box.innerHTML=list.length?list.map(x=>`<div class="chcard" data-id="${esc(x.id)}">${x.refs.length?`<img loading="lazy" src="${chImg(x.refs[0],1)}" alt="${esc(x.name)}">`:'<div class="chnoimg">대표 이미지 없음</div>'}
+    <div class="chbody"><div class="plh"><b>${esc(x.name)}</b><span class="badge">${esc(x.kind)}</span></div>
+    <p class="plt">${esc((x.prompt||'').slice(0,110))}${(x.prompt||'').length>110?'…':''}</p>
+    <small class="mute">${x.loras.length?'LoRA '+x.loras.map(l=>esc(l[0].replace(/\.safetensors$/i,''))+' ('+l[1]+')').join(', ')+' · ':''}${x.seed!=null?'시드 '+x.seed+' · ':''}${x.refs.length?'참고 이미지 '+x.refs.length+'장':''}${esc(x.note?' · '+x.note:'')}</small>
+    <div class="plb"><button type="button" class="ghost sm" data-ch="gen" title="프롬프트·LoRA·시드·모델을 이미지 생성 화면에 넣어요(프롬프트는 뒤에 이어 붙여요)">이미지 생성에 넣기</button><button type="button" class="ghost sm" data-ch="edit" title="참고 이미지를 이미지 편집의 참조 이미지 칸에 넣어요">편집에 참고로</button><button type="button" class="ghost sm" data-ch="ipa" title="참고 이미지와 프롬프트를 '참고 이미지로 그리기' 기능에 넣어요">참고 이미지로 그리기</button><button type="button" class="ghost sm" data-ch="edit-item">수정</button><button type="button" class="ghost sm" data-ch="del">삭제</button></div></div></div>`).join(''):`<p class="mute">${CH.length?'조건에 맞는 항목이 없어요.':'아직 저장한 캐릭터·스타일이 없어요. [+ 새로 만들기]를 누르거나, 마음에 드는 그림의 [이어서 작업]에서 저장해 보세요.'}</p>`}
+function chLoraRow(name,w){const i=document.createElement('div');i.className='ch-lrow';const all=[...(LISTS.loras||[])];if(name&&!all.includes(name))all.unshift(name);
+  i.innerHTML=`<select class="ch-lora"><option value="">사용 안 함</option>${all.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select><input type="number" class="ch-w" step="0.05" min="-2" max="2" value="${w??0.8}" title="강도"><button type="button" class="x" title="이 줄 지우기">×</button>`;
+  $('select',i).value=name||'';$('.x',i).onclick=()=>i.remove();$('#ch-loras').append(i)}
+function chOpen(it){const f=$('#ch-form');f.reset();it=it||{};f.elements.id.value=it.id||'';f.elements.name.value=it.name||'';f.elements.kind.value=it.kind||'캐릭터';
+  f.elements.prompt.value=it.prompt||'';f.elements.negative.value=it.negative||'';f.elements.seed.value=it.seed??'';f.elements.model.value=it.model||'';f.elements.note.value=it.note||'';
+  $('#ch-loras').innerHTML='';(it.loras||[]).forEach(l=>chLoraRow(l[0],l[1]));if(!(it.loras||[]).length)chLoraRow();
+  ['chref1','chref2'].forEach((k,i)=>{const m=$(`.mini[data-img=${k}]`,f);m.clear();const r=(it.refs||[])[i];if(r)m.set(it.refsData&&it.refsData[i]||chImg(r))});
+  f.hidden=false;f.scrollIntoView({block:'nearest'});f.elements.name.focus()}
+$('#ch-addl').onclick=()=>chLoraRow();
+$('#ch-new').onclick=()=>chOpen();$('#ch-cancel').onclick=()=>{$('#ch-form').hidden=true};
+$('#ch-q').oninput=chRender;$('#ch-kind').onchange=chRender;
+function chFromGenForm(){const f=$('#f-gen');const rows=$$('.lora-row',f).map(r=>[$('select',r).value,+$('input',r).value]).filter(r=>r[0]);
+  const seed=+f.elements.seed.value;return{prompt:String(f.elements.prompt.value||'').replace(/\s*<lora:[^>]*>/gi,'').trim(),negative:f.elements.negative?f.elements.negative.value.trim():'',
+    loras:rows,seed:seed>=0?seed:null,model:(f.elements.ckpt&&f.elements.ckpt.value||'').replace(/^ckpt::/,'')}}
+$('#ch-fromgen').onclick=()=>{const g=chFromGenForm();if(!g.prompt&&!g.loras.length)return toast('이미지 생성 화면에 채워 둔 내용이 없어요.');chOpen({...g,name:'',kind:'캐릭터'})};
+$('#ch-form').onsubmit=async e=>{e.preventDefault();const f=e.target;if(!f.elements.name.value.trim())return toast('이름을 적어 주세요.');
+  const refs=['chref1','chref2'].map(k=>$(`.mini[data-img=${k}]`,f).value).filter(Boolean).map(v=>v.startsWith('data:')?{data:v}:{keep:chName(v)});
+  const loras=$$('.ch-lrow',f).map(r=>[$('.ch-lora',r).value,+$('.ch-w',r).value]).filter(r=>r[0]);
+  const r=await api('/api/chars',{action:'save',id:f.elements.id.value,name:f.elements.name.value,kind:f.elements.kind.value,prompt:f.elements.prompt.value,negative:f.elements.negative.value,
+    loras,seed:f.elements.seed.value,model:f.elements.model.value,note:f.elements.note.value,refs});
+  if(r.error)return toast(r.error);CH=r.items;f.hidden=true;chRender();toast('보관함에 저장했어요.')};
+async function chImgData(n){return urlToDataURL(chImg(n))}
+$('#ch-list').addEventListener('click',async e=>{const b=e.target.closest('[data-ch]');if(!b)return;const it=CH.find(x=>x.id===b.closest('.chcard').dataset.id);if(!it)return;const a=b.dataset.ch;
+  if(a==='edit-item')return chOpen(it);
+  if(a==='del'){if(!confirm(`'${it.name}' 을(를) 보관함에서 지울까요?\n저장해 둔 참고 이미지도 함께 지워져요. 되돌릴 수 없어요.`))return;
+    const r=await api('/api/chars',{action:'delete',id:it.id});CH=r.items||[];chRender();return}
+  if(a==='gen'){const f=$('#f-gen'),t=f.elements.prompt,cur=t.value.trim(),miss=[];
+    if(it.prompt)t.value=cur?cur.replace(/[\s,]+$/,'')+', '+it.prompt:it.prompt;
+    if(it.negative&&f.elements.negative&&!f.elements.negative.value.includes(it.negative)){const n=f.elements.negative;n.value=n.value.trim()?n.value.trim().replace(/[\s,]+$/,'')+', '+it.negative:it.negative}
+    const have=$$('.lora-row',f).map(r=>[$('select',r).value,+$('input',r).value]).filter(r=>r[0]),o={};let k=0;
+    for(const [n,w] of have){k++;o['lora'+k]=n;o['lora'+k+'_w']=w}
+    for(const [n,w] of it.loras){const l=pickFile(LISTS.loras,n);if(!l){miss.push('LoRA '+n);continue}if(have.some(h=>h[0]===l))continue;k++;o['lora'+k]=l;o['lora'+k+'_w']=w}
+    setLoras(f,o);
+    if(it.seed!=null)setv(f,'seed',it.seed);
+    if(it.model){const ck=pickFile(LISTS.checkpoints,it.model);if(ck&&f.elements.gengine.value==='sdxl')setv(f,'ckpt',ck);else if(!ck)miss.push('모델 '+it.model)}
+    f.elements.prompt.dispatchEvent(new Event('input',{bubbles:true}));saveForm(f);show('gen');
+    toast(`'${it.name}' 을(를) 넣었어요.`+(miss.length?` (이 PC에 없어서 못 넣은 것: ${miss.join(', ')})`:''),miss.length?7000:3500);return}
+  if(!it.refs.length)return toast('이 항목에는 참고 이미지가 없어요. [수정]에서 추가할 수 있어요.');
+  if(a==='edit'){const f=$('#f-edit');for(const [i,k] of ['ref1','ref2'].entries())if(it.refs[i])$(`.mini[data-img=${k}]`,f).set(await chImgData(it.refs[i]));
+    show('edit');toast('참조 이미지 칸에 넣었어요. 고칠 사진은 따로 올려 주세요.',5000);return}
+  if(a==='ipa'){show('feat');await sleep(300);await featForm('ipadapter',true);const ff=$('#feat-form');const m=$('.mini[data-img=image]',ff);
+    if(m)m.set(await chImgData(it.refs[0]));{const pt=$('[name=prompt]',ff);if(pt&&it.prompt){pt.value=it.prompt;pt.dispatchEvent(new Event('input',{bubbles:true}))}}toast('참고 이미지와 프롬프트를 넣었어요.',4000)}});
+document.addEventListener('click',async e=>{const b=e.target.closest('.ch-save-gen');if(!b)return;const g=chFromGenForm();if(!g.prompt&&!g.loras.length)return toast('먼저 프롬프트를 적거나 LoRA를 골라 주세요.');
+  show('lib');await sleep(200);chOpen({...g,name:'',kind:'캐릭터'})});
+async function chFromImage(u){let dataUrl;try{dataUrl=await urlToDataURL(u)}catch{return toast('이미지를 읽지 못했어요.')}
+  let g=null;try{const r=await api('/api/meta',{image:dataUrl});g=r.gen}catch{}
+  const p=(g&&g.params)||{};show('lib');await sleep(250);
+  chOpen({prompt:g?String(g.prompt||'').replace(/\s*<lora:[^>]*>/gi,'').trim():'',negative:g?g.negative||'':'',loras:(p.loras||[]).map(([n,w])=>[pickFile(LISTS.loras,n)||n,w??0.8]),seed:p.seed??null,model:p.model||'',name:'',kind:'캐릭터',refs:['x'],refsData:[dataUrl]});
+  if(!g)toast('이 그림에는 생성 정보가 없어서 이미지만 대표 사진으로 넣었어요.',5000)}
+
+/* ── 앱 안에서 업데이트 파일 적용 ── */
+{const drop=$('#upd-drop'),inp=$('#upd-file'),out=$('#upd-out');let TOK=null;
+ const show1=h=>{out.innerHTML=h};
+ async function updRead(f){if(!f)return;if(!/\.bat$/i.test(f.name)){show1('<p class="warn">.bat 로 끝나는 업데이트 파일을 올려 주세요.</p>');return}
+  show1('<p class="mute">파일을 확인하는 중이에요…</p>');let r;
+  try{r=await api('/api/update/inspect',{text:await f.text()})}catch{show1('<p class="warn">서버와 연결되지 않았어요.</p>');return}
+  if(r.error){show1(`<p class="warn">${esc(r.error)}</p>`);return}
+  TOK=r.token;const notes=r.notes.length?`<ul class="partlist">${r.notes.map(n=>`<li><div>${esc(n)}</div></li>`).join('')}</ul>`:'';
+  const head=`<p><b>${esc(r.from)}</b> → <b>${esc(r.to)}</b>${r.changes?` · 바뀔 파일 ${r.changes}개`:''}</p>`;
+  const det=`<details class="fold"><summary>바뀔 파일 자세히 보기</summary><pre class="updlog">${esc(r.log)}</pre></details>`;
+  if(r.same){show1(head+'<p class="hint plain">이미 최신 상태예요. 바꿀 파일이 없어요.</p>'+det);return}
+  if(r.older){show1(head+`<p class="warn">설치된 버전이 이 업데이트보다 새로워요. 되돌리려는 게 아니라면 적용하지 마세요.</p>`+det+'<div class="actions"><button type="button" class="ghost" id="upd-go" data-force="1">그래도 적용(예전 버전으로 되돌리기)</button></div>');return}
+  if(r.code){show1(head+`<p class="warn">적용할 수 없어요.</p>`+det);return}
+  show1(head+notes+(r.busy?`<p class="hint plain">지금 진행 중인 작업이 ${r.busy}개 있어요. 파일만 바꾸고, 다시 시작은 따로 눌러야 해서 작업은 안 끊겨요.</p>`:'')+det+'<div class="actions"><button type="button" class="go" id="upd-go">적용하기</button></div>')}
+ drop.onclick=()=>inp.click();inp.onchange=()=>{updRead(inp.files[0]);inp.value=''};
+ drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};drop.ondragleave=()=>drop.classList.remove('over');
+ drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');updRead(e.dataTransfer.files[0])};
+ out.addEventListener('click',async e=>{const b=e.target.closest('#upd-go');if(!b)return;
+  if(b.dataset.force&&!confirm('설치된 버전보다 옛 버전으로 되돌려요. 계속할까요?'))return;
+  b.disabled=true;b.textContent='적용하는 중…';let r;try{r=await api('/api/update/apply',{token:TOK,force:!!b.dataset.force})}catch{show1('<p class="warn">서버와 연결되지 않았어요.</p>');return}
+  if(r.error){show1(`<p class="warn">${esc(r.error)}</p>`);return}
+  const det=`<details class="fold"><summary>자세한 기록</summary><pre class="updlog">${esc(r.log)}</pre></details>`;
+  if(!r.ok){show1('<p class="warn">적용하지 못했어요. 파일은 원래대로 되돌렸어요.</p>'+det);return}
+  show1('<p><b>적용했어요.</b> 다시 시작하면 새 버전이 돼요. 이전 파일은 backup 폴더에 있어서 rollback.bat 으로 되돌릴 수 있어요.</p>'+det+'<div class="actions"><button type="button" class="go" id="upd-rs">지금 다시 시작</button></div>')});
+ out.addEventListener('click',e=>{if(e.target.closest('#upd-rs'))appRestart()})}
 $('#app-up').onclick=()=>{$('#app-dest').value=$('#app-up').dataset.p||'';appCheck()};
 async function appCheck(){const pl=$('#app-plan'),go=$('#app-go');go.hidden=true;APP_PLAN=null;
   const r=await api('/api/app/move/check',{dest:$('#app-dest').value});
@@ -1655,7 +1759,7 @@ async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
   const n=q.running+q.queued,c=$('#qcount');c.hidden=!n;c.textContent=n;$('#qbtn').classList.toggle('busy',n>0);
   {const run=q.items.find(r=>r.state==='running'),pc=run&&typeof run.progress==='number'?Math.round(run.progress*100):null,F=$('#qfloat');
    F.classList.toggle('busy',n>0);$('#qftext').textContent=run?`${run.label}${pc!==null?' · '+pc+'%':''}`:n?`대기 ${q.queued}개`:'작업 대기열';
-   {const S=$('#qside');S.classList.toggle('busy',n>0);$('#qstext').textContent=$('#qftext').textContent;$('#qscount').hidden=n<2;$('#qscount').textContent=n;$('#qsbar').hidden=pc===null;$('#qsbar').style.width=(pc||0)+'%'}
+   $('#qstext').textContent=$('#qftext').textContent;$('#qsbar').hidden=pc===null;$('#qsbar').style.width=(pc||0)+'%';
    $('#qfcount').hidden=n<2;$('#qfcount').textContent=n;$('#qfbar').hidden=pc===null;$('#qfbar').style.width=(pc||0)+'%'}
   for(const r of q.items){const was=QSEEN.get(r.id);
     if(QINIT&&(r.state==='done'||r.state==='error')&&was!=='done'&&was!=='error')qNotify(r);
@@ -1666,9 +1770,9 @@ function qApply(q){const p=$('#qpanel');if(!p)return;q=q||QLAST;
   const want=QUSER==='open'?true:QUSER==='closed'?false:!!(qPin()&&document.documentElement.dataset.qpos!=='side'&&q&&q.items.some(r=>r.state==='running'||r.state==='queued'));
   const was=!p.hidden;p.hidden=!want;p.classList.toggle('pinned',qPin());
   if(want){$('#q-sound').checked=qSound();$('#q-desk').checked=qDesk();$('#q-pin').checked=qPin();if(q)qRender(q)}
-  $('#qfloat').classList.toggle('open',want);$('#qside').classList.toggle('open',want);if(typeof qPlace==='function')qPlace()}
+  $('#qfloat').classList.toggle('open',want);$('#qbtn').classList.toggle('open',want);if(typeof qPlace==='function')qPlace()}
 const qToggle=()=>{QUSER=$('#qpanel').hidden?'open':'closed';qApply();if(QUSER==='open')qPoll()};
-$('#qbtn').onclick=qToggle;$('#qfloat').onclick=qToggle;$('#qside').onclick=qToggle;
+$('#qbtn').onclick=qToggle;$('#qfloat').onclick=qToggle;
 $('#qpanel .qx').onclick=()=>{QUSER='closed';qApply()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#qpanel').hidden){QUSER='closed';qApply()}});
 $('#q-pin').onchange=e=>{ls.set('q:pin',e.target.checked);QUSER=e.target.checked?null:'open';qApply()};
@@ -1939,7 +2043,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
  pick('opt-toast','opt:toast',3.5);
  tog('opt-gosticky','opt:gosticky',true,v=>{if(v)delete D.dataset.gosticky;else D.dataset.gosticky='off'});
  pick('opt-qpos','opt:qpos','side',v=>{D.dataset.qpos=v;qApply();qPlace()});
- $('#opt-qreset').onclick=()=>{ls.set('opt:qxy',null);ls.set('opt:qpos','side');D.dataset.qpos='side';$('#opt-qpos').value='side';qPlace();toast('대기열 위치를 사이드바 위쪽으로 되돌렸어요.')};
+ $('#opt-qreset').onclick=()=>{ls.set('opt:qxy',null);ls.set('opt:qpos','side');D.dataset.qpos='side';$('#opt-qpos').value='side';qPlace();toast('대기열 위치를 사이드바 버튼으로 되돌렸어요.')};
  pick('opt-home','opt:home','');
  /* 강조 색 */
  {const cur=ls.get('opt:accent','');$$('#accent-pick input').forEach(i=>{i.checked=i.value===cur});
@@ -2057,11 +2161,43 @@ async function cachePanel(){const box=$('#cachein');clearTimeout(cacheT);if(!box
     const x=await api('/api/cachein/move',{});if(x.error)return toast(x.error,6000);cachePanel()};
   const tg=$('#cache-tog');if(tg)tg.onclick=async()=>{const x=await api('/api/cachein',{on:!r.on});toast(x.error||'바꿨어요. 적용하려면 프로그램을 다시 시작해 주세요.',6000);cachePanel();diskScan()}}
 $('#fold-disk').addEventListener('toggle',e=>{if(e.target.open)cachePanel()});
+/* ── 내 PC 점검 ── */
+async function checkScan(){const st=$('#chk-st'),B=$('#chk');st.textContent='점검 중이에요…';let r;try{r=await api('/api/selfcheck')}catch{st.textContent='점검하지 못했어요.';return}
+  const ic={ok:'✔',warn:'△',bad:'✖'},nb=r.groups.filter(g=>g.state==='bad').length,nw=r.groups.filter(g=>g.state==='warn').length;
+  st.textContent=nb?`고쳐야 할 곳이 ${nb}군데 있어요.`:nw?'꼭 필요한 것은 갖춰졌어요. 선택 항목만 비어 있어요.':'모두 갖춰졌어요.';
+  B.innerHTML=r.groups.map(g=>`<div class="chk-g s-${g.state}" data-g="${esc(g.id)}"><div class="chk-h"><span class="chk-i">${ic[g.state]}</span><b>${esc(g.title)}</b>${g.view?`<button type="button" class="ghost sm" data-chk="open" data-v="${esc(g.view)}">화면 열기</button>`:''}</div>
+    ${g.rows.map((x,i)=>`<div class="chk-r ${x.ok===true?'ok':x.ok===false?(x.opt?'opt':'bad'):'unk'}" data-r="${i}"><i></i><span class="chk-l">${esc(x.label)}${x.opt&&x.ok===false?' <small class="mute">(선택)</small>':''}</span><small class="mute chk-d">${esc(x.detail||'')}</small>${x.fix?`<button type="button" class="ghost sm" data-chk="fix" data-gi="${esc(g.id)}" data-ri="${i}">${esc(x.fixlabel||'고치기')}</button>`:''}<span class="mute chk-s"></span></div>`).join('')}</div>`).join('');
+  window.CHK=r}
+async function chkPoll(url,key,st){for(;;){await sleep(1500);let s;try{s=await api(url)}catch{continue}s=key?s[key]:s;if(!s)continue;st.textContent=s.msg||'';if(s.state!=='running')return s}}
+async function chkFix(btn){const g=CHK.groups.find(x=>x.id===btn.dataset.gi),x=g.rows[+btn.dataset.ri],f=x.fix,row=btn.closest('.chk-r'),st=$('.chk-s',row);btn.disabled=true;
+  const done=(msg,rs)=>{st.innerHTML=esc(msg)+(rs?' <button type="button" class="ghost sm" data-chk="again">다시 점검</button>':'');btn.disabled=false};
+  try{
+   if(f.a==='view'){show(f.v);btn.disabled=false;return}
+   if(f.a==='restart'||f.a==='restart_all'){if(f.a==='restart_all'){btn.disabled=false;return appRestart()}
+     st.textContent='다시 시작하는 중…';const r=await api('/api/engine/restart',{});if(r.error)return done(r.error);await sleep(9000);await loadCaps();await checkScan();return}
+   if(f.a==='nodes'){st.textContent='설치할 확장을 찾는 중…';const r=await api('/api/nodes/sources',{missing:f.missing});if(r.error)return done(r.error);
+     const todo=(r.repos||[]).filter(q=>!q.installed||q.incomplete);if(!todo.length&&!(r.unknown||[]).length)return done('이미 설치돼 있어요. 이미지 엔진을 다시 시작하면 적용돼요.',true);
+     for(const q of todo){const i=await api('/api/nodes/install',{repo:q.repo});if(i.error){st.textContent=q.title+': '+i.error;continue}st.textContent=q.title+' 설치 중…';const s=await chkPoll('/api/nodes/status',q.repo,st);if(s.state==='error'){st.textContent=q.title+': '+s.msg;btn.disabled=false;return}}
+     if((r.unknown||[]).length)return done('설치할 곳을 못 찾은 노드: '+r.unknown.join(', ')+' — ComfyUI 를 업데이트하거나 직접 설치해야 해요.');
+     st.innerHTML='설치했어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>';btn.disabled=false;return}
+   if(f.a==='pymods'){for(const m of f.modules){st.textContent=m.pip+' 설치 중…(1~3분)';const r=await api('/api/pymod/install',{module:m.module});if(r.error){st.textContent=r.error;btn.disabled=false;return}
+       const s=await chkPoll('/api/pymod/status',m.module,st);if(s.state==='error'){st.textContent=m.pip+': '+s.msg;btn.disabled=false;return}}
+     st.innerHTML='설치했어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>';btn.disabled=false;return}
+   if(f.a==='swap'){const r=await api('/api/faceswap/model',{});if(r.error)return done(r.error);st.textContent='받는 중…';const s=await chkPoll('/api/faceswap/model',null,st);
+     return s.state==='error'?done(s.msg):st.innerHTML='받았어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>'}
+  }catch{done('서버와 연결되지 않았어요.')}}
+$('#chk-run').onclick=checkScan;
+$('#fold-check').addEventListener('toggle',e=>{if(e.target.open&&!window.CHK)checkScan()});
+$('#chk').addEventListener('click',async e=>{const b=e.target.closest('[data-chk]');if(!b)return;const k=b.dataset.chk;
+  if(k==='open'){const v=b.dataset.v;if(v.startsWith('feat:')){show('feat');setTimeout(()=>featForm(v.slice(5),true),400)}else show(v)}
+  else if(k==='fix')chkFix(b);else if(k==='again')checkScan();
+  else if(k==='restart'){b.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 다시 점검해요.',5000);await sleep(9000);await loadCaps();checkScan()}});
+
 
 /* ── 작업 대기열 자리: 맨 왼쪽/오른쪽 아래, 만들기 버튼 아래(따라다녀요), 직접 끌어서 옮긴 자리 ── */
 function qPlace(){const D=document.documentElement,pill=$('#qfloat'),pan=$('#qpanel');if(!pill||!pan)return;
   const mode=D.dataset.qpos,clr=el=>['left','top','right','bottom','maxHeight'].forEach(k=>el.style[k]='');
-  if(mode==='side'&&innerWidth>860){clr(pill);if(!pan.hidden){const r=$('#qside').getBoundingClientRect();Object.assign(pan.style,{left:(r.right+8)+'px',top:Math.max(8,r.top)+'px',right:'auto',bottom:'auto',maxHeight:(innerHeight-Math.max(8,r.top)-16)+'px'})}return}
+  if(mode==='side'&&innerWidth>860){clr(pill);if(!pan.hidden){const r=$('#qbtn').getBoundingClientRect();Object.assign(pan.style,{left:(r.right+8)+'px',bottom:Math.max(8,innerHeight-r.bottom)+'px',top:'auto',right:'auto',maxHeight:(innerHeight-24)+'px'})}return}
   if((mode!=='dock'&&mode!=='free')||innerWidth<=860){clr(pill);clr(pan);return}
   const pw=pill.offsetWidth||200,ph=pill.offsetHeight||40,cl=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   let x,y;
