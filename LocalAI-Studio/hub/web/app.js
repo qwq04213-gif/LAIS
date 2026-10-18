@@ -127,7 +127,7 @@ function setLoras(f,o){
 const TIPS={
  engine:'말로 편집(Qwen)은 "재킷을 빨간색으로 바꿔줘"처럼 문장으로 지시해요. 칠해서 편집(SDXL 또는 FLUX·Krea·Chroma)은 바꿀 영역을 직접 칠하고 그 부분만 새로 그려요. 칠하지 않은 곳은 원본 그대로예요.',
  fengine:'칠해서 고칠 때 쓸 모델 계열이에요. 모델 파일 목록은 이 계열에 맞는 것만 나와요. 파일 이름에 kontext가 들어 있는 FLUX 모델은 칠하지 않고 말로 지시해서 고칠 수 있어요.',
- fx_denoise:'칠한 곳을 얼마나 새로 그릴지예요. 1이면 완전히 새로, 낮추면 원래 모습을 더 남겨요. FLUX 계열은 1 근처가 자연스러워요.',
+ fx_edn:'칠한 곳을 얼마나 바꿀지예요. 0.4~0.6은 원래 그림을 바탕으로 세부만 다듬고(얼굴·손 고치기), 0.8 안팎은 크게 바꾸고, 1은 원본과 상관없이 칠한 곳을 통째로 새로 그려서 붙여요. 처음엔 0.6으로 해 보고, 너무 안 바뀌면 올려 보세요.',
  gengine:'어떤 계열의 모델로 그릴지 정해요. 체크포인트 파일을 쓰는 SD1.5·SDXL·Illustrious·Pony·NoobAI는 태그형, FLUX·Krea(FLUX.1)·Krea 2·Chroma는 문장형 프롬프트에 강해요. Chroma는 성인 표현 제한이 없고, Krea 2는 ComfyUI 0.26.0 이상이 필요해요.',
  mode:'빠른 업스케일은 모델로 크기만 키워서 빠르고 원본에 충실해요. 디테일 재생성은 키운 뒤 조각마다 다시 그려 질감을 더해요. 오래 걸리고 모양이 조금 바뀔 수 있어요.',
  fast:'Lightning LoRA로 4단계만에 만들어요. 훨씬 빠르지만 디테일이 조금 덜해요. 켜면 아래 Qwen 설정의 단계 수와 CFG는 무시돼요.',
@@ -2165,7 +2165,7 @@ $('#fold-disk').addEventListener('toggle',e=>{if(e.target.open)cachePanel()});
 async function checkScan(){const st=$('#chk-st'),B=$('#chk');st.textContent='점검 중이에요…';let r;try{r=await api('/api/selfcheck')}catch{st.textContent='점검하지 못했어요.';return}
   const ic={ok:'✔',warn:'△',bad:'✖'},nb=r.groups.filter(g=>g.state==='bad').length,nw=r.groups.filter(g=>g.state==='warn').length;
   st.textContent=nb?`고쳐야 할 곳이 ${nb}군데 있어요.`:nw?'꼭 필요한 것은 갖춰졌어요. 선택 항목만 비어 있어요.':'모두 갖춰졌어요.';
-  B.innerHTML=r.groups.map(g=>`<div class="chk-g s-${g.state}" data-g="${esc(g.id)}"><div class="chk-h"><span class="chk-i">${ic[g.state]}</span><b>${esc(g.title)}</b>${g.view?`<button type="button" class="ghost sm" data-chk="open" data-v="${esc(g.view)}">화면 열기</button>`:''}</div>
+  B.innerHTML=r.groups.map(g=>`<div class="chk-g s-${g.state}" data-g="${esc(g.id)}"><div class="chk-h"><span class="chk-i">${ic[g.state]}</span><b>${esc(g.title)}</b>${g.view?`<button type="button" class="ghost sm" data-chk="open" data-v="${esc(g.view)}">화면 열기</button>`:''}</div>${g.note?`<p class="hint plain chk-n">${esc(g.note)}</p>`:''}
     ${g.rows.map((x,i)=>`<div class="chk-r ${x.ok===true?'ok':x.ok===false?(x.opt?'opt':'bad'):'unk'}" data-r="${i}"><i></i><span class="chk-l">${esc(x.label)}${x.opt&&x.ok===false?' <small class="mute">(선택)</small>':''}</span><small class="mute chk-d">${esc(x.detail||'')}</small>${x.fix?`<button type="button" class="ghost sm" data-chk="fix" data-gi="${esc(g.id)}" data-ri="${i}">${esc(x.fixlabel||'고치기')}</button>`:''}<span class="mute chk-s"></span></div>`).join('')}</div>`).join('');
   window.CHK=r}
 async function chkPoll(url,key,st){for(;;){await sleep(1500);let s;try{s=await api(url)}catch{continue}s=key?s[key]:s;if(!s)continue;st.textContent=s.msg||'';if(s.state!=='running')return s}}

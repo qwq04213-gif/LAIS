@@ -167,9 +167,24 @@ def gpu_live():
     return v
 
 
+MODEL_ALIAS = {"text_encoders": ("clip",), "diffusion_models": ("unet",)}      # ComfyUI 는 옛 이름 폴더(clip, unet)도 같은 목록으로 보여 줘요
+
+
 def files(sub):
-    d = MODELS / sub
-    return sorted(p.name for p in d.iterdir() if p.is_file() and p.suffix.lower() in EXT) if d.is_dir() else []
+    out = set()
+    for s in (sub, *MODEL_ALIAS.get(sub, ())):
+        d = MODELS / s
+        if d.is_dir():
+            out.update(p.name for p in d.iterdir() if p.is_file() and p.suffix.lower() in EXT)
+    return sorted(out)
+
+
+def mpath(sub, name):
+    """모델 파일의 실제 위치(옛 이름 폴더 포함)."""
+    for s in (sub, *MODEL_ALIAS.get(sub, ())):
+        if (MODELS / s / name).is_file():
+            return MODELS / s / name
+    return MODELS / sub / name
 
 
 def find(sub, *keys):
@@ -964,7 +979,7 @@ def edit_flux(p, J, img, mask, grow, feather, rng):
         return [(res, flux_info(q, res, "edit-flux", Kontext=True), None)]
     if not mask:
         raise ValueError("칠해서 고치는 방식이에요. 편집할 영역을 마스크로 칠하거나 [선택 도구]로 골라 주세요. (말로만 지시해서 고치려면 Qwen-Image-Edit 이나 FLUX Kontext 모델을 쓰세요.)")
-    q["denoise"] = clamp(num(p, "fx_denoise", 1.0), 0.1, 1.0)
+    q["denoise"] = clamp(num(p, "fx_edn", num(p, "fx_denoise", 0.6)), 0.1, 1.0)     # 기본 0.6: 1.0 이면 칠한 곳을 원본과 상관없이 통째로 새로 그려요
     pos, crop, soft, size = plan(img, mask, grow, clamp(num(p, "ctx", 35.0), 5, 200) / 100,
                                  clamp(num(p, "res", 1024, int), 512, 2048), feather, mult=16)
     a = put_input(crop.resize(size, RS.LANCZOS), J)
@@ -1570,15 +1585,18 @@ CHROMA_NEG = "low quality, ugly, unfinished, out of focus, deformed, disfigure, 
 
 
 def flux_vae():
-    return next((n for n in files("vae") if n.lower() in ("ae.safetensors", "flux_ae.safetensors") or "flux" in n.lower()), None)
+    return next((n for n in files("vae") if n.lower() in ("ae.safetensors", "flux_ae.safetensors") or n.lower().startswith("ae.") or "flux" in n.lower()), None)
 
 
 def flux_parts(p=None):
     """FLUX 계열 공용 파일. 자동으로 찾고, 화면에서 직접 고른 파일(fx_vae/fx_t5/fx_clip)이 있으면 그걸 써요."""
     te = files("text_encoders")
-    r = dict(t5=next((n for n in te if "t5xxl" in n.lower()), None) or next((n for n in te if "t5" in n.lower() and "umt5" not in n.lower()), None),
-             clip_l=next((n for n in te if n.lower().startswith("clip_l")), None) or next((n for n in te if "clip" in n.lower() and "t5" not in n.lower()), None),
-             vae=flux_vae() or next((n for n in files("vae") if "qwen" not in n.lower() and "sdxl" not in n.lower()), None))
+    low = lambda n: n.lower()
+    is_t5 = lambda n: ("t5" in low(n) or "xxl" in low(n)) and "umt5" not in low(n)
+    r = dict(t5=next((n for n in te if "t5xxl" in low(n)), None) or next((n for n in te if is_t5(n)), None),
+             clip_l=next((n for n in te if low(n).startswith("clip_l")), None) or next((n for n in te if "clip" in low(n) and not is_t5(n)), None)
+             or next((n for n in te if re.search(r"vit-?l|clipl|text_?encoder", low(n)) and not is_t5(n) and "qwen" not in low(n)), None),
+             vae=flux_vae() or next((n for n in files("vae") if not re.search(r"qwen|sdxl|wan|sd15|sd_xl", n.lower())), None))
     if p:
         for key, field, sub in (("t5", "fx_t5", "text_encoders"), ("clip_l", "fx_clip", "text_encoders"), ("vae", "fx_vae", "vae")):
             if p.get(field) and p[field] in files(sub):
@@ -4976,7 +4994,7 @@ FAMILY_CHOICES = ("sd15", "sdxl", "sd3", "flux", "krea2", "chroma", "qwen", "hid
 
 def model_family(folder, name):
     """(계열, 올인원 여부, 판단 방법). 사용자가 직접 지정한 값이 있으면 그걸 써요."""
-    d = modelinfo.detect(MODELS / folder / name)
+    d = modelinfo.detect(mpath(folder, name))
     ov = settings().get("families", {}).get(f"{folder}/{name}")
     if ov in FAMILY_CHOICES:
         return ov, d["all_in_one"], "manual"
@@ -4985,7 +5003,7 @@ def model_family(folder, name):
 
 def set_family(p):
     folder, name, fam = p.get("folder"), str(p.get("name", "")), p.get("family") or "auto"
-    if folder not in ("checkpoints", "diffusion_models") or Path(name).name != name or not (MODELS / folder / name).is_file():
+    if folder not in ("checkpoints", "diffusion_models") or Path(name).name != name or not mpath(folder, name).is_file():
         return {"error": "파일을 찾을 수 없어요."}
     if fam != "auto" and fam not in FAMILY_CHOICES:
         return {"error": "알 수 없는 계열이에요."}
@@ -5088,6 +5106,21 @@ def selfcheck():
     am = L.get("anymodels") or []
     grp("image", "이미지 만들기", "gen", [_row("그림 모델(체크포인트)", bool(am), f"{len(am)}개 있어요" if am else "그림 모델이 없어요.", None if am else {"a": "view", "v": "setup"}, "설치와 모델 열기"),
                                            _row("확대 모델", bool(L.get("upscalers")), "" if L.get("upscalers") else "없어도 기본 확대로 동작해요.", opt=True)])
+    try:
+        fp, kp = flux_parts(), krea2_parts()
+    except Exception:
+        fp, kp = {}, {}
+    fix_setup = {"a": "view", "v": "setup"}
+    def prow(label, val, miss_msg):
+        return _row(label, bool(val), val or miss_msg, None if val else fix_setup, "" if val else "설치와 모델 열기", opt=True)
+    grp("flux", "FLUX · Chroma · Krea 2 공용 파일", "gen", [
+        prow("FLUX·Chroma 모델 파일", (L.get("fluxmodels") or L.get("chromamodels") or [None])[0], "diffusion_models 폴더(또는 unet 폴더)에 모델이 없어요."),
+        prow("T5 텍스트 인코더 (FLUX·Chroma)", fp.get("t5"), "text_encoders(또는 clip) 폴더에 t5xxl 파일이 없어요."),
+        prow("CLIP-L 텍스트 인코더 (FLUX)", fp.get("clip_l"), "text_encoders(또는 clip) 폴더에 clip_l 파일이 없어요."),
+        prow("VAE (ae.safetensors)", fp.get("vae"), "vae 폴더에 ae.safetensors 가 없어요."),
+        prow("Krea 2 텍스트 인코더 (Qwen3-VL)", kp.get("te"), "Krea 2 를 쓸 때만 필요해요."),
+        prow("Krea 2 VAE (Qwen Image VAE)", kp.get("vae"), "Krea 2 를 쓸 때만 필요해요.")],
+        "FLUX 는 모델·T5·CLIP-L·VAE 가 모두 있어야 하고, Chroma 는 모델·T5·VAE, Krea 2 는 모델·Qwen3-VL·Qwen Image VAE 가 필요해요. 쓰지 않는 계열이 비어 있는 건 괜찮아요.")
     grp("edit", "이미지 편집", "edit", [_row("Qwen 편집 모델 묶음", bool(L.get("qwen")), "" if L.get("qwen") else "편집 모델·텍스트 인코더·VAE 중 빠진 게 있어요.",
                                             None if L.get("qwen") else {"a": "view", "v": "setup"}, "설치와 모델 열기", opt=True)])
     wan_ok = bool(L.get("wan_ready") and L.get("wanmodels"))

@@ -528,3 +528,4 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 .chrefs{display:flex;gap:10px;flex-wrap:wrap}.chrefs .mini img{max-height:120px;border-radius:8px}
 .ch-lrow{display:flex;gap:8px;align-items:center;margin-bottom:6px}.ch-lrow select{flex:1;min-width:0}.ch-lrow input{width:80px}
 #ch-form{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}
+.chk-n{margin:4px 0 2px 32px}
