@@ -5,6 +5,7 @@
 all_in_one: 텍스트 인코더·VAE까지 한 파일에 들어 있는 '체크포인트' 형태인지
 """
 import json
+import re
 import struct
 from pathlib import Path
 
@@ -190,5 +191,30 @@ def lora_card(path):
                     except (TypeError, ValueError):
                         pass
         card["tags"] = [t for t, _ in sorted(tot.items(), key=lambda kv: -kv[1])[:14] if t]
+    card["kind_auto"] = guess_kind(card)
     _CACHE[key] = card
     return card
+
+
+KINDS = ("character", "style", "background", "other")
+_KIND_RX = {
+    "character": r"character|char[_\- ]|cosplay|\boc\b|캐릭터|캐릭",
+    "style": r"style|art ?style|artist|lineart|line[ _-]?art|watercolor|oil ?paint|sketch|pixel|aesthetic|screencap|ghibli|cyberpunk|illustration|painting|manga|comic|3d ?render|film ?grain|vintage|retro|flat ?color|画风|风格|스타일|화풍",
+    "background": r"background|backdrop|scenery|landscape|cityscape|\bcity\b|street|\broom\b|interior|bedroom|forest|mountain|ocean|beach|\bsky\b|building|architecture|environment|\bbg\b|배경|풍경",
+    "other": r"slider|detail|lightning|turbo|\blcm\b|hyper|speed|refiner|enhance|quality|contrast|lighting|\bpose\b|outfit|clothes|clothing|dress|uniform|costume|concept|expression|\bhands?\b|fix|tweak|의상|포즈|디테일",
+}
+_CHAR_TAG = re.compile(r"(hair|eyes)$|^(1girl|1boy|solo|2girls|2boys)$|ponytail|twintails|ahoge|bangs|breasts|school uniform", re.I)
+
+
+def guess_kind(card):
+    """LoRA 가 캐릭터용인지 / 스타일 / 배경·풍경 / 기타인지 파일 정보와 이름으로 짐작해요(틀릴 수 있어서 화면에서 직접 고칠 수 있어요)."""
+    tags = [t.lower() for t in card.get("tags", [])]
+    if any(t in tags[:10] for t in ("no humans", "scenery", "landscape", "cityscape")):
+        return "background"
+    text = " ".join([card.get("name", ""), card.get("title", ""), card.get("description", ""), " ".join(card.get("trigger", []))]).lower()
+    for k in ("character", "style", "background", "other"):
+        if re.search(_KIND_RX[k], text):
+            return k
+    if sum(1 for t in tags[:15] if _CHAR_TAG.search(t)) >= 3:
+        return "character"
+    return "unknown"

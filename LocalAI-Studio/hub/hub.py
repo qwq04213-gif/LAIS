@@ -16,6 +16,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flows
 import meta
+import bgremove
 import modelinfo
 import sam
 
@@ -41,7 +42,7 @@ HFURL = os.environ.get("HF_URL", "https://huggingface.co")
 GHURL = os.environ.get("GITHUB_URL", "https://github.com")
 NODEMAP_URL = os.environ.get("NODEMAP_URL", "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json")
 PROFILES = json.loads((HUB / "profiles.json").read_text(encoding="utf-8"))
-FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam"}
+FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg"}
 EXT = (".safetensors", ".ckpt", ".pth", ".pt", ".gguf", ".bin")
 DEFAULT_NEG = ("lowres, bad anatomy, bad hands, extra digits, missing fingers, worst quality, "
                "jpeg artifacts, watermark, text, signature")
@@ -1115,9 +1116,8 @@ def feat_compare(p, J):
     return [(grid, info, None)]
 
 
-def feat_resize(p, J):
-    """크기 바꾸기 · 비율대로 자르기 · 회전/뒤집기 (ComfyUI 없이 바로 처리해요)."""
-    img = load_img(p["image"]).convert("RGB")
+def resize_steps(img, p):
+    """크기 바꾸기 · 비율대로 자르기 · 회전/뒤집기. (이미지, 한 일 목록) 을 돌려줘요."""
     steps = []
     ratio = p.get("crop") or "none"
     if ratio != "none":
@@ -1145,6 +1145,12 @@ def feat_resize(p, J):
         s = long_side / max(img.size)
         img = img.resize((max(1, round(img.width * s)), max(1, round(img.height * s))), RS.LANCZOS)
         steps.append(f"긴 변 {long_side}px")
+    return img, steps
+
+
+def feat_resize(p, J):
+    """크기 바꾸기 · 비율대로 자르기 · 회전/뒤집기 (ComfyUI 없이 바로 처리해요)."""
+    img, steps = resize_steps(load_img(p["image"]).convert("RGB"), p)
     if not steps:
         raise ValueError("하나 이상 골라 주세요. (자를 비율, 회전, 뒤집기, 긴 변 크기)")
     return [(img, dict(kind="feat-resize", extra={"Edit": ", ".join(steps)}), None)]
@@ -1456,7 +1462,7 @@ def do_wf(p, J):
     return [(im, dict(kind="wf"), g) for im in run_wf(g, J)]
 
 
-OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상"}
+OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄"}
 
 
 def out_path(rel):
@@ -1536,9 +1542,10 @@ def do_vid(p, J):
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
-        wait_comfy()
-        claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid}[p["kind"]](p, J)
+        if p["kind"] != "batch" or p.get("op") == "upscale":      # 일괄 처리의 배경 지우기·크기 변경은 ComfyUI 가 필요 없어요
+            wait_comfy()
+            claim("image")
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "batch": do_batch}[p["kind"]](p, J)
         sub = OUT_SUB.get(p["kind"], "기타")
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
@@ -1557,15 +1564,319 @@ def job_thread(J, p):
         J["state"], J["progress"] = "done", 1.0
     except Cancelled as e:
         J["state"], J["error"] = "cancelled", str(e)
+        if p["kind"] == "batch" and J.get("images"):
+            J["msg"] = f"중단했어요. 지금까지 {len(J['images'])}장은 저장돼 있어요."
     except Exception as e:
         J["state"], J["error"] = "error", str(e) or e.__class__.__name__
         log("[작업 오류]", J["error"])
     finally:
-        for f in J["tmp"]:
-            try:
-                f.unlink()
-            except OSError:
-                pass
+        _clean_tmp(J)
+        if p.get("stage"):      # 올려 둔 파일은 내가 만든 임시 사본이라 끝나면 정리해요
+            shutil.rmtree(BATCH_IN / str(p["stage"]), ignore_errors=True)
+
+
+def _clean_tmp(J):
+    for f in J["tmp"]:
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    J["tmp"].clear()
+
+
+# ───────────────────────── 작업 대기열 ─────────────────────────
+QUEUE, QP = [], {}
+_QCV = threading.Condition()
+_QW = {"t": None}
+KIND_NAME = {"edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "batch": "일괄 처리"}
+DONE_STATES = ("done", "error", "cancelled")
+
+
+def job_label(p):
+    k = p.get("kind")
+    name = KIND_NAME.get(k, "작업")
+    if k == "batch":
+        return f"{name} · {BATCH_OPS.get(p.get('op'), '')} ({p.get('count', 0)}장)"
+    if k == "feat":
+        name = next((f["title"] for f in FEATURES if f["id"] == p.get("feature")), name)
+    txt = " ".join(str(p.get("prompt") or "").split())
+    return name + (f" · {txt[:36]}{'…' if len(txt) > 36 else ''}" if txt else "")
+
+
+def enqueue(J, p):
+    J["kind"], J["label"], J["t_add"] = p["kind"], job_label(p), time.time()
+    with _QCV:
+        QP[J["id"]] = p
+        QUEUE.append(J["id"])
+        _QCV.notify_all()
+        if not (_QW["t"] and _QW["t"].is_alive()):
+            _QW["t"] = threading.Thread(target=job_worker, daemon=True)
+            _QW["t"].start()
+
+
+def job_worker():
+    """대기열 맨 앞 작업부터 하나씩 실행해요(엔진은 어차피 한 번에 하나만 그리니까, 순서를 바꾸거나 빼기 쉽게 한 줄로 세워요)."""
+    while True:
+        with _QCV:
+            while not QUEUE:
+                _QCV.wait()
+            jid = QUEUE.pop(0)
+            p = QP.pop(jid, None)
+        J = JOBS.get(jid)
+        if not J or p is None or J.get("state") != "queued":
+            continue
+        if J.get("cancel"):
+            J["state"], J["error"] = "cancelled", "사용자가 중단했어요."
+            continue
+        try:
+            J["t_start"] = time.time()
+            job_thread(J, p)
+        except BaseException as e:  # noqa: BLE001
+            J["state"], J["error"] = "error", repr(e)
+            log("[대기열 오류]", repr(e))
+        J["t_end"] = time.time()
+
+
+def queue_cancel(J):
+    J["cancel"] = True
+    if J.get("state") == "queued":
+        with _QCV:
+            if J["id"] in QUEUE:
+                QUEUE.remove(J["id"])
+                QP.pop(J["id"], None)
+        J["state"], J["error"] = "cancelled", "사용자가 중단했어요."
+    elif J.get("pid"):
+        threading.Thread(target=comfy_cancel, args=(J["pid"],), daemon=True).start()
+
+
+def queue_move(p):
+    to = p.get("to")
+    with _QCV:
+        if p.get("id") not in QUEUE:
+            return {"error": "이미 시작했거나 끝난 작업이에요."}
+        i = QUEUE.index(p["id"])
+        j = {"up": max(0, i - 1), "down": min(len(QUEUE) - 1, i + 1), "top": 0, "bottom": len(QUEUE) - 1}.get(to)
+        if j is None:
+            return {"error": "알 수 없는 동작"}
+        QUEUE.insert(j, QUEUE.pop(i))
+    return {"ok": True}
+
+
+def _qrow(J, pos=0):
+    return {"id": J["id"], "kind": J.get("kind"), "label": J.get("label") or "작업", "state": J["state"], "pos": pos,
+            "msg": J.get("msg", ""), "progress": J.get("progress"), "error": str(J.get("error") or "")[:200],
+            "images": len(J.get("images") or []), "t_end": J.get("t_end")}
+
+
+def queue_view():
+    run = [_qrow(J) for J in list(JOBS.values()) if J.get("state") == "running"]
+    wait = [_qrow(JOBS[i], n + 1) for n, i in enumerate(list(QUEUE)) if i in JOBS]
+    fin = [_qrow(J) for J in list(JOBS.values()) if J.get("state") in DONE_STATES and J.get("label")][-8:][::-1]
+    return {"running": len(run), "queued": len(wait), "items": run + wait + fin}
+
+
+# ───────────────────────── 일괄(폴더) 처리 ─────────────────────────
+BATCH_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+BATCH_MAX = 2000
+BATCH_IN = ROOT / "cache" / "batch-in"
+BATCH_OPS = {"upscale": "업스케일", "rmbg": "배경 지우기", "resize": "크기·자르기·회전"}
+RM = {"engine": None, "key": None, "factory": None}
+RM_LOCK = threading.Lock()
+
+
+def batch_folder(p):
+    """처리할 이미지가 들어 있는 폴더: 내 컴퓨터의 폴더(folder) 또는 화면에서 올려 둔 묶음(stage)."""
+    if p.get("stage"):
+        sid = str(p["stage"])
+        if not re.fullmatch(r"[0-9a-f]{8,16}", sid) or not (BATCH_IN / sid).is_dir():
+            raise ValueError("올려 둔 파일을 찾을 수 없어요. 다시 올려 주세요.")
+        return BATCH_IN / sid
+    if p.get("outsub"):      # 이 프로그램의 결과 폴더(생성·편집·업스케일 …)
+        if p["outsub"] not in OUT_SUB.values():
+            raise ValueError("알 수 없는 결과 폴더예요.")
+        d = OUT / p["outsub"]
+        if not d.is_dir():
+            raise ValueError("아직 그 결과 폴더가 없어요(만든 사진이 없어요).")
+        return d
+    raw = str(p.get("folder") or "").strip().strip('"')
+    if not raw:
+        raise ValueError("폴더 경로를 적어 주세요.")
+    d = Path(raw).expanduser()
+    if not d.is_absolute():
+        raise ValueError("전체 경로로 적어 주세요. 예: E:\\사진\\여행")
+    if not d.is_dir():
+        raise ValueError("그런 폴더를 찾을 수 없어요.")
+    return d
+
+
+def batch_files(d, sub=False):
+    try:
+        it = d.rglob("*") if sub else d.iterdir()
+        return sorted((f for f in it if f.is_file() and f.suffix.lower() in BATCH_EXT and not f.name.startswith(".")),
+                      key=lambda f: str(f).lower())
+    except OSError:
+        return []
+
+
+def batch_scan(p):
+    try:
+        d = batch_folder(p)
+    except ValueError as e:
+        return {"error": str(e)}
+    fs = batch_files(d, bool(p.get("sub")))
+    return {"folder": str(d), "count": len(fs), "names": [f.name for f in fs[:4]], "mb": round(sum(fsize(f) for f in fs) / 1048576, 1), "over": len(fs) > BATCH_MAX}
+
+
+def batch_upload(p):
+    """화면에서 고른 이미지 한 장을 임시 폴더(cache/batch-in/<묶음 id>)에 올려 둬요. 끝나면 자동으로 정리돼요."""
+    sid = str(p.get("stage") or uuid.uuid4().hex[:10])
+    if not re.fullmatch(r"[0-9a-f]{8,16}", sid):
+        return {"error": "잘못된 묶음이에요."}
+    d = BATCH_IN / sid
+    if d.is_dir() and len(list(d.iterdir())) >= BATCH_MAX:
+        return {"error": f"한 번에 {BATCH_MAX}장까지만 올릴 수 있어요."}
+    try:
+        raw = base64.b64decode(str(p.get("image") or "").split(",", 1)[-1])
+        with Image.open(io.BytesIO(raw)) as im:
+            im.verify()
+    except Exception:
+        return {"error": "이미지를 읽을 수 없어요."}
+    d.mkdir(parents=True, exist_ok=True)
+    stem = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", Path(str(p.get("name") or "image")).stem)[:80] or "image"
+    ext = Path(str(p.get("name") or "")).suffix.lower()
+    ext = ext if ext in BATCH_EXT else ".png"
+    f, n = d / (stem + ext), 1
+    while f.exists():
+        n += 1
+        f = d / f"{stem}-{n}{ext}"
+    f.write_bytes(raw)
+    for old in BATCH_IN.iterdir():      # 하루 넘게 남은 임시 묶음 정리(이 프로그램이 만든 사본만)
+        try:
+            if old.is_dir() and old != d and time.time() - old.stat().st_mtime > 86400:
+                shutil.rmtree(old, ignore_errors=True)
+        except OSError:
+            pass
+    return {"stage": sid, "count": len(list(d.iterdir()))}
+
+
+def rmbg_status():
+    busy = any(t.get("kind") == "rmbg" and t["state"] in ("queued", "running") for t in TASKS)
+    ort = bgremove.have_ort()
+    return {"ort": ort, "busy": busy, "models": {k: {"label": m["label"], "mb": m["mb"], "installed": bgremove.installed(MODELS / "rmbg", k)} for k, m in bgremove.MODELS.items()}}
+
+
+def rmbg_install(p):
+    key = p.get("key") if p.get("key") in bgremove.MODELS else "normal"
+    if any(t.get("kind") == "rmbg" and t["state"] in ("queued", "running") for t in TASKS):
+        return {"ok": True}
+    if shutil.disk_usage(ROOT).free < 1e9:
+        return {"error": "디스크 여유 공간이 부족해요."}
+    add_task(f"배경 지우기 모델 설치 ({bgremove.MODELS[key]['label']})", kind="rmbg", key=key)
+    return {"ok": True}
+
+
+def ensure_ort(t):
+    if bgremove.have_ort():
+        return
+    t["msg"] = "분석 엔진(onnxruntime) 설치 중"
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "--no-warn-script-location", "onnxruntime"], capture_output=True, text=True, timeout=1200)
+    if r.returncode != 0:
+        log("[pip 오류]", (r.stdout + r.stderr)[-600:])
+        raise RuntimeError("onnxruntime 설치에 실패했어요. 인터넷 연결을 확인하거나 스튜디오 창의 오류 내용을 알려 주세요.")
+    import importlib
+    importlib.invalidate_caches()
+    if not bgremove.have_ort():
+        raise RuntimeError("onnxruntime 설치 후에도 불러오지 못했어요. 스튜디오를 다시 시작해 보세요.")
+
+
+def rmbg_run_install(t):
+    ensure_ort(t)
+    m = bgremove.MODELS[t.get("key") or "normal"]
+    t.update(url=bgremove.REPO + m["file"], dir="rmbg", name=None, msg=f"{m['file']} 받는 중", done=0, total=0)
+    download(t)
+    RM["engine"] = None
+
+
+def rmbg_engine(key):
+    with RM_LOCK:
+        if RM["engine"] is None or RM["key"] != key:
+            RM["engine"] = bgremove.Remover(MODELS / "rmbg", key, RM.get("factory"))
+            RM["key"] = key
+        return RM["engine"]
+
+
+def _unique(path):
+    f, n = path, 1
+    while f.exists():
+        n += 1
+        f = path.with_name(f"{path.stem}-{n}{path.suffix}")
+    return f
+
+
+def do_batch(p, J):
+    """폴더의 이미지를 하나씩 처리해 결과 폴더(일괄)에 새 파일로 저장해요. 원본은 건드리지 않아요."""
+    op = p.get("op")
+    if op not in BATCH_OPS:
+        raise ValueError("알 수 없는 처리예요.")
+    imgs = batch_files(batch_folder(p), bool(p.get("sub")))[:BATCH_MAX]
+    if not imgs:
+        raise ValueError("처리할 이미지가 없어요. (png · jpg · webp · bmp)")
+    jpg = p.get("fmt") == "jpg"
+    scale, model, rm_key, rm_bg = 4, None, None, None
+    if op == "upscale":
+        scale = 2 if str(p.get("scale")) == "2" else 4
+        model = p.get("upm") or (files("upscale_models") or [None])[0]
+        if not model:
+            raise RuntimeError("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.")
+        suffix = f"_업스케일x{scale}"
+    elif op == "rmbg":
+        rm_key = p.get("rmodel") if p.get("rmodel") in bgremove.MODELS else "normal"
+        if not bgremove.have_ort() or not bgremove.installed(MODELS / "rmbg", rm_key):
+            raise RuntimeError("배경 지우기 모델이 아직 설치되지 않았어요. 일괄 처리 화면의 [설치] 버튼을 눌러 주세요.")
+        rm_bg = {"white": (255, 255, 255), "black": (0, 0, 0)}.get(p.get("bg"))
+        jpg = jpg and rm_bg is not None          # 투명 배경은 PNG 만 가능해요
+        suffix = "_배경없음"
+    else:
+        probe, steps = resize_steps(Image.new("RGB", (64, 64)), p)
+        if not steps:
+            raise ValueError("하나 이상 골라 주세요. (자를 비율, 회전, 뒤집기, 긴 변 크기)")
+        suffix = "_크기변경"
+    out_dir = OUT / OUT_SUB["batch"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    n, fails = len(imgs), []
+    J["batch"] = {"total": n, "ok": 0, "failed": fails}
+    for i, f in enumerate(imgs):
+        check_cancel(J)
+        J["msg"], J["progress"] = f"{i + 1}/{n} · {f.name}", i / n
+        try:
+            with Image.open(f) as im0:
+                img = ImageOps.exif_transpose(im0).convert("RGB")
+            if op == "upscale":
+                if max(img.size) * scale > 8192:
+                    raise ValueError("결과가 8192px 를 넘어요(더 작은 배율을 골라 보세요)")
+                res = upscale(img, J, model, scale)
+            elif op == "rmbg":
+                res = rmbg_engine(rm_key).cut(img, rm_bg)
+            else:
+                res, _ = resize_steps(img, p)
+            ext = ".jpg" if jpg else ".png"
+            if jpg and res.mode != "RGB":
+                res = res.convert("RGB")
+            dst = _unique(out_dir / (f.stem + suffix + ext))
+            res.save(dst, "JPEG", quality=95) if jpg else res.save(dst, "PNG")
+            J["images"].append("/out/" + urllib.parse.quote(OUT_SUB["batch"]) + "/" + urllib.parse.quote(dst.name))
+            J["batch"]["ok"] += 1
+        except Cancelled:
+            raise
+        except Exception as e:  # noqa: BLE001
+            fails.append([f.name, (str(e) or e.__class__.__name__)[:140]])
+        finally:
+            _clean_tmp(J)
+    ok = J["batch"]["ok"]
+    if not ok:
+        raise RuntimeError("처리한 이미지가 없어요. " + (fails[0][1] if fails else ""))
+    J["msg"] = f"{ok}장 완료" + (f", {len(fails)}장 실패" if fails else "")
+    return []
 
 
 # ───────────────────────── 프롬프트 보관함 · 와일드카드 · 이미지→프롬프트 ─────────────────────────
@@ -2034,15 +2345,91 @@ def model_preview(kind, name):
     return None
 
 
+LORA_USER = ROOT / "lora_user.json"
+
+
+def lora_user():
+    try:
+        d = json.loads(LORA_USER.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def lora_user_api(p):
+    """내가 직접 적은 트리거 단어와 종류(character/style/background/other, 비우면 자동)를 LoRA 별로 저장해요."""
+    name = str(p.get("name") or "")
+    if name not in files("loras"):
+        return {"error": "그런 LoRA 파일이 없어요."}
+    with _PLOCK:
+        d = lora_user()
+        cur = d.get(name, {})
+        if "trigger" in p:
+            words = []
+            for w in p.get("trigger") or []:
+                w = str(w).strip()[:60]
+                if w and w not in words:
+                    words.append(w)
+            cur["trigger"] = words[:30]
+        if "kind" in p:
+            k = str(p.get("kind") or "")
+            if k and k not in modelinfo.KINDS:
+                return {"error": "알 수 없는 종류예요."}
+            cur["kind"] = k
+        if cur.get("trigger") or cur.get("kind"):
+            d[name] = cur
+        else:
+            d.pop(name, None)
+        LORA_USER.parent.mkdir(parents=True, exist_ok=True)
+        LORA_USER.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"ok": True, **lora_user().get(name, {"trigger": [], "kind": ""})}
+
+
+def lora_preview_api(p):
+    """모델 미리보기 그림을 올리거나(image) 지워요(remove). 파일 옆에 '이름.preview.jpg' 로 저장돼요.
+    dir: loras(기본) / checkpoints / diffusion_models"""
+    name = str(p.get("name") or "")
+    sub = str(p.get("dir") or "loras")
+    if sub not in ("loras", "checkpoints", "diffusion_models"):
+        return {"error": "알 수 없는 폴더예요."}
+    if name not in files(sub):
+        return {"error": "그런 모델 파일이 없어요."}
+    stem = Path(name).stem
+    old = [MODELS / sub / (stem + e) for e in PREV_EXT]
+    if p.get("remove"):
+        for f in old:
+            if f.is_file() and f.name.lower().startswith(stem.lower() + ".preview"):
+                f.unlink(missing_ok=True)
+        return {"ok": True}
+    try:
+        im = load_img(p["image"])
+    except Exception:
+        return {"error": "이미지를 읽을 수 없어요."}
+    im.thumbnail((640, 640))
+    for f in old:
+        if f.name.lower().startswith(stem.lower() + ".preview") and f.is_file():
+            f.unlink(missing_ok=True)
+    im.save(MODELS / sub / (stem + ".preview.jpg"), "JPEG", quality=88)
+    return {"ok": True}
+
+
+def lora_final(c, user):
+    u = user.get(c["name"], {})
+    return u.get("kind") or c.get("kind_auto") or "unknown", bool(u.get("kind"))
+
+
 def model_cards(kind):
-    """kind: loras(트리거 단어·학습 정보까지) / checkpoints(계열·크기)."""
+    """kind: loras(트리거 단어·종류·학습 정보까지) / checkpoints(계열·크기)."""
     out = []
     if kind == "loras":
+        user = lora_user()
         for n in files("loras"):
             try:
                 c = dict(modelinfo.lora_card(MODELS / "loras" / n))
             except Exception:  # noqa: BLE001
-                c = {"name": n, "family": "unknown", "trigger": [], "tags": []}
+                c = {"name": n, "family": "unknown", "trigger": [], "tags": [], "kind_auto": "unknown"}
+            c["kind"], c["kind_set"] = lora_final(c, user)
+            c["user_trigger"] = (user.get(n) or {}).get("trigger", [])
             c["preview"] = bool(model_preview("loras", n))
             out.append(c)
     else:
@@ -2055,6 +2442,109 @@ def model_cards(kind):
                     sz, fam = 0, "unknown"
                 out.append({"name": n, "dir": sub, "size_mb": sz, "family": fam, "preview": bool(model_preview(sub, n))})
     return {"items": out}
+
+
+def lora_kinds():
+    user = lora_user()
+    out = {}
+    for n in files("loras"):
+        try:
+            out[n] = lora_final(dict(modelinfo.lora_card(MODELS / "loras" / n)), user)[0]
+        except Exception:  # noqa: BLE001
+            out[n] = "unknown"
+    return out
+
+
+# ───────────────────────── 설정 백업 · 복원 ─────────────────────────
+BACKUP_MAX = 30 * 1024 * 1024
+
+
+def backup_export():
+    """프롬프트 보관함·즐겨찾기·LoRA 내 정보·와일드카드를 한 묶음으로 돌려줘요(프리셋은 화면에서 덧붙여요)."""
+    wc = {}
+    d = ROOT / "wildcards"
+    if d.is_dir():
+        for f in sorted(d.glob("*.txt")):
+            try:
+                wc[f.stem] = f.read_text(encoding="utf-8", errors="replace")[:200000]
+            except OSError:
+                pass
+    return {"app": "LocalAI-Studio", "kind": "backup", "format": 1, "version": VERSION, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "prompts": prompts_load(), "favs": sorted(gal_favs()), "lora_user": lora_user(), "wildcards": wc}
+
+
+def backup_import(p):
+    """백업 묶음을 되살려요. mode: merge(이미 있는 건 그대로 두고 없는 것만 추가) / overwrite(같은 항목은 파일 내용으로 덮어쓰기).
+    어느 쪽이든 지우지는 않고, 바꾸기 전에 지금 파일을 backups 폴더에 복사해 둬요."""
+    d = p.get("data")
+    if not isinstance(d, dict) or d.get("app") != "LocalAI-Studio" or d.get("kind") != "backup":
+        return {"error": "이 프로그램의 백업 파일이 아니에요."}
+    if len(json.dumps(d, ensure_ascii=False)) > BACKUP_MAX:
+        return {"error": "백업 파일이 너무 커요."}
+    over = p.get("mode") == "overwrite"
+    with _PLOCK:
+        snap = ROOT / "backups" / ("before-restore-" + time.strftime("%Y%m%d-%H%M%S"))
+        snap.mkdir(parents=True, exist_ok=True)
+        for f in (PROMPTS_FILE, GAL_FILE, LORA_USER):
+            if f.is_file():
+                shutil.copy2(f, snap / f.name)
+        wd = ROOT / "wildcards"
+        if wd.is_dir():
+            shutil.copytree(wd, snap / "wildcards", dirs_exist_ok=True)
+        n = {"prompts": 0, "favs": 0, "lora_user": 0, "wildcards": 0}
+        # 보관함
+        items = prompts_load()
+        have = {x.get("id"): i for i, x in enumerate(items)}
+        for it in d.get("prompts") or []:
+            if not isinstance(it, dict) or not str(it.get("text") or "").strip():
+                continue
+            c = {"id": str(it.get("id") or uuid.uuid4().hex[:8])[:40], "name": str(it.get("name") or "")[:60] or str(it["text"])[:30],
+                 "text": str(it["text"])[:8000], "negative": str(it.get("negative") or "")[:4000],
+                 "tags": [str(t).strip()[:20] for t in (it.get("tags") or []) if str(t).strip()][:8]}
+            if c["id"] in have:
+                if over:
+                    items[have[c["id"]]] = c
+                    n["prompts"] += 1
+            else:
+                items.append(c)
+                have[c["id"]] = len(items) - 1
+                n["prompts"] += 1
+        if n["prompts"]:
+            PROMPTS_FILE.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+        # 즐겨찾기(합치기만)
+        fav = gal_favs()
+        new = {str(x) for x in (d.get("favs") or []) if isinstance(x, str) and x.split("/")[0] in OUT_SUB.values() and len(x) < 300} - fav
+        if new:
+            GAL_FILE.write_text(json.dumps({"favs": sorted(fav | new)}, ensure_ascii=False), encoding="utf-8")
+            n["favs"] = len(new)
+        # LoRA 내 정보
+        lu = lora_user()
+        for name, u in (d.get("lora_user") or {}).items():
+            if not isinstance(u, dict) or not isinstance(name, str):
+                continue
+            tr = [str(w).strip()[:60] for w in (u.get("trigger") or []) if str(w).strip()][:30]
+            kd = u.get("kind") if u.get("kind") in modelinfo.KINDS else ""
+            cur = lu.get(name) or {}
+            if over:
+                cur = {"trigger": tr, "kind": kd}
+            else:
+                cur = {"trigger": cur.get("trigger") or tr, "kind": cur.get("kind") or kd}
+            if (cur.get("trigger") or cur.get("kind")) and cur != lu.get(name):
+                lu[name] = cur
+                n["lora_user"] += 1
+        if n["lora_user"]:
+            LORA_USER.write_text(json.dumps(lu, ensure_ascii=False, indent=1), encoding="utf-8")
+        # 와일드카드
+        for name, text in (d.get("wildcards") or {}).items():
+            if not isinstance(name, str) or not WC_NAME.match(name) or ".." in name or not isinstance(text, str):
+                continue
+            f = wd / (name + ".txt")
+            if f.exists() and not over:
+                continue
+            wd.mkdir(parents=True, exist_ok=True)
+            f.write_text(text[:200000].replace("\r\n", "\n"), encoding="utf-8")
+            n["wildcards"] += 1
+    return {"ok": True, "counts": n, "saved_to": str(snap)}
 
 
 # ───────────────────────── 모델 설치 ─────────────────────────
@@ -2162,7 +2652,7 @@ def worker():
             continue
         t["state"] = "running"
         try:
-            pull(t) if t["kind"] == "ollama" else sam_run_install(t) if t["kind"] == "sam" else download(t)
+            pull(t) if t["kind"] == "ollama" else sam_run_install(t) if t["kind"] == "sam" else rmbg_run_install(t) if t["kind"] == "rmbg" else download(t)
             t["state"], t["msg"] = "done", t["msg"] if t["msg"] == "이미 설치되어 있어요" else "완료"
         except Exception as e:
             t["state"], t["msg"] = "error", str(e)
@@ -2713,7 +3203,7 @@ def lists():
     fp, kp = flux_parts(), krea2_parts()      # 폴더를 한 번씩만 훑어요
     loras = files("loras")
     return {"llm": llms(), "checkpoints": sdxl, "loras": loras, "families": info,
-            "lora_info": {n: modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras},
+            "lora_info": {n: modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras}, "lora_kind": lora_kinds(),
             "upscalers": files("upscale_models"), "controlnets": files("controlnet"),
             "vaes": files("vae"), "text_encoders": files("text_encoders"), "diffusion": files("diffusion_models"),
             "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2, "anymodels": sdxl + flux + chroma + krea2,
@@ -2755,6 +3245,16 @@ STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js",
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 
 
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        """브라우저가 연결을 끊어서 생기는 오류(WinError 10053/10054, Broken pipe)는 콘솔에 띄우지 않아요."""
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -2766,7 +3266,10 @@ class Handler(BaseHTTPRequestHandler):
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(b)
+        try:
+            self.wfile.write(b)
+        except (ConnectionError, TimeoutError):
+            pass        # 브라우저가 응답을 받기 전에 탭을 닫거나 새로고침한 경우 — 정상이라 조용히 넘어가요
 
     def send_json(self, obj, code=200):
         self.send_bytes(json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8", code)
@@ -2865,6 +3368,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(app_where())
         if u == "/api/app/notice":
             return self.send_json(app_notice())
+        if u == "/api/queue":
+            return self.send_json(queue_view())
+        if u == "/api/rmbg/status":
+            return self.send_json(rmbg_status())
+        if u == "/api/backup/export":
+            return self.send_json(backup_export())
         if u == "/api/models/cards":
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             return self.send_json(model_cards((qs.get("kind") or ["loras"])[0]))
@@ -2874,7 +3383,7 @@ class Handler(BaseHTTPRequestHandler):
             if not f:
                 return self.send_json({"error": "not found"}, 404)
             try:
-                return self.send_bytes(thumb_bytes(f), "image/jpeg", extra={"Cache-Control": "max-age=3600"})
+                return self.send_bytes(thumb_bytes(f), "image/jpeg", extra={"Cache-Control": "no-cache"})
             except Exception:
                 return self.send_json({"error": "preview failed"}, 500)
         if u == "/api/vision":
@@ -2885,7 +3394,13 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            return self.send_json({k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase") if k in J})
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch") if k in J}
+            if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
+                out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
+            if J.get("state") == "queued":
+                ahead = (QUEUE.index(J["id"]) if J["id"] in QUEUE else 0) + sum(1 for v in list(JOBS.values()) if v.get("state") == "running")
+                out["msg"] = "대기 중" + (f" · 앞에 {ahead}개" if ahead else "")
+            return self.send_json(out)
         self.send_json({"error": "not found"}, 404)
 
     def do_POST(self):
@@ -2899,13 +3414,23 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/chat":
             return self.chat(p)
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "batch"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if len(JOBS) > 50:
-                del JOBS[next(iter(JOBS))]
+                for k, v in list(JOBS.items()):
+                    if v.get("state") in DONE_STATES:
+                        del JOBS[k]
+                        break
+            if p["kind"] == "batch":
+                try:
+                    p["count"] = len(batch_files(batch_folder(p), bool(p.get("sub")))[:BATCH_MAX])
+                except ValueError as e:
+                    return self.send_json({"error": str(e)})
+                if not p["count"]:
+                    return self.send_json({"error": "처리할 이미지가 없어요. (png · jpg · webp · bmp)"})
             J = {"id": uuid.uuid4().hex[:10], "state": "queued", "msg": "대기 중", "elapsed": 0, "images": [], "tmp": []}
             JOBS[J["id"]] = J
-            threading.Thread(target=job_thread, args=(J, p), daemon=True).start()
+            enqueue(J, p)
             return self.send_json({"id": J["id"]})
         if u == "/api/install":
             return self.send_json(install(p))
@@ -2950,6 +3475,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(node_install(p))
         if u == "/api/engine/restart":
             return self.send_json(restart_comfy())
+        if u == "/api/backup/import":
+            return self.send_json(backup_import(p))
+        if u == "/api/lora/user":
+            return self.send_json(lora_user_api(p))
+        if u == "/api/lora/preview":
+            return self.send_json(lora_preview_api(p))
         if u == "/api/prompts":
             return self.send_json(prompts_api(p))
         if u == "/api/wildcards":
@@ -2992,10 +3523,16 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(p.get("id"))
             if not J:
                 return self.send_json({"error": "작업을 찾을 수 없습니다."})
-            J["cancel"] = True
-            if J.get("pid"):
-                threading.Thread(target=comfy_cancel, args=(J["pid"],), daemon=True).start()
+            queue_cancel(J)
             return self.send_json({"ok": True})
+        if u == "/api/queue/move":
+            return self.send_json(queue_move(p))
+        if u == "/api/batch/scan":
+            return self.send_json(batch_scan(p))
+        if u == "/api/batch/upload":
+            return self.send_json(batch_upload(p))
+        if u == "/api/rmbg/install":
+            return self.send_json(rmbg_install(p))
         self.send_json({"error": "not found"}, 404)
 
     def chat(self, p):
@@ -3046,7 +3583,7 @@ def main():
     ws_start()
     threading.Thread(target=worker, daemon=True).start()
     try:
-        srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        srv = Server(("127.0.0.1", PORT), Handler)
     except OSError:
         sys.exit(f"포트 {PORT} 를 이미 사용 중입니다. 이미 실행 중인 스튜디오가 있는지 확인하세요.")
     url = f"http://127.0.0.1:{PORT}"

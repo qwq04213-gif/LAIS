@@ -11,24 +11,35 @@
   <div class="brand">로컬 AI 스튜디오<small id="ver"></small></div>
   <div id="gbars" hidden></div>
   <nav>
-    <button data-v="start">시작하기</button>
-    <button data-v="chat" class="on">대화</button>
-    <i class="sep"></i>
-    <button data-v="edit">이미지 편집</button>
-    <button data-v="gen">이미지 생성</button>
-    <button data-v="up">업스케일</button>
-    <button data-v="vid">영상 만들기</button>
-    <button data-v="gal">기록 갤러리</button>
-    <button data-v="lib">프롬프트</button>
-    <i class="sep"></i>
-    <button data-v="info">이미지 정보</button>
-    <button data-v="feat">기능 모음</button>
-    <button data-v="wf">워크플로</button>
-    <button data-v="guide">ComfyUI 길잡이</button>
-    <i class="sep"></i>
-    <button data-v="dl">다운로드</button>
-    <button data-v="setup">설치와 모델</button>
+    <div class="ng"><span class="ngt">처음</span>
+      <button data-v="start" title="시작하기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6L12 16.7 6.7 19.6l1.1-6L3.4 9.4l6-.8z"/></svg><span>시작하기</span></button>
+      <button data-v="guide" title="ComfyUI 길잡이"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 8h6"/></svg><span>ComfyUI 길잡이</span></button>
+    </div>
+    <div class="ng"><span class="ngt">대화</span>
+      <button data-v="chat" class="on" title="대화"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.5-4.6A8 8 0 1 1 21 12z"/></svg><span>대화</span></button>
+    </div>
+    <div class="ng"><span class="ngt">만들기</span>
+      <button data-v="gen" title="이미지 생성"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg><span>이미지 생성</span></button>
+      <button data-v="edit" title="이미지 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span>이미지 편집</span></button>
+      <button data-v="up" title="업스케일"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg><span>업스케일</span></button>
+      <button data-v="vid" title="영상 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>영상 만들기</span></button>
+    </div>
+    <div class="ng"><span class="ngt">내 작업</span>
+      <button data-v="gal" title="기록 갤러리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>기록 갤러리</span></button>
+      <button data-v="lib" title="프롬프트"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>프롬프트</span></button>
+      <button data-v="info" title="이미지 정보"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span>이미지 정보</span></button>
+    </div>
+    <div class="ng"><span class="ngt">도구</span>
+      <button data-v="feat" title="기능 모음"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0-5 5L3.5 17.5l3 3 6-6a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/></svg><span>기능 모음</span></button>
+      <button data-v="batch" title="일괄 처리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>일괄 처리</span></button>
+      <button data-v="wf" title="워크플로"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="9" y="15" width="6" height="5" rx="1"/><path d="M6 9v2.5h12V9M12 11.5V15"/></svg><span>워크플로</span></button>
+    </div>
+    <div class="ng"><span class="ngt">관리</span>
+      <button data-v="dl" title="다운로드"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></svg><span>다운로드</span></button>
+      <button data-v="setup" title="설치와 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 14a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>설치와 모델</span></button>
+    </div>
   </nav>
+  <button id="qbtn" type="button" class="qbtn" aria-haspopup="dialog" title="진행 중이거나 기다리는 작업을 보고, 순서를 바꾸거나 취소해요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>작업 대기열</span><i id="qcount" hidden>0</i></button>
   <div class="grow"></div>
   <button class="adv" id="refresh-models" type="button" title="폴더에 새로 넣거나 지운 모델·LoRA·VAE 파일을 목록에 바로 반영해요.">↻ 모델 목록 새로고침</button>
   <button class="adv" id="restart-app" type="button" title="스튜디오와 엔진을 껐다가 다시 켜요.">⟳ 프로그램 다시 시작</button>
@@ -432,7 +443,7 @@
   <p class="hint plain">지금까지 만든 이미지와 영상을 한곳에서 봐요. 프롬프트로 검색하고, ★로 즐겨찾기를 해 두고, 마음에 드는 건 같은 설정으로 다시 만들 수 있어요.</p>
   <div class="galbar">
     <input id="gal-q" type="search" placeholder="프롬프트나 파일 이름으로 검색">
-    <select id="gal-kind"><option value="">전체</option><option>생성</option><option>편집</option><option>업스케일</option><option>워크플로</option><option>기능</option><option>영상</option></select>
+    <select id="gal-kind"><option value="">전체</option><option>생성</option><option>편집</option><option>업스케일</option><option>워크플로</option><option>기능</option><option>영상</option><option>일괄</option></select>
     <label class="chk"><input type="checkbox" id="gal-fav"> ★ 즐겨찾기만</label>
     <span class="mute" id="gal-n"></span>
   </div>
@@ -570,6 +581,52 @@
   <p class="hint plain">빠진 기능은 왼쪽 아래 <b>ComfyUI 고급 화면 열기</b>에서 노드를 직접 연결해 쓸 수 있어요. 만든 워크플로는 <b>Save (API Format)</b>으로 저장해 워크플로 탭에서 실행하세요.</p>
 </section>
 
+<!-- 일괄 처리 -->
+<section class="view" id="v-batch">
+  <h2>일괄 처리</h2>
+  <p class="hint plain">폴더 안의 사진(또는 고른 여러 장)을 한꺼번에 처리해요. <b>원본은 그대로</b> 두고, 결과는 새 파일로 결과 폴더의 <b>일괄</b> 폴더에 저장돼요.</p>
+  <form id="f-batch" autocomplete="off" novalidate>
+    <h3>1. 처리할 사진</h3>
+    <div class="bt-src">
+      <label class="chk"><input type="radio" name="srcm" value="folder" checked> 내 컴퓨터의 폴더</label>
+      <label class="chk"><input type="radio" name="srcm" value="files"> 사진 여러 장 고르기</label>
+      <label class="chk"><input type="radio" name="srcm" value="out"> 이 프로그램의 결과 폴더</label>
+    </div>
+    <div data-src="folder"><label class="f">폴더 경로<input name="folder" placeholder="예: E:\사진\여행 (탐색기 주소창의 경로를 복사해 붙여 넣으세요)"></label>
+      <label class="chk"><input type="checkbox" name="sub"> 안쪽 폴더의 사진도 함께</label></div>
+    <div data-src="files" hidden><div class="bt-drop" id="bt-drop" tabindex="0" role="button">여기에 사진을 끌어다 놓거나 눌러서 고르세요<input type="file" id="bt-files" accept="image/*" multiple hidden></div></div>
+    <div data-src="out" hidden><label class="f">결과 폴더<select name="outsub"><option>생성</option><option>편집</option><option>업스케일</option><option>워크플로</option><option>기능</option><option>일괄</option></select></label></div>
+    <div class="actions"><button type="button" class="ghost" id="bt-scan">사진 수 확인</button><span id="bt-info" class="hint plain"></span></div>
+    <h3>2. 어떻게 처리할까요?</h3>
+    <div class="bt-ops">
+      <label class="bt-op"><input type="radio" name="op" value="resize" checked><b>크기 · 자르기 · 회전</b><span>긴 변 길이 맞추기, 비율대로 자르기, 돌리기·뒤집기. 바로 끝나요.</span></label>
+      <label class="bt-op"><input type="radio" name="op" value="rmbg"><b>배경 지우기</b><span>사람·물건만 남기고 배경을 투명하게(또는 흰색·검정으로) 바꿔요.</span></label>
+      <label class="bt-op"><input type="radio" name="op" value="upscale"><b>업스케일</b><span>2배·4배로 키워요. 이미지 엔진을 쓰므로 한 장씩 시간이 걸려요.</span></label>
+    </div>
+    <div data-op="resize" class="bt-opts">
+      <label class="f">긴 변 길이(px, 0이면 그대로)<input type="number" name="long_side" value="1024" min="0" max="8192" step="1"></label>
+      <label class="f">비율대로 자르기<select name="crop"><option value="none">자르지 않음</option><option value="1:1">1:1 (정사각형)</option><option value="4:3">4:3 가로</option><option value="3:4">3:4 세로</option><option value="3:2">3:2 가로</option><option value="2:3">2:3 세로</option><option value="16:9">16:9 가로</option><option value="9:16">9:16 세로</option></select></label>
+      <label class="f">돌리기<select name="rotate"><option value="0">돌리지 않음</option><option value="90">오른쪽으로 90°</option><option value="180">180°</option><option value="270">왼쪽으로 90°</option></select></label>
+      <label class="f">뒤집기<select name="flip"><option value="none">뒤집지 않음</option><option value="h">좌우 뒤집기</option><option value="v">상하 뒤집기</option></select></label>
+    </div>
+    <div data-op="rmbg" class="bt-opts" hidden>
+      <label class="f">정확도<select name="rmodel"><option value="fast">빠름 (가볍고 대충)</option><option value="normal" selected>보통 (추천)</option><option value="precise">정밀 (머리카락까지, 느림)</option></select></label>
+      <label class="f">배경 처리<select name="bg"><option value="">투명하게 (PNG)</option><option value="white">흰색으로</option><option value="black">검정으로</option></select></label>
+      <p class="hint plain" id="bt-rm-note"></p>
+      <div class="actions"><button type="button" class="ghost" id="bt-rm-install" hidden>배경 지우기 도구 설치</button></div>
+    </div>
+    <div data-op="upscale" class="bt-opts" hidden>
+      <label class="f">배율<select name="scale"><option value="2">2배</option><option value="4" selected>4배</option></select></label>
+      <label class="f">업스케일 모델<select name="upm"></select></label>
+      <p class="hint plain">결과가 8192px를 넘는 사진은 건너뛰고 이유를 알려 드려요.</p>
+    </div>
+    <label class="f bt-fmt">저장 형식<select name="fmt"><option value="png">PNG (화질 그대로, 용량 큼)</option><option value="jpg">JPEG (용량 작음, 투명 배경은 불가)</option></select></label>
+    <div class="actions"><button class="go" type="submit">처리 시작</button></div>
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+  </form>
+  <div class="res" id="bt-res"></div>
+</section>
+
 <!-- 워크플로 -->
 <section class="view split" id="v-wf">
   <form id="f-wf" autocomplete="off">
@@ -666,8 +723,20 @@
   </details>
   <details class="fold" id="fold-minfo"><summary>LoRA · 모델 정보</summary>
     <p class="hint plain">설치된 LoRA와 모델이 어느 계열용인지, 파일 안에 적힌 트리거 단어·자주 쓰인 태그가 무엇인지 보여 줘요. LoRA 파일 옆에 같은 이름의 그림 파일(예: 이름.preview.png)이 있으면 미리보기로 써요. 이미지 생성·편집 화면에서 LoRA를 고르면 같은 정보가 칸 아래에 나오고, 단어를 누르면 프롬프트에 들어가요.</p>
-    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
+    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">👤 캐릭터</option><option value="style">🎨 스타일</option><option value="background">🏞 배경·풍경</option><option value="other">✦ 기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
     <div id="mi-list"></div>
+  </details>
+  <details class="fold" id="fold-backup"><summary>설정 백업 · 복원</summary>
+    <p class="hint plain">프롬프트 보관함, 와일드카드, 즐겨찾기, 내가 적은 LoRA 정보(트리거 단어·종류), 화면별 프리셋을 파일 하나로 저장하거나 되살려요. 다른 PC로 옮기거나 재설치 전에 쓰면 좋아요. 모델·결과 이미지는 용량이 커서 포함하지 않아요.</p>
+    <div class="actions"><button class="ghost" id="bk-export" type="button">백업 파일 저장</button>
+      <label class="ghost filebtn">백업 파일 불러오기<input id="bk-file" type="file" accept=".json,application/json" hidden></label></div>
+    <div id="bk-box" hidden>
+      <p class="hint plain" id="bk-sum"></p>
+      <div class="actions"><label class="chk"><input type="radio" name="bkmode" value="merge" checked> 합치기 — 지금 있는 건 그대로 두고 없는 것만 추가</label>
+        <label class="chk"><input type="radio" name="bkmode" value="overwrite"> 덮어쓰기 — 같은 항목은 백업 내용으로 바꾸기</label></div>
+      <div class="actions"><button class="go" id="bk-go" type="button">되살리기</button><button class="ghost" id="bk-cancel" type="button">취소</button></div>
+      <p class="hint plain">어느 쪽이든 아무것도 지우지 않아요. 바꾸기 전 파일은 <b>backups</b> 폴더에 복사해 둬요.</p>
+    </div>
   </details>
   <details class="fold" id="fold-app"><summary>프로그램 관리 (다시 시작 · 위치 옮기기)</summary>
     <p class="hint plain">지금 설치 위치: <b id="app-root"></b></p>
@@ -682,6 +751,16 @@
   <h3>진행 상황</h3><div id="tasks"></div>
 </section>
 </main>
+
+<div id="qpanel" hidden role="dialog" aria-label="작업 대기열">
+  <div class="qh"><b>작업 대기열</b><button type="button" class="qx" aria-label="닫기">×</button></div>
+  <div id="qlist"><p class="mute">불러오는 중…</p></div>
+  <div class="qn">
+    <label class="chk"><input type="checkbox" id="q-sound"> 🔔 작업이 끝나면 소리로 알려주기</label>
+    <label class="chk"><input type="checkbox" id="q-desk"> 🖥 다른 창을 보는 중이면 바탕화면 알림도 받기</label>
+    <button type="button" class="ghost sm" id="q-test">알림 시험해 보기</button>
+  </div>
+</div>
 
 <div id="restarting" hidden role="alert"><div><span class="spin"></span><b id="rs-t">프로그램을 다시 켜는 중…</b><p id="rs-m" class="mute">잠시만 기다려 주세요. 켜지면 이 화면이 자동으로 새로고침돼요. 1분이 지나도 안 되면 바탕화면의 start.bat 을 직접 실행해 주세요.</p></div></div>
 

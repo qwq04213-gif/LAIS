@@ -57,6 +57,8 @@ T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
 $$('[data-blk]').forEach(e=>{e.innerHTML=T[e.dataset.blk.replace(/-(\w)/g,(_,c)=>c.toUpperCase())]()});
 
 /* ══════════ LoRA 줄 (개수 제한 없이 추가/삭제) ══════════ */
+const LKIND={character:['👤','캐릭터'],style:['🎨','스타일'],background:['🏞','배경·풍경'],other:['✦','기타'],unknown:['','미분류']};
+const lkIcon=n=>{const k=(LISTS.lora_kind||{})[n];return k&&LKIND[k]&&LKIND[k][0]?LKIND[k][0]+' ':''};
 const LFAM={sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image-Edit',unknown:'판별 불가'};
 /* 지금 이 폼이 쓰려는 모델의 계열 (LoRA 가 맞는지 비교하는 기준) */
 function formFam(f){
@@ -70,7 +72,7 @@ function formFam(f){
 const loraOk=(lf,ff)=>!lf||lf==='unknown'||lf===ff||(ff==='chroma'&&lf==='flux');
 function loraOptions(sel,val){
   const f=sel.form,ff=f?formFam(f):null,inf=LISTS.lora_info||{};
-  const opt=x=>`<option>${esc(x)}</option>`;
+  const opt=x=>`<option value="${esc(x)}">${lkIcon(x)}${esc(x)}</option>`;
   const good=LISTS.loras.filter(x=>loraOk(inf[x],ff)),bad=LISTS.loras.filter(x=>!loraOk(inf[x],ff));
   let h='<option value="">사용 안 함</option>';
   if(bad.length){
@@ -86,8 +88,8 @@ let LCARD={t:0,m:{}};
 async function loraCards(force){if(!force&&Date.now()-LCARD.t<60000)return LCARD.m;LCARD.t=Date.now();
   try{const r=await api('/api/models/cards?kind=loras');LCARD.m=Object.fromEntries(r.items.map(c=>[c.name,c]))}catch{}return LCARD.m}
 function loraTrig(sel){const row=sel.closest('.lora-row');if(!row)return;$('.ltr',row)?.remove();const v=sel.value;if(!v)return;
-  loraCards().then(m=>{const c=m[v];if(!c||sel.value!==v||$('.ltr',row))return;const w=[...(c.trigger||[]),...(c.tags||[]).filter(t=>!(c.trigger||[]).includes(t))].slice(0,8);if(!w.length)return;
-    const d=document.createElement('div');d.className='ltr';d.innerHTML=`<span class="mute">${c.trigger&&c.trigger.length?'트리거 단어':'이 LoRA 학습에 자주 쓰인 태그'}:</span> `+w.map(t=>`<button type="button" class="chip lt-chip" data-t="${esc(t)}" title="프롬프트에 넣기">+ ${esc(t)}</button>`).join('');row.append(d)})}
+  loraCards().then(m=>{const c=m[v];if(!c||sel.value!==v||$('.ltr',row))return;const tr=[...(c.user_trigger||[]),...(c.trigger||[]).filter(t=>!(c.user_trigger||[]).includes(t))],w=[...tr,...(c.tags||[]).filter(t=>!tr.includes(t))].slice(0,10);if(!w.length)return;
+    const d=document.createElement('div');d.className='ltr';d.innerHTML=`<span class="mute">${tr.length?'트리거 단어':'이 LoRA 학습에 자주 쓰인 태그'}:</span> `+w.map(t=>`<button type="button" class="chip lt-chip" data-t="${esc(t)}" title="프롬프트에 넣기">+ ${esc(t)}</button>`).join('');row.append(d)})}
 function loraNote(sel){loraTrig(sel);
   const row=sel.closest('.lora-row');if(!row)return;
   let n=$('.lnote',row);if(!n){n=document.createElement('small');n.className='lnote';row.append(n)}
@@ -262,6 +264,7 @@ function show(v){
   $$('#rail nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   $$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   if(v==='start')startInit();
+  if(v==='batch')loadLists().then(()=>window.btInit&&btInit());
   if(v==='gal')galLoad();else if(v==='lib')libShow();
   if(v==='setup'){appInit()}
   if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide')loadLists();
@@ -1361,18 +1364,171 @@ $('#app-go').onclick=async()=>{if(!APP_PLAN)return;
 document.addEventListener('click',e=>{const c=e.target.closest('.lt-chip');if(!c)return;const f=c.closest('form'),t=f&&f.elements.prompt;if(!t)return;
   const cur=t.value.trim();t.value=cur?cur.replace(/[\s,]+$/,'')+', '+c.dataset.t:c.dataset.t;t.dispatchEvent(new Event('input',{bubbles:true}));toast(`'${c.dataset.t}' 을(를) 넣었어요.`)});
 let MI=[];
-async function miLoad(force){const kind=$('#mi-kind').value;$('#mi-list').innerHTML='<p class="mute">읽는 중…</p>';
+async function miLoad(force,silent){const kind=$('#mi-kind').value;if(!silent)$('#mi-list').innerHTML='<p class="mute">읽는 중…</p>';
   if(force)await loraCards(true);
-  try{MI=(await api('/api/models/cards?kind='+kind)).items}catch{MI=[]}miRender()}
-function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('#mi-kind').value;
-  const list=MI.filter(c=>!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q));
-  $('#mi-list').innerHTML=list.length?list.map(c=>{const fam=LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),
-    img=c.preview?`<img class="mimg" loading="lazy" src="/mprev/${kind==='loras'?'loras':c.dir}/${encodeURIComponent(c.name)}" alt="">`:'<div class="mimg none">미리보기 없음</div>';
+  try{MI=(await api('/api/models/cards?kind='+kind)).items}catch{MI=[]}
+  if(kind==='loras'){LISTS.lora_kind=Object.fromEntries(MI.map(c=>[c.name,c.kind]));LCARD={t:Date.now(),m:Object.fromEntries(MI.map(c=>[c.name,c]))}}
+  miRender()}
+const kindBadge=c=>{const k=LKIND[c.kind]||LKIND.unknown;return c.kind==='unknown'?`<span class="badge kind k-unknown" title="종류를 아직 모르겠어요. 아래 ‘설정’에서 직접 골라 주세요.">미분류</span>`:`<span class="badge kind k-${c.kind}" title="${c.kind_set?'내가 고른 종류':'이름·태그로 추정한 종류 — 틀리면 ‘설정’에서 바꿔 주세요'}">${k[0]} ${k[1]}${c.kind_set?'':' <i>추정</i>'}</span>`};
+function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('#mi-kind').value,kf=$('#mi-filter').value;
+  $('#mi-filter').hidden=kind!=='loras';
+  const list=MI.filter(c=>(!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.user_trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q))&&(kind!=='loras'||kf==='all'||c.kind===kf));
+  $('#mi-list').innerHTML=list.length?list.map(c=>{const fam=LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),L=kind==='loras',
+    dir=L?'loras':c.dir,pic=c.preview?`<img class="mimg" loading="lazy" src="/mprev/${dir}/${encodeURIComponent(c.name)}?t=${MIT}" alt="">`:'<div class="mimg none">사진 없음</div>',
+    img=`<div class="mpv" data-act="pick" data-n="${esc(c.name)}" data-d="${dir}" role="button" tabindex="0" title="클릭하거나 사진을 끌어다 놓으면 미리보기가 바뀌어요">${pic}<span class="mpv-hint">📷 ${c.preview?'사진 바꾸기':'사진 넣기'}</span>${c.preview?`<button type="button" class="mpv-x" data-act="rmprev" data-n="${esc(c.name)}" data-d="${dir}" title="미리보기 지우기" aria-label="미리보기 지우기">×</button>`:''}</div>`;
     const chips=(arr,lab)=>arr&&arr.length?`<div class="mchips"><span class="mute">${lab}</span> ${arr.map(t=>`<span class="badge" title="클릭하면 복사해요" data-copy="${esc(t)}">${esc(t)}</span>`).join('')}</div>`:'';
-    return `<div class="mcard2">${img}<div class="mbody"><b>${esc(c.title||c.name)}</b>${c.title?`<div class="mute">${esc(c.name)}</div>`:''}<div><span class="badge acc">${esc(fam)}</span> <span class="mute">${c.size_mb} MB${c.dim?` · 차원 ${esc(c.dim)}`:''}${c.images?` · 학습 이미지 ${esc(c.images)}장`:''}${c.base?` · 기반 ${esc(c.base)}`:''}</span></div>${c.description?`<p class="mute">${esc(c.description)}</p>`:''}${chips(c.trigger,'트리거 단어')}${chips(c.tags,'자주 쓰인 태그')}</div></div>`}).join(''):'<p class="mute">표시할 항목이 없어요.</p>'}
-$('#mi-list').addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.copy);toast(`'${b.dataset.copy}' 을(를) 복사했어요.`)}catch{toast('복사하지 못했어요.')}});
-$('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-reload').onclick=()=>miLoad(true);
+    const mine=(c.user_trigger||[]).length?`<div class="mchips"><span class="mute">내가 적은 단어</span> ${c.user_trigger.map(t=>`<span class="badge mine" title="클릭하면 복사해요" data-copy="${esc(t)}">${esc(t)}</span><button type="button" class="chipx" data-act="deltr" data-n="${esc(c.name)}" data-t="${esc(t)}" title="이 단어 지우기" aria-label="${esc(t)} 지우기">×</button>`).join('')}</div>`:'';
+    const acts=L?`<div class="macts"><button type="button" class="ghost sm" data-act="use" data-f="gen" data-n="${esc(c.name)}">✎ 생성에 쓰기</button><button type="button" class="ghost sm" data-act="use" data-f="edit" data-n="${esc(c.name)}">✎ 편집에 쓰기</button></div>`:'';
+    const cfg=L?`<details class="mcfg"><summary>설정 · 종류 · 트리거 단어 · 미리보기</summary><div class="mcfg-in">
+      <label class="f"><span class="lt">종류</span><select data-act="kind" data-n="${esc(c.name)}"><option value=""${c.kind_set?'':' selected'}>자동${c.kind_set?'':' ('+LKIND[c.kind][1]+')'}</option>${['character','style','background','other'].map(k=>`<option value="${k}"${c.kind_set&&c.kind===k?' selected':''}>${LKIND[k][0]} ${LKIND[k][1]}</option>`).join('')}</select></label>
+      <div class="mrow"><input type="text" data-addtr="${esc(c.name)}" placeholder="트리거 단어 직접 추가 (쉼표로 여러 개)" maxlength="200"><button type="button" class="ghost sm" data-act="addtr" data-n="${esc(c.name)}">추가</button></div>
+</div></details>`:'';
+    return `<div class="mcard2">${img}<div class="mbody"><b>${esc(c.title||c.name)}</b> ${L?kindBadge(c):''}${c.title?`<div class="mute">${esc(c.name)}</div>`:''}<div><span class="badge acc">${esc(fam)}</span> <span class="mute">${c.size_mb} MB${c.dim?` · 차원 ${esc(c.dim)}`:''}${c.images?` · 학습 이미지 ${esc(c.images)}장`:''}${c.base?` · 기반 ${esc(c.base)}`:''}</span></div>${c.description?`<p class="mute">${esc(c.description)}</p>`:''}${mine}${chips(c.trigger,'트리거 단어')}${chips(c.tags,'자주 쓰인 태그')}${acts}${cfg}</div></div>`}).join(''):'<p class="mute">표시할 항목이 없어요.</p>'}
+let MIT=Date.now();
+async function miPrev(name,dir,f){if(!f)return;if(!/^image\//.test(f.type))return toast('사진 파일을 넣어 주세요.');
+  try{const r=await api('/api/lora/preview',{name,dir:dir||'loras',image:await toDataURL(f)});if(r.error)return toast(r.error);toast('미리보기를 바꿨어요.');MIT=Date.now();await miLoad(false,true)}catch{toast('저장하지 못했어요.')}}
+$('#mi-list').addEventListener('dragover',e=>{if(e.target.closest('.mpv')){e.preventDefault();e.target.closest('.mpv').classList.add('drop')}});
+$('#mi-list').addEventListener('dragleave',e=>e.target.closest('.mpv')?.classList.remove('drop'));
+$('#mi-list').addEventListener('drop',e=>{const m=e.target.closest('.mpv');if(!m)return;e.preventDefault();m.classList.remove('drop');miPrev(m.dataset.n,m.dataset.d,e.dataTransfer.files[0])});
+$('#mi-list').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('mpv')){e.preventDefault();e.target.click()}});
+/* LoRA 를 생성/편집 탭의 빈 LoRA 칸에 넣고, 트리거 단어를 프롬프트에 넣은 뒤 그 탭으로 가요 */
+function useLora(fid,name){const f=$('#f-'+fid),box=f&&$('.loras',f);if(!f||!box)return;
+  let sel=$$('.lora-row select',f).find(x=>x.value===name);
+  if(!sel){const emp=$$('.lora-row select',f).find(x=>!x.value);sel=emp||$('select',addLora(box));loraOptions(sel,name);sel.value=name;loraNote(sel)}
+  const c=(LCARD.m||{})[name]||{},words=(c.user_trigger&&c.user_trigger.length?c.user_trigger:(c.trigger||[])).slice(0,4);
+  const t=f.elements.prompt;let add=[];
+  if(t){const low=t.value.toLowerCase();add=words.filter(w=>!low.includes(w.toLowerCase()));
+    if(add.length){const cur=t.value.trim();t.value=(cur?cur.replace(/[\s,]+$/,'')+', ':'')+add.join(', ');t.dispatchEvent(new Event('input',{bubbles:true}))}}
+  show(fid);toast(`'${name}' 을(를) ${fid==='gen'?'생성':'편집'} 탭에 넣었어요`+(add.length?` (트리거 단어 ${add.length}개 포함).`:'.'),5000)}
+async function miSaveUser(name,o){const r=await api('/api/lora/user',{name,...o});if(r.error){toast(r.error);return false}
+  LCARD.t=0;await miLoad(false,true);$$('#f-gen,#f-edit,#f-up').forEach(refreshLoras);return true}
+$('#mi-list').addEventListener('click',async e=>{
+  const a=e.target.closest('[data-act]');
+  if(a){const n=a.dataset.n,c=MI.find(x=>x.name===n)||{},act=a.dataset.act;
+    if(act==='use')return useLora(a.dataset.f,n);
+    if(act==='deltr')return void await miSaveUser(n,{trigger:(c.user_trigger||[]).filter(t=>t!==a.dataset.t)});
+    if(act==='addtr'){const inp=a.parentElement.querySelector('input'),w=inp.value.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);if(!w.length)return toast('추가할 단어를 적어 주세요.');
+      if(await miSaveUser(n,{trigger:[...(c.user_trigger||[]),...w]}))toast(`${w.length}개를 저장했어요.`);return}
+    if(act==='rmprev'){e.stopPropagation();if(!confirm('이 미리보기 사진을 지울까요? (모델 파일은 그대로예요)'))return;
+      const r=await api('/api/lora/preview',{name:n,dir:a.dataset.d||'loras',remove:true});if(r.error)return toast(r.error);MIT=Date.now();return void await miLoad(false,true)}
+    if(act==='pick'){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=()=>miPrev(n,a.dataset.d,i.files[0]);i.click();return}}
+  const b=e.target.closest('[data-copy]');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.copy);toast(`'${b.dataset.copy}' 을(를) 복사했어요.`)}catch{toast('복사하지 못했어요.')}});
+$('#mi-list').addEventListener('change',async e=>{const s=e.target.closest('select[data-act=kind]');if(s)await miSaveUser(s.dataset.n,{kind:s.value})});
+$('#mi-list').addEventListener('keydown',e=>{const i=e.target.closest('input[data-addtr]');if(i&&e.key==='Enter'){e.preventDefault();i.parentElement.querySelector('[data-act=addtr]').click()}});
+$('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-filter').onchange=miRender;$('#mi-reload').onclick=()=>miLoad(true);
 $('#fold-minfo').addEventListener('toggle',e=>{if(e.target.open&&!MI.length)miLoad()});
+/* ══════════ 설정 백업 · 복원 ══════════ */
+let BK=null;
+function bkPresets(){const o={};try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('preset:'))o[k]=ls.get(k,{})}}catch{}return o}
+$('#bk-export').onclick=async()=>{try{const d=await api('/api/backup/export');d.presets=bkPresets();
+  const n=new Date(),p=x=>String(x).padStart(2,'0'),name=`LocalAI-백업-${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}.json`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(d,null,1)],{type:'application/json'}));a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  toast('백업 파일을 저장했어요: '+name,6000)}catch{toast('백업을 만들지 못했어요.')}};
+$('#bk-file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const d=JSON.parse(await f.text());if(d.app!=='LocalAI-Studio'||d.kind!=='backup')throw 0;BK=d;
+    const np=Object.values(d.presets||{}).reduce((a,o)=>a+Object.keys(o||{}).length,0);
+    $('#bk-sum').textContent=`${d.created||''} 에 만든 백업(버전 ${d.version||'?'}): 프롬프트 ${(d.prompts||[]).length}개 · 와일드카드 ${Object.keys(d.wildcards||{}).length}개 · 즐겨찾기 ${(d.favs||[]).length}개 · LoRA 정보 ${Object.keys(d.lora_user||{}).length}개 · 프리셋 ${np}개`;$('#bk-box').hidden=false}
+  catch{BK=null;$('#bk-box').hidden=true;toast('이 프로그램의 백업 파일이 아니에요.')}};
+$('#bk-cancel').onclick=()=>{BK=null;$('#bk-box').hidden=true};
+$('#bk-go').onclick=async()=>{if(!BK)return;const mode=$('input[name=bkmode]:checked').value;
+  if(mode==='overwrite'&&!confirm('같은 이름·번호의 항목을 백업 내용으로 바꿔요. 계속할까요? (바꾸기 전 파일은 backups 폴더에 복사돼요)'))return;
+  const r=await api('/api/backup/import',{data:BK,mode});if(r.error)return toast(r.error);
+  let np=0;for(const[k,v]of Object.entries(BK.presets||{})){if(!/^preset:f-[a-z]+$/.test(k)||typeof v!=='object'||!v)continue;const cur=ls.get(k,{});
+    for(const[n,val]of Object.entries(v)){if(mode==='overwrite'||!(n in cur)){cur[n]=val;np++}}ls.set(k,cur)}
+  $$('form[id^=f-]').forEach(f=>{try{const sel=$('.pre-sel',f);if(sel&&f.id){const a=ls.get('preset:'+f.id,{});const v=sel.value;sel.innerHTML='<option value="">내 프리셋 불러오기</option>'+Object.keys(a).map(n=>`<option>${esc(n)}</option>`).join('');sel.value=v}}catch{}});
+  const c=r.counts;BK=null;$('#bk-box').hidden=true;
+  toast(`되살렸어요: 프롬프트 ${c.prompts} · 와일드카드 ${c.wildcards} · 즐겨찾기 ${c.favs} · LoRA 정보 ${c.lora_user} · 프리셋 ${np}`,9000);loadLists()};
+/* ══════════ 작업 대기열 · 완료 알림 ══════════ */
+const QST={running:'진행 중',queued:'대기',done:'완료',error:'실패',cancelled:'중단'};
+const qSound=()=>ls.get('q:sound',true),qDesk=()=>ls.get('q:desk',false);
+let QSEEN=new Map(),QINIT=false,QLAST=null;
+function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
+  try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=window.QCTX||(window.QCTX=new A());if(c.state==='suspended')c.resume();
+    [[880,0],[1175,.16]].forEach(([f,t])=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);
+      const t0=c.currentTime+t;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.18,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.3);o.start(t0);o.stop(t0+.32)})}catch{}}
+function qNotify(r){const ok=r.state==='done',t=ok?`✔ ${r.label} — 끝났어요`:`⚠ ${r.label} — 실패했어요`+(r.error?`: ${r.error}`:'');
+  toast(t,7000);qBeep();
+  if(qDesk()&&document.hidden&&window.Notification&&Notification.permission==='granted'){try{new Notification(ok?'작업이 끝났어요':'작업에 실패했어요',{body:r.label+(ok||!r.error?'':'\n'+r.error)})}catch{}}}
+function qRender(q){const L=$('#qlist');if(!L)return;
+  if(!q.items.length){L.innerHTML='<p class="mute">지금 진행 중이거나 기다리는 작업이 없어요.</p>';return}
+  L.innerHTML=q.items.map(r=>{const act=r.state==='running'||r.state==='queued',pc=typeof r.progress==='number'&&r.state==='running'?Math.round(r.progress*100):null,
+    ic={running:'▶',queued:r.pos+'',done:'✔',error:'⚠',cancelled:'■'}[r.state];
+    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
+    <div class="qb">${r.state==='queued'?`<button type="button" data-q="top" title="맨 앞으로">⤒</button><button type="button" data-q="up" title="한 칸 앞으로">▲</button><button type="button" data-q="down" title="한 칸 뒤로">▼</button>`:''}${act?`<button type="button" data-q="cancel" title="${r.state==='running'?'중단':'대기열에서 빼기'}">✕</button>`:''}</div></div>`}).join('')}
+async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
+  const n=q.running+q.queued,c=$('#qcount');c.hidden=!n;c.textContent=n;$('#qbtn').classList.toggle('busy',n>0);
+  for(const r of q.items){const was=QSEEN.get(r.id);
+    if(QINIT&&(r.state==='done'||r.state==='error')&&was!=='done'&&was!=='error')qNotify(r);
+    QSEEN.set(r.id,r.state)}
+  QINIT=true;if(!$('#qpanel').hidden)qRender(q)}
+$('#qbtn').onclick=()=>{const p=$('#qpanel');p.hidden=!p.hidden;if(!p.hidden){$('#q-sound').checked=qSound();$('#q-desk').checked=qDesk();if(QLAST)qRender(QLAST);qPoll()}};
+$('#qpanel .qx').onclick=()=>{$('#qpanel').hidden=true};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#qpanel').hidden)$('#qpanel').hidden=true});
+$('#qlist').addEventListener('click',async e=>{const b=e.target.closest('[data-q]');if(!b)return;const id=b.closest('.qrow').dataset.id;
+  try{const r=b.dataset.q==='cancel'?await api('/api/job/cancel',{id}):await api('/api/queue/move',{id,to:b.dataset.q});if(r.error)toast(r.error)}catch{}qPoll()});
+$('#q-sound').onchange=e=>{ls.set('q:sound',e.target.checked);if(e.target.checked)qBeep()};
+$('#q-desk').onchange=async e=>{if(!e.target.checked){ls.set('q:desk',false);return}
+  if(!window.Notification){e.target.checked=false;return toast('이 브라우저는 바탕화면 알림을 지원하지 않아요.')}
+  const p=Notification.permission==='granted'?'granted':await Notification.requestPermission();
+  if(p!=='granted'){e.target.checked=false;ls.set('q:desk',false);return toast('브라우저에서 알림이 허용되지 않았어요. 주소창 왼쪽 자물쇠에서 알림을 허용해 주세요.',7000)}
+  ls.set('q:desk',true);toast('이제 다른 창을 보고 있을 때 작업이 끝나면 알려 드려요.')};
+$('#q-test').onclick=()=>qNotify({state:'done',label:'알림 시험',error:''});
+qPoll();setInterval(qPoll,2500);
+/* ══════════ 일괄 처리 ══════════ */
+(()=>{const f=$('#f-batch'),view=$('#v-batch');if(!f)return;
+  let FILES=[],info=$('#bt-info');const mode=()=>f.elements.srcm.value,op=()=>f.elements.op.value;
+  const imgs=l=>[...l].filter(x=>/^image\//.test(x.type)||/\.(png|jpe?g|webp|bmp)$/i.test(x.name));
+  const sync=()=>{$$('[data-src]',f).forEach(e=>e.hidden=e.dataset.src!==mode());$$('[data-op]',f).forEach(e=>e.hidden=e.dataset.op!==op());
+    $$('.bt-op',f).forEach(l=>l.classList.toggle('on',l.querySelector('input').checked));info.textContent='';rmNote()};
+  async function rmNote(){if(op()!=='rmbg')return;let st;try{st=await api('/api/rmbg/status')}catch{return}
+    const k=f.elements.rmodel.value,m=st.models[k],ok=st.ort&&m.installed;
+    $('#bt-rm-note').textContent=ok?`✔ 설치됨 — ${m.label} 모델을 써요.`:`아직 설치되지 않았어요. 아래 버튼을 누르면 ${m.label} 모델(약 ${m.mb}MB)을 받아요.`+(st.ort?'':' (분석 엔진도 함께 설치돼요)');
+    const b=$('#bt-rm-install');b.hidden=ok;b.disabled=st.busy;b.textContent=st.busy?'설치하는 중…':`배경 지우기 도구 설치 (${m.mb}MB)`;return ok}
+  f.addEventListener('change',e=>{if(e.target.name==='srcm'||e.target.name==='op')sync();else if(e.target.name==='rmodel')rmNote()});
+  $('#bt-rm-install').onclick=async()=>{const r=await api('/api/rmbg/install',{key:f.elements.rmodel.value});if(r.error)return toast(r.error);
+    for(let i=0;i<900;i++){await sleep(2000);const ok=await rmNote();const t=(await api('/api/install')).filter(x=>x.kind==='rmbg').pop();
+      if(t&&t.state==='error'){$('#bt-rm-note').textContent='설치하지 못했어요: '+t.msg;return}
+      if(t&&t.state==='running')$('#bt-rm-note').textContent='설치 중: '+(t.msg||'')+(t.total?` ${Math.round(t.done/t.total*100)}%`:'');
+      if(ok){toast('배경 지우기 도구를 설치했어요.');return}}};
+  const pick=l=>{FILES=imgs(l);$('#bt-drop').firstChild.textContent=FILES.length?`${FILES.length}장 선택됨 (${FILES.slice(0,3).map(x=>x.name).join(', ')}${FILES.length>3?' …':''}) — 다시 누르면 바꿀 수 있어요`:'여기에 사진을 끌어다 놓거나 눌러서 고르세요';info.textContent=''};
+  const drop=$('#bt-drop');drop.onclick=()=>$('#bt-files').click();drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();drop.click()}};
+  $('#bt-files').onchange=e=>{pick(e.target.files);e.target.value=''};
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add('drop')};drop.ondragleave=()=>drop.classList.remove('drop');
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drop');pick(e.dataTransfer.files)};
+  const src=()=>mode()==='folder'?{folder:f.elements.folder.value.trim(),sub:f.elements.sub.checked}:mode()==='out'?{outsub:f.elements.outsub.value}:{};
+  $('#bt-scan').onclick=async()=>{if(mode()==='files')return void(info.textContent=FILES.length?`${FILES.length}장을 고르셨어요.`:'아직 고른 사진이 없어요.');
+    const r=await api('/api/batch/scan',src());info.textContent=r.error?r.error:`사진 ${r.count}장 (${r.mb}MB)${r.names.length?' — '+r.names.join(', ')+(r.count>r.names.length?' …':''):''}${r.over?' — 한 번에 2000장까지만 처리해요.':''}`;info.className='hint plain'+(r.error?' bad':'')};
+  const bar=(t,m)=>setBar(view,t,m);
+  f.onsubmit=async e=>{e.preventDefault();const go=$('.go',f),stop=$('.stop',$('.jobbar',view));
+    const p={kind:'batch',op:op(),fmt:f.elements.fmt.value};
+    if(op()==='resize'){for(const k of['long_side','crop','rotate','flip'])p[k]=f.elements[k].value;
+      if(!(+p.long_side)&&p.crop==='none'&&p.rotate==='0'&&p.flip==='none')return bar('긴 변 길이, 자르기, 돌리기, 뒤집기 중 하나 이상 정해 주세요.','bad')}
+    if(op()==='rmbg'){p.rmodel=f.elements.rmodel.value;p.bg=f.elements.bg.value;if(!await rmNote())return bar('먼저 [배경 지우기 도구 설치]를 눌러 주세요.','bad')}
+    if(op()==='upscale'){p.scale=f.elements.scale.value;p.upm=f.elements.upm.value}
+    let id=null,wantStop=false;go.disabled=true;stop.disabled=false;
+    stop.onclick=async()=>{wantStop=true;stop.disabled=true;bar('중단하는 중이에요…','run');if(id)try{await api('/api/job/cancel',{id})}catch{}};
+    try{
+      if(mode()==='files'){if(!FILES.length)throw new Error('처리할 사진을 먼저 골라 주세요.');
+        let stage=null;for(let i=0;i<FILES.length;i++){if(wantStop)throw new Error('중단했어요.');bar(`사진을 올리는 중… ${i+1}/${FILES.length}`,'run');
+          const r=await api('/api/batch/upload',{stage,name:FILES[i].name,image:await toDataURL(FILES[i])});if(r.error)throw new Error(r.error);stage=r.stage}
+        p.stage=stage}
+      else Object.assign(p,src());
+      bar('작업을 시작해요…','run');const r=await api('/api/job',p);if(r.error)throw new Error(r.error);id=r.id;if(wantStop)await api('/api/job/cancel',{id});
+      for(;;){await sleep(1000);const j=await api('/api/job/'+id);
+        if(j.state==='error')throw new Error(j.error);
+        if(j.state==='cancelled'){bar(j.msg||'중단했어요.','ok');btResult(j);break}
+        if(j.state==='done'){bar('완료 — '+(j.msg||''),'ok');btResult(j);break}
+        bar(wantStop?'중단하는 중이에요…':`${j.msg||'처리 중'}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');if(!wantStop)setProg(view,j)}
+    }catch(e){bar(e.message,'bad')}
+    go.disabled=false};
+  function btResult(j){const b=j.batch||{ok:0,failed:[]},R=$('#bt-res'),u=j.images||[];
+    R.insertAdjacentHTML('afterbegin',`<div class="batch bt-done"><p><b>${b.ok}장 완료</b>${b.failed.length?`, ${b.failed.length}장 실패`:''}${j.n_images>u.length?` (아래에는 마지막 ${u.length}장만 보여요)`:''}</p>
+      <div class="actions"><button type="button" class="ghost" data-open="outputs">결과 폴더 열기</button><button type="button" class="ghost" data-go="gal">기록 갤러리에서 보기</button></div>
+      ${b.failed.length?`<details><summary>처리하지 못한 사진 ${b.failed.length}장</summary><ul>${b.failed.map(x=>`<li>${esc(x[0])} — ${esc(x[1])}</li>`).join('')}</ul></details>`:''}
+      <div class="bt-grid">${u.map(x=>`<a href="${x}" target="_blank" rel="noopener"><img src="${x}" loading="lazy" alt=""></a>`).join('')}</div></div>`)}
+  window.btInit=()=>{const s=$('select[name=upm]',f);s.innerHTML=(LISTS.upscalers||[]).map(x=>`<option>${esc(x)}</option>`).join('')||'<option value="">업스케일 모델 없음</option>';sync()};
+  sync();
+})();
 /* ══════════ 시작하기 · 화면별 사용법 안내 ══════════ */
 const GOALS=[
  {t:'글만으로 그림을 만들고 싶어요',d:'프롬프트(원하는 그림을 설명한 글)를 쓰면 그림이 나와요.',go:'gen',need:()=>LISTS.checkpoints.length||fxAny(),why:'이미지 모델이 필요해요',
@@ -1427,6 +1583,7 @@ const COACH={
  gen:['모델을 고르고 프롬프트를 적어요.','필요하면 크기와 시드를 정해요(모르면 그대로 둬도 돼요).','[이미지 생성]을 누르고 결과를 확인해요.'],
  up:['사진을 올려요.','빠른 업스케일 / 디테일 재생성 중 방식을 골라요.','[업스케일 실행] 후 [겹쳐서 비교]로 확인해요.'],
  vid:['장면과 움직임을 문장으로 적어요.','움직일 이미지가 있으면 올려요(없어도 돼요).','크기·길이를 고르고 [영상 만들기]. 처음엔 3초로 시험해 보세요.'],
+ batch:['처리할 사진을 폴더나 파일로 골라요.','크기·배경 지우기·업스케일 중 하나를 골라요.','[처리 시작] — 원본은 그대로, 결과는 새 파일로 저장돼요.'],
  gal:['위 칸에서 프롬프트나 종류로 검색해요.','★로 즐겨찾기, ↻로 같은 설정 다시 만들기.','사진을 클릭하면 크게 볼 수 있어요.'],
  lib:['자주 쓰는 프롬프트를 보관함에 저장해요.','와일드카드로 후보를 무작위로 바꿔 넣어요.','사진에서 프롬프트를 뽑아 바로 생성에 써요.'],
  wf:['워크플로 JSON이나 PNG를 올려요.','없는 노드는 [설치] 후 엔진을 다시 시작해요.','프롬프트·시드를 고치고 [실행]을 눌러요.'],
