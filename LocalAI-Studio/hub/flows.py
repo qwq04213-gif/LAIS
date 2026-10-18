@@ -225,6 +225,16 @@ def wf_flux(q):
         lat, denoise = [w.add("VAEEncode", pixels=[li, 0], vae=vae), 0], q["init_denoise"]
     else:
         lat = [w.add("EmptyLatentImage" if q["family"] == "krea2" else "EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    if q.get("k2c"):      # Krea 2 컨트롤 LoRA(깊이·포즈·캐니 등): 확장 노드 Krea2Control* 3개
+        c = q["k2c"]
+        img = [w.add("LoadImage", image=c["image"]), 0]
+        if c.get("canny"):
+            img = [w.add("Canny", image=img, low_threshold=0.4, high_threshold=0.8), 0]
+        model = [w.add("Krea2ControlLoRALoader", model=model, lora_name=c["lora"], strength=c["strength"]), 0]
+        enc = w.add("Krea2ControlImageEncode", control_image=img, vae=vae, resize="match_latent_size", upscale_method="lanczos", crop="center",
+                    channel_mode="grayscale" if c.get("depth") else "rgb", normalize="per_image_minmax" if c.get("depth") else "none",
+                    invert=False, batch_mode="independent_images", latent=lat)
+        model = [w.add("Krea2ControlApply", model=model, control_latent=[enc, 0]), 0]
     k = flux_sample(w, q, model, pos, neg, lat, denoise)
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
     return w.n
@@ -294,6 +304,73 @@ def wf_qwen(q, img, refs, plus):
 # ───────────────────────── 영상 (Wan 2.2 TI2V 5B) ─────────────────────────
 WAN_NEG = ("色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，"
            "多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走")
+
+
+# ───────────────────────── SD3.5 · HiDream · Lumina 2 ─────────────────────────
+LUMINA_POS = "You are an assistant designed to generate superior images with the superior degree of image-text alignment based on textual prompts or user prompts. <Prompt Start> "
+LUMINA_NEG = "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> "
+
+
+def wf_other(q):
+    """SD3.5 / HiDream / Lumina 2 텍스트→이미지. q: family, unet(또는 ckpt), te(파일 이름 목록 또는 dict), vae, loras, prompt, negative, seed, w, h, steps, cfg, sampler, scheduler, shift.
+    sd35   : 체크포인트(텍스트 인코더 내장이면 그대로, 아니면 TripleCLIPLoader) + ModelSamplingSD3 는 쓰지 않고 모델 기본 shift
+    hidream: UNETLoader + QuadrupleCLIPLoader + ModelSamplingSD3(shift)
+    lumina : UNETLoader + CLIPLoader(type=lumina2) + ModelSamplingAuraFlow(shift) + 시스템 프롬프트 접두어"""
+    w = WF()
+    fam, te = q["family"], q.get("te") or {}
+    if fam == "sd35":
+        ck = w.add("CheckpointLoaderSimple", ckpt_name=q["ckpt"])
+        model, vae = [ck, 0], [ck, 2]
+        if te:
+            clip = w.add("TripleCLIPLoader", clip_name1=te["clip_l"], clip_name2=te["clip_g"], clip_name3=te["t5"])
+            clip_ref = [clip, 0]
+        else:
+            clip_ref = [ck, 1]
+        if q.get("vae"):
+            vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    else:
+        un = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
+        model = [un, 0]
+        if fam == "hidream":
+            clip = w.add("QuadrupleCLIPLoader", clip_name1=te["clip_l"], clip_name2=te["clip_g"], clip_name3=te["t5"], clip_name4=te["llama"])
+        else:
+            clip = w.add("CLIPLoader", clip_name=te["gemma"], type="lumina2", device="default")
+        clip_ref = [clip, 0]
+        vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    for name, wt in q.get("loras", []):
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    if fam == "hidream":
+        model = [w.add("ModelSamplingSD3", model=model, shift=q["shift"]), 0]
+    elif fam == "lumina":
+        model = [w.add("ModelSamplingAuraFlow", model=model, shift=q["shift"]), 0]
+    pt, nt = q["prompt"], q["negative"]
+    if fam == "lumina":
+        pt, nt = LUMINA_POS + pt, LUMINA_NEG + nt
+    pos = [w.add("CLIPTextEncode", text=pt, clip=clip_ref), 0]
+    neg = [w.add("CLIPTextEncode", text=nt, clip=clip_ref), 0]
+    lat = [w.add("EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
+              scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat, denoise=1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
+def wf_music(q):
+    """ACE-Step 1.5 올인원 체크포인트로 음악 만들기: 글(태그·가사) → 소리 잠재 → 샘플링 → 소리로 풀기 → 저장.
+    q: ckpt, tags, lyrics, seed, seconds, bpm, timesig, language, keyscale, steps, cfg, sampler, scheduler, fmt(mp3/flac), codes"""
+    w = WF()
+    ck = w.add("CheckpointLoaderSimple", ckpt_name=q["ckpt"])
+    pos = w.add("TextEncodeAceStepAudio1.5", clip=[ck, 1], tags=q["tags"], lyrics=q["lyrics"], seed=q["seed"], bpm=q["bpm"], duration=q["seconds"],
+                timesignature=q["timesig"], language=q["language"], keyscale=q["keyscale"], generate_audio_codes=q["codes"], cfg_scale=2.0,
+                temperature=0.85, top_p=0.9, top_k=0, min_p=0.0)
+    neg = w.add("ConditioningZeroOut", conditioning=[pos, 0])
+    lat = w.add("EmptyAceStep1.5LatentAudio", seconds=q["seconds"], batch_size=1)
+    k = w.add("KSampler", model=[ck, 0], seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+              positive=[pos, 0], negative=[neg, 0], latent_image=[lat, 0], denoise=1.0)
+    dec = w.add("VAEDecodeAudio", samples=[k, 0], vae=[ck, 2])
+    fmt = {"format": "flac"} if q.get("fmt") == "flac" else {"format": "mp3", "format.quality": "V0"}
+    w.add("SaveAudioAdvanced", audio=[dec, 0], filename_prefix="audio/hub", **fmt)
+    return w.n
 
 
 def wf_video(q, start=None):
@@ -435,11 +512,123 @@ def _widget_names(spec):
     return out
 
 
+def _norm_links(links):
+    out = []
+    for l in links or []:
+        if isinstance(l, (list, tuple)) and len(l) >= 5:
+            out.append({"id": l[0], "origin_id": l[1], "origin_slot": l[2], "target_id": l[3], "target_slot": l[4]})
+        elif isinstance(l, dict) and "id" in l:
+            out.append({"id": l["id"], "origin_id": l.get("origin_id"), "origin_slot": l.get("origin_slot", 0),
+                        "target_id": l.get("target_id"), "target_slot": l.get("target_slot", 0)})
+    return out
+
+
+def flatten_subgraphs(ui):
+    """서브그래프(묶음 노드)를 풀어서 안에 든 노드를 바깥 그래프에 그대로 펼쳐요(중첩도 풀어요).
+    펼쳐진 노드 번호는 '묶음번호:안쪽번호' 이고, 묶음 바깥에서 들어오던 값·연결은 안쪽 노드에 직접 이어 줘요.
+    묶음 노드에서 바깥으로 꺼내 둔 값(위젯)은 안쪽 노드의 같은 위젯 값으로 넣고(_ovr), 끈/우회한 묶음은 안쪽 노드도 같은 상태로 둬요."""
+    subs = {str(s.get("id")): s for s in (ui.get("definitions") or {}).get("subgraphs", []) if isinstance(s, dict)}
+    nodes = [dict(n) for n in ui.get("nodes", []) if isinstance(n, dict) and "id" in n]
+    links = _norm_links(ui.get("links"))
+    for _ in range(12):
+        inst = [n for n in nodes if str(n.get("type")) in subs]
+        if not inst:
+            break
+        for I in inst:
+            sg, pre = subs[str(I["type"])], f"{I['id']}:"
+            byid = {l["id"]: l for l in links}
+            ins = I.get("inputs") or []
+            wv = list(I.get("widgets_values") or []) if isinstance(I.get("widgets_values"), list) else []
+            outer, wvals, k = {}, {}, 0          # 바깥 연결 / 연결 없는 위젯 입력의 값
+            for slot, i in enumerate(ins):
+                lid = i.get("link")
+                if lid is not None and lid in byid:
+                    outer[slot] = byid[lid]
+                elif i.get("widget") and k < len(wv):
+                    wvals[slot] = wv[k]
+                if i.get("widget"):
+                    k += 1
+            new_nodes = []
+            for N in sg.get("nodes", []):
+                if not isinstance(N, dict) or "id" not in N:
+                    continue
+                c = copy.deepcopy(N)
+                c["id"] = pre + str(N["id"])
+                for i in c.get("inputs") or []:
+                    if i.get("link") is not None:
+                        i["link"] = pre + str(i["link"])
+                for o in c.get("outputs") or []:
+                    if isinstance(o.get("links"), list):
+                        o["links"] = [pre + str(x) for x in o["links"]]
+                if I.get("mode") in (2, 4):
+                    c["mode"] = I["mode"]
+                c["_ovr"] = dict(c.get("_ovr") or {})
+                new_nodes.append(c)
+            nmap = {str(c["id"]): c for c in new_nodes}
+            pw = (I.get("properties") or {}).get("proxyWidgets")
+            if isinstance(pw, list) and wv and not any(i.get("widget") for i in ins):
+                for idx, pair in enumerate(pw):
+                    if isinstance(pair, (list, tuple)) and len(pair) == 2 and idx < len(wv) and str(pair[0]) not in ("-1", "-10"):
+                        t = nmap.get(pre + str(pair[0]))
+                        if t is not None:
+                            t["_ovr"][pair[1]] = wv[idx]
+            out_map, new_links = {}, []
+            for L in sg.get("links", []):
+                if not isinstance(L, dict):
+                    continue
+                o_id, t_id = L.get("origin_id"), L.get("target_id")
+                if t_id == -20:                      # 묶음의 출력 → 바깥에서 이 출력을 쓰는 연결의 출발점
+                    out_map[L.get("target_slot", 0)] = (L.get("origin_id"), L.get("origin_slot", 0), L)
+                    continue
+                tgt = nmap.get(pre + str(t_id))
+                if tgt is None:
+                    continue
+                if o_id == -10:                      # 묶음의 입력 → 바깥에서 들어오던 연결 또는 위젯 값
+                    slot = L.get("origin_slot", 0)
+                    ol = outer.get(slot)
+                    tname = None
+                    for ti in tgt.get("inputs") or []:
+                        if ti.get("link") == pre + str(L["id"]):
+                            tname = ti.get("name")
+                            if ol is None:
+                                ti["link"] = None
+                    if ol is not None:
+                        new_links.append({"id": pre + str(L["id"]), "origin_id": ol["origin_id"], "origin_slot": ol["origin_slot"],
+                                          "target_id": tgt["id"], "target_slot": L.get("target_slot", 0)})
+                    elif slot in wvals and tname:
+                        tgt["_ovr"][tname] = wvals[slot]
+                else:
+                    new_links.append({"id": pre + str(L["id"]), "origin_id": pre + str(o_id), "origin_slot": L.get("origin_slot", 0),
+                                      "target_id": tgt["id"], "target_slot": L.get("target_slot", 0)})
+            keep = []
+            for l in links:
+                if l["target_id"] == I["id"]:
+                    continue                          # 이 묶음으로 들어가던 연결은 안쪽에 다시 이었어요
+                if l["origin_id"] == I["id"]:
+                    m = out_map.get(l["origin_slot"])
+                    if m is None:
+                        continue
+                    oid, osl, src = m
+                    if oid == -10:                    # 입력이 곧바로 출력으로 지나가는 경우
+                        ol = outer.get(osl)
+                        if ol is None:
+                            continue
+                        l = dict(l, origin_id=ol["origin_id"], origin_slot=ol["origin_slot"])
+                    else:
+                        l = dict(l, origin_id=pre + str(oid), origin_slot=osl)
+                keep.append(l)
+            nodes = [n for n in nodes if n is not I] + new_nodes
+            links = keep + new_links
+    out = {k: v for k, v in ui.items() if k not in ("nodes", "links")}
+    out["nodes"], out["links"] = nodes, links
+    return out
+
+
 def ui_to_api(ui, info):
     """화면용 워크플로(nodes/links)를 API 형식으로 바꿔요. info 는 ComfyUI 의 /object_info 응답이에요.
     Reroute·PrimitiveNode 는 값/연결을 바로 이어 주고, 끈 노드(mode 2)는 빼고, 우회 노드(mode 4)는 같은 종류의 입력으로 건너뛰어요."""
-    if ui.get("definitions", {}).get("subgraphs"):
-        raise ValueError("서브그래프(묶음 노드)가 들어 있는 워크플로예요. ComfyUI 에서 서브그래프를 풀거나 'Save (API Format)'으로 저장해 주세요.")
+    if (ui.get("definitions") or {}).get("subgraphs"):
+        ui = flatten_subgraphs(ui)
     nodes = {str(n["id"]): n for n in ui.get("nodes", []) if isinstance(n, dict) and "id" in n}
     links = {}
     for l in ui.get("links", []):
@@ -490,6 +679,8 @@ def ui_to_api(ui, info):
                 if k < len(vals):
                     inp[name] = vals[k]
                 k += 2 if extra else 1
+        for k2, v2 in (n.get("_ovr") or {}).items():
+            inp[k2] = v2
         for i in n.get("inputs", []):
             lid = i.get("link")
             if lid is None or lid not in links:

@@ -424,6 +424,182 @@
      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors"
     }
    ]
+  },
+  {
+   "id": "sd35-common",
+   "name": "SD3.5 공용 파일 (텍스트 인코더 3개)",
+   "gb": 6.8,
+   "desc": "SD3.5 Large 가 쓰는 CLIP-L·CLIP-G·T5(fp8). 아래 SD3.5 Large 를 고르면 자동으로 함께 설치돼요. SD3.5 Medium 은 이 파일이 이미 들어 있어서 필요 없어요. ※ 미검증",
+   "files": [
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_l.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_g.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "sd35-large",
+   "name": "Stable Diffusion 3.5 Large (fp8)",
+   "gb": 14.9,
+   "requires": [
+    "sd35-common"
+   ],
+   "desc": "문장 이해가 좋은 SD3.5 대형 모델. 이미지 생성 탭에서 '모델 종류'를 Stable Diffusion 3.5 로 골라요. VRAM 16GB 이상 권장. Stability AI 커뮤니티 라이선스를 확인하세요. ※ 미검증",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_large_fp8_scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "sd35-medium",
+   "name": "Stable Diffusion 3.5 Medium (텍스트 인코더 내장)",
+   "gb": 11.6,
+   "desc": "텍스트 인코더가 한 파일에 들어 있어서 이것만 받으면 돼요. 이미지 생성 탭에서 '모델 종류'를 Stable Diffusion 3.5 로 골라요. ※ 미검증",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "hidream-common",
+   "name": "HiDream 공용 파일 (텍스트 인코더 4개 + VAE)",
+   "gb": 16.2,
+   "desc": "HiDream 이 쓰는 CLIP-L·CLIP-G·T5·Llama 3.1 텍스트 인코더와 VAE. 아래 HiDream 모델을 고르면 자동으로 함께 설치돼요. ※ 미검증",
+   "files": [
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/clip_l_hidream.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/clip_g_hidream.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/llama_3.1_8b_instruct_fp8_scaled.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/vae/ae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "hidream-fast",
+   "name": "HiDream I1 Fast (fp8, 16단계)",
+   "gb": 17.1,
+   "requires": [
+    "hidream-common"
+   ],
+   "desc": "가장 빠른 HiDream. 16단계, CFG 1. 이미지 생성 탭에서 '모델 종류'를 HiDream 으로 골라요. VRAM 16GB 이상 권장. ※ 미검증",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_fast_fp8.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "hidream-dev",
+   "name": "HiDream I1 Dev (fp8, 28단계)",
+   "gb": 17.1,
+   "requires": [
+    "hidream-common"
+   ],
+   "desc": "속도와 품질 균형. 28단계, CFG 1. ※ 미검증",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_dev_fp8.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "hidream-full",
+   "name": "HiDream I1 Full (fp8, 50단계)",
+   "gb": 17.1,
+   "requires": [
+    "hidream-common"
+   ],
+   "desc": "가장 품질이 좋은 HiDream. 50단계, CFG 5라 느려요. ※ 미검증",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_full_fp8.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "lumina2-common",
+   "name": "Lumina 2 공용 파일 (Gemma 2 텍스트 인코더 + VAE)",
+   "gb": 5.6,
+   "desc": "Lumina 2 가 쓰는 Gemma 2 텍스트 인코더와 VAE. 아래 Lumina 2 를 고르면 자동으로 함께 설치돼요. ※ 미검증",
+   "files": [
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/text_encoders/gemma_2_2b_fp16.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "lumina2",
+   "name": "Lumina Image 2.0 (bf16, 2.6B)",
+   "gb": 5.2,
+   "requires": [
+    "lumina2-common"
+   ],
+   "desc": "가볍고 빠른 문장형 모델(약 2.6B). 이미지 생성 탭에서 '모델 종류'를 Lumina 2 로 골라요. VRAM 8GB 부터 가능해요. ※ 미검증",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/diffusion_models/lumina_2_model_bf16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "krea2-depth-control",
+   "name": "Krea 2 깊이 컨트롤 LoRA (구도·깊이 따라 하기)",
+   "gb": 0.86,
+   "desc": "사진의 깊이(앞뒤 구조)를 따라 Krea 2 로 새로 그려요. 이미지 생성 탭에서 '모델 종류'를 Krea 2 로 고르고 ControlNet 칸에서 이 파일을 골라요. Krea 2 Raw 기준으로 학습됐고 Turbo 에도 쓸 수 있어요. 'comfyui-krea2-controlnet' 확장이 필요해요(같은 칸의 설치 버튼). ※ 미검증",
+   "files": [
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Patil/Krea-2-depth-controlnet/resolve/main/depth-control-lora.safetensors",
+     "name": "krea2-depth-control-lora.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "ace-step-15-turbo",
+   "name": "ACE-Step 1.5 Turbo — 음악 만들기 (올인원)",
+   "gb": 10.0,
+   "desc": "글(스타일 태그)과 가사로 노래·연주곡을 만들어요. 사이드바 [음악 만들기]에서 써요. 한 파일에 텍스트 인코더와 VAE가 모두 들어 있어요. 8단계로 빨라요. VRAM 12GB 이상 권장, 라이선스는 모델 페이지에서 확인하세요. ※ 미검증",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/checkpoints/ace_step_1.5_turbo_aio.safetensors"
+    }
+   ]
   }
  ]
 }

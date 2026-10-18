@@ -14,9 +14,11 @@ const IV={},COMPARE={};
 const FB_S=['euler','euler_ancestral','dpmpp_2m','dpmpp_2m_sde','dpmpp_3m_sde','uni_pc','heun','lms'];
 const FB_C=['normal','karras','simple','sgm_uniform','exponential','beta'];
 /* FLUX 계열 기본값: FLUX/Krea는 가이던스 방식(CFG 1), Chroma는 일반 CFG와 beta 스케줄러 */
-const FX_DEF={sdxl:{rdenoise:0.3},flux:{rdenoise:0.3,fx_steps:20,fx_guidance:3.5,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
-              chroma:{rdenoise:0.3,fx_steps:26,fx_guidance:0,fx_cfg:4,fx_sampler:'euler',fx_scheduler:'beta'},
-              krea2:{rdenoise:0.3,fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
+const FX_DEF={sdxl:{rdenoise:0.3,cn_strength:0.7},flux:{rdenoise:0.3,cn_strength:0.7,fx_steps:20,fx_guidance:3.5,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
+              chroma:{rdenoise:0.3,cn_strength:0.7,fx_steps:26,fx_guidance:0,fx_cfg:4,fx_sampler:'euler',fx_scheduler:'beta'},
+              krea2:{rdenoise:0.3,cn_strength:1,fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
+              sd35:{fx_steps:28,fx_cfg:4.5,fx_sampler:'euler',fx_scheduler:'sgm_uniform'},hidream:{fx_steps:50,fx_cfg:5,fx_sampler:'uni_pc',fx_scheduler:'simple'},
+              lumina:{fx_steps:25,fx_cfg:4,fx_sampler:'res_multistep',fx_scheduler:'simple'},
               qwen:{rdenoise:0.45}};   // Krea 2 Turbo 기준(8단계, CFG 1)
 const LORA_NOTE='프롬프트에 &lt;lora:이름:0.8&gt; 태그를 쓰면 설치된 LoRA 중 이름이 맞는 파일을 자동으로 찾아 적용해요. 개수 제한은 없어요.';
 
@@ -65,13 +67,14 @@ $$('[data-blk]').forEach(e=>{e.innerHTML=T[e.dataset.blk.replace(/-(\w)/g,(_,c)=
 /* ══════════ LoRA 줄 (개수 제한 없이 추가/삭제) ══════════ */
 const LKIND={character:['👤','캐릭터'],style:['🎨','스타일'],background:['🏞','배경·풍경'],other:['✦','기타'],unknown:['','미분류']};
 const lkIcon=n=>{const k=(LISTS.lora_kind||{})[n];return k&&LKIND[k]&&LKIND[k][0]?LKIND[k][0]+' ':''};
-const LFAM={sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image-Edit',unknown:'판별 불가'};
+const LFAM={sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image-Edit',sd3:'SD3.5',hidream:'HiDream',lumina:'Lumina 2',unknown:'판별 불가'};
 /* 지금 이 폼이 쓰려는 모델의 계열 (LoRA 가 맞는지 비교하는 기준) */
 function formFam(f){
   const e=f?.elements||{};
   if(e.engine&&e.engine.value==='flux'&&e.fengine)return e.fengine.value;
   const eng=(e.gengine&&e.gengine.value)||(e.rengine&&e.rengine.value)||(e.engine&&e.engine.value);
-  if(['flux','chroma','krea2','qwen'].includes(eng))return eng;
+  if(['flux','chroma','krea2','qwen','hidream','lumina'].includes(eng))return eng;
+  if(eng==='sd35')return 'sd3';
   const ck=e.ckpt&&e.ckpt.value;
   const fam=ck&&LISTS.families&&LISTS.families['checkpoints/'+ck];
   return fam&&fam.family==='sd15'?'sd15':'sdxl'}
@@ -324,23 +327,26 @@ function fillCaps(){
 }
 async function loadCaps(){try{CAPS=await api('/api/caps');fillCaps()}catch{}}
 /* FLUX 종류에 맞는 모델만 목록에 보여 줘요 (이름에 chroma 가 있으면 Chroma) */
-const fxModels=g=>(g==='chroma'?LISTS.chromamodels:g==='krea2'?LISTS.krea2models:LISTS.fluxmodels)||[];
+const OXF=['sd35','hidream','lumina'],OXN={sd35:'Stable Diffusion 3.5',hidream:'HiDream',lumina:'Lumina 2'};
+const fxModels=g=>(OXF.includes(g)?(LISTS.oxmodels||{})[g]:g==='chroma'?LISTS.chromamodels:g==='krea2'?LISTS.krea2models:LISTS.fluxmodels)||[];
 const fxLabel=x=>x.startsWith('ckpt::')?x.slice(6)+' (올인원 체크포인트)':x;
 function fillFx(){
   const ge=$('#f-gen').dataset.g,fe=$('#f-edit').elements.fengine;
-  for(const[f,g] of [[$('#f-gen'),['chroma','krea2'].includes(ge)?ge:'flux'],[$('#f-up'),['flux','chroma','krea2'].includes($('#f-up').dataset.re)?$('#f-up').dataset.re:'flux'],[$('#f-edit'),fe?fe.value:'flux']]){
+  for(const[f,g] of [[$('#f-gen'),['chroma','krea2',...OXF].includes(ge)?ge:'flux'],[$('#f-up'),['flux','chroma','krea2'].includes($('#f-up').dataset.re)?$('#f-up').dataset.re:'flux'],[$('#f-edit'),fe?fe.value:'flux']]){
     const s=f.elements.fx_model;if(!s)continue;const arr=fxModels(g),cur=s.value;
     s.innerHTML=arr.length?arr.map(x=>`<option value="${esc(x)}">${esc(fxLabel(x))}</option>`).join(''):'<option value="">(설치된 모델 없음)</option>';
     if(arr.includes(cur))s.value=cur}
 }
 /* Krea 2: Turbo 는 8단계·CFG 1, Raw(증류 전)는 단계를 늘리고 CFG 를 올려요 */
-function k2tune(f){if((f.dataset.g||f.dataset.re||f.dataset.fe)!=='krea2')return;const raw=/raw/i.test(f.elements.fx_model.value);setv(f,'fx_steps',raw?30:8);setv(f,'fx_cfg',raw?4:1)}
+function k2tune(f){if((f.dataset.g||f.dataset.re||f.dataset.fe)==='hidream'){const v=f.elements.fx_model.value.toLowerCase(),t=/fast/.test(v)?[16,1,'lcm','normal']:/dev/.test(v)?[28,1,'lcm','normal']:[50,5,'uni_pc','simple'];setv(f,'fx_steps',t[0]);setv(f,'fx_cfg',t[1]);setv(f,'fx_sampler',t[2]);setv(f,'fx_scheduler',t[3]);return}
+  if((f.dataset.g||f.dataset.re||f.dataset.fe)!=='krea2')return;const raw=/raw/i.test(f.elements.fx_model.value);setv(f,'fx_steps',raw?30:8);setv(f,'fx_cfg',raw?4:1)}
 function warn(){
   const fe=$('#f-edit');$('#w-edit').hidden=fe.dataset.e==='qwen'?(LISTS.qwen||!!(fe.q_unet.value&&fe.q_te.value&&fe.q_vae.value)):fe.dataset.e==='flux'?fxModels(fe.elements.fengine.value).length>0:LISTS.checkpoints.length>0;
   const g=$('#f-gen').dataset.g||'sdxl',w=$('#w-gen');
-  const parts=g==='flux'?LISTS.flux_ready:g==='krea2'?LISTS.krea2_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
+  const parts=OXF.includes(g)?(LISTS.ox_ready||{})[g]:g==='flux'?LISTS.flux_ready:g==='krea2'?LISTS.krea2_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
   w.hidden=ok;
-  if(!ok)w.innerHTML=(g==='sdxl'?'체크포인트가 아직 없어요. ':g==='krea2'?'Krea 2 모델이나 공용 파일(Qwen3-VL 텍스트 인코더, Qwen Image VAE)이 아직 없어요. ':g==='flux'?'FLUX·Krea 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':'Chroma 모델이나 공용 파일(T5 텍스트 인코더, VAE)이 아직 없어요. ')+'<a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.';
+  if(!ok)w.innerHTML=(OXF.includes(g)?OXN[g]+' 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':g==='sdxl'?'체크포인트가 아직 없어요. ':g==='krea2'?'Krea 2 모델이나 공용 파일(Qwen3-VL 텍스트 인코더, Qwen Image VAE)이 아직 없어요. ':g==='flux'?'FLUX·Krea 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':'Chroma 모델이나 공용 파일(T5 텍스트 인코더, VAE)이 아직 없어요. ')+'<a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.';
+  (()=>{const w=$('#w-music'),has=(LISTS.musicmodels||[]).length>0,nodes=LISTS.music_nodes!==false;if(w){w.hidden=has&&nodes;w.innerHTML=!has?'음악 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 \'ACE-Step 1.5 Turbo\'를 설치해 주세요. (약 10GB)':'이 ComfyUI 에는 음악 만들기 노드가 없어요. ComfyUI 를 업데이트해 주세요.'}})();
   $('#w-vid').hidden=!!LISTS.wan_ready&&(LISTS.wanmodels||[]).length>0;if(window.vidSync)vidSync();$('#w-up').hidden=LISTS.upscalers.length>0;$('#w-chat').hidden=LISTS.llm.length>0;
 }
 let listsAt=0;
@@ -385,6 +391,14 @@ function applyFields(f,o){
   sync(f)}
 /* ControlNet 모델 목록: FLUX 계열을 고르면 이름에 FLUX 가 든 모델만, 그 밖에는 FLUX 용을 뺀 것만 보여 줘요 */
 function cnFilter(f){const s=f.elements.cn_model;if(!s)return;
+  if(f.elements.gengine&&f.elements.gengine.value==='krea2'){      // Krea 2 는 ControlNet 대신 컨트롤 LoRA(loras 폴더)를 써요
+    const arr=LISTS.k2control||[],cur=s.value;s.dataset.k2='1';
+    s.innerHTML='<option value="">사용 안 함</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');if(arr.includes(cur))s.value=cur;
+    const t=$('.cn-fam',f),box=$('.cn-easy',f);if(!t)return;t.hidden=false;
+    t.innerHTML=!arr.length?`Krea 2 컨트롤 LoRA 가 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Krea 2 깊이 컨트롤 LoRA'를 설치해 주세요. (약 0.9GB)`
+      :LISTS.k2c_nodes?'':'Krea 2 컨트롤에는 확장 노드가 필요해요. 아래 설치 버튼을 눌러 주세요.';
+    if(arr.length&&!LISTS.k2c_nodes&&box)cnPack(box,'Krea2ControlLoRALoader');return}
+  if(s.dataset.k2==='1'){delete s.dataset.k2;const cur=s.value,arr=LISTS.controlnets||[];s.innerHTML='<option value="">사용 안 함</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');if(arr.includes(cur))s.value=cur}
   const fx=f.elements.gengine&&f.elements.gengine.value==='flux';let n=0;
   [...s.options].forEach(o=>{if(!o.value)return;const is=/flux/i.test(o.value),ok=fx?is:!is;o.hidden=o.disabled=!ok;if(ok)n++});
   if(s.selectedOptions[0]&&s.selectedOptions[0].disabled)s.value='';
@@ -805,7 +819,13 @@ function lastFrame(u){return new Promise((ok,bad)=>{const v=document.createEleme
   const fail=()=>bad(new Error('영상을 읽지 못했어요.'));v.onerror=fail;setTimeout(fail,15000);
   v.onloadedmetadata=()=>{v.currentTime=Math.max(0,(v.duration||0)-0.05)};
   v.onseeked=()=>{try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);ok(c.toDataURL('image/png'))}catch{fail()}}})}
+function addMusicResults(sec,j){
+  const used=(j.used||[]).filter(Boolean);
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig mfig"><audio src="${u}" controls preload="metadata"></audio><figcaption><a href="${u}" download>저장</a> <button type="button" class="link" data-open="music">음악 폴더 열기</button></figcaption></figure>`).join('')}${used.length?`<details><summary>사용된 스타일</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
+  const a=$('.res .batch audio',sec);if(a){a.scrollIntoView({block:'nearest'});a.play().catch(()=>{})}
+}
 function addResults(sec,j,kind){
+  if(kind==='music')return addMusicResults(sec,j);
   if(kind==='vid'||kind==='vpost')return addVideoResults(sec,j);
   const first=kind==='edit'?'이어서 편집':'편집으로';
   const used=(j.used||[]).filter(Boolean);
@@ -865,6 +885,13 @@ async function run(kind,form,extra={}){
 }
 /* ── 영상 만들기 ── */
 let VID_IMG=null;
+(()=>{const f=$('#f-music');if(!f)return;
+  const key=$('#mu-key');key.innerHTML=['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B'].flatMap(r=>['major','minor'].map(q=>`${r} ${q}`)).sort((a,b)=>a.endsWith('major')===b.endsWith('major')?0:a.endsWith('major')?-1:1).map(k=>`<option>${k}</option>`).join('');
+  const save=()=>ls.set('form:f-music',formVals(f)),sync=()=>{$('#mu-lyr').hidden=f.elements.instrumental.checked};
+  const o=ls.get('form:f-music',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e)continue;if(e.type==='checkbox')e.checked=!!v;else e.value=v}
+  key.value=key.value||'C major';sync();f.addEventListener('change',()=>{sync();save()});f.addEventListener('input',debounce(save,400));
+  f.onsubmit=e=>{e.preventDefault();if(!f.elements.tags.value.trim())return setBar($('#v-music'),'어떤 음악인지 스타일을 적어 주세요. 예: lo-fi, chill, piano','bad');save();run('music',f)};
+})();
 (()=>{const f=$('#f-vid');if(!f)return;
   const save=()=>ls.set('form:f-vid',formVals(f));
   const o=ls.get('form:f-vid',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e||e.type==='file')continue;if(e.type==='checkbox')e.checked=!!v;else e.value=v}
@@ -991,7 +1018,7 @@ const pickFile=(arr,name)=>{const m=stemN(name);if(!m)return null;
   return arr.find(c=>stemN(c)===m)||arr.find(c=>{const x=stemN(c);return x&&(x.includes(m)||m.includes(x))})||null};
 function sendToGen(){
   const g=INFO.r.gen,p=g.params,f=$('#f-gen'),X={...(g.raw||{}),...(p.extra||{})},miss=[],done=[];
-  const fam=['flux','chroma','krea2'].includes(p.family)?p.family:'sdxl';
+  const fam=['flux','chroma','krea2','hidream','lumina'].includes(p.family)?p.family:p.family==='sd3'||p.family==='sd35'?'sd35':'sdxl';
   setv(f,'gengine',fam);sync(f);fillFx();
   const put=(k,v,label)=>{const el=f.elements[k];if(!el||v==null||v==='')return false;
     if(el.tagName==='SELECT'&&![...el.options].some(o=>o.value===String(v))){if(label)miss.push(`${label} ${v}`);return false}
@@ -1205,7 +1232,7 @@ const fmtSize=b=>b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(0)+' MB';
 const DIRN={checkpoints:'체크포인트',loras:'LoRA',embeddings:'임베딩',controlnet:'ControlNet',vae:'VAE',upscale_models:'업스케일',diffusion_models:'디퓨전 모델',text_encoders:'텍스트 인코더',clip_vision:'CLIP Vision',unet:'UNet',clip:'CLIP'};
 async function loadManage(){
   let m;try{m=await api('/api/manage')}catch{return}
-  const FAMN={auto:'자동',sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen',hidden:'목록에서 숨김'};
+  const FAMN={auto:'자동',sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen',sd3:'SD3.5',hidream:'HiDream',lumina:'Lumina 2',hidden:'목록에서 숨김'};
   const HOW={header:'파일 내용으로 확인',name:'이름으로 추정',manual:'직접 지정'};
   const famSel=f=>f.family?`<label class="famsel">계열 <select class="fam" data-dir="${esc(f.dirname||'')}" data-name="${esc(f.name)}">${Object.entries(FAMN).map(([k,v])=>`<option value="${k}"${(f.override||'auto')===k?' selected':''}>${v}</option>`).join('')}</select></label><small>${f.override&&f.override!=='auto'?'직접 지정':'자동 판별'}: ${esc(FAMN[f.family]||f.family)} (${HOW[f.how]||''})${f.all_in_one?' · 올인원':''}</small>`:'';
   const card=(f,kind,d)=>`<div class="mcard"><b title="${esc(f.name)}">${esc(f.name)}</b><small>${f.name.endsWith('.part')?'받다 만 파일 · ':''}${fmtSize(f.size)}</small>${famSel({...f,dirname:d})}<button type="button" class="ghost del" data-kind="${kind}" data-dir="${esc(d||'')}" data-name="${esc(f.name)}">삭제</button></div>`;
@@ -1638,7 +1665,7 @@ $$('.cn-easy').forEach(box=>{const f=box.closest('form'),src=$('.cn-src',box),st
       for(let i=0;i<120;i++){await sleep(2000);const s=(await api('/api/nodes/status'))[b.dataset.repo];if(s){st.textContent=s.msg;if(s.state!=='running'){b.disabled=false;if(s.state==='done'){$('.cn-node',box).innerHTML='<button type="button" class="ghost" data-a="rs">이미지 엔진 다시 시작</button>'}return}}}}
     if(b.dataset.a==='rs'){b.disabled=true;const r=await api('/api/engine/restart',{});st.textContent=r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 [추출]을 다시 눌러 주세요.'}})});
 async function cnPack(box,node){const n=$('.cn-node',box);let r;try{r=await api('/api/nodes/sources',{missing:[node]})}catch{return}
-  if(r.error||!r.repos||!r.repos.length){n.hidden=false;n.innerHTML='<p class="mute">설치할 곳을 찾지 못했어요. ComfyUI 에 \'ComfyUI\'s ControlNet Auxiliary Preprocessors\' 확장을 직접 설치해 주세요.</p>';return}
+  if(r.error||!r.repos||!r.repos.length){n.hidden=false;n.innerHTML=/^Krea2/.test(node)?'<p class="mute">설치할 곳을 찾지 못했어요. ComfyUI 에 \'comfyui-krea2-controlnet\' 확장을 직접 설치해 주세요.</p>':'<p class="mute">설치할 곳을 찾지 못했어요. ComfyUI 에 \'ComfyUI\'s ControlNet Auxiliary Preprocessors\' 확장을 직접 설치해 주세요.</p>';return}
   const x=r.repos[0];n.hidden=false;n.innerHTML=x.installed?'<button type="button" class="ghost" data-a="rs">이미지 엔진 다시 시작</button> <span class="mute">이미 설치돼 있어요. 엔진을 다시 시작하면 적용돼요.</span>'
     :`<button type="button" class="ghost" data-a="inst" data-repo="${esc(x.repo)}">${esc(x.title)} 설치</button> <a href="${esc(x.repo)}" target="_blank" rel="noopener">출처 보기</a>`}
 /* ══════════ 일괄 처리 ══════════ */
@@ -1706,6 +1733,8 @@ const GOALS=[
   steps:['업스케일 탭에 사진을 올려요.','빠르게는 [빠른 업스케일], 질감을 더 살리려면 [디테일 재생성]을 골라요.','배율을 정하고 [업스케일 실행]. 결과는 [겹쳐서 비교]로 원본과 견줘 볼 수 있어요.']},
  {t:'그림을 영상으로 움직이고 싶어요',d:'글이나 시작 이미지로 몇 초짜리 영상을 만들어요.',go:'vid',need:()=>LISTS.wan_ready&&(LISTS.wanmodels||[]).length,why:'Wan 2.2 영상 모델이 필요해요(설치와 모델 탭)',
   steps:['영상 만들기 탭에서 장면과 움직임을 문장으로 적어요.','움직이게 할 이미지가 있으면 [이미지 고르기]로 올려요.','크기와 길이를 고르고 [영상 만들기]. 처음엔 3초, 가로 480p로 시험해 보세요.']},
+ {t:'글과 가사로 음악을 만들고 싶어요',d:'스타일을 적으면 노래나 연주곡이 나와요.',go:'music',need:()=>(LISTS.musicmodels||[]).length&&LISTS.music_nodes!==false,why:'ACE-Step 음악 모델이 필요해요',
+  steps:['음악 만들기 탭에서 스타일을 영어 단어로 적어요(예: lo-fi, chill, piano).','가사가 있으면 적고, 없으면 [가사 없이 연주곡으로]를 켜요.','길이를 고르고 [음악 만들기]. 처음엔 30초로 확인해 보세요.']},
  {t:'예전에 만든 그림을 찾고 싶어요',d:'만든 이미지·영상을 모아 보고 검색해요.',go:'gal',need:()=>true,why:'',
   steps:['기록 갤러리 탭을 열어요.','프롬프트나 종류로 검색하고, 마음에 드는 건 ★로 즐겨찾기를 해요.','↻를 누르면 그 그림의 설정을 그대로 불러와 다시 만들 수 있어요.']},
  {t:'마음에 든 사진처럼 만들고 싶어요',d:'사진을 설명하는 프롬프트를 자동으로 뽑아요.',go:'lib',need:()=>true,why:'',

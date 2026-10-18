@@ -24,6 +24,7 @@
       <button data-v="edit" title="이미지 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span>이미지 편집</span></button>
       <button data-v="up" title="업스케일"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg><span>업스케일</span></button>
       <button data-v="vid" title="영상 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>영상 만들기</span></button>
+      <button data-v="music" title="음악 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="16" r="2.5"/></svg><span>음악 만들기</span></button>
     </div>
     <div class="ng"><span class="ngt">내 작업</span>
       <button data-v="gal" title="기록 갤러리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>기록 갤러리</span></button>
@@ -284,12 +285,16 @@
         <option value="flux">FLUX.1 · Krea 계열</option>
         <option value="chroma">Chroma (무검열 FLUX 계열)</option>
         <option value="krea2">Krea 2 (새 12B 모델)</option>
+        <option value="sd35">Stable Diffusion 3.5</option>
+        <option value="hidream">HiDream (I1 Full·Dev·Fast)</option>
+        <option value="lumina">Lumina 2</option>
       </select></label>
     <div data-for="sdxl" data-blk="sd-main"></div>
-    <div data-for="flux chroma krea2">
+    <div data-for="flux chroma krea2 sd35 hidream lumina">
       <label class="f">모델 파일<select name="fx_model"></select></label>
-      <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button></p>
-      <details><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
+      <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button> <span data-for="sd35"><button type="button" class="link" data-open="checkpoints">체크포인트 폴더 열기</button></span></p>
+      <p class="hint plain" data-for="sd35 hidream lumina">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 안 되면 '설치와 모델'에서 해당 공용 파일을 설치해 주세요. 문장형 프롬프트가 잘 맞아요.</p>
+      <details data-for="flux chroma krea2"><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
         <label class="f" data-for="flux chroma">VAE<select name="fx_vae"></select></label>
         <label class="f" data-for="flux chroma">T5 텍스트 인코더<select name="fx_t5"></select></label>
         <label class="f" data-for="krea2">Qwen Image VAE<select name="k2_vae"></select></label>
@@ -304,7 +309,7 @@
       <p class="hint" id="wcs"></p>
     </details>
     <p class="hint" data-for="flux chroma krea2">FLUX·Krea 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
-    <label class="f" data-for="sdxl chroma krea2">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <label class="f" data-for="sdxl chroma krea2 sd35 hidream lumina">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="row">
       <label class="f">가로<input type="number" name="w" value="1024" step="8" min="256" max="2048"></label>
@@ -331,7 +336,7 @@
       <div class="mini" data-img="init"></div>
       <label class="f">변화 강도 (낮을수록 원본 유지)<input type="number" name="init_denoise" value="0.7" step="0.05" min="0.05" max="1"></label>
     </details>
-    <details data-for="sdxl flux"><summary>ControlNet (구도·포즈 고정)</summary>
+    <details data-for="sdxl flux krea2"><summary>ControlNet (구도·포즈 고정)</summary>
       <div data-blk="cn-easy"></div>
       <label class="f">모델<select name="cn_model"></select></label>
       <p class="hint plain cn-fam" hidden></p>
@@ -341,17 +346,17 @@
         <label class="f">전처리<select name="cn_prep"><option value="none">없음 (이미 만든 지도)</option><option value="canny">캐니 윤곽선</option></select></label>
         <label class="f">강도<input type="number" name="cn_strength" value="0.7" step="0.05" min="0" max="2"></label>
       </div>
-      <div class="row">
+      <div class="row" data-for="sdxl flux">
         <label class="f">적용 시작(0~1)<input type="number" name="cn_start" value="0" step="0.05" min="0" max="1"></label>
         <label class="f">적용 끝(0~1)<input type="number" name="cn_end" value="1" step="0.05" min="0" max="1"></label>
       </div>
     </details>
     <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
-    <details data-for="flux chroma krea2" open><summary>FLUX·Krea 샘플링</summary>
+    <details data-for="flux chroma krea2 sd35 hidream lumina" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
         <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.5" min="0" max="20"></label>
-        <label class="f" data-for="chroma krea2">CFG<input type="number" name="fx_cfg" value="4" step="0.5" min="0" max="20"></label>
+        <label class="f" data-for="chroma krea2 sd35 hidream lumina">CFG<input type="number" name="fx_cfg" value="4" step="0.5" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
@@ -450,6 +455,44 @@
         <label class="f">움직임 강도(shift)<input type="number" name="shift" value="8" min="1" max="20" step="0.5"></label>
       </div>
       <p class="hint plain">길이·크기를 키울수록 VRAM과 시간이 크게 늘어요. 메모리 부족 오류가 나면 길이를 줄이거나 크기를 낮춰 보세요.</p>
+    </details>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"></div>
+  </div>
+</section>
+
+<!-- 음악 만들기 -->
+<section class="view split" id="v-music">
+  <form id="f-music" autocomplete="off" novalidate>
+    <button class="go">음악 만들기</button>
+    <p class="warn" id="w-music" hidden></p>
+    <p class="hint plain">어떤 분위기인지 적고(가사는 선택), [음악 만들기]를 누르면 곡이 나와요. 처음 한 번은 모델을 불러오느라 오래 걸려요.</p>
+    <label class="f">스타일<textarea name="tags" rows="3" placeholder="예: lo-fi, chill, piano, relaxing, rainy night"></textarea></label>
+    <p class="hint plain">장르·악기·분위기를 <b>영어 단어</b>로 쉼표로 이어 쓰면 잘 맞아요. 예: k-pop, upbeat, female vocal, synth</p>
+    <label class="chk"><input type="checkbox" name="instrumental"> 가사 없이 연주곡으로</label>
+    <label class="f" id="mu-lyr">가사 (선택)<textarea name="lyrics" rows="6" placeholder="[verse]&#10;첫 줄 가사&#10;&#10;[chorus]&#10;후렴 가사"></textarea></label>
+    <div class="row">
+      <label class="f">길이<select name="seconds"><option value="30">30초</option><option value="60" selected>1분</option><option value="120">2분</option><option value="180">3분</option><option value="240">4분</option></select></label>
+      <label class="f">파일 형식<select name="format"><option value="mp3">MP3 (작아요)</option><option value="flac">FLAC (무손실)</option></select></label>
+    </div>
+    <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"></span></label>
+    <details><summary>고급 설정</summary>
+      <div class="row">
+        <label class="f">빠르기(BPM)<input type="number" name="bpm" value="120" min="40" max="240"></label>
+        <label class="f">박자<select name="timesignature"><option value="4" selected>4/4</option><option value="3">3/4</option><option value="2">2/4</option><option value="6">6/8</option></select></label>
+      </div>
+      <div class="row">
+        <label class="f">키(조)<select name="keyscale" id="mu-key"></select></label>
+        <label class="f">가사 언어<select name="language"><option value="ko" selected>한국어</option><option value="en">영어</option><option value="ja">일본어</option><option value="zh">중국어</option><option value="es">스페인어</option><option value="fr">프랑스어</option><option value="de">독일어</option><option value="ru">러시아어</option><option value="pt">포르투갈어</option><option value="it">이탈리아어</option><option value="unknown">모르겠음</option></select></label>
+      </div>
+      <div class="row">
+        <label class="f">단계 수<input type="number" name="steps" value="8" min="1" max="100"></label>
+        <label class="f">CFG<input type="number" name="cfg" value="1" min="0" max="20" step="0.5"></label>
+      </div>
+      <label class="chk"><input type="checkbox" name="no_codes"> 빠르게 만들기 (품질 보조 단계를 생략해요)</label>
     </details>
   </form>
   <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
@@ -597,7 +640,8 @@
     <tr><td>FLUX · Krea · Chroma</td><td class="y">지원</td><td>이미지 생성</td></tr>
     <tr><td>이미지→이미지, 하이레스 픽스, LoRA 여러 개, 임베딩</td><td class="y">지원</td><td>이미지 생성</td></tr>
     <tr><td>ControlNet (생성 / 칠해서 편집)</td><td class="y">지원</td><td>이미지 생성, 이미지 편집</td></tr>
-    <tr><td>ControlNet — FLUX.1 · Krea(FLUX.1) 계열</td><td class="p">미검증</td><td>이미지 생성 (FLUX 계열 선택 시). Chroma·Krea 2 는 호환 모델이 없어요</td></tr>
+    <tr><td>ControlNet — FLUX.1 · Krea(FLUX.1) 계열</td><td class="p">미검증</td><td>이미지 생성 (FLUX 계열 선택 시). Chroma 는 호환 모델이 없어요</td></tr>
+    <tr><td>Krea 2 컨트롤 (깊이 등 컨트롤 LoRA)</td><td class="p">미검증</td><td>이미지 생성 → Krea 2 → ControlNet 칸 (확장 노드 설치 버튼 포함)</td></tr>
     <tr><td>인페인트 (칠해서 편집), Qwen 말로 편집, 참조 이미지</td><td class="y">지원</td><td>이미지 편집</td></tr>
     <tr><td>자동 선택 (얼굴·배경·색 영역)</td><td class="y">지원</td><td>이미지 편집</td></tr>
     <tr><td>업스케일 (모델 / 타일 재생성)</td><td class="y">지원</td><td>업스케일</td></tr>
@@ -609,7 +653,8 @@
     <tr><td>배경 제거 (투명 PNG)</td><td class="y">지원</td><td>이미지 편집 → [배경] → [선택 반전] → [선택만 남겨 투명 PNG 저장]</td></tr>
     <tr><td>크기 바꾸기 · 비율 자르기 · 회전 · 밝기/색 보정</td><td class="y">지원</td><td>기능 모음</td></tr>
     <tr><td>LoRA 가 어느 모델용인지 확인</td><td class="y">지원</td><td>이미지 생성·편집·업스케일의 LoRA 칸</td></tr>
-    <tr><td>SD3 · HiDream · Lumina · 그 밖의 모델 계열</td><td class="p">준비 중</td><td>—</td></tr>
+    <tr><td>Stable Diffusion 3.5 · HiDream · Lumina 2</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류 (설치와 모델에서 받아요)</td></tr>
+    <tr><td>음악 만들기 (ACE-Step 1.5)</td><td class="p">미검증</td><td>사이드바 [음악 만들기] — 스타일과 가사로 곡을 만들어요</td></tr>
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
     <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
     <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
@@ -626,7 +671,7 @@
     <tr><td>프로그램 다시 시작 · 설치 위치 옮기기</td><td class="y">지원</td><td>왼쪽 아래 버튼, 설정 → 프로그램 관리</td></tr>
     <tr><td>워크플로의 없는 커스텀 노드 설치</td><td class="y">지원</td><td>워크플로 (노드 도우미)</td></tr>
     <tr><td>얼굴·손 자동 보정 · 참고 이미지(IP-Adapter)로 스타일·얼굴 유지</td><td class="p">미검증</td><td>기능 모음 (확장 설치 도우미 포함, 만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
-    <tr><td>얼굴 교체 · SD3 · HiDream · Lumina · 서브그래프 워크플로</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
+    <tr><td>ComfyUI에서 저장한 워크플로의 서브그래프(묶음 노드)</td><td class="y">지원</td><td>워크플로 탭에서 그대로 열어요(안쪽 노드를 펼쳐서 실행해요)</td></tr>
     <tr><td>오디오 · 3D 생성</td><td class="n">미지원</td><td>ComfyUI 고급 화면</td></tr>
   </tbody></table>
   <p class="hint plain">빠진 기능은 왼쪽 아래 <b>ComfyUI 고급 화면 열기</b>에서 노드를 직접 연결해 쓸 수 있어요. 만든 워크플로는 <b>Save (API Format)</b>으로 저장해 워크플로 탭에서 실행하세요.</p>

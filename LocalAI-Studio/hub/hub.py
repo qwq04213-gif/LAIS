@@ -795,9 +795,53 @@ def set_progress(J, frac, est=False):
     J["pest"] = est
 
 
+USED_FILE = ROOT / "models_used.json"
+_USED_LOCK = threading.Lock()
+
+
+def used_load():
+    try:
+        d = json.loads(USED_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def used_save(d):
+    try:
+        USED_FILE.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def note_models_used(wf, now=None):
+    """작업에 쓰인 모델 파일의 '마지막으로 쓴 날'을 기록해요(모델 정리 도우미가 써요). 실패해도 작업에는 영향이 없어요."""
+    try:
+        names = set()
+        for node in wf.values():
+            for v in (node.get("inputs") or {}).values():
+                if isinstance(v, str) and Path(v.replace("\\", "/")).suffix.lower() in EXT:
+                    names.add(Path(v.replace("\\", "/")).name)
+        if not names:
+            return
+        now = now or time.time()
+        with _USED_LOCK:
+            d = used_load()
+            for fd in FOLDERS:
+                base = MODELS / fd
+                if base.is_dir():
+                    for n in names:
+                        if (base / n).is_file():
+                            d[fd + "/" + n] = now
+            used_save(d)
+    except Exception:
+        pass
+
+
 def run_wf(wf, J, raw=False):
     """raw=True 이면 이미지 대신 결과 파일(영상) 바이트를 [(파일명, 바이트)] 로 돌려줘요."""
     check_cancel(J)
+    note_models_used(wf)
     try:
         pid = http(CUI + "/prompt", {"prompt": wf, "client_id": CID}, 30)["prompt_id"]
     except urllib.error.HTTPError as e:
@@ -824,7 +868,7 @@ def run_wf(wf, J, raw=False):
                     raise RuntimeError(msg)
             imgs = []
             for o in h.get("outputs", {}).values():
-                for im in o.get("images", []):
+                for im in (o.get("images", []) + (o.get("audio", []) if raw else [])):
                     with urllib.request.urlopen(CUI + "/view?" + urllib.parse.urlencode(im), timeout=300 if raw else 60) as f:
                         data = f.read()
                     imgs.append((Path(im["filename"]).name, data) if raw else Image.open(io.BytesIO(data)).convert("RGB"))
@@ -838,7 +882,7 @@ def run_wf(wf, J, raw=False):
             except Exception:
                 pass
             if not imgs:
-                raise RuntimeError("결과 영상이 없습니다." if raw else "결과 이미지가 없습니다.")
+                raise RuntimeError("결과 파일이 없습니다." if raw else "결과 이미지가 없습니다.")
             return imgs
         J["elapsed"] = int(time.time() - t0)
         time.sleep(0.3)
@@ -1355,6 +1399,8 @@ def control_prep(p):
 def do_gen(p, J):
     if p.get("gengine") in ("flux", "chroma", "krea2"):
         return do_gen_flux(p, J)
+    if p.get("gengine") in OX_FAMS:
+        return do_gen_other(p, J)
     base = seed_of(p)
     n = clamp(num(p, "n", 1, int), 1, 8)
     w, h = (clamp(num(p, k, 1024, int) // 8 * 8, 256, 2048) for k in ("w", "h"))
@@ -1434,6 +1480,17 @@ def krea2_parts(p=None):
     return r
 
 
+K2C_NODES = ("Krea2ControlLoRALoader", "Krea2ControlImageEncode", "Krea2ControlApply")
+K2C_REPO = "https://github.com/facok/comfyui-krea2-controlnet"
+# 허브가 직접 확인해 둔 확장(코드를 읽어 네트워크·실행 호출이 없는 것을 확인한 커밋으로 고정). 목록에 없는 주소는 여전히 설치하지 않아요.
+KNOWN_PACKS = {K2C_REPO: {"ref": "79ebfd3bd80d2180b334dd7ce57f3c9ddaa0848f", "title": "Krea2 Control (comfyui-krea2-controlnet)", "nodes": K2C_NODES}}
+
+
+def k2_control_loras():
+    """loras 폴더에서 Krea 2 컨트롤 LoRA(깊이·캐니·포즈 등)로 보이는 파일."""
+    return [n for n in files("loras") if re.search(r"control|depth|canny|pose|lineart|normal", n, re.I)]
+
+
 def flux_setup(p, J, fam):
     """FLUX·Chroma·Krea 2 가 쓸 파일(모델, 텍스트 인코더, VAE)을 찾아서 (파일들, 올인원 여부, 스케줄러)를 돌려줘요."""
     sel = p.get("fx_model") or None
@@ -1475,8 +1532,15 @@ def do_gen_flux(p, J):
     init = load_img(p["init"]) if p.get("init") else None
     cnimg = None
     if p.get("cn_model") and p.get("cn_image"):
-        if fam != "flux":      # Chroma·Krea 2 는 구조가 달라 FLUX.1 용 ControlNet 이 맞지 않아요
-            warn(J, "ControlNet 은 FLUX.1·Krea(FLUX.1) 계열에서만 쓸 수 있어 이번에는 쓰지 않았어요.")
+        if fam == "krea2":      # Krea 2 는 ControlNet 대신 '컨트롤 LoRA' 를 써요(확장 노드 필요)
+            if p["cn_model"] not in k2_control_loras():
+                raise ValueError("고른 파일은 Krea 2 컨트롤 LoRA 가 아닌 것 같아요. 설치와 모델의 'Krea 2 깊이 컨트롤 LoRA'를 설치하거나 사용 안 함으로 바꿔 주세요.")
+            gone = [n for n in K2C_NODES if not has_node(n)]
+            if gone:
+                raise RuntimeError("Krea 2 컨트롤에는 'comfyui-krea2-controlnet' 확장 노드가 필요해요. 이미지 생성 화면 ControlNet 칸의 [설치] 버튼으로 설치하고 이미지 엔진을 다시 시작해 주세요.")
+            cnimg = load_img(p["cn_image"])
+        elif fam != "flux":      # Chroma 는 구조가 달라 FLUX.1 용 ControlNet 이 맞지 않아요
+            warn(J, "ControlNet 은 FLUX.1·Krea(FLUX.1)·Krea 2 에서만 쓸 수 있어 이번에는 쓰지 않았어요.")
         else:
             if not re.search(r"flux", str(p["cn_model"]), re.I):
                 raise ValueError("고른 ControlNet 모델은 FLUX 용이 아닌 것 같아요. 이름에 'FLUX'가 들어간 모델을 고르거나(설치와 모델 → FLUX ControlNet), 사용 안 함으로 바꿔 주세요.")
@@ -1512,10 +1576,15 @@ def do_gen_flux(p, J):
             if prep_canny and not has_node("Canny"):
                 warn(J, "이 ComfyUI 에는 Canny 노드가 없어 전처리 없이 사용했어요.")
                 prep_canny = False
-            q["cn"] = dict(model=p["cn_model"], image=put_input(cover(cnimg, (w0, h0)), J), canny=prep_canny, union=None,
-                           strength=clamp(num(p, "cn_strength", 0.7), 0.0, 2.0),
-                           start=clamp(num(p, "cn_start", 0.0), 0.0, 1.0), end=clamp(num(p, "cn_end", 1.0), 0.0, 1.0))
-            cn_note = f'{p["cn_model"]} {q["cn"]["strength"]}'
+            if fam == "krea2":
+                q["k2c"] = dict(lora=p["cn_model"], image=put_input(cover(cnimg, (w0, h0)), J), canny=prep_canny,
+                                strength=clamp(num(p, "cn_strength", 1.0), 0.0, 2.0), depth="depth" in p["cn_model"].lower() or p.get("cn_type") == "depth")
+                cn_note = f'{p["cn_model"]} {q["k2c"]["strength"]}'
+            else:
+                q["cn"] = dict(model=p["cn_model"], image=put_input(cover(cnimg, (w0, h0)), J), canny=prep_canny, union=None,
+                               strength=clamp(num(p, "cn_strength", 0.7), 0.0, 2.0),
+                               start=clamp(num(p, "cn_start", 0.0), 0.0, 1.0), end=clamp(num(p, "cn_end", 1.0), 0.0, 1.0))
+                cn_note = f'{p["cn_model"]} {q["cn"]["strength"]}'
         J["msg"] = f"생성 중 ({i + 1}/{n})"
         J["pi"], J["pn"] = i, n
         g = flows.wf_flux(q)
@@ -1531,6 +1600,139 @@ def do_gen_flux(p, J):
                     w=res.width, h=res.height, model=f["unet"], loras=[[a, b] for a, b in q["loras"]],
                     extra={"Family": fam, **({"Distilled CFG": q["guidance"]} if fam == "flux" else {}), **({"ControlNet": cn_note} if cn_note else {})})
         out.append((res, info, g if init is None and cnimg is None else None))
+    return out
+
+
+OX_FAMS = ("sd35", "hidream", "lumina")
+OX_NAMES = {"sd35": "SD3.5", "hidream": "HiDream", "lumina": "Lumina 2"}
+# 계열별 기본값: (단계, CFG, 샘플러, 스케줄러, shift). HiDream 은 파일 이름(full/dev/fast)에 따라 달라요.
+OX_DEFAULTS = {"sd35": (28, 4.5, "euler", "sgm_uniform", None), "lumina": (25, 4.0, "res_multistep", "simple", 6.0)}
+HIDREAM_DEFAULTS = {"full": (50, 5.0, "uni_pc", "simple", 3.0), "dev": (28, 1.0, "lcm", "normal", 3.0), "fast": (16, 1.0, "lcm", "normal", 3.0)}
+
+
+def ox_defaults(fam, model):
+    if fam == "hidream":
+        n = (model or "").lower()
+        return HIDREAM_DEFAULTS["fast" if "fast" in n else "dev" if "dev" in n else "full"]
+    return OX_DEFAULTS[fam]
+
+
+def _pick(lst, *prefs):
+    """prefs: 키워드 묶음(튜플)을 앞에서부터 시도해 이름에 모두 들어 있는 첫 파일. 없으면 None."""
+    for keys in prefs:
+        keys = (keys,) if isinstance(keys, str) else keys
+        for n in lst:
+            if all(k in n.lower() for k in keys):
+                return n
+    return None
+
+
+def ox_parts(fam):
+    """SD3.5·HiDream·Lumina 2 가 쓸 텍스트 인코더·VAE 를 폴더에서 찾아요."""
+    te, va = files("text_encoders"), files("vae")
+    nohd = [n for n in te if "hidream" not in n.lower()]
+    r = {"vae": _pick(va, "ae.safetensors", "flux", "ae")}
+    if fam == "hidream":
+        r["te"] = {"clip_l": _pick(te, ("clip_l", "hidream"), "clip_l"), "clip_g": _pick(te, ("clip_g", "hidream"), "clip_g"),
+                   "t5": _pick(te, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl"), "llama": _pick(te, ("llama", "3.1"), "llama")}
+    elif fam == "lumina":
+        r["te"] = {"gemma": _pick(te, "gemma")}
+    else:
+        r["te"] = {"clip_l": _pick(nohd, "clip_l"), "clip_g": _pick(nohd, "clip_g"), "t5": _pick(nohd, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl")}
+    return r
+
+
+def other_models():
+    """{'sd35': [...], 'hidream': [...], 'lumina': [...]} — SD3.5 는 체크포인트 폴더, HiDream·Lumina 2 는 디퓨전 모델 폴더에서 찾아요."""
+    out = {k: [] for k in OX_FAMS}
+    for n in files("checkpoints"):
+        if model_family("checkpoints", n)[0] == "sd3":
+            out["sd35"].append(n)
+    for n in files("diffusion_models"):
+        fam = model_family("diffusion_models", n)[0]
+        if fam in ("hidream", "lumina"):
+            out[fam].append(n)
+    return out
+
+
+def ox_setup(p, J, fam):
+    """고른 모델 파일과 보조 파일을 확인해서 (모델 파일, 텍스트 인코더 dict, VAE) 를 돌려줘요. 빠진 게 있으면 설명과 함께 에러."""
+    models = other_models()[fam]
+    sel = p.get("fx_model") or (models[0] if models else None)
+    if sel and sel.startswith("ckpt::"):
+        sel = sel[6:]
+    if not sel or sel not in models:
+        raise RuntimeError(f"{OX_NAMES[fam]} 모델 파일이 없어요. '설치와 모델' 탭에서 설치해 주세요.")
+    parts = ox_parts(fam)
+    te, vae = parts["te"], parts["vae"]
+    if fam == "sd35":
+        _, allin, _ = model_family("checkpoints", sel)
+        if allin or "incl_clips" in sel.lower():
+            te, vae = {}, None
+        elif not all(te.values()):
+            raise RuntimeError("SD3.5 텍스트 인코더가 없어요(" + ", ".join(k for k, v in te.items() if not v) + "). '설치와 모델' 탭의 'SD3.5 공용 파일'을 설치해 주세요.")
+    else:
+        names = {"clip_l": "CLIP-L", "clip_g": "CLIP-G", "t5": "T5", "llama": "Llama 3.1", "gemma": "Gemma 2"}
+        miss = [names[k] for k, v in te.items() if not v] + (["VAE(ae.safetensors)"] if not vae else [])
+        if miss:
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + f". '설치와 모델' 탭에서 {OX_NAMES[fam]} 공용 파일을 설치해 주세요.")
+    if fam == "lumina":
+        ct = caps().get("clip_types") or []
+        if ct and "lumina2" not in ct:
+            raise RuntimeError("이 ComfyUI 는 Lumina 2 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    need = {"sd35": [], "hidream": ["QuadrupleCLIPLoader", "ModelSamplingSD3"], "lumina": ["ModelSamplingAuraFlow"]}[fam]
+    if fam == "sd35" and te:
+        need = ["TripleCLIPLoader"]
+    gone = [n for n in need if not has_node(n)]
+    if gone:
+        raise RuntimeError(f"이 ComfyUI 에는 {OX_NAMES[fam]} 에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 를 업데이트해 주세요.")
+    return sel, te, vae
+
+
+def do_gen_other(p, J):
+    """SD3.5 / HiDream / Lumina 2 생성(LoRA·다이나믹 프롬프트·번역 지원). 설정 칸은 FLUX 계열과 같은 fx_* 를 써요."""
+    fam = p["gengine"]
+    sel, te, vae = ox_setup(p, J, fam)
+    dsteps, dcfg, dsamp, dsch, dshift = ox_defaults(fam, sel)
+    base, n = seed_of(p), clamp(num(p, "n", 1, int), 1, 8)
+    w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
+    sch = p.get("fx_scheduler") or dsch
+    have = caps()["schedulers"]
+    if have and sch not in have:
+        warn(J, f"이 ComfyUI 에는 스케줄러 '{sch}' 가 없어 simple 로 바꿨어요.")
+        sch = "simple"
+    sampler = p.get("fx_sampler") or dsamp
+    if caps()["samplers"] and sampler not in caps()["samplers"]:
+        warn(J, f"이 ComfyUI 에는 샘플러 '{sampler}' 가 없어 euler 로 바꿨어요.")
+        sampler = "euler"
+    out = []
+    for i in range(n):
+        rng = random.Random(base + i)
+        text, tags = prep(p, J, "caption", rng)
+        if blocked(text):
+            raise ValueError(BLOCK_MSG)
+        neg = (p.get("negative") or "").strip()
+        q = dict(family=fam, te=te, vae=vae, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=base + i, w=w, h=h,
+                 steps=clamp(num(p, "fx_steps", dsteps, int), 1, 150), cfg=clamp(num(p, "fx_cfg", dcfg), 0.0, 30.0),
+                 sampler=sampler, scheduler=sch, shift=clamp(num(p, "ox_shift", dshift or 3.0), 0.1, 20.0))
+        if fam == "sd35":
+            q["ckpt"] = sel
+        else:
+            q["unet"] = sel
+        J["msg"] = f"생성 중 ({i + 1}/{n})"
+        J["pi"], J["pn"] = i, n
+        g = flows.wf_other(q)
+        try:
+            res = run_wf(g, J)[0]
+        except Cancelled:
+            if out:
+                warn(J, f"중단해서 완료된 {len(out)}장만 저장했어요.")
+                break
+            raise
+        info = dict(kind="gen-" + fam, prompt=text, negative=neg, steps=q["steps"], cfg=q["cfg"], sampler=sampler, scheduler=sch,
+                    seed=q["seed"], w=res.width, h=res.height, model=sel, loras=[[a, b] for a, b in q["loras"]],
+                    extra={"Family": fam})
+        out.append((res, info, g))
     return out
 
 
@@ -1655,7 +1857,7 @@ def do_wf(p, J):
 
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄"}
+OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악"}
 
 
 def out_path(rel):
@@ -1763,6 +1965,46 @@ def do_vid14(p, J):
     return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
 
 
+MUSIC_NODES = ("TextEncodeAceStepAudio1.5", "EmptyAceStep1.5LatentAudio", "ConditioningZeroOut", "VAEDecodeAudio", "SaveAudioAdvanced")
+MUSIC_LANGS = ("ko", "en", "ja", "zh", "es", "fr", "de", "ru", "pt", "it", "unknown")
+KEYSCALES = [f"{r} {q}" for q in ("major", "minor") for r in ("C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B")]
+
+
+def music_models():
+    """checkpoints 폴더의 ACE-Step 1.5 올인원 파일(텍스트 인코더·VAE 포함)."""
+    return [n for n in files("checkpoints") if "ace_step" in n.lower() or "acestep" in n.lower()]
+
+
+def do_music(p, J):
+    """ACE-Step 1.5 로 음악 만들기. 결과: [(바이트, 정보, 확장자)]"""
+    gone = [n for n in MUSIC_NODES if not has_node(n)]
+    if gone:
+        raise RuntimeError(f"이 ComfyUI 에는 음악 만들기에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    models = music_models()
+    sel = p.get("music_model") or (models[0] if models else None)
+    if not sel or sel not in models:
+        raise RuntimeError("ACE-Step 음악 모델이 없어요. '설치와 모델' 탭에서 'ACE-Step 1.5 Turbo'를 설치해 주세요.")
+    tags = (p.get("tags") or "").strip()
+    if not tags:
+        raise ValueError("어떤 음악인지 적어 주세요. 예: lo-fi, chill, piano, relaxing")
+    lyrics = "" if p.get("instrumental") else (p.get("lyrics") or "").strip()
+    if blocked(tags + " " + lyrics):
+        raise ValueError(BLOCK_MSG)
+    sec = clamp(num(p, "seconds", 60.0), 5.0, 300.0)
+    lang = p.get("language") if p.get("language") in MUSIC_LANGS else "ko"
+    key = p.get("keyscale") if p.get("keyscale") in KEYSCALES else "C major"
+    q = dict(ckpt=sel, tags=tags, lyrics=lyrics, seed=seed_of(p), seconds=sec, bpm=clamp(num(p, "bpm", 120, int), 40, 240),
+             timesig=str(p.get("timesignature") if str(p.get("timesignature")) in ("2", "3", "4", "6") else "4"), language=lang, keyscale=key,
+             steps=clamp(num(p, "steps", 8, int), 1, 100), cfg=clamp(num(p, "cfg", 1.0), 0.0, 20.0), fmt=p.get("format") if p.get("format") in ("mp3", "flac") else "mp3",
+             codes=not bool(p.get("no_codes")),
+             sampler="euler" if "euler" in (caps()["samplers"] or ["euler"]) else (caps()["samplers"] or ["euler"])[0],
+             scheduler="simple" if "simple" in (caps()["schedulers"] or ["simple"]) else (caps()["schedulers"] or ["simple"])[0])
+    J["msg"] = f"음악 만드는 중 ({int(sec)}초)"
+    res = run_wf(flows.wf_music(q), J, raw=True)
+    info = dict(kind="music", prompt=tags, lyrics=lyrics, seed=q["seed"], seconds=sec, bpm=q["bpm"], keyscale=key, language=lang, steps=q["steps"], cfg=q["cfg"], model=sel)
+    return [(data, info, Path(name).suffix.lower() or ".mp3") for name, data in res[:1]]
+
+
 def do_vid(p, J):
     if p.get("wan_ver") == "14b":
         return do_vid14(p, J)
@@ -1862,13 +2104,13 @@ def job_thread(J, p):
         if p["kind"] != "batch" or p.get("op") == "upscale":      # 일괄 처리의 배경 지우기·크기 변경은 ComfyUI 가 필요 없어요
             wait_comfy()
             claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "batch": do_batch}[p["kind"]](p, J)
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "music": do_music, "batch": do_batch}[p["kind"]](p, J)
         sub = OUT_SUB["vid"] if p["kind"] == "vpost" else OUT_SUB.get(p["kind"], "기타")
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
         for i, (im, info, graph) in enumerate(items):
-            if p["kind"] in ("vid", "vpost"):      # 영상: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
-                name = f'{stamp}-{uuid.uuid4().hex[:4]}-vid-{i}{graph}'
+            if p["kind"] in ("vid", "vpost", "music"):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
+                name = f'{stamp}-{uuid.uuid4().hex[:4]}-{"music" if p["kind"] == "music" else "vid"}-{i}{graph}'
                 (OUT / sub / name).write_bytes(im)
                 (OUT / sub / (name + ".json")).write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
                 J["images"].append("/out/" + urllib.parse.quote(sub) + "/" + name)
@@ -1910,7 +2152,7 @@ def _clean_tmp(J):
 QUEUE, QP = [], {}
 _QCV = threading.Condition()
 _QW = {"t": None}
-KIND_NAME = {"edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "batch": "일괄 처리"}
+KIND_NAME = {"edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "music": "음악 만들기", "batch": "일괄 처리"}
 DONE_STATES = ("done", "error", "cancelled")
 
 
@@ -2758,8 +3000,11 @@ def _repo_dir(url):
 
 def node_sources(missing):
     """없는 노드 이름들 → 설치할 저장소별로 묶어서 돌려줘요."""
-    m = nodemap()
-    if _NM["idx"] is None:
+    if missing and all(any(n in v["nodes"] for v in KNOWN_PACKS.values()) for n in missing):
+        m = {}           # 직접 확인해 둔 확장만 필요하면 공개 노드 목록(인터넷)을 받지 않아도 안내할 수 있어요
+    else:
+        m = nodemap()
+    if _NM["idx"] is None and m:
         idx = {}
         for repo, v in m.items():
             for n in (v[0] if v and isinstance(v[0], list) else []):
@@ -2767,13 +3012,14 @@ def node_sources(missing):
         _NM["idx"] = idx
     by, unknown = {}, []
     for n in missing:
-        repos = [r for r in _NM["idx"].get(n, []) if r.startswith(GHURL + "/")]
+        known = next((r for r, v in KNOWN_PACKS.items() if n in v["nodes"]), None)
+        repos = [known] if known else [r for r in (_NM["idx"] or {}).get(n, []) if r.startswith(GHURL + "/")]
         if not repos:
             unknown.append(n)
             continue
         r = repos[0]
         by.setdefault(r, []).append(n)
-    out = [{"repo": r, "title": ((m[r][1] or {}).get("title_aux") if len(m[r]) > 1 else "") or Path(r).name, "nodes": ns,
+    out = [{"repo": r, "title": (KNOWN_PACKS[r]["title"] if r in KNOWN_PACKS else ((m[r][1] or {}).get("title_aux") if len(m[r]) > 1 else "")) or Path(r).name, "nodes": ns,
             "installed": _repo_dir(r).is_dir(), "state": (NODE_JOBS.get(r) or {}).get("state", "")} for r, ns in by.items()]
     return {"repos": out, "unknown": unknown}
 
@@ -2789,7 +3035,8 @@ def _node_install(repo):
         tmp = ROOT / "cache" / "nodes"
         tmp.mkdir(parents=True, exist_ok=True)
         zp = tmp / (dest.name + ".zip")
-        with urllib.request.urlopen(repo + "/archive/HEAD.zip", timeout=120) as r, open(zp, "wb") as f:
+        ref = (KNOWN_PACKS.get(repo) or {}).get("ref") or "HEAD"      # 확인해 둔 확장은 확인한 커밋 그대로 받아요
+        with urllib.request.urlopen(repo + "/archive/" + ref + ".zip", timeout=120) as r, open(zp, "wb") as f:
             total = 0
             while True:
                 c = r.read(1 << 20)
@@ -2854,6 +3101,8 @@ def oom_guide(msg, p):
     if kind == "vid":
         tips = ["영상 길이(프레임 수)를 줄이거나 크기를 낮춰 보세요. 둘 다 메모리를 크게 써요.",
                 "14B 모델이면 5B 로 바꿔 보세요."]
+    elif kind == "music":
+        tips = ["곡 길이를 줄여 보세요(예: 120초 → 60초). 길수록 메모리를 많이 써요."]
     elif kind == "vpost":
         tips = ["프레임 보간·업스케일은 영상이 길수록 메모리를 많이 써요. 더 짧은 영상으로 해 보세요.",
                 "업스케일 배율을 낮추거나 보간 배수를 2배로 해 보세요."]
@@ -2910,7 +3159,7 @@ def pymod_install(p):
 def node_install(p):
     repo = str(p.get("repo") or "")
     try:
-        ok = repo in nodemap() and repo.startswith(GHURL + "/")
+        ok = repo in KNOWN_PACKS or (repo in nodemap() and repo.startswith(GHURL + "/"))
     except RuntimeError as e:
         return {"error": str(e)}
     if not ok:
@@ -3930,29 +4179,40 @@ def disk_report():
                 used=sum(i["bytes"] for i in items if i["key"] not in ("o_default", "hf", "pip")))
 
 
+TIDY_DAYS = 60
+
+
 def model_tidy(now=None):
-    """지워도 될 만한 모델 파일 후보를 이유와 함께 모아요. 여기서는 아무것도 지우지 않아요(지우기는 화면에서 직접 고른 것만)."""
+    """지워도 될 만한 모델 파일 후보를 이유와 함께 모아요. 여기서는 아무것도 지우지 않아요(지우기는 화면에서 직접 고른 것만).
+    '오래 안 쓴' 기준은 이 프로그램이 기록한 마지막 사용일이에요. 기록이 없는 파일은 지금부터 세기 시작해서(처음 본 날) 바로 후보가 되지 않아요."""
     now = now or time.time()
     cands, seen = {}, {}
     def add(d, f, reason):
         k = (d, f.name)
-        c = cands.setdefault(k, dict(dir=d, name=f.name, size=fsize(f), reasons=[], days=int((now - f.stat().st_mtime) // 86400)))
+        c = cands.setdefault(k, dict(dir=d, name=f.name, size=fsize(f), reasons=[]))
         c["reasons"].append(reason)
-    for d in sorted(FOLDERS):
-        base = MODELS / d
-        if not base.is_dir():
-            continue
-        for f in sorted(base.iterdir()):
-            if not f.is_file():
+    with _USED_LOCK:
+        used = used_load(); dirty = False
+        for d in sorted(FOLDERS):
+            base = MODELS / d
+            if not base.is_dir():
                 continue
-            if f.suffix == ".part":
-                add(d, f, "받다 만 파일이에요")
-            elif f.suffix.lower() in EXT:
-                sz = fsize(f)
-                if sz > (50 << 20):
-                    seen.setdefault(sz, []).append((d, f))
-                if sz > (1 << 30) and now - f.stat().st_mtime > 120 * 86400:
-                    add(d, f, f"받은 지 {int((now - f.stat().st_mtime) // 86400)}일이 지났어요")
+            for f in sorted(base.iterdir()):
+                if not f.is_file():
+                    continue
+                if f.suffix == ".part":
+                    add(d, f, "받다 만 파일이에요")
+                elif f.suffix.lower() in EXT:
+                    sz = fsize(f)
+                    if sz > (50 << 20):
+                        seen.setdefault(sz, []).append((d, f))
+                    key = d + "/" + f.name
+                    if key not in used:
+                        used[key] = now; dirty = True        # 처음 본 날부터 세요
+                    elif sz > (500 << 20) and now - used[key] > TIDY_DAYS * 86400:
+                        add(d, f, f"{int((now - used[key]) // 86400)}일 동안 쓰지 않았어요")
+        if dirty:
+            used_save(used)
     for sz, fs in seen.items():
         if len(fs) < 2:
             continue
@@ -4024,7 +4284,7 @@ def status():
     return {"boot": BOOT, "ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "gpu_live": gpu_live(), "version": VERSION}
 
 
-FAMILY_CHOICES = ("sd15", "sdxl", "flux", "krea2", "chroma", "qwen", "hidden")
+FAMILY_CHOICES = ("sd15", "sdxl", "sd3", "flux", "krea2", "chroma", "qwen", "hidream", "lumina", "hidden")
 
 
 def model_family(folder, name):
@@ -4058,7 +4318,7 @@ def sorted_models():
     for n in files("checkpoints"):
         fam, allin, how = model_family("checkpoints", n)
         info["checkpoints/" + n] = dict(family=fam, all_in_one=allin, how=how)
-        if fam == "hidden":
+        if fam == "hidden" or n in music_models():      # 음악 모델은 그림 모델 목록에 섞지 않아요
             continue
         if fam == "flux":
             flux.append("ckpt::" + n)
@@ -4071,7 +4331,7 @@ def sorted_models():
         info["diffusion_models/" + n] = dict(family=fam, all_in_one=allin, how=how)
         if fam == "krea2":
             krea2.append(n)
-        elif fam in ("hidden", "qwen", "sd15", "sdxl", "sd3") or (fam == "unknown" and "qwen" in n.lower()):
+        elif fam in ("hidden", "qwen", "sd15", "sdxl", "sd3", "hidream", "lumina") or (fam == "unknown" and "qwen" in n.lower()):
             continue
         else:
             (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)
@@ -4082,6 +4342,11 @@ def lists():
     wc = ROOT / "wildcards"
     sdxl, flux, chroma, krea2, info = sorted_models()
     fp, kp = flux_parts(), krea2_parts()      # 폴더를 한 번씩만 훑어요
+    ox = other_models()
+    ox_ready = {}
+    for k in OX_FAMS:
+        pr = ox_parts(k)
+        ox_ready[k] = True if k == "sd35" else bool(all(pr["te"].values()) and pr["vae"])
     loras = files("loras")
     return {"llm": llms(), "checkpoints": sdxl, "loras": loras, "families": info,
             "lora_info": {n: modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras}, "lora_kind": lora_kinds(),
@@ -4090,7 +4355,8 @@ def lists():
             "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2, "anymodels": sdxl + flux + chroma + krea2,
             "flux_ready": bool(fp["t5"] and fp["clip_l"] and fp["vae"]),
             "chroma_ready": bool(fp["t5"] and fp["vae"]),
-            "krea2_ready": bool(kp["te"] and kp["vae"]),
+            "krea2_ready": bool(kp["te"] and kp["vae"]), "oxmodels": ox, "ox_ready": ox_ready,
+            "musicmodels": music_models(), "music_nodes": all(has_node(n) for n in MUSIC_NODES), "k2control": k2_control_loras(), "k2c_nodes": all(has_node(n) for n in K2C_NODES),
             "wanmodels": wan_models(), "wan_ready": bool(wan_parts()["te"] and wan_parts()["vae"]), "wan14": wan14_state(),
             "wildcards": sorted(p.stem for p in wc.glob("*.txt")) if wc.is_dir() else [],
             "qwen": bool(find("diffusion_models", "qwen_image_edit") and find("text_encoders", "qwen_2.5_vl")
@@ -4116,12 +4382,12 @@ def caps_info():
 # ───────────────────────── HTTP 서버 ─────────────────────────
 def folder_map():
     m = {"outputs": OUT, "logs": LOGS, "root": ROOT, "llm": ROOT / "models" / "llm", "wildcards": ROOT / "wildcards",
-         "backup": ROOT / "backup", "tags": ROOT / "tags"}
+         "backup": ROOT / "backup", "tags": ROOT / "tags", "music": OUT / "음악"}
     m.update({k: MODELS / k for k in FOLDERS})
     return m
 
 
-MEDIA = {".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
+MEDIA = {".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 
@@ -4309,7 +4575,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/chat":
             return self.chat(p)
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "batch"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "music", "batch"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if len(JOBS) > 50:
                 for k, v in list(JOBS.items()):

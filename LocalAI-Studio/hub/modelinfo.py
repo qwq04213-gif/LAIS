@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """모델 파일이 어느 계열인지 알아내요. .safetensors 맨 앞의 목록(헤더)만 읽어서 빨라요(모델을 불러오지 않아요).
 
-계열: sd15, sdxl, sd3, flux, chroma, qwen, unknown
+계열: sd15, sdxl, sd3, flux, chroma, qwen, hidream, lumina, unknown
 all_in_one: 텍스트 인코더·VAE까지 한 파일에 들어 있는 '체크포인트' 형태인지
 """
 import json
@@ -10,7 +10,7 @@ import struct
 from pathlib import Path
 
 FAMILIES = {"sd15": "SD 1.5 계열", "sdxl": "SDXL · Illustrious · Pony · NoobAI", "sd3": "SD3 / SD3.5",
-            "flux": "FLUX · Krea(FLUX.1)", "krea2": "Krea 2", "chroma": "Chroma", "qwen": "Qwen-Image", "unknown": "알 수 없음"}
+            "flux": "FLUX · Krea(FLUX.1)", "krea2": "Krea 2", "hidream": "HiDream", "lumina": "Lumina 2", "chroma": "Chroma", "qwen": "Qwen-Image", "unknown": "알 수 없음"}
 _CACHE = {}
 
 
@@ -39,6 +39,10 @@ def classify(keys):
     allin = has("first_stage_model.") or has("text_encoders.") or has("cond_stage_model") or has("conditioner.embedders")
     if has("distilled_guidance_layer"):
         return "chroma", allin
+    if has("double_stream_blocks.") and has("single_stream_blocks."):
+        return "hidream", allin
+    if has("noise_refiner.") and has("context_refiner."):
+        return "lumina", allin
     if has("double_blocks.") and has("single_blocks."):
         return "flux", allin
     if has("joint_blocks."):
@@ -54,7 +58,7 @@ def classify(keys):
 
 def by_name(name):
     n = name.lower()
-    for fam, pat in (("krea2", ("krea2", "krea-2", "krea_2")), ("chroma", ("chroma",)), ("qwen", ("qwen",)), ("flux", ("flux", "krea")), ("sd3", ("sd3",)),
+    for fam, pat in (("krea2", ("krea2", "krea-2", "krea_2")), ("chroma", ("chroma",)), ("qwen", ("qwen",)), ("flux", ("flux", "krea")), ("sd3", ("sd3", "sd_3")), ("hidream", ("hidream",)), ("lumina", ("lumina",)),
                      ("sdxl", ("sdxl", "illustrious", "noobai", "pony")), ("sd15", ("sd15", "sd1.5", "v1-5"))):
         if any(p in n for p in pat):
             return fam

@@ -74,7 +74,7 @@ details details{border-top:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 [data-e=qwen] .sdxl,[data-e=qwen] .fxe,[data-e=qwen] .den,[data-e=sdxl] .qwen,[data-e=sdxl] .fxe,[data-e=flux] .qwen,[data-e=flux] .sdxl,[data-e=flux] .den,[data-m=esrgan] .refine{display:none!important}
 #f-edit[data-fe=flux] .fe-c,#f-edit[data-fe=krea2] .fe-g,#f-edit[data-fe=chroma] .fe-g{display:none}
-#f-gen[data-g=sdxl] [data-for]:not([data-for~=sdxl]),#f-gen[data-g=flux] [data-for]:not([data-for~=flux]),#f-gen[data-g=chroma] [data-for]:not([data-for~=chroma]),#f-gen[data-g=krea2] [data-for]:not([data-for~=krea2]){display:none!important}
+#f-gen[data-g=sdxl] [data-for]:not([data-for~=sdxl]),#f-gen[data-g=flux] [data-for]:not([data-for~=flux]),#f-gen[data-g=chroma] [data-for]:not([data-for~=chroma]),#f-gen[data-g=krea2] [data-for]:not([data-for~=krea2]),#f-gen[data-g=sd35] [data-for]:not([data-for~=sd35]),#f-gen[data-g=hidream] [data-for]:not([data-for~=hidream]),#f-gen[data-g=lumina] [data-for]:not([data-for~=lumina]){display:none!important}
 div[data-for]{display:grid;gap:14px}
 .presets{display:grid;grid-template-columns:1fr auto auto;gap:8px}
 .presets select{padding:7px 10px}
