@@ -370,3 +370,10 @@ details.fold h4{margin:16px 0 6px;font-size:13px}
 .galgrid.sel .gt{cursor:pointer}.galgrid .gt.picked{outline:3px solid var(--acc);outline-offset:-3px}.galgrid.sel .gt img{pointer-events:none}.gb2 button[data-del]:hover{color:#e5736a}
 
 .cn-easy{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}.cn-easy .row{align-items:end}.cn-easy .mini.cn-src{min-width:140px}.cn-node{margin:6px 0}
+
+.gday{grid-column:1/-1;margin:14px 0 0;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:4px}.gday small{color:var(--mute);font-weight:400}.gday:first-child{margin-top:0}
+.galbar select{width:auto}
+#ver{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}#ver:hover,#ver:focus-visible{color:var(--acc)}
+.loglist{margin:12px 0}.logv{border:1px solid var(--line);border-radius:10px;padding:8px 14px;margin:8px 0}.logv>summary{cursor:pointer;padding:4px 0}.logv ul{margin:6px 0 4px 18px;padding:0;line-height:1.6}.logv li{margin:4px 0}
+#v-log .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#v-log .actions input{flex:1;min-width:200px;width:auto}
+.pymod{display:inline-flex;gap:8px;align-items:center;margin-left:6px}

@@ -272,8 +272,9 @@ function show(v){
   if(v==='start')startInit();
   if(v==='batch')loadLists().then(()=>window.btInit&&btInit());
   if(v==='gal')galLoad();else if(v==='lib')libShow();
+  if(v==='log')logInit();
   if(v==='setup'){appInit()}
-  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide')loadLists();
+  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log')loadLists();
 }
 $$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
 function toast(t,ms){
@@ -775,7 +776,7 @@ async function run(kind,form,extra={}){
     id=r.id;if(wantStop)await api('/api/job/cancel',{id});
     for(;;){
       await sleep(1000);const j=await api('/api/job/'+id);
-      if(j.state==='error')throw new Error(j.error);
+      if(j.state==='error'){const er=new Error(j.error);er.pymod=j.pymod;throw er}
       if(j.state==='cancelled'){setBar(view,'중단했어요.','ok');break}
       if(j.state==='done'){
         if(extra.image&&(kind==='edit'||kind==='up')){j.images.forEach(u=>COMPARE[u]=extra.image);IV[kind].showResult(j.images[0],extra.image)}
@@ -786,7 +787,7 @@ async function run(kind,form,extra={}){
       setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');
       if(!wantStop)setProg(view,j);
     }
-  }catch(e){setBar(view,e.message,'bad')}
+  }catch(e){setBar(view,e.message,'bad');if(e.pymod)pymodHelp($('.jobbar .st',view),e.pymod)}
   go.disabled=false;
 }
 /* ── 영상 만들기 ── */
@@ -1329,18 +1330,25 @@ function libShow(){plLoad();wcLoad();i2pInit()}
 /* ══════════ 기록 갤러리 ══════════ */
 let GAL={off:0,items:[]};
 async function galLoad(more){
-  if(!more){GAL={off:0,items:[]};$('#gal-grid').innerHTML=''}
-  const qs=new URLSearchParams({q:$('#gal-q').value.trim(),kind:$('#gal-kind').value,fav:$('#gal-fav').checked?'1':'',offset:GAL.off});
+  if(!more){GAL={off:0,items:[],last:''};$('#gal-grid').innerHTML=''}
+  const qs=new URLSearchParams({q:$('#gal-q').value.trim(),kind:$('#gal-kind').value,fav:$('#gal-fav').checked?'1':'',date:$('#gal-date').value,offset:GAL.off});
   let r;try{r=await api('/api/gallery?'+qs)}catch{return}
   GAL.items.push(...r.items);GAL.off+=r.items.length;
+  const dmap=Object.fromEntries(r.days||[]),today=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),
+    wd=d=>['일','월','화','수','목','금','토'][new Date(d+'T12:00:00').getDay()];
+  if(!more){const sel=$('#gal-date'),keep=sel.value;sel.innerHTML='<option value="">모든 날짜</option>'+(r.days||[]).map(([d,n])=>`<option value="${d}">${d} (${wd(d)})${d===today?' · 오늘':''} · ${n}개</option>`).join('');
+    sel.value=[...sel.options].some(o=>o.value===keep)?keep:''}
+  const grouped=$('#gal-group').checked;
   const fmt=t=>new Date(t*1000).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   $('#gal-grid').insertAdjacentHTML('beforeend',r.items.map(x=>{const tn=x.url.replace('/out/','/thumb/');
-    return `<figure class="gt" data-u="${x.url}">${x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
+    let head='';if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
+    return head+`<figure class="gt" data-u="${x.url}">${x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
     <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="같은 설정으로 생성">↻</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로">✎</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
-  $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value);
+  $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value||$('#gal-date').value);
 }
-$('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=()=>galLoad();$('#gal-more').onclick=()=>galLoad(true);
+$('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=$('#gal-date').onchange=()=>galLoad();
+$('#gal-group').checked=!!ls.get('gal:group',false);$('#gal-group').onchange=()=>{ls.set('gal:group',$('#gal-group').checked);galLoad()};$('#gal-more').onclick=()=>galLoad(true);
 let GSEL=false,GPICK=new Set();
 const galSelUi=()=>{$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?'선택 끝내기':'선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
   $$('#gal-grid .gt').forEach(t=>t.classList.toggle('picked',GPICK.has(t.dataset.u)))};
@@ -1348,7 +1356,7 @@ async function galDelete(urls){if(!urls.length)return;
   if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;
   const r=await api('/api/gallery/delete',{files:urls});if(r.error)return toast(r.error);
   const set=new Set(urls);$$('#gal-grid .gt').forEach(t=>{if(set.has(t.dataset.u))t.remove()});GAL.items=GAL.items.filter(x=>!set.has(x.url));urls.forEach(u=>GPICK.delete(u));
-  $('#gal-n').textContent=$$('#gal-grid .gt').length+'개 표시 중';galSelUi();toast(`${r.deleted}개를 지웠어요.`+(r.failed?` (${r.failed}개는 지우지 못했어요)`:''))}
+  $$('#gal-grid .gday').forEach(h=>{if(!(h.nextElementSibling&&h.nextElementSibling.classList.contains('gt')))h.remove()});$('#gal-n').textContent=$$('#gal-grid .gt').length+'개 표시 중';galSelUi();toast(`${r.deleted}개를 지웠어요.`+(r.failed?` (${r.failed}개는 지우지 못했어요)`:''))}
 $('#gal-sel').onclick=()=>{GSEL=!GSEL;GPICK.clear();galSelUi()};
 $('#gal-delsel').onclick=()=>galDelete([...GPICK]);
 $('#org-prev').onclick=async()=>{const r=await api('/api/gallery/organize',{mode:'preview',keep_today:$('#org-today').checked}),I=$('#org-info');
@@ -1524,7 +1532,7 @@ $$('.cn-easy').forEach(box=>{const f=box.closest('form'),src=$('.cn-src',box),st
     $('.cn-go',box).disabled=true;st.textContent='지도를 만드는 중… (처음엔 모델을 불러와서 오래 걸릴 수 있어요)';$('.cn-node',box).hidden=true;
     let r;try{r=await api('/api/control/prep',{image:src.value,type:kind})}catch{r={error:'서버와 연결되지 않았어요.'}}
     $('.cn-go',box).disabled=false;
-    if(r.error){st.textContent=r.error;if(r.need_pack)cnPack(box,r.missing);return}
+    if(r.error){st.textContent=r.error;if(r.need_pack)cnPack(box,r.missing);if(r.pymod)pymodHelp(st,r.pymod);return}
     const cm=$('.mini[data-img=cn_image]',f);cm.set(r.image);f.elements.cn_prep.value='none';f.elements.cn_type.value=kind;f.elements.cn_strength.value=CN_STR[kind]||0.7;
     if(pick){f.elements.cn_model.value=pick}
     st.innerHTML=pick?`✔ ${esc({pose:'포즈',canny:'윤곽선',depth:'깊이',lineart:'선화'}[kind])} 지도를 만들어 아래 [제어 이미지]에 넣었어요. ControlNet 모델은 <b>${esc(pick)}</b> 로 맞췄어요.`
@@ -1674,3 +1682,21 @@ coachMount();
 $$('details.fold').forEach(d=>{
   try{const v=localStorage.getItem('fold:'+d.id);if(v==='1')d.open=true;else if(v==='0')d.open=false}catch{}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('fold:'+d.id,d.open?'1':'0')}catch{}})});
+
+/* ══════════ 빠진 파이썬 부품 설치 · 버전별 변경 사항 ══════════ */
+function pymodHelp(host,pm){if(!host||!pm)return;host.querySelectorAll('.pymod').forEach(x=>x.remove());
+  host.insertAdjacentHTML('beforeend',` <span class="pymod"><button type="button" class="ghost sm" data-pymod="${esc(pm.module)}">빠진 부품 설치 (${esc(pm.pip)})</button> <span class="mute pm-st"></span></span>`)}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-pymod]');if(!b)return;const mod=b.dataset.pymod,st=b.parentElement.querySelector('.pm-st');
+  b.disabled=true;st.textContent='시작해요…';let r;try{r=await api('/api/pymod/install',{module:mod})}catch{st.textContent='서버와 연결되지 않았어요.';b.disabled=false;return}
+  if(r.error){st.textContent=r.error;b.disabled=false;return}
+  for(;;){await sleep(1500);let s;try{s=(await api('/api/pymod/status'))[mod]}catch{continue}if(!s)continue;st.textContent=s.msg;
+    if(s.state!=='running'){b.disabled=false;if(s.state==='done')b.textContent='다시 설치';break}}});
+let LOGV=null;
+async function logInit(){const box=$('#log-list');
+  if(!LOGV){let r;try{r=await api('/api/changelog')}catch{box.innerHTML='<p class="mute">불러오지 못했어요.</p>';return}LOGV=r}
+  const r=LOGV;if(r.error&&!r.versions.length){box.innerHTML=`<p class="mute">${esc(r.error)}</p>`;return}
+  const q=($('#log-q').value||'').trim().toLowerCase(),vs=r.versions.map(v=>({...v,items:q?v.items.filter(t=>(t+' '+v.version+' '+v.title).toLowerCase().includes(q)):v.items})).filter(v=>v.items.length);
+  box.innerHTML=vs.length?vs.map((v,i)=>`<details class="logv"${(i===0||q)?' open':''}><summary><b>${esc(v.version)}</b>${v.version===r.current?' <span class="badge acc">지금 쓰는 버전</span>':''}${v.title?` <span class="mute">${esc(v.title)}</span>`:''} <span class="mute">· ${v.items.length}개</span></summary><ul>${v.items.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></details>`).join(''):'<p class="mute">찾는 내용이 없어요.</p>'}
+$('#log-q').oninput=debounce(logInit,250);
+$('#log-open').onclick=()=>$$('#log-list details').forEach(d=>d.open=true);$('#log-close').onclick=()=>$$('#log-list details').forEach(d=>d.open=false);
+$('#ver').onclick=()=>show('log');$('#ver').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('log')}};

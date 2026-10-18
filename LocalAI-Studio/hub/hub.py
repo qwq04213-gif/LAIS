@@ -1332,7 +1332,8 @@ def control_prep(p):
     try:
         r = run_wf(w.n, J)[0]
     except RuntimeError as e:
-        return {"error": f"지도를 만들지 못했어요: {e}"}
+        pm = pymod_missing(e)
+        return {"error": f"지도를 만들지 못했어요: {e}" + (" — 아래 버튼으로 빠진 부품을 설치할 수 있어요." if pm else ""), **({"pymod": pm} if pm else {})}
     finally:
         _clean_tmp(J)
     b = io.BytesIO()
@@ -1806,6 +1807,8 @@ def job_thread(J, p):
             J["msg"] = f"중단했어요. 지금까지 {len(J['images'])}장은 저장돼 있어요."
     except Exception as e:
         J["state"], J["error"] = "error", str(e) or e.__class__.__name__
+        if pymod_missing(J["error"]):
+            J["pymod"] = pymod_missing(J["error"])
         log("[작업 오류]", J["error"])
     finally:
         _clean_tmp(J)
@@ -2372,6 +2375,8 @@ def organize_outputs(p):
 def gallery(q):
     kind, text, off = (q.get("kind") or [""])[0], (q.get("q") or [""])[0].strip().lower(), int((q.get("offset") or ["0"])[0] or 0)
     only_fav, lim = (q.get("fav") or [""])[0] == "1", 60
+    day = (q.get("date") or [""])[0]
+    day = day if DATE_RX.match(day) else ""
     favs, rows = gal_favs(), []
     for sub in OUT_SUB.values():
         if kind and kind != sub:
@@ -2397,11 +2402,49 @@ def gallery(q):
             if text not in f.name.lower() and text not in pr.lower():
                 continue
         out.append((mt, sub, f, key, pr))
+    dayof = lambda t: time.strftime("%Y-%m-%d", time.localtime(t))
+    days = {}
+    for mt, *_ in out:      # 날짜 고르기 목록(날짜 필터는 빼고, 검색·종류·즐겨찾기 조건만 반영)
+        days[dayof(mt)] = days.get(dayof(mt), 0) + 1
+    if day:
+        out = [r for r in out if dayof(r[0]) == day]
     page = out[off:off + lim]
-    items = [{"url": "/out/" + "/".join(urllib.parse.quote(x) for x in f.relative_to(OUT).parts), "kind": sub, "name": f.name, "time": int(mt),
+    items = [{"day": dayof(mt), "url": "/out/" + "/".join(urllib.parse.quote(x) for x in f.relative_to(OUT).parts), "kind": sub, "name": f.name, "time": int(mt),
               "fav": key in favs, "video": f.suffix.lower() in (".mp4", ".webm"),
               "prompt": (pr if pr is not None else gal_prompt(f, mt))[:200]} for mt, sub, f, key, pr in page]
-    return {"items": items, "total": len(out), "more": off + lim < len(out)}
+    return {"items": items, "total": len(out), "more": off + lim < len(out), "days": [[d, n] for d, n in list(days.items())[:400]]}
+
+
+VER_RX = re.compile(r"^\[(\d{4}\.\d{2}\.\d{2}(?:\.\d+)?)([^\]]*)\]\s*(.*)$")
+
+
+def changelog():
+    """README.txt 의 [2026.10.18.14] 같은 구역을 읽어 버전별 변경 사항 목록(최신 순)으로 돌려줘요."""
+    try:
+        lines = (ROOT / "README.txt").read_text(encoding="utf-8-sig").splitlines()
+    except OSError:
+        return {"error": "README.txt 를 찾지 못했어요.", "versions": [], "current": VERSION}
+    vers, cur = [], None
+    for ln in lines:
+        m = VER_RX.match(ln)
+        if m:
+            cur = {"version": m.group(1), "title": (m.group(2) + " " + m.group(3)).strip(), "items": []}
+            vers.append(cur)
+            continue
+        if re.match(r"^\[[^\]]+\]", ln) or ln.startswith("====="):      # 다른 구역(설치 방법 등)이 시작되면 끝
+            cur = None
+            continue
+        if cur is None or not ln.strip():
+            continue
+        if re.match(r"^\s*-\s+", ln):
+            cur["items"].append(re.sub(r"^\s*-\s+", "", ln).strip())
+        elif cur["items"]:
+            cur["items"][-1] += " " + ln.strip()      # 줄바꿈된 항목은 이어 붙여요
+        else:
+            cur["items"].append(ln.strip())
+    key = lambda v: tuple(int(x) for x in v["version"].split("."))
+    vers.sort(key=key, reverse=True)
+    return {"versions": vers, "current": VERSION}
 
 
 def thumb_bytes(path, w=320):
@@ -2535,6 +2578,49 @@ def _node_install(repo):
     except Exception as e:  # noqa: BLE001
         J["state"], J["msg"] = "error", str(e) or e.__class__.__name__
         log("[노드 설치 오류]", repr(e))
+
+
+# 확장 노드가 실행 중 "No module named 'xxx'" 로 멈출 때, 화면에서 바로 설치할 수 있게 해 줘요(아래 목록의 흔한 부품만)
+PYMODS = {"matplotlib": "matplotlib", "scipy": "scipy", "cv2": "opencv-python-headless", "skimage": "scikit-image", "sklearn": "scikit-learn",
+          "yaml": "pyyaml", "PIL": "pillow", "einops": "einops", "timm": "timm", "addict": "addict", "yapf": "yapf", "mediapipe": "mediapipe",
+          "onnxruntime": "onnxruntime", "ultralytics": "ultralytics", "trimesh": "trimesh", "omegaconf": "omegaconf", "fvcore": "fvcore",
+          "svglib": "svglib", "reportlab": "reportlab", "numba": "numba"}
+PYMOD_JOBS = {}
+
+
+def pymod_missing(msg):
+    """오류 문구에서 '빠진 파이썬 부품'을 찾아요. 설치해도 되는 흔한 부품이면 {module, pip}, 아니면 None."""
+    m = re.search(r"No module named ['\"]([A-Za-z0-9_]+)", str(msg or ""))
+    return {"module": m.group(1), "pip": PYMODS[m.group(1)]} if m and m.group(1) in PYMODS else None
+
+
+def pymod_run(mod):
+    J = PYMOD_JOBS[mod]
+    try:
+        if not PY.exists():
+            raise RuntimeError("python_embeded 를 찾지 못했어요. ComfyUI 포터블이 설치돼 있는지 확인해 주세요.")
+        J["msg"] = f"{PYMODS[mod]} 설치 중…(1~3분 걸릴 수 있어요)"
+        r = subprocess.run([str(PY), "-s", "-m", "pip", "install", PYMODS[mod], "--no-warn-script-location"], cwd=HOME,
+                           capture_output=True, text=True, timeout=1500)
+        if r.returncode:
+            LOGS.mkdir(exist_ok=True)
+            (LOGS / "pymod.log").write_text((r.stdout or "")[-4000:] + (r.stderr or "")[-4000:], encoding="utf-8")
+            raise RuntimeError("설치에 실패했어요(인터넷 연결을 확인해 주세요. 자세한 내용은 logs\\pymod.log).")
+        J["state"], J["msg"] = "done", "설치했어요. 같은 작업을 다시 해 보세요. (그래도 안 되면 [이미지 엔진 다시 시작])"
+    except Exception as e:  # noqa: BLE001
+        J["state"], J["msg"] = "error", str(e) or e.__class__.__name__
+        log("[파이썬 부품 설치 오류]", repr(e))
+
+
+def pymod_install(p):
+    mod = str(p.get("module") or "")
+    if mod not in PYMODS:
+        return {"error": "설치할 수 있는 부품 목록에 없어요."}
+    if PYMOD_JOBS.get(mod, {}).get("state") == "running":
+        return {"ok": True}
+    PYMOD_JOBS[mod] = {"state": "running", "msg": "시작해요…"}
+    threading.Thread(target=pymod_run, args=(mod,), daemon=True).start()
+    return {"ok": True}
 
 
 def node_install(p):
@@ -3692,6 +3778,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_bytes(thumb_bytes(fp), "image/jpeg", extra={"Cache-Control": "max-age=3600"})
             except Exception:
                 return self.send_json({"error": "thumb failed"}, 500)
+        if u == "/api/pymod/status":
+            return self.send_json({m: {"state": j["state"], "msg": j["msg"]} for m, j in PYMOD_JOBS.items()})
+        if u == "/api/changelog":
+            return self.send_json(changelog())
         if u == "/api/nodes/status":
             return self.send_json({r: {"state": j["state"], "msg": j["msg"]} for r, j in NODE_JOBS.items()})
         if u == "/api/app/where":
@@ -3724,7 +3814,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -3840,6 +3930,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"data": base64.b64encode(data).decode(), "ext": ext, "note": note})
             except Exception as e:
                 return self.send_json({"error": f"처리할 수 없어요: {e}"})
+        if u == "/api/pymod/install":
+            return self.send_json(pymod_install(p))
         if u == "/api/wf/analyze":
             try:
                 g = flows.parse_graph(p.get("graph"), caps()["info"])
