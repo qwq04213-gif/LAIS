@@ -273,8 +273,8 @@ function show(v){
   if(v==='batch')loadLists().then(()=>window.btInit&&btInit());
   if(v==='gal')galLoad();else if(v==='lib')libShow();
   if(v==='log')logInit();
-  if(v==='setup'){appInit()}
-  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log')loadLists();
+  if(v==='setup'||v==='conf'){appInit()}
+  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
 }
 $$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
 function toast(t,ms){
@@ -288,7 +288,7 @@ async function openFolder(which){
 /* 폴더에서 모델 파일을 넣고 돌아오면 목록을 자동으로 새로고침 */
 addEventListener('focus',debounce(()=>{
   const on=$('.view.on');if(!on||document.hidden)return;
-  if(on.id==='v-setup')loadSetup();else if(on.id==='v-dl')loadDl();else if(on.id==='v-feat')loadFeat();else if(on.id!=='v-info'&&on.id!=='v-wf'&&on.id!=='v-guide')loadLists(true);
+  if(on.id==='v-setup')loadSetup();else if(on.id==='v-dl')loadDl();else if(on.id==='v-feat')loadFeat();else if(on.id!=='v-info'&&on.id!=='v-wf'&&on.id!=='v-guide'&&on.id!=='v-conf')loadLists(true);
 },400));
 
 /* ══════════ 상태 / 목록 / 기능 조회 ══════════ */
@@ -812,16 +812,19 @@ function addResults(sec,j,kind){
   const mi=(u,to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${tip}"`:''}>${t}</button>`;
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
     j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a>${mi(u,'edit',first)}${
-    kind==='up'?'':mi(u,'up','업스케일')}<details class="more"><summary>더 보기</summary><div class="menu">${
-    kind==='gen'?mi(u,'regen','같은 설정으로 생성','이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요')+mi(u,'var','비슷하게 여러 장…','구도는 유지하고 디테일만 조금씩 다른 이미지를 여러 장 만들어요'):''}${
-    mi(u,'vid','영상으로','이 이미지를 시작 장면으로 영상을 만들어요')}${COMPARE[u]?mi(u,'cmp','겹쳐서 비교'):''}${mi(u,'info','정보')}${mi(u,'folder','출력 폴더 열기','이 사진이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`).join('')}${
+    kind==='up'?'':mi(u,'up','업스케일')}${kind==='gen'?mi(u,'regen','같은 설정으로','이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요'):''}${mi(u,'vid','영상으로','이 이미지를 시작 장면으로 영상을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
+    kind==='gen'?mi(u,'var','여러 장 변형','구도는 유지하고 디테일만 조금씩 다른 이미지를 여러 장 만들어요'):''}${COMPARE[u]?mi(u,'cmp','비교','원본과 겹쳐서 비교해요'):''}${mi(u,'info','정보')}${mi(u,'folder','폴더 열기','이 사진이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
   bt.querySelectorAll('img').forEach(i=>{if(!i.complete)i.addEventListener('load',goto,{once:true})}); // 사진이 다 불러와진 뒤 높이가 커져도 다시 맞춰요
 }
+document.addEventListener('toggle',e=>{const d=e.target;if(!d.classList||!d.classList.contains('more')||!d.open)return;
+  const m=$('.menu',d);d.classList.remove('up');const r=d.getBoundingClientRect(),h=m.offsetHeight+10,pane=d.closest('.res')||document.body,pr=pane.getBoundingClientRect();
+  if(innerHeight-r.bottom<h&&r.top-Math.max(0,pr.top)>h)d.classList.add('up')},true);
 /* 진행 표시줄: 이미지 아래에 상태를 보여 주고, 실행 중에는 [중단] 버튼을 보여 줘요 */
 function setBar(view,text,mode){
   const b=$('.jobbar',view),st=$('.st',b),run=mode==='run';
+  b.querySelectorAll('.oom').forEach(x=>x.remove());
   b.hidden=!text;b.dataset.m=mode;st.className='st'+(mode==='bad'?' bad':'');st.textContent=text||'';
   $('.spin',b).hidden=!run;$('.stop',b).hidden=!run;
   const pg=$('.pg',b);if(!run)pg.hidden=true;
@@ -846,7 +849,7 @@ async function run(kind,form,extra={}){
     id=r.id;if(wantStop)await api('/api/job/cancel',{id});
     for(;;){
       await sleep(1000);const j=await api('/api/job/'+id);
-      if(j.state==='error'){const er=new Error(j.error);er.pymod=j.pymod;throw er}
+      if(j.state==='error'){const er=new Error(j.error);er.pymod=j.pymod;er.oom=j.oom;throw er}
       if(j.state==='cancelled'){setBar(view,'중단했어요.','ok');break}
       if(j.state==='done'){
         if(extra.image&&(kind==='edit'||kind==='up')){j.images.forEach(u=>COMPARE[u]=extra.image);IV[kind].showResult(j.images[0],extra.image)}
@@ -857,7 +860,7 @@ async function run(kind,form,extra={}){
       setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');
       if(!wantStop)setProg(view,j);
     }
-  }catch(e){setBar(view,e.message,'bad');if(e.pymod)pymodHelp($('.jobbar .st',view),e.pymod)}
+  }catch(e){setBar(view,e.message,'bad');if(e.pymod)pymodHelp($('.jobbar .st',view),e.pymod);if(e.oom)oomHelp(view,e.oom)}
   go.disabled=false;
 }
 /* ── 영상 만들기 ── */
@@ -1227,6 +1230,18 @@ async function diskScan(){
    <h4>용량이 큰 모델 파일 순서</h4><table class="disktb"><tbody>${big}</tbody></table>`;
 }
 $('#disk-scan').onclick=diskScan;
+let TIDY=[];
+const tidySum=()=>{const ck=[...$$('#tidy .tk:checked')],sz=ck.reduce((a,c)=>a+(+c.dataset.s),0),b=$('#tidy-go');if(b){b.disabled=!ck.length;b.textContent=ck.length?`선택한 ${ck.length}개 지우기 (${fmtSize(sz)})`:'지울 파일을 골라 주세요'}};
+$('#tidy-scan').onclick=async()=>{const st=$('#disk-st'),T=$('#tidy');st.textContent='찾는 중이에요…';let r;try{r=await api('/api/model-tidy')}catch{st.textContent='확인하지 못했어요.';return}st.textContent='';
+  if(!r.items.length){T.innerHTML='<p class="hint plain">정리할 만한 모델 파일이 없어요. 👍</p>';return}
+  TIDY=r.items;T.innerHTML=`<h4>정리하면 좋은 모델 파일 <small class="mute">후보 ${r.items.length}개 · 최대 ${fmtSize(r.total)}</small></h4><p class="hint plain">자동으로 지우지 않아요. 지울 파일을 직접 체크한 뒤 버튼을 눌러 주세요. 지우면 되돌릴 수 없어요(필요하면 다시 받아야 해요).</p>
+   <ul class="tidylist">${r.items.map((f,i)=>`<li><label><input type="checkbox" class="tk" data-i="${i}" data-s="${f.size}"> <b>${esc(DIRN[f.dir]||f.dir)} / ${esc(f.name)}</b> <small class="mute">${fmtSize(f.size)}</small></label><small class="mute">${f.reasons.map(esc).join(' · ')}</small></li>`).join('')}</ul>
+   <button type="button" class="go" id="tidy-go" disabled>지울 파일을 골라 주세요</button>`;tidySum()};
+$('#tidy').onchange=e=>{if(e.target.classList.contains('tk'))tidySum()};
+$('#tidy').onclick=async e=>{if(e.target.id!=='tidy-go')return;const ck=[...$$('#tidy .tk:checked')].map(c=>TIDY[+c.dataset.i]);if(!ck.length)return;
+  if(!confirm(`선택한 ${ck.length}개 파일(${fmtSize(ck.reduce((a,f)=>a+f.size,0))})을 컴퓨터에서 지울까요?\n되돌릴 수 없어요.`))return;
+  e.target.disabled=true;let ok=0,bad=0;for(const f of ck){const r=await api('/api/delete',{kind:'file',dir:f.dir,name:f.name});r.error?bad++:ok++}
+  toast(`${ok}개를 지웠어요.`+(bad?` (${bad}개는 다른 프로그램이 쓰고 있어서 못 지웠어요)`:''));$('#tidy-scan').click();diskScan();loadManage();loadLists(true)};
 $('#disk').onclick=async e=>{
   const c=e.target.closest('.cl');if(c){c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
   const b=e.target.closest('.del');if(!b)return;
@@ -1428,6 +1443,7 @@ $('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-
 $('#gal-group').checked=!!ls.get('gal:group',false);$('#gal-group').onchange=()=>{ls.set('gal:group',$('#gal-group').checked);galLoad()};$('#gal-more').onclick=()=>galLoad(true);
 let GSEL=false,GPICK=new Set();
 const galSelUi=()=>{$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?'선택 끝내기':'선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
+  {const two=[...GPICK].filter(u=>!/\.(mp4|webm|webp|gif)$/i.test(u));$('#gal-cmp').hidden=!(GSEL&&GPICK.size===2&&two.length===2)}
   $$('#gal-grid .gt').forEach(t=>t.classList.toggle('picked',GPICK.has(t.dataset.u)))};
 async function galDelete(urls){if(!urls.length)return;
   if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;
@@ -1436,6 +1452,7 @@ async function galDelete(urls){if(!urls.length)return;
   $$('#gal-grid .gday').forEach(h=>{if(!(h.nextElementSibling&&h.nextElementSibling.classList.contains('gt')))h.remove()});$('#gal-n').textContent=$$('#gal-grid .gt').length+'개 표시 중';galSelUi();toast(`${r.deleted}개를 지웠어요.`+(r.failed?` (${r.failed}개는 지우지 못했어요)`:''))}
 $('#gal-sel').onclick=()=>{GSEL=!GSEL;GPICK.clear();galSelUi()};
 $('#gal-delsel').onclick=()=>galDelete([...GPICK]);
+$('#gal-cmp').onclick=()=>{const [a,b]=[...GPICK];if(a&&b)lbOpen([{url:b,before:a,name:b.split('/').pop()}],0,true)};
 $('#org-prev').onclick=async()=>{const r=await api('/api/gallery/organize',{mode:'preview',keep_today:$('#org-today').checked}),I=$('#org-info');
   if(!r.total){I.textContent='옮길 파일이 없어요.';$('#org-run').hidden=true;return}
   I.textContent=`${r.total}개를 옮겨요: `+Object.entries(r.days).map(([s,m])=>`${s} ${Object.entries(m).map(([d,n])=>`${d}(${n})`).join(' ')}`).join(' / ');$('#org-run').hidden=false};
@@ -1695,7 +1712,7 @@ const GOALS=[
   steps:['프롬프트 탭에서 [이미지에서 프롬프트 뽑기]를 열어요.','사진을 올리고 형식(문장형·태그형)을 골라 [프롬프트 만들기]를 눌러요.','[이미지 생성에 넣기]로 바로 만들어 보세요. 이미지를 보는 대화 모델(Qwen2.5-VL)이 필요해요.']},
  {t:'ComfyUI 워크플로를 돌려 보고 싶어요',d:'인터넷에서 받은 워크플로(JSON·PNG)를 실행해요.',go:'wf',need:()=>true,why:'',
   steps:['워크플로 탭에서 [파일 열기]로 JSON이나 ComfyUI로 만든 PNG를 올려요.','없는 노드가 있으면 안내에 따라 [설치]하고 [이미지 엔진 다시 시작]을 눌러요.','프롬프트·시드·크기를 고치고 [실행]을 눌러요.']},
- {t:'모델을 설치하거나 정리하고 싶어요',d:'추천 모델 설치, 디스크 정리, 프로그램 위치 옮기기.',go:'setup',need:()=>true,why:'',
+ {t:'모델을 설치하거나 정리하고 싶어요',d:'추천 모델 설치, 디스크 정리.',go:'setup',need:()=>true,why:'',
   steps:['설치와 모델 탭의 [내 GPU에 맞춰 고르기]를 누르면 추천 항목이 골라져요.','[선택한 항목 설치]를 누르고 아래 \'진행 상황\'을 지켜봐요.','디스크가 부족하면 [저장 공간 점검]에서 정리하세요.']},
 ];
 const fxAny=()=>(LISTS.fluxmodels||[]).length||(LISTS.chromamodels||[]).length||(LISTS.krea2models||[]).length;
@@ -1734,7 +1751,7 @@ const COACH={
  up:['사진을 올려요.','빠른 업스케일 / 디테일 재생성 중 방식을 골라요.','[업스케일 실행] 후 [겹쳐서 비교]로 확인해요.'],
  vid:['장면과 움직임을 문장으로 적어요.','움직일 이미지가 있으면 올려요(없어도 돼요).','크기·길이를 고르고 [영상 만들기]. 처음엔 3초로 시험해 보세요.'],
  batch:['처리할 사진을 폴더나 파일로 골라요.','크기·배경 지우기·업스케일 중 하나를 골라요.','[처리 시작] — 원본은 그대로, 결과는 새 파일로 저장돼요.'],
- gal:['위 칸에서 프롬프트나 종류로 검색해요.','★로 즐겨찾기, ↻로 같은 설정 다시 만들기.','사진을 클릭하면 크게 볼 수 있어요.'],
+ gal:['위 칸에서 프롬프트나 종류로 검색해요.','★로 즐겨찾기, ↻로 같은 설정 다시 만들기.','사진을 클릭하면 크게 볼 수 있어요.','선택 → 이미지 두 장을 고르면 [두 장 비교]가 나와요.'],
  lib:['자주 쓰는 프롬프트를 보관함에 저장해요.','와일드카드로 후보를 무작위로 바꿔 넣어요.','사진에서 프롬프트를 뽑아 바로 생성에 써요.'],
  wf:['워크플로 JSON이나 PNG를 올려요.','없는 노드는 [설치] 후 엔진을 다시 시작해요.','프롬프트·시드를 고치고 [실행]을 눌러요.'],
  feat:['하고 싶은 기능 카드를 골라요.','이미지를 올리고 값을 정해요.','실행하면 결과가 아래에 쌓여요.'],
@@ -1761,6 +1778,10 @@ $$('details.fold').forEach(d=>{
   d.addEventListener('toggle',()=>{try{localStorage.setItem('fold:'+d.id,d.open?'1':'0')}catch{}})});
 
 /* ══════════ 빠진 파이썬 부품 설치 · 버전별 변경 사항 ══════════ */
+function oomHelp(view,o){const bar=$('.jobbar',view);if(!bar||!o)return;bar.querySelectorAll('.oom').forEach(x=>x.remove());
+  bar.insertAdjacentHTML('beforeend',`<div class="oom"><b>메모리가 모자라 멈췄어요.</b><ul>${o.tips.map(t=>`<li>${esc(t)}</li>`).join('')}</ul><button type="button" class="ghost sm" data-memfree>메모리 비우기</button> <span class="mute mf-st"></span></div>`)}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-memfree]');if(!b)return;b.disabled=true;const st=b.parentElement.querySelector('.mf-st');
+  try{await api('/api/memory/free',{});st.textContent='비웠어요. 다시 만들어 보세요.'}catch{st.textContent='서버와 연결되지 않았어요.'}b.disabled=false});
 function pymodHelp(host,pm){if(!host||!pm)return;host.querySelectorAll('.pymod').forEach(x=>x.remove());
   host.insertAdjacentHTML('beforeend',` <span class="pymod"><button type="button" class="ghost sm" data-pymod="${esc(pm.module)}">빠진 부품 설치 (${esc(pm.pip)})</button> <span class="mute pm-st"></span></span>`)}
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-pymod]');if(!b)return;const mod=b.dataset.pymod,st=b.parentElement.querySelector('.pm-st');
@@ -1815,6 +1836,9 @@ document.addEventListener('keydown',e=>{
  document.addEventListener('focusout',e=>{if(e.target===ta)setTimeout(close,120)});
  addEventListener('scroll',()=>{if(!box.hidden)close()},true);addEventListener('resize',close)}
 
+{const sel=$('#ui-scale'),get=()=>{try{return parseFloat(localStorage.getItem('ui:scale'))||1}catch{return 1}};
+ sel.value=String(get());if(sel.value!==String(get()))sel.value='1';
+ sel.onchange=()=>{try{localStorage.setItem('ui:scale',sel.value)}catch{}document.documentElement.style.setProperty('--ui',sel.value)}}
 $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
   try{const r=await fetch('/api/diag/export');if(!r.ok)throw 0;const blob=await r.blob(),n=new Date(),p=x=>String(x).padStart(2,'0'),
     name=`LocalAI-진단-${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}.zip`,a=document.createElement('a');

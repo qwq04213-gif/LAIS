@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
-<script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}</script>
+<script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}try{var z=parseFloat(localStorage.getItem('ui:scale'));if(z>=0.8&&z<=1.6)document.documentElement.style.setProperty('--ui',z)}catch(e){}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -37,7 +37,8 @@
     </div>
     <div class="ng"><span class="ngt">관리</span>
       <button data-v="dl" title="다운로드"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></svg><span>다운로드</span></button>
-      <button data-v="setup" title="설치와 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 14a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>설치와 모델</span></button>
+      <button data-v="setup" title="설치와 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span>설치와 모델</span></button>
+      <button data-v="conf" title="설정"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 14a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>설정</span></button>
     </div>
   </nav>
   <button id="qbtn" type="button" class="qbtn" aria-haspopup="dialog" title="진행 중이거나 기다리는 작업을 보고, 순서를 바꾸거나 취소해요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>작업 대기열</span><i id="qcount" hidden>0</i></button>
@@ -471,6 +472,7 @@
     <span class="mute" id="gal-n"></span>
     <button type="button" class="ghost sm" data-open="outputs" title="결과 파일이 저장된 outputs 폴더를 탐색기로 열어요">outputs 폴더 열기</button>
     <button type="button" class="ghost sm" id="gal-sel">선택</button>
+    <button type="button" class="ghost sm" id="gal-cmp" hidden title="선택한 이미지 두 장을 겹쳐서 슬라이더로 비교해요">두 장 비교</button>
     <button type="button" class="ghost sm" id="gal-delsel" hidden>선택한 파일 삭제 (0)</button>
   </div>
   <details class="fold" id="fold-org"><summary>결과 폴더 날짜별로 정리</summary>
@@ -585,7 +587,7 @@
     <dt>좋아하는 프롬프트를 저장해 두고 싶어요</dt><dd><b>프롬프트</b> 탭 → 보관함. 생성·편집·영상 화면의 [📚 보관함에서 넣기]로 불러와요. 후보를 무작위로 바꿔 넣는 <b>와일드카드</b>도 여기서 만들어요.</dd>
     <dt>마음에 든 사진과 비슷하게 만들고 싶어요</dt><dd><b>프롬프트</b> 탭 → [이미지에서 프롬프트 뽑기]. 사진을 올리면 설명(프롬프트)을 만들어 줘요. 이미지를 보는 대화 모델(Qwen2.5-VL)이 필요해요.</dd>
     <dt>GPU가 얼마나 쓰이는지 보고 싶어요</dt><dd>왼쪽 위 버전 아래에 VRAM·사용률·온도·전력이 막대로 보여요. 막대가 주황·빨강이면 여유가 거의 없는 거예요.</dd>
-    <dt>설치 폴더를 다른 곳으로 옮기고 싶어요</dt><dd><b>설치와 모델</b> 탭 → [프로그램 관리] → 새 위치를 적고 [확인] → [옮기기 시작]. 폴더가 한 겹 더 들어가 있다면 [바깥 폴더로 한 단계 올리기]를 써요. 같은 드라이브에서는 몇 초면 끝나요.</dd>
+    <dt>설치 폴더를 다른 곳으로 옮기고 싶어요</dt><dd><b>설정</b> 탭 → [프로그램 관리] → 새 위치를 적고 [확인] → [옮기기 시작]. 폴더가 한 겹 더 들어가 있다면 [바깥 폴더로 한 단계 올리기]를 써요. 같은 드라이브에서는 몇 초면 끝나요.</dd>
     <dt>화면이 멈췄거나 설정을 바꾼 뒤 적용하고 싶어요</dt><dd>왼쪽 아래 <b>[⟳ 프로그램 다시 시작]</b>을 눌러요. 스튜디오와 엔진이 다시 켜지고 화면이 자동으로 새로고침돼요.</dd>
     <dt>디스크가 가득 찼어요</dt><dd><b>설치와 모델</b> 탭 → [저장 공간 점검]에서 큰 파일과 임시 파일을 찾아 정리해요.</dd>
   </dl>
@@ -612,16 +614,16 @@
     <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
     <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
     <tr><td>결과 삭제 · 날짜별 폴더 정리 · 날짜별로 보기 · outputs 폴더 열기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
-    <tr><td>버전별 변경 사항 보기</td><td class="y">지원</td><td>왼쪽 위 버전 표시를 누르거나 설치와 모델 → 프로그램 관리</td></tr>
+    <tr><td>버전별 변경 사항 보기</td><td class="y">지원</td><td>왼쪽 위 버전 표시를 누르거나 설정 → 프로그램 관리</td></tr>
     <tr><td>대화 목록 저장 · 검색 · 내보내기, 대화에 사진 붙여 묻기 (이미지 보는 모델 필요)</td><td class="y">지원</td><td>대화</td></tr>
-    <tr><td>태그 자동완성 (내 프롬프트 · LoRA 트리거 · 와일드카드 포함)</td><td class="y">지원</td><td>프롬프트 칸 (끄기: 설치와 모델 → 화면 설정)</td></tr>
+    <tr><td>태그 자동완성 (내 프롬프트 · LoRA 트리거 · 와일드카드 포함)</td><td class="y">지원</td><td>프롬프트 칸 (끄기: 설정 → 화면 · 입력 · 단축키)</td></tr>
     <tr><td>영상 이어서 만들기 (마지막 장면에서 시작)</td><td class="y">지원</td><td>영상 결과 카드</td></tr>
     <tr><td>영상 프레임 늘리기 · 업스케일 · 움직이는 WebP 변환</td><td class="p">미검증</td><td>영상 결과 카드 → 더 보기 (프레임 늘리기는 확장 필요)</td></tr>
     <tr><td>만든 결과 모아 보기 · 검색 · 즐겨찾기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
     <tr><td>프롬프트 보관함 · 와일드카드 편집 · 이미지에서 프롬프트 뽑기</td><td class="y">지원</td><td>프롬프트</td></tr>
     <tr><td>처음 쓰는 사람을 위한 안내 (준비 상태 점검, 하고 싶은 일별 순서, 문제 해결집)</td><td class="y">지원</td><td>시작하기</td></tr>
     <tr><td>LoRA 트리거 단어·학습 정보·미리보기 보기</td><td class="y">지원</td><td>설치와 모델 → LoRA·모델 정보, LoRA 칸 아래</td></tr>
-    <tr><td>프로그램 다시 시작 · 설치 위치 옮기기</td><td class="y">지원</td><td>왼쪽 아래 버튼, 설치와 모델 → 프로그램 관리</td></tr>
+    <tr><td>프로그램 다시 시작 · 설치 위치 옮기기</td><td class="y">지원</td><td>왼쪽 아래 버튼, 설정 → 프로그램 관리</td></tr>
     <tr><td>워크플로의 없는 커스텀 노드 설치</td><td class="y">지원</td><td>워크플로 (노드 도우미)</td></tr>
     <tr><td>얼굴·손 자동 보정 · 참고 이미지(IP-Adapter)로 스타일·얼굴 유지</td><td class="p">미검증</td><td>기능 모음 (확장 설치 도우미 포함, 만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
     <tr><td>얼굴 교체 · SD3 · HiDream · Lumina · 서브그래프 워크플로</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
@@ -763,7 +765,8 @@
   </details>
   <details class="fold" id="fold-disk"><summary>저장 공간 점검</summary>
     <p class="hint plain">어디에서 용량을 쓰는지 폴더별로 보여 주고, 지워도 안전한 임시 파일만 골라서 정리해 줘요. 모델과 결과 이미지는 자동으로 지우지 않아요.</p>
-    <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button><span class="mute" id="disk-st"></span></div>
+    <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button> <button type="button" class="ghost" id="tidy-scan" title="받다 만 파일, 같은 파일이 두 곳에 있는 경우, 오래된 큰 모델을 찾아 줘요">정리할 모델 찾기</button><span class="mute" id="disk-st"></span></div>
+    <div id="tidy"></div>
     <div id="disk"></div>
   </details>
   <details class="fold" id="fold-manage"><summary>설치된 모델</summary>
@@ -775,7 +778,15 @@
     <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">👤 캐릭터</option><option value="style">🎨 스타일</option><option value="background">🏞 배경·풍경</option><option value="other">✦ 기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
     <div id="mi-list"></div>
   </details>
-  <details class="fold" id="fold-ui"><summary>화면 설정 · 단축키</summary>
+  <h3>진행 상황</h3><div id="tasks"></div>
+</section>
+<section class="view" id="v-conf">
+  <h2>설정</h2>
+  <p class="hint plain">화면 모양, 백업, 문제 해결, 프로그램 관리를 모았어요. 모델 설치와 폴더는 <a href="#" data-go="setup">설치와 모델</a>에 있어요.</p>
+  <details class="fold" id="fold-ui" open><summary>화면 · 입력 · 단축키</summary>
+    <h4>화면 크기</h4>
+    <label class="f ui-scale">글자·메뉴 크기<select id="ui-scale"><option value="0.9">작게 (90%)</option><option value="1">보통 (100%)</option><option value="1.1">조금 크게 (110%)</option><option value="1.25">크게 (125%)</option><option value="1.5">아주 크게 (150%)</option></select></label>
+    <p class="hint plain">글자와 왼쪽 메뉴가 같이 커지거나 작아져요. 브라우저의 Ctrl + 휠(확대)과 따로 기억돼요.</p>
     <h4>화면 색</h4>
     <div class="theme-pick" id="theme-pick"><label><input type="radio" name="theme" value="auto"> 컴퓨터 설정에 맞춤</label><label><input type="radio" name="theme" value="dark"> 어둡게</label><label><input type="radio" name="theme" value="light"> 밝게</label></div>
     <h4>프롬프트 입력</h4>
@@ -812,7 +823,6 @@
     <div class="actions"><button class="ghost" id="app-up" type="button">바깥 폴더로 한 단계 올리기</button><button class="ghost" id="app-check" type="button">확인</button><button class="go" id="app-go" type="button" hidden>옮기기 시작</button></div>
     <p id="app-plan" class="hint plain"></p>
   </details>
-  <h3>진행 상황</h3><div id="tasks"></div>
 </section>
 </main>
 

@@ -181,6 +181,19 @@ def llms():
         return []
 
 
+def quiet_log(*a):
+    """콘솔(검은 창)에는 찍지 않고 logs\\hub-debug.log 에만 남겨요(너무 커지면 새로 시작)."""
+    try:
+        LOGS.mkdir(exist_ok=True)
+        f = LOGS / "hub-debug.log"
+        if f.exists() and f.stat().st_size > 200_000:
+            f.write_text("", encoding="utf-8")
+        with open(f, "a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S ") + " ".join(str(x) for x in a) + "\n")
+    except OSError:
+        pass
+
+
 def _front_window(title, before):
     """Windows: 브라우저가 포그라운드라 탐색기가 뒤에 열려요. 새로 뜬(또는 이미 열려 있던) 탐색기 창을 찾아 앞으로 가져옵니다.
     포그라운드 잠금은 (1) 앞 창의 입력 스레드에 붙기 (2) 잠깐 '항상 위'로 올렸다 내리기 (3) SwitchToThisWindow 를 차례로 써서 풀어요."""
@@ -218,7 +231,7 @@ def _front_window(title, before):
             break
         time.sleep(0.1)
     else:
-        log("[폴더 창을 찾지 못했어요]", title)
+        quiet_log("[폴더 창을 찾지 못했어요]", title)
         return
     time.sleep(0.15)   # 창이 완전히 자리 잡은 뒤에
     if u.IsIconic(hwnd):
@@ -237,7 +250,7 @@ def _front_window(title, before):
     finally:
         if attached:
             u.AttachThreadInput(me, theirs, False)
-    log("[폴더 창 앞으로]", title, "성공" if u.GetForegroundWindow() == hwnd else "시도함(앞으로 안 왔을 수 있음)")
+    quiet_log("[폴더 창 앞으로]", title, "성공" if u.GetForegroundWindow() == hwnd else "시도함(앞으로 안 왔을 수 있음)")
 
 
 def _explorer_windows():
@@ -256,7 +269,7 @@ def _safe(f, *a):
     try:
         f(*a)
     except Exception as e:  # noqa: BLE001
-        log("[창 앞으로 가져오기 실패]", e)
+        quiet_log("[창 앞으로 가져오기 실패]", e)
 
 
 def open_folder(p, select=None):
@@ -808,8 +821,6 @@ def run_wf(wf, J, raw=False):
             for ev, d in h.get("status", {}).get("messages", []):
                 if ev == "execution_error":
                     msg = d.get("exception_message", "실행 오류")
-                    if "out of memory" in msg.lower():
-                        msg += " — 해상도를 낮추거나 '빠른 모드'를 사용해 보세요."
                     raise RuntimeError(msg)
             imgs = []
             for o in h.get("outputs", {}).values():
@@ -1876,6 +1887,9 @@ def job_thread(J, p):
         J["state"], J["error"] = "error", str(e) or e.__class__.__name__
         if pymod_missing(J["error"]):
             J["pymod"] = pymod_missing(J["error"])
+        og = oom_guide(J["error"], p)
+        if og:
+            J["oom"] = og
         log("[작업 오류]", J["error"])
     finally:
         _clean_tmp(J)
@@ -2826,6 +2840,36 @@ PYMODS = {"matplotlib": "matplotlib", "scipy": "scipy", "cv2": "opencv-python-he
           "onnxruntime": "onnxruntime", "ultralytics": "ultralytics", "trimesh": "trimesh", "omegaconf": "omegaconf", "fvcore": "fvcore",
           "svglib": "svglib", "reportlab": "reportlab", "numba": "numba"}
 PYMOD_JOBS = {}
+
+
+OOM_PAT = re.compile(r"out of memory|outofmemory|not enough memory|failed to allocate|allocation on device|insufficient memory|cublas_status_alloc_failed", re.I)
+
+
+def oom_guide(msg, p):
+    """메모리(VRAM) 부족으로 멈췄을 때, 작업 종류에 맞는 해결 방법을 돌려줘요. 아니면 None."""
+    if not OOM_PAT.search(str(msg or "")):
+        return None
+    kind = (p or {}).get("kind")
+    tips = []
+    if kind == "vid":
+        tips = ["영상 길이(프레임 수)를 줄이거나 크기를 낮춰 보세요. 둘 다 메모리를 크게 써요.",
+                "14B 모델이면 5B 로 바꿔 보세요."]
+    elif kind == "vpost":
+        tips = ["프레임 보간·업스케일은 영상이 길수록 메모리를 많이 써요. 더 짧은 영상으로 해 보세요.",
+                "업스케일 배율을 낮추거나 보간 배수를 2배로 해 보세요."]
+    elif kind in ("up", "batch"):
+        tips = ["업스케일은 큰 사진일수록 메모리를 많이 써요. 사진을 먼저 줄이거나 배율을 낮춰 보세요."]
+    else:
+        tips = ["해상도를 한 단계 낮춰 보세요(예: 1024 → 832). 장수는 1장씩이 가장 안전해요.",
+                "ControlNet·LoRA·고해상도 보정을 켰다면 하나씩 꺼 보세요."]
+    tips.append("아래 [메모리 비우기]로 쌓인 메모리를 정리한 뒤 다시 시도해 보세요. 채팅 모델이 올라가 있으면 같이 내려가요.")
+    return {"tips": tips}
+
+
+def memory_free():
+    free_ollama()
+    free_comfy()
+    return {"ok": True}
 
 
 def pymod_missing(msg):
@@ -3886,6 +3930,44 @@ def disk_report():
                 used=sum(i["bytes"] for i in items if i["key"] not in ("o_default", "hf", "pip")))
 
 
+def model_tidy(now=None):
+    """지워도 될 만한 모델 파일 후보를 이유와 함께 모아요. 여기서는 아무것도 지우지 않아요(지우기는 화면에서 직접 고른 것만)."""
+    now = now or time.time()
+    cands, seen = {}, {}
+    def add(d, f, reason):
+        k = (d, f.name)
+        c = cands.setdefault(k, dict(dir=d, name=f.name, size=fsize(f), reasons=[], days=int((now - f.stat().st_mtime) // 86400)))
+        c["reasons"].append(reason)
+    for d in sorted(FOLDERS):
+        base = MODELS / d
+        if not base.is_dir():
+            continue
+        for f in sorted(base.iterdir()):
+            if not f.is_file():
+                continue
+            if f.suffix == ".part":
+                add(d, f, "받다 만 파일이에요")
+            elif f.suffix.lower() in EXT:
+                sz = fsize(f)
+                if sz > (50 << 20):
+                    seen.setdefault(sz, []).append((d, f))
+                if sz > (1 << 30) and now - f.stat().st_mtime > 120 * 86400:
+                    add(d, f, f"받은 지 {int((now - f.stat().st_mtime) // 86400)}일이 지났어요")
+    for sz, fs in seen.items():
+        if len(fs) < 2:
+            continue
+        g = {}
+        for d, f in fs:
+            g.setdefault(quick_sig(f), []).append((d, f))
+        for sig, v in g.items():
+            if not sig or len(v) < 2:
+                continue
+            for d, f in v[1:]:       # 첫 번째는 남기고 나머지를 후보로
+                add(d, f, f"같은 파일이 {v[0][0]}/{v[0][1].name} 에도 있어요")
+    items = sorted(cands.values(), key=lambda x: -x["size"])
+    return dict(items=items, total=sum(i["size"] for i in items))
+
+
 def clean_item(what):
     """안전한 임시 파일만 지워요. 돌려주는 값: 확보한 바이트."""
     freed = 0
@@ -4149,6 +4231,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(sam_status())
         if u == "/api/dl/tokens":
             return self.send_json(token_state())
+        if u == "/api/model-tidy":
+            return self.send_json(model_tidy())
         if u == "/api/disk":
             return self.send_json(disk_report())
         if u == "/api/gallery":
@@ -4205,7 +4289,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -4271,6 +4355,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": f"선택하지 못했어요 ({type(e).__name__}: {e})"})
         if u == "/api/family":
             return self.send_json(set_family(p))
+        if u == "/api/memory/free":
+            return self.send_json(memory_free())
         if u == "/api/app/restart":
             return self.send_json(app_restart(p))
         if u == "/api/app/move/check":
