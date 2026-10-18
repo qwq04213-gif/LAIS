@@ -273,7 +273,8 @@ IMG_CLASSES = ("LoadImage", "LoadImageMask", "LoadImageOutput")
 SEED_KEYS = ("seed", "noise_seed")
 
 
-def parse_graph(obj):
+def parse_graph(obj, info=None):
+    """API 형식이면 그대로, 화면용(UI) 형식이면 info(/object_info)로 변환해요."""
     if isinstance(obj, (str, bytes)):
         try:
             obj = json.loads(obj)
@@ -282,10 +283,106 @@ def parse_graph(obj):
     if isinstance(obj, dict) and isinstance(obj.get("prompt"), dict) and "class_type" not in obj:
         obj = obj["prompt"]  # {"prompt": {...}} 형태의 API 요청 본문도 허용
     if isinstance(obj, dict) and "nodes" in obj and "links" in obj:
-        raise ValueError("ComfyUI 화면용(UI) 워크플로예요. 설정에서 개발자 모드를 켠 뒤 'Save (API Format)'으로 저장한 파일이 필요해요.")
+        if not info:
+            raise ValueError("화면용(UI) 워크플로를 바꾸려면 이미지 엔진(ComfyUI)이 켜져 있어야 해요. 잠시 뒤 다시 시도해 주세요.")
+        return ui_to_api(obj, info)
     g = {str(k): v for k, v in obj.items() if isinstance(v, dict) and "class_type" in v} if isinstance(obj, dict) else {}
     if not g:
         raise ValueError("노드를 찾지 못했어요. 'Save (API Format)'으로 저장한 JSON 인지 확인해 주세요.")
+    return g
+
+
+# ───────────────────────── ComfyUI 화면용(UI) 워크플로 → API 형식 변환 ─────────────────────────
+_PRIM = ("INT", "FLOAT", "STRING", "BOOLEAN")
+_SKIP_TYPES = {"Note", "MarkdownNote", "Group"}
+
+
+def _widget_names(spec):
+    """object_info 의 입력 정의에서 '화면 위젯으로 나오는 입력' 이름을 순서대로 돌려줘요 (연결용 입력은 빼요)."""
+    out = []
+    for sec in ("required", "optional"):
+        for name, d in (spec.get("input", {}).get(sec) or {}).items():
+            t = d[0] if isinstance(d, (list, tuple)) and d else d
+            opts = d[1] if isinstance(d, (list, tuple)) and len(d) > 1 and isinstance(d[1], dict) else {}
+            if isinstance(t, list) or t in _PRIM or opts.get("image_upload") or opts.get("video_upload") or opts.get("audio_upload"):
+                extra = bool(opts.get("control_after_generate")) or name in ("seed", "noise_seed") \
+                    or bool(opts.get("image_upload") or opts.get("video_upload") or opts.get("audio_upload"))
+                out.append((name, extra))
+    return out
+
+
+def ui_to_api(ui, info):
+    """화면용 워크플로(nodes/links)를 API 형식으로 바꿔요. info 는 ComfyUI 의 /object_info 응답이에요.
+    Reroute·PrimitiveNode 는 값/연결을 바로 이어 주고, 끈 노드(mode 2)는 빼고, 우회 노드(mode 4)는 같은 종류의 입력으로 건너뛰어요."""
+    if ui.get("definitions", {}).get("subgraphs"):
+        raise ValueError("서브그래프(묶음 노드)가 들어 있는 워크플로예요. ComfyUI 에서 서브그래프를 풀거나 'Save (API Format)'으로 저장해 주세요.")
+    nodes = {str(n["id"]): n for n in ui.get("nodes", []) if isinstance(n, dict) and "id" in n}
+    links = {}
+    for l in ui.get("links", []):
+        if isinstance(l, (list, tuple)) and len(l) >= 5:
+            links[l[0]] = (str(l[1]), l[2])
+        elif isinstance(l, dict):
+            links[l["id"]] = (str(l["origin_id"]), l["origin_slot"])
+    unknown = sorted({n["type"] for n in nodes.values() if n.get("type") not in info and n.get("type") not in _SKIP_TYPES
+                      and n.get("type") not in ("Reroute", "PrimitiveNode") and n.get("mode") not in (2,)})
+    if unknown:
+        raise ValueError("설치되지 않은 노드가 있어요: " + ", ".join(unknown) + " (ComfyUI 고급 화면의 Manager 에서 설치한 뒤 다시 시도해 주세요)")
+
+    def resolve(ref, depth=0):
+        """(노드번호, 슬롯) 이 Reroute/우회/Primitive 이면 실제 출발점이나 값으로 따라가요. 반환: ('link', id, slot) 또는 ('val', 값)."""
+        nid, slot = ref
+        n = nodes.get(nid)
+        if n is None or depth > 40:
+            return None
+        t = n.get("type")
+        if t == "PrimitiveNode":
+            v = n.get("widgets_values") or [None]
+            return ("val", v[0])
+        if t == "Reroute" or n.get("mode") == 4:
+            ins = [i for i in n.get("inputs", []) if i.get("link") is not None]
+            if t != "Reroute":     # 우회: 출력과 같은 종류의 입력을 찾아요
+                outs = n.get("outputs", [])
+                want = outs[slot].get("type") if slot < len(outs) else None
+                ins = [i for i in ins if i.get("type") == want] or ins
+            if not ins or ins[0]["link"] not in links:
+                return None
+            return resolve(links[ins[0]["link"]], depth + 1)
+        return ("link", nid, slot)
+
+    g = {}
+    for nid, n in nodes.items():
+        t = n.get("type")
+        if t in _SKIP_TYPES or t in ("Reroute", "PrimitiveNode") or n.get("mode") in (2, 4) or t not in info:
+            continue
+        spec = info[t]
+        wn = _widget_names(spec)
+        vals = list(n.get("widgets_values") or []) if not isinstance(n.get("widgets_values"), dict) else n["widgets_values"]
+        inp = {}
+        if isinstance(vals, dict):
+            inp.update(vals)
+        else:
+            k = 0
+            for name, extra in wn:
+                if k < len(vals):
+                    inp[name] = vals[k]
+                k += 2 if extra else 1
+        for i in n.get("inputs", []):
+            lid = i.get("link")
+            if lid is None or lid not in links:
+                continue
+            r = resolve(links[lid])
+            if r is None:
+                continue
+            inp[i["name"]] = r[1] if r[0] == "val" else [r[1], r[2]]
+            if r[0] == "val":
+                inp[i["name"]] = r[1]
+        g[nid] = {"class_type": t, "inputs": inp}
+    for nid in list(g):      # 끊어진 연결(빠진 노드를 가리킴)은 지워요
+        for k, v in list(g[nid]["inputs"].items()):
+            if isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and v[0] not in g:
+                del g[nid]["inputs"][k]
+    if not g:
+        raise ValueError("실행할 수 있는 노드를 찾지 못했어요.")
     return g
 
 

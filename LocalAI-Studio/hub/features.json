@@ -365,5 +365,204 @@
     "advanced": true
    }
   ]
+ },
+ {
+  "id": "resize",
+  "title": "크기·자르기·회전",
+  "icon": "✂",
+  "summary": "사진을 원하는 비율로 자르고, 돌리고, 뒤집고, 긴 변 길이를 맞춰요. 모델이 필요 없고 바로 끝나요.",
+  "steps": [
+   "이미지를 올려요",
+   "필요한 것만 골라요 (자를 비율 / 회전 / 뒤집기 / 긴 변 크기)",
+   "[만들기]를 눌러요"
+  ],
+  "needs": {},
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "이미지",
+    "required": true
+   },
+   {
+    "name": "crop",
+    "type": "select",
+    "label": "비율대로 자르기",
+    "options": [
+     [
+      "none",
+      "자르지 않음"
+     ],
+     [
+      "1:1",
+      "1:1 (정사각형)"
+     ],
+     [
+      "4:3",
+      "4:3 가로"
+     ],
+     [
+      "3:4",
+      "3:4 세로"
+     ],
+     [
+      "3:2",
+      "3:2 가로"
+     ],
+     [
+      "2:3",
+      "2:3 세로"
+     ],
+     [
+      "16:9",
+      "16:9 가로"
+     ],
+     [
+      "9:16",
+      "9:16 세로"
+     ]
+    ],
+    "default": "none"
+   },
+   {
+    "name": "anchor",
+    "type": "select",
+    "label": "남길 위치",
+    "options": [
+     [
+      "center",
+      "가운데"
+     ],
+     [
+      "left",
+      "왼쪽 / 위쪽"
+     ],
+     [
+      "right",
+      "오른쪽 / 아래쪽"
+     ]
+    ],
+    "default": "center",
+    "hint": "왼쪽/위쪽을 고르면 그쪽을 남기고 반대쪽을 잘라요."
+   },
+   {
+    "name": "rotate",
+    "type": "select",
+    "label": "회전",
+    "options": [
+     [
+      "0",
+      "돌리지 않음"
+     ],
+     [
+      "90",
+      "오른쪽으로 90°"
+     ],
+     [
+      "180",
+      "180°"
+     ],
+     [
+      "270",
+      "왼쪽으로 90°"
+     ]
+    ],
+    "default": "0"
+   },
+   {
+    "name": "flip",
+    "type": "select",
+    "label": "뒤집기",
+    "options": [
+     [
+      "none",
+      "뒤집지 않음"
+     ],
+     [
+      "h",
+      "좌우 뒤집기"
+     ],
+     [
+      "v",
+      "상하 뒤집기"
+     ]
+    ],
+    "default": "none"
+   },
+   {
+    "name": "long_side",
+    "type": "number",
+    "label": "긴 변 길이 (px, 0=그대로)",
+    "default": 0,
+    "min": 0,
+    "max": 8192,
+    "step": 64
+   }
+  ]
+ },
+ {
+  "id": "color",
+  "title": "밝기·색 보정",
+  "icon": "◐",
+  "summary": "밝기, 대비, 채도, 선명도, 흐림을 슬라이더 숫자로 조절해요. 100은 원래 그대로예요. 모델이 필요 없어요.",
+  "steps": [
+   "이미지를 올려요",
+   "바꾸고 싶은 값만 조절해요 (100 = 그대로)",
+   "[만들기]를 눌러요"
+  ],
+  "needs": {},
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "이미지",
+    "required": true
+   },
+   {
+    "name": "bright",
+    "type": "number",
+    "label": "밝기 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 5
+   },
+   {
+    "name": "contrast",
+    "type": "number",
+    "label": "대비 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 5
+   },
+   {
+    "name": "sat",
+    "type": "number",
+    "label": "채도 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 5
+   },
+   {
+    "name": "sharp",
+    "type": "number",
+    "label": "선명도 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 5
+   },
+   {
+    "name": "blur",
+    "type": "number",
+    "label": "흐림 (px, 0=없음)",
+    "default": 0,
+    "min": 0,
+    "max": 50,
+    "step": 1
+   }
+  ]
  }
 ]

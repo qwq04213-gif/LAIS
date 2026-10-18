@@ -300,6 +300,8 @@ def read(data):
                 out["gen"], out["kind"] = comfy_norm(g), "comfyui"
     except ValueError:
         pass
+    if not out["comfy"] and isinstance(texts.get("workflow"), str) and texts["workflow"].lstrip().startswith("{"):
+        out["workflow"] = texts["workflow"]      # 화면용(UI) 워크플로만 들어 있는 이미지 → 워크플로 탭에서 변환해 열어요
     if texts.get("Software") == "NovelAI" and "Comment" in texts:
         try:
             c = json.loads(texts["Comment"])

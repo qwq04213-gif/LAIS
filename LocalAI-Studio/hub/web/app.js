@@ -34,6 +34,7 @@ const T={
 T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
   <select name="rengine"><option value="sdxl">SD·SDXL 체크포인트 (일러스트 · 실사 SDXL 모두)</option><option value="flux">FLUX · Krea(FLUX.1)</option><option value="krea2">Krea 2</option><option value="chroma">Chroma</option><option value="qwen">Qwen-Image-Edit (이미지 편집에 쓰는 모델)</option></select></label>
  <label class="f">프롬프트 (선택)<textarea name="prompt" rows="3" placeholder="비워 두면 일반적인 고화질 지시만 써요"></textarea></label>
+ <label class="f re-noq">타일 프롬프트<select name="tileprompt"><option value="auto">일반 고화질 지시만 (추천 — 배경에 눈·얼굴이 새로 생기지 않아요)</option><option value="mine">내 프롬프트도 함께 사용</option></select></label>
  <label class="f re-noq">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 프로필 기본값을 써요"></textarea></label>
  <div class="re-q"><p class="hint plain">Qwen-Image-Edit 이 각 조각을 지시문대로 다시 그려요. 프롬프트는 <b>더 선명하고 자연스러운 질감으로</b>처럼 문장으로 적고, 비워 두면 '구도·얼굴은 그대로 두고 선명하게' 지시를 써요. 변화 강도는 0.3~0.5가 무난해요.</p>
   <label class="chk"><input type="checkbox" name="fast"> 빠른 모드 (Lightning 4단계 LoRA가 설치되어 있을 때)</label></div>
@@ -171,7 +172,8 @@ const TIPS={
  fx_scheduler:'노이즈를 줄이는 속도 배분이에요. FLUX·Krea·Krea 2는 simple, Chroma는 beta를 추천해요.',
  upm:'확대에 쓸 모델이에요. Real-ESRGAN은 실사·일반 이미지, UltraSharp 계열은 선명한 그림에 잘 맞아요.',
  scale:'가로세로를 몇 배로 키울지예요. 4배는 결과 파일이 매우 커질 수 있어요.',
- rdenoise:'확대 뒤 다시 그릴 정도예요. 0.25~0.35가 무난하고, 높이면 디테일이 늘지만 모양이 바뀔 수 있어요. Qwen-Image-Edit 은 0.3~0.5가 무난해요.',
+ tileprompt:'큰 이미지를 조각(타일)으로 나눠 다시 그리는데, 조각마다 "얼굴, 눈" 같은 프롬프트를 넣으면 배경 조각에도 눈·얼굴을 그려 넣어요. 추천 설정은 일반 고화질 지시만 쓰고, 내 프롬프트의 LoRA 태그만 살려요.',
+ rdenoise:'확대 뒤 다시 그릴 정도예요. 0.25~0.35가 무난하고(실사는 0.15~0.25), 높이면 디테일이 늘지만 모양이 바뀌고 배경에 눈·얼굴이 생길 수 있어요. Qwen-Image-Edit 은 0.3~0.5가 무난해요.',
  tile:'큰 이미지를 이 크기의 조각으로 나눠 한 장씩 다시 그려요. VRAM이 부족하면 줄이세요.',
  overlap:'조각 사이를 얼마나 겹쳐서 이음새를 감출지예요. 128 정도면 대부분 충분해요.',
  lora:'LoRA는 특정 캐릭터·화풍·옷 등을 더해 주는 작은 추가 파일이에요. 체크포인트와 같은 계열의 것만 맞아요(SDXL용은 SDXL 모델에).',
@@ -355,7 +357,7 @@ function sync(f){if(f.elements.engine)f.dataset.e=f.elements.engine.value;if(f.e
   if(f.elements.gengine)f.dataset.g=f.elements.gengine.value;if(f.elements.rengine)f.dataset.re=f.elements.rengine.value;if(f.elements.fengine)f.dataset.fe=f.elements.fengine.value;warn()}
 function presetsUI(f){
   const box=$('[data-presets]',f);if(!box)return;
-  box.innerHTML='<select class="pre-sel"></select><button type="button" class="ghost pre-save">현재 설정 저장</button><button type="button" class="ghost pre-del">삭제</button>';
+  box.innerHTML='<select class="pre-sel"></select><button type="button" class="ghost pre-save">현재 설정 저장</button><button type="button" class="ghost pre-del">삭제</button><button type="button" class="ghost refresh-models" title="폴더에 새로 넣거나 지운 모델·LoRA 파일을 목록에 바로 반영해요.">↻ 모델 새로고침</button>';
   const sel=$('.pre-sel',box),all=()=>ls.get('preset:'+f.id,{});
   const refresh=()=>{sel.innerHTML='<option value="">내 프리셋 불러오기</option>'+Object.keys(all()).map(n=>`<option>${esc(n)}</option>`).join('')};
   refresh();
@@ -397,7 +399,7 @@ function lbClose(){$('#lb').hidden=true;document.body.style.overflow='';$('#lb-i
 function lbLoad(){
   const it=LB.list[LB.i],im=$('#lb-img');
   LB.cmp=false;$('#lb-before').hidden=$('#lb-line').hidden=$('#lb-split').hidden=true;
-  $('#lb-cmp').hidden=!it.before;$('#lb-cmp').textContent='전후 비교';
+  $('#lb-cmp').hidden=!it.before;$('#lb-cmp').textContent='겹쳐서 비교';
   $('#lb-prev').disabled=$('#lb-next').disabled=LB.list.length<2;
   $('#lb-dl').href=it.url;$('#lb-dl').download=it.name||'image.png';
   im.onload=()=>{LB.nw=im.naturalWidth;LB.nh=im.naturalHeight;im.style.width=LB.nw+'px';im.style.height=LB.nh+'px';lbFit();if(LB.wantCmp){LB.wantCmp=false;lbCmp()}};
@@ -422,7 +424,7 @@ function lbCmp(){
   const bf=$('#lb-before');
   if(LB.cmp){bf.src=it.before;bf.style.width=LB.nw+'px';bf.style.height=LB.nh+'px'}
   bf.hidden=$('#lb-line').hidden=$('#lb-split').hidden=!LB.cmp;
-  $('#lb-cmp').textContent=LB.cmp?'비교 끄기':'전후 비교';lbApply();
+  $('#lb-cmp').textContent=LB.cmp?'비교 끄기':'겹쳐서 비교';lbApply();
 }
 $('#lb-split').oninput=lbApply;
 $('#lb-view').addEventListener('wheel',e=>{e.preventDefault();const r=lbRect();lbZoom(Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0015)),e.clientX-r.left,e.clientY-r.top)},{passive:false});
@@ -441,7 +443,7 @@ addEventListener('keydown',e=>{
   if(e.key==='Escape')lbClose();
   else if(e.key==='ArrowLeft')lbStep(-1);else if(e.key==='ArrowRight')lbStep(1);
   else if(e.key==='+'||e.key==='=')lbZoom(1.25,cx,cy);else if(e.key==='-')lbZoom(0.8,cx,cy);
-  else if(e.key==='0')lbFit();else if(e.key==='1')lbOne();else return;
+  else if(e.key==='0')lbFit();else if(e.key==='1')lbOne();else if((e.key==='c'||e.key==='C')&&LB.list[LB.i]&&LB.list[LB.i].before)lbCmp();else return;
   e.preventDefault();
 });
 addEventListener('resize',()=>{if(!$('#lb').hidden)lbFit()});
@@ -644,6 +646,11 @@ function painter(v){
   cv.onpointerup=cv.onpointercancel=()=>{down=false};
   cv.onpointerleave=()=>{ring.style.display='none'};
   $('.clr',sec).onclick=()=>c.clearRect(0,0,cv.width,cv.height);
+  $('.am-cut',sec).onclick=()=>{   // 선택한 부분만 남기고 나머지를 투명하게 → PNG 저장 (배경 제거)
+    if(!v.hasMask())return note('먼저 남길 부분을 칠하거나 선택해 주세요. (배경 제거: [배경] → [선택 반전])');
+    const w=imEl.naturalWidth,hh=imEl.naturalHeight,t=document.createElement('canvas');t.width=w;t.height=hh;const x=t.getContext('2d');
+    x.drawImage(imEl,0,0,w,hh);x.globalCompositeOperation='destination-in';x.drawImage(cv,0,0,w,hh);
+    t.toBlob(b=>{const u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download='cutout.png';document.body.append(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);note('선택한 부분만 남긴 투명 PNG를 저장했어요.')},'image/png')};
   v.hasMask=()=>{const d=c.getImageData(0,0,cv.width,cv.height).data;for(let i=3;i<d.length;i+=4)if(d[i]>40)return true;return false};
   v.maskData=()=>{const t=document.createElement('canvas');t.width=cv.width;t.height=cv.height;
     const x=t.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,t.width,t.height);x.drawImage(cv,0,0);return t.toDataURL('image/png')};
@@ -676,11 +683,13 @@ function imgView(id){
   if(cv)painter(v);
   const bs=$('.bigsel',sec);
   if(bs){
-    const st=$('.stage',sec),sim=$('img',st);
-    const fit=()=>{if(!sec.classList.contains('bigedit')){st.style.width='';sim.style.width='';sim.style.maxHeight='';return}   // 화면 크기에 맞춰 최대한 크게(원본보다 커져도 돼요)
-      const r=(sim.naturalWidth||4)/(sim.naturalHeight||3),w=Math.max(200,Math.min(sec.clientWidth-44,(innerHeight-$('.tools',sec).offsetHeight-80)*r));st.style.width=w+'px';sim.style.width='100%';sim.style.maxHeight='none'};
-    const big=on=>{sec.classList.toggle('bigedit',on);bs.textContent=on?'작게 돌아가기 (Esc)':'크게 보며 선택';if(on)sec.scrollTop=0;fit()};
-    addEventListener('resize',fit);
+    const st=$('.stage',sec),sim=$('img',st),wk=$('.work',sec),bz=$('.bigzoom',sec),bo=$('.bigonly output',sec);
+    const fit=()=>{if(!sec.classList.contains('bigedit')){st.style.width='';sim.style.width='';sim.style.maxHeight='';return}   // 남는 공간에 꽉 차게(원본보다 커져도 돼요)
+      const r=(sim.naturalWidth||4)/(sim.naturalHeight||3),aw=wk.clientWidth-26,ah=wk.clientHeight-30,w=Math.max(200,Math.min(aw,ah*r)*(+bz.value)/100);
+      st.style.width=w+'px';sim.style.width='100%';sim.style.maxHeight='none';bo.textContent=bz.value+'%'};
+    const big=on=>{sec.classList.toggle('bigedit',on);bs.textContent=on?'← 작게 돌아가기 (Esc)':'크게 보며 선택';if(on){bz.value=100;wk.scrollTo(0,0)}fit()};
+    addEventListener('resize',fit);bz.oninput=fit;
+    wk.addEventListener('wheel',e=>{if(!e.ctrlKey||!sec.classList.contains('bigedit'))return;e.preventDefault();bz.value=Math.max(100,Math.min(400,+bz.value+(e.deltaY<0?20:-20)));fit()},{passive:false});
     bs.onclick=()=>{if(!v.img)return toast('먼저 이미지를 올려 주세요.');big(!sec.classList.contains('bigedit'))};
     $('.bigrun',sec).onclick=()=>{big(false);$('form .go',sec).click()};
     addEventListener('keydown',e=>{if(e.key==='Escape'&&sec.classList.contains('bigedit')&&$('#lb').hidden)big(false)});
@@ -698,7 +707,7 @@ function addResults(sec,j,kind){
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
     j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="edit">${first}</button>${
     kind==='up'?'':`<button type="button" data-u="${u}" data-to="up">업스케일</button>`}${kind==='gen'?`<button type="button" data-u="${u}" data-to="regen" title="이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요">같은 설정으로 생성</button>`:''}<button type="button" data-u="${u}" data-to="info">정보</button><button type="button" data-u="${u}" data-to="folder" title="이 사진이 저장된 폴더를 열어요">출력 폴더 열기</button>${
-    COMPARE[u]?`<button type="button" data-u="${u}" data-to="cmp">전후 비교</button>`:''}</figcaption></figure>`).join('')}${
+    COMPARE[u]?`<button type="button" data-u="${u}" data-to="cmp">겹쳐서 비교</button>`:''}</figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
   bt.querySelectorAll('img').forEach(i=>{if(!i.complete)i.addEventListener('load',goto,{once:true})}); // 사진이 다 불러와진 뒤 높이가 커져도 다시 맞춰요
@@ -816,7 +825,7 @@ function renderInfo(){
      <button type="button" class="ghost" data-act="send-edit">이미지 편집으로 보내기</button>
      ${g&&g.prompt?'<button type="button" class="ghost" data-act="gen">이 설정으로 이미지 생성 탭 채우기</button>':''}
      <button type="button" class="ghost" data-act="send-up">업스케일로 보내기</button>
-     ${r.comfy?'<button type="button" class="ghost" data-act="wf">워크플로 탭으로 보내기</button>':''}
+     ${r.comfy||r.workflow?'<button type="button" class="ghost" data-act="wf">워크플로 탭으로 보내기</button>':''}
      <button type="button" class="ghost" data-act="strip">메타데이터 제거본 저장</button>
     </div>
     <p class="st" id="info-st"></p>
@@ -830,7 +839,7 @@ $('#info-out').addEventListener('click',async e=>{
   if(t.dataset.copy!==undefined){await navigator.clipboard.writeText(t.dataset.copy);t.textContent='복사됨';setTimeout(()=>t.textContent='복사',1200);return}
   const a=t.dataset.act;if(!a)return;
   if(a==='gen')sendToGen();
-  else if(a==='wf'){$('#wf-json').value=JSON.stringify(INFO.r.comfy,null,1);show('wf');wfAnalyze()}
+  else if(a==='wf'){$('#wf-json').value=INFO.r.comfy?JSON.stringify(INFO.r.comfy,null,1):INFO.r.workflow;show('wf');wfAnalyze()}
   else if(a==='card')applyCard(INFO.r.card);
   else if(a==='send-edit'){IV.edit.set(INFO.dataUrl);show('edit')}
   else if(a==='send-up'){IV.up.set(INFO.dataUrl);show('up')}
@@ -921,7 +930,12 @@ function renderWF(){
   $$('#wf-fields .mini').forEach(m=>mini(m,'이미지 바꾸기 (선택)'));
 }
 $('#wf-an').onclick=wfAnalyze;$('#wf-file').onclick=()=>$('#wf-fin').click();
-$('#wf-fin').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f){$('#wf-json').value=await f.text();wfAnalyze()}};
+$('#wf-fin').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(f.type.startsWith('image/')){   // ComfyUI 로 만든 이미지에서 워크플로 꺼내기
+    const r=await api('/api/meta',{image:await toDataURL(f)});const g=r.comfy?JSON.stringify(r.comfy,null,1):r.workflow;
+    if(!g){const st=$('#wf-st');st.className='st bad';st.textContent='이 이미지에는 ComfyUI 워크플로가 들어 있지 않아요.';return}
+    $('#wf-json').value=g;wfAnalyze();return}
+  $('#wf-json').value=await f.text();wfAnalyze()};
 $('#wf-json').addEventListener('input',()=>{if(WFX.a){$('#wf-go').disabled=true;$('#wf-st').className='st';$('#wf-st').textContent='내용이 바뀌었어요. [분석]을 다시 눌러 주세요.'}});
 $('#f-wf').onsubmit=e=>{e.preventDefault();if(!WFX.a)return;
   const rand=$('#wf-rand')?.checked,ov={texts:{},seeds:{},images:{},sizes:{},rand:!!rand};
@@ -1016,6 +1030,13 @@ $('#inst').onclick=async()=>{
   if(r.error){alert(r.error);return}
   $$('#v-setup .item input').forEach(i=>i.checked=false);loadTasks();
 };
+async function refreshModels(){
+  const b=$$('.refresh-models,#refresh-models,#refresh-models2');b.forEach(x=>x.disabled=true);
+  try{await loadLists(true);loadManage();await loadCaps();
+    toast(`목록을 새로 읽었어요: 체크포인트 ${LISTS.checkpoints.length}개 · FLUX계열 ${(LISTS.fluxmodels||[]).length+(LISTS.krea2models||[]).length+(LISTS.chromamodels||[]).length}개 · LoRA ${LISTS.loras.length}개 · VAE ${LISTS.vaes.length}개`)}
+  catch{toast('목록을 읽지 못했어요. 이미지 엔진이 켜져 있는지 확인해 주세요.')}
+  b.forEach(x=>x.disabled=false)}
+document.addEventListener('click',e=>{if(e.target.closest('.refresh-models,#refresh-models,#refresh-models2'))refreshModels()});
 const fmtSize=b=>b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(0)+' MB';
 const DIRN={checkpoints:'체크포인트',loras:'LoRA',embeddings:'임베딩',controlnet:'ControlNet',vae:'VAE',upscale_models:'업스케일',diffusion_models:'디퓨전 모델',text_encoders:'텍스트 인코더',clip_vision:'CLIP Vision',unet:'UNet',clip:'CLIP'};
 async function loadManage(){

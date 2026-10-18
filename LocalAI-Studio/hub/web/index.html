@@ -25,6 +25,7 @@
     <button data-v="setup">설치와 모델</button>
   </nav>
   <div class="grow"></div>
+  <button class="adv" id="refresh-models" type="button" title="폴더에 새로 넣거나 지운 모델·LoRA·VAE 파일을 목록에 바로 반영해요.">↻ 모델 목록 새로고침</button>
   <button class="adv" data-open="outputs" type="button">결과 폴더 열기</button>
   <a class="adv" href="http://127.0.0.1:8188" target="_blank" rel="noopener">ComfyUI 고급 화면 열기</a>
   <div id="stat">
@@ -200,6 +201,7 @@
         <button type="button" class="ghost am-bg">배경</button>
         <button type="button" class="ghost am-inv">선택 반전</button>
         <button type="button" class="ghost am-undo">되돌리기</button>
+        <button type="button" class="ghost am-cut" title="지금 선택(칠한) 영역만 남기고 나머지는 투명하게 해서 PNG 로 저장해요. [배경] → [선택 반전] 순서로 누르면 배경 제거가 돼요.">선택만 남겨 투명 PNG 저장</button>
         <span class="growbox" title="칠한 영역을 사방으로 넓히거나 줄여요. 인페인트는 주변을 조금 더 칠해야 경계가 자연스러워요.">
           <button type="button" class="ghost am-grow">주변 넓히기</button><button type="button" class="ghost am-shrink">줄이기</button>
           <input type="number" class="grow-px" value="16" min="1" max="300" aria-label="넓히는 폭(픽셀)">px
@@ -213,6 +215,7 @@
         </span>
       </span>
       <button type="button" class="ghost bigsel" title="설정 칸을 접고 이미지를 화면 가득 키워서 칠하거나 선택해요. Esc 로 돌아와요.">크게 보며 선택</button>
+      <label class="bigonly" title="이미지를 더 크게 키워요. 커지면 스크롤하거나 Ctrl+마우스 휠로 조절해요.">확대 <input type="range" class="bigzoom" min="100" max="400" step="10" value="100"><output>100%</output></label>
       <button type="button" class="go bigrun" title="큰 화면을 닫고 지금 선택으로 바로 편집해요.">닫고 편집 실행</button>
       <button type="button" class="ghost zoom">원본 크게 보기</button>
       <button type="button" class="ghost swap">다른 이미지</button>
@@ -406,6 +409,19 @@
     <dt>업스케일</dt><dd>해상도를 키우면서 디테일을 살려요. <b>업스케일 탭</b></dd>
     <dt>노드 / 워크플로</dt><dd>ComfyUI의 '부품'과 '연결도'예요. 이 프로그램은 자주 쓰는 연결도를 대신 만들어 주고, 직접 만든 것은 <b>워크플로 탭</b>에서 실행할 수 있어요.</dd>
   </dl>
+  <h3>하고 싶은 일로 찾기</h3>
+  <dl class="gloss">
+    <dt>글만으로 그림을 만들고 싶어요</dt><dd><b>이미지 생성</b> 탭 → 모델을 고르고 프롬프트를 적고 [이미지 생성]. 처음이면 프로필은 '자동'으로 두세요.</dd>
+    <dt>마음에 든 그림을 조금만 바꿔서 또 만들고 싶어요</dt><dd>결과 아래 <b>[같은 설정으로 생성]</b>을 누른 뒤 프롬프트나 시드만 바꿔요. 시드를 그대로 두면 같은 구도로 나와요.</dd>
+    <dt>사진 속 옷·머리색·표정만 바꾸고 싶어요</dt><dd><b>이미지 편집</b> → 사진을 올리고 [선택 도구]로 바꿀 곳을 클릭 → 원하는 변화를 적고 [편집 실행]. 말로만 바꾸려면 'Qwen-Image-Edit'을 쓰세요.</dd>
+    <dt>사진을 더 크고 선명하게 만들고 싶어요</dt><dd><b>업스케일</b> → 빠른 업스케일. 더 자세한 질감이 필요하면 '디테일 재생성'(실사는 변화 강도 0.2 안팎).</dd>
+    <dt>사진의 배경만 지우고 싶어요</dt><dd><b>이미지 편집</b> → [배경] → [선택 반전] → [선택만 남겨 투명 PNG 저장].</dd>
+    <dt>그림의 바깥을 더 넓히고 싶어요</dt><dd><b>기능 모음 → 이미지 확장</b>. 세로 사진을 가로로 만들 때 좋아요.</dd>
+    <dt>어떤 설정이 좋은지 비교해 보고 싶어요</dt><dd><b>기능 모음 → 설정 비교표</b>. 같은 시드로 CFG·단계 수만 바꿔 한 장에 모아 줘요.</dd>
+    <dt>인터넷에서 받은 ComfyUI 워크플로를 돌려 보고 싶어요</dt><dd><b>워크플로</b> 탭 → [파일 열기]에 JSON이나 PNG를 올려요. 없는 노드가 있으면 알려 줘요.</dd>
+    <dt>새 모델·LoRA 파일을 폴더에 직접 넣었어요</dt><dd>왼쪽 아래 <b>[↻ 모델 목록 새로고침]</b>을 누르면 바로 목록에 나와요.</dd>
+    <dt>디스크가 가득 찼어요</dt><dd><b>설치와 모델</b> 탭 → [저장 공간 점검]에서 큰 파일과 임시 파일을 찾아 정리해요.</dd>
+  </dl>
   <h3>ComfyUI 기능을 여기서 쓸 수 있나요?</h3>
   <table class="cov"><thead><tr><th>기능</th><th>상태</th><th>어디서</th></tr></thead><tbody>
     <tr><td>글로 그림 만들기 (SD1.5·SDXL·Illustrious·Pony·NoobAI)</td><td class="y">지원</td><td>이미지 생성</td></tr>
@@ -418,7 +434,11 @@
     <tr><td>이미지 확장 (아웃페인팅)</td><td class="y">지원</td><td>기능 모음</td></tr>
     <tr><td>영역별 프롬프트</td><td class="y">지원</td><td>기능 모음</td></tr>
     <tr><td>설정 비교표 (XY 플롯)</td><td class="y">지원</td><td>기능 모음</td></tr>
-    <tr><td>내가 만든 ComfyUI 워크플로 실행</td><td class="y">지원</td><td>워크플로 (API 형식 JSON)</td></tr>
+    <tr><td>내가 만든·받은 ComfyUI 워크플로 실행 (Save / Save (API Format) JSON, ComfyUI 로 만든 PNG)</td><td class="y">지원</td><td>워크플로</td></tr>
+    <tr><td>FLUX · Krea · Krea 2 · Chroma 로 칠해서 편집 / FLUX Kontext 말로 편집</td><td class="y">지원</td><td>이미지 편집</td></tr>
+    <tr><td>배경 제거 (투명 PNG)</td><td class="y">지원</td><td>이미지 편집 → [배경] → [선택 반전] → [선택만 남겨 투명 PNG 저장]</td></tr>
+    <tr><td>크기 바꾸기 · 비율 자르기 · 회전 · 밝기/색 보정</td><td class="y">지원</td><td>기능 모음</td></tr>
+    <tr><td>LoRA 가 어느 모델용인지 확인</td><td class="y">지원</td><td>이미지 생성·편집·업스케일의 LoRA 칸</td></tr>
     <tr><td>SD3 · HiDream · Lumina · 그 밖의 모델 계열</td><td class="p">준비 중</td><td>—</td></tr>
     <tr><td>영상 (이미지→영상, 글→영상)</td><td class="p">준비 중</td><td>—</td></tr>
     <tr><td>IP-Adapter · 얼굴 교체 · SAM 같은 커스텀 노드 기능</td><td class="p">준비 중</td><td>ComfyUI 고급 화면(좌측 하단)에서 직접 설치 가능</td></tr>
@@ -431,14 +451,14 @@
 <section class="view split" id="v-wf">
   <form id="f-wf" autocomplete="off">
     <button class="go" id="wf-go" disabled>실행</button>
-    <p class="hint">ComfyUI 화면에서 만든 워크플로를 그대로 실행해요. ComfyUI 설정에서 개발자 모드를 켠 뒤 <b>Save (API Format)</b>으로 저장한 JSON을 붙여 넣거나 파일로 여세요. 이미지 정보 탭에서 ComfyUI로 만든 PNG를 열어 바로 보낼 수도 있어요.</p>
+    <p class="hint">ComfyUI에서 만든(또는 Civitai 같은 곳에서 받은) 워크플로를 그대로 실행해요. <b>워크플로 JSON</b>(Save 한 것도, Save (API Format)도 모두 돼요)을 붙여 넣거나 <b>[파일 열기]</b>로 JSON 또는 ComfyUI로 만든 <b>PNG 이미지</b>를 여세요. 열면 프롬프트·이미지·시드·크기만 골라서 바꿀 수 있게 정리해 줘요.</p>
     <label class="f">워크플로 JSON<textarea id="wf-json" rows="9" spellcheck="false" placeholder='{"3": {"class_type": "KSampler", ...}}'></textarea></label>
     <div class="row">
       <button type="button" class="ghost" id="wf-file">파일 열기</button>
       <button type="button" class="ghost" id="wf-an">분석</button>
     </div>
     <p class="st" id="wf-st"></p>
-    <input type="file" id="wf-fin" accept=".json,application/json" hidden>
+    <input type="file" id="wf-fin" accept=".json,application/json,image/png,image/webp,image/jpeg" hidden>
     <div id="wf-fields"></div>
     <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 워크플로 기록</label>
   </form>
@@ -503,6 +523,7 @@
     <button type="button" class="ghost" data-open="embeddings">임베딩</button>
     <button type="button" class="ghost" data-open="llm">대화 모델</button>
     <button type="button" class="ghost" data-open="wildcards">와일드카드</button>
+    <button type="button" class="ghost" id="refresh-models2" title="폴더에 새로 넣거나 지운 파일을 목록에 바로 반영해요.">↻ 목록 새로고침</button>
     <button type="button" class="ghost" data-open="outputs">결과 이미지</button>
     <button type="button" class="ghost" data-open="logs">로그</button>
     <button type="button" class="ghost" data-open="root">설치 폴더</button>
@@ -530,7 +551,7 @@
     <button type="button" id="lb-next">다음</button>
     <button type="button" id="lb-fit">화면에 맞춤</button>
     <button type="button" id="lb-one">원본 크기</button>
-    <button type="button" id="lb-cmp" hidden>전후 비교</button>
+    <button type="button" id="lb-cmp" hidden title="원본과 결과를 겹쳐 놓고 가운데 선을 움직여 비교해요 (C 키)">겹쳐서 비교</button>
     <a id="lb-dl" download>저장</a>
     <button type="button" id="lb-meta">이미지 정보</button>
     <button type="button" id="lb-x">닫기</button>

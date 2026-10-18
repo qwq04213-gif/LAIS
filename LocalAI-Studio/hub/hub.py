@@ -353,7 +353,7 @@ def translate(text, style):
 
 
 # ───────────────────────── ComfyUI 기능 조회 ─────────────────────────
-_CAPS = {"t": 0.0, "nodes": set(), "samplers": [], "schedulers": [], "clip_types": []}
+_CAPS = {"t": 0.0, "info": {}, "nodes": set(), "samplers": [], "schedulers": [], "clip_types": []}
 
 
 def caps(force=False):
@@ -362,7 +362,7 @@ def caps(force=False):
             o = http(CUI + "/object_info", timeout=60)
             ks = o.get("KSampler", {}).get("input", {}).get("required", {})
             ct = o.get("CLIPLoader", {}).get("input", {}).get("required", {}).get("type", [[]])
-            _CAPS.update(t=time.time(), nodes=set(o), samplers=list(ks.get("sampler_name", [[]])[0]),
+            _CAPS.update(t=time.time(), info=o, nodes=set(o), samplers=list(ks.get("sampler_name", [[]])[0]),
                          schedulers=list(ks.get("scheduler", [[]])[0]), clip_types=list(ct[0]) if ct and isinstance(ct[0], list) else [])
         except Exception:
             pass
@@ -1072,8 +1072,59 @@ def feat_compare(p, J):
     return [(grid, info, None)]
 
 
+def feat_resize(p, J):
+    """크기 바꾸기 · 비율대로 자르기 · 회전/뒤집기 (ComfyUI 없이 바로 처리해요)."""
+    img = load_img(p["image"]).convert("RGB")
+    steps = []
+    ratio = p.get("crop") or "none"
+    if ratio != "none":
+        a, b = (int(x) for x in ratio.split(":"))
+        w, h = img.size
+        if w * b > h * a:      # 너무 넓음 → 좌우를 잘라요
+            nw = round(h * a / b)
+            x = {"left": 0, "right": w - nw}.get(p.get("anchor"), (w - nw) // 2)
+            img = img.crop((x, 0, x + nw, h))
+        else:
+            nh = round(w * b / a)
+            y = {"top": 0, "bottom": h - nh}.get(p.get("anchor"), (h - nh) // 2)
+            img = img.crop((0, y, w, y + nh))
+        steps.append(f"{ratio} 로 자름")
+    rot = {"90": -90, "180": 180, "270": 90}.get(str(p.get("rotate")))
+    if rot:
+        img = img.rotate(rot, expand=True)
+        steps.append(f"{p.get('rotate')}° 회전")
+    if p.get("flip") == "h":
+        img, _ = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT), steps.append("좌우 뒤집기")
+    elif p.get("flip") == "v":
+        img, _ = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM), steps.append("상하 뒤집기")
+    long_side = clamp(num(p, "long_side", 0, int), 0, 8192)
+    if long_side:
+        s = long_side / max(img.size)
+        img = img.resize((max(1, round(img.width * s)), max(1, round(img.height * s))), RS.LANCZOS)
+        steps.append(f"긴 변 {long_side}px")
+    if not steps:
+        raise ValueError("하나 이상 골라 주세요. (자를 비율, 회전, 뒤집기, 긴 변 크기)")
+    return [(img, dict(kind="feat-resize", extra={"Edit": ", ".join(steps)}), None)]
+
+
+def feat_color(p, J):
+    """밝기·대비·채도·선명도·흐림 보정 (ComfyUI 없이 바로 처리해요)."""
+    from PIL import ImageEnhance
+    img = load_img(p["image"]).convert("RGB")
+    vals = {k: clamp(num(p, k, 100), 0, 300) for k in ("bright", "contrast", "sat", "sharp")}
+    for key, cls in (("bright", ImageEnhance.Brightness), ("contrast", ImageEnhance.Contrast), ("sat", ImageEnhance.Color), ("sharp", ImageEnhance.Sharpness)):
+        if abs(vals[key] - 100) > 0.5:
+            img = cls(img).enhance(vals[key] / 100)
+    blur = clamp(num(p, "blur", 0), 0, 50)
+    if blur:
+        img = img.filter(ImageFilter.GaussianBlur(blur))
+    if all(abs(v - 100) <= 0.5 for v in vals.values()) and not blur:
+        raise ValueError("바꿀 값을 하나 이상 조절해 주세요. (100은 원래 그대로예요)")
+    return [(img, dict(kind="feat-color", extra={"Adjust": f"밝기 {vals['bright']:.0f} 대비 {vals['contrast']:.0f} 채도 {vals['sat']:.0f} 선명도 {vals['sharp']:.0f} 흐림 {blur:.0f}"}), None)]
+
+
 def do_feat(p, J):
-    fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare}.get(p.get("feature"))
+    fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
@@ -1242,6 +1293,29 @@ def do_gen_flux(p, J):
     return out
 
 
+ANTI_DUP = "extra eyes, extra faces, multiple faces, duplicate, extra heads, extra limbs, deformed, mutated"
+
+
+def tile_text(p, J, rng, style, generic):
+    """타일 리파인에 쓸 문장. 기본(auto)은 일반 고화질 지시만 써요 — 타일마다 '얼굴·눈' 같은 프롬프트를 그대로 넣으면
+    배경 조각에도 눈·얼굴을 그려 넣기 때문이에요. 'mine' 이면 내 프롬프트를 그대로 써요. 반환: (문장, LoRA 태그, 자동 모드 여부)"""
+    raw = (p.get("prompt") or "").strip()
+    if not raw:
+        return generic, [], True
+    if p.get("tileprompt") == "mine":
+        text, tags = prep(p, J, style, rng)
+        return text, tags, False
+    if blocked(raw):
+        raise ValueError(BLOCK_MSG)
+    tags = []
+
+    def grab(m):
+        tags.append((m.group(1).strip(), float(m.group(2) or 1)))
+        return ""
+    LORA_TAG.sub(grab, raw)
+    return generic, tags, True
+
+
 QWEN_REFINE = "Enhance this image: make it sharper with fine natural detail and clean textures. Keep the composition, colors, faces and identity exactly the same."
 
 
@@ -1294,12 +1368,14 @@ def do_up(p, J):
         return [(out, info, None)]
     if fam != "sdxl":      # 실사 등 FLUX 계열 모델로 타일을 다시 그려요
         f, allin, sch = flux_setup(p, J, fam)
-        text, tags = prep(p, J, "caption", rng) if (p.get("prompt") or "").strip() else ("high quality photo, sharp focus, fine detail, natural skin texture", [])
+        text, tags, auto = tile_text(p, J, rng, "caption", "high quality photo, sharp focus, fine detail, natural skin texture")
         if blocked(text):
             raise ValueError(BLOCK_MSG)
         neg = (p.get("negative") or "").strip() if fam in ("krea2", "chroma") else ""
         if fam == "chroma" and not neg:
             neg = CHROMA_NEG
+        if auto and fam in ("krea2", "chroma"):
+            neg = (neg + ", " + ANTI_DUP).strip(", ")
         den = clamp(num(p, "rdenoise", 0.3), 0.05, 0.8)
         q = dict(family=fam, allin=allin, **f, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=seed_of(p), w=1024, h=1024,
                  guidance=clamp(num(p, "fx_guidance", 3.5), 0.0, 20.0), steps=clamp(num(p, "fx_steps", 20, int), 1, 100),
@@ -1312,8 +1388,10 @@ def do_up(p, J):
                     sampler=q["sampler"], scheduler=sch, seed=q["seed"], w=out.width, h=out.height, model=f["unet"],
                     loras=[[a, b] for a, b in q["loras"]], extra={"Family": fam, "Denoising strength": den, "Tile": tile})
         return [(out, info, None)]
-    text, tags = prep(p, J, "tags", rng) if (p.get("prompt") or "").strip() else ("highly detailed, sharp focus", [])
+    text, tags, auto = tile_text(p, J, rng, "tags", "highly detailed, sharp focus")
     q = sd(p, text, tags, J)
+    if auto:      # 배경 조각에 눈·얼굴이 새로 생기는 것을 막는 제외 요소
+        q["negative"] = (q["negative"] + ", " + ANTI_DUP).strip(", ")
     q["denoise"] = clamp(num(p, "rdenoise", 0.3), 0.05, 0.8)
     tile = clamp(num(p, "tile", 1024, int) // 8 * 8, 512, 1536)
     out = refine_tiles(big, q, tile, clamp(num(p, "overlap", 128, int), 32, tile // 2), J)
@@ -1321,7 +1399,7 @@ def do_up(p, J):
 
 
 def do_wf(p, J):
-    g = flows.parse_graph(p.get("graph"))
+    g = flows.parse_graph(p.get("graph"), caps()["info"])
     g = flows.apply(g, p.get("ov") or {}, lambda data: put_input(load_img(data), J), random)
     txt = " ".join(str(v) for n in g.values() for k, v in n.get("inputs", {}).items()
                    if k in flows.TEXT_KEYS and isinstance(v, str))
@@ -2203,8 +2281,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": f"처리할 수 없어요: {e}"})
         if u == "/api/wf/analyze":
             try:
-                g = flows.parse_graph(p.get("graph"))
-                caps()
+                g = flows.parse_graph(p.get("graph"), caps()["info"])
                 return self.send_json({"ok": True, **flows.analyze(g, caps()["nodes"] or None)})
             except (ValueError, TypeError) as e:
                 return self.send_json({"error": str(e) if isinstance(e, ValueError) else "JSON 형식이 올바르지 않아요."})

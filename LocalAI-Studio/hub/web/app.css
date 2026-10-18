@@ -263,13 +263,19 @@ form .go{position:sticky;top:0;z-index:5;width:100%;box-shadow:0 6px 10px -6px r
 .disktb .del{color:var(--bad)}
 .duplist{margin:6px 0 12px;padding-left:20px;font-size:13px;line-height:1.7}
 
-/* 크게 보며 선택·칠하기: 설정 칸을 숨기고 이미지를 화면 가득 보여 줘요 */
-.view.split.on.bigedit{grid-template-columns:minmax(0,1fr)}
+/* 크게 보며 선택: 화면 전체를 덮고, 도구는 왼쪽 줄에, 이미지는 나머지 공간에 최대한 크게 (확대 슬라이더로 더 키울 수 있어요) */
+.view.split.on.bigedit{position:fixed;inset:0;z-index:70;height:100vh;background:var(--bg);display:block;padding:0;overflow:hidden}
 .view.bigedit>form,.view.bigedit>.gutter{display:none}
-.view.bigedit>.col{display:flex;flex-direction:column;gap:10px;padding:12px 18px}
-.view.bigedit .tools{order:-1;position:sticky;top:0;z-index:6;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--line)}
-.view.bigedit .jobbar{order:-2}
-.view.bigedit .stage{justify-self:center}
-.view.bigedit .res,.view.bigedit .pane.outp{display:none}
-.bigrun{display:none}.view.bigedit .bigrun{display:inline-flex}
-.view.bigedit .zoom,.view.bigedit .swap{display:none}
+.view.split.bigedit>.col{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100vh;padding:0;gap:0;overflow:hidden;align-content:stretch}
+.view.bigedit .tools{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:14px;overflow:auto;border-right:1px solid var(--line);background:var(--chrome)}
+.view.bigedit .tools .autosel{display:flex;flex:none;flex-basis:auto;flex-wrap:wrap;gap:6px;width:100%;box-sizing:border-box}
+.view.bigedit .tools>*{flex:none;max-width:100%}
+.view.bigedit .tools .growbox,.view.bigedit .tools .sam-on,.view.bigedit .tools .sam-off{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.view.bigedit .work{grid-column:2;grid-row:1;display:block;overflow:auto;padding:12px;height:100vh}
+.view.bigedit .work .pane{display:block}
+.view.bigedit .stage{margin:0 auto;justify-self:auto;max-width:none}
+.view.bigedit .jobbar{position:fixed;left:316px;right:16px;top:10px;z-index:80}
+.view.bigedit .drop,.view.bigedit .res,.view.bigedit .pane.outp,.view.bigedit .zoom,.view.bigedit .swap{display:none}
+.bigonly,.bigrun{display:none}
+.view.bigedit .bigonly{display:flex;gap:8px;align-items:center}.view.bigedit .bigrun{display:inline-flex;justify-content:center}
+.view.bigedit .bigsel{order:-3}.view.bigedit .bigrun{order:-2}.view.bigedit .bigonly{order:-1}
