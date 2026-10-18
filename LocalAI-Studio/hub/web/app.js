@@ -824,8 +824,13 @@ function addMusicResults(sec,j){
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig mfig"><audio src="${u}" controls preload="metadata"></audio><figcaption><a href="${u}" download>저장</a> <button type="button" class="link" data-open="music">음악 폴더 열기</button></figcaption></figure>`).join('')}${used.length?`<details><summary>사용된 스타일</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const a=$('.res .batch audio',sec);if(a){a.scrollIntoView({block:'nearest'});a.play().catch(()=>{})}
 }
+function addTtsResults(sec,j){
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig mfig"><audio src="${u}" controls preload="metadata"></audio><figcaption><a href="${u}" download>저장</a> <button type="button" class="link" data-open="tts">음성 폴더 열기</button></figcaption></figure>`).join('')}</div>`);
+  const a=$('.res .batch audio',sec);if(a){a.scrollIntoView({block:'nearest'});a.play().catch(()=>{})}
+}
 function addResults(sec,j,kind){
   if(kind==='music')return addMusicResults(sec,j);
+  if(kind==='tts')return addTtsResults(sec,j);
   if(kind==='vid'||kind==='vpost')return addVideoResults(sec,j);
   const first=kind==='edit'?'이어서 편집':'편집으로';
   const used=(j.used||[]).filter(Boolean);
@@ -1149,6 +1154,7 @@ const fieldHTML=f=>{
   const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'';
   if(f.type==='image')return `<div class="f"><span>${esc(f.label)}${req}</span><div class="mini" data-img="${n}"></div>${hint}</div>`;
   if(f.type==='textarea')return `<label class="f"><span>${esc(f.label)}${req}</span><textarea name="${n}" rows="${f.rows||3}"></textarea>${hint}</label>`;
+  if(f.type==='check')return `<label class="chk consent"><input type="checkbox" name="${n}"> <span>${esc(f.label)}</span></label>`;
   if(f.type==='text')return `<label class="f">${esc(f.label)}<input name="${n}" value="${esc(f.default??'')}">${hint}</label>`;
   if(f.type==='number')return `<label class="f">${esc(f.label)}<input type="number" name="${n}" value="${esc(f.default??'')}" min="${f.min??''}" max="${f.max??''}" step="${f.step??1}">${hint}</label>`;
   if(f.type==='seed')return `<label class="f">${esc(f.label)}<span class="seedrow"><input type="number" name="${n}" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>`;
@@ -1169,7 +1175,7 @@ function featForm(id,keep){
   const main=f.fields.filter(x=>!x.advanced),adv=f.fields.filter(x=>x.advanced);
   $('#feat-form').innerHTML=`<h3>${esc(f.title)}</h3><p class="hint plain">${esc(f.summary)}</p>
     <ol class="steps">${f.steps.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>
-    ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. <a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.</p>`:''}
+    ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?'아래 <b>[설치]</b> 버튼으로 확장을 설치하세요.':'<a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.'}</p>`:''}
     ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?`<div class="warn feat-nodes"><b>필요한 확장:</b> ${esc(f.needs.pack)}<div class="fn-list mute">설치할 수 있는 곳을 찾는 중…</div></div>`:''}
     <button class="go">만들기</button>
     <input type="hidden" name="feature" value="${esc(id)}">
@@ -1182,7 +1188,8 @@ function featForm(id,keep){
 $('#feat-pick').onclick=e=>{const b=e.target.closest('.fcard');if(b)featForm(b.dataset.f)};
 $('#f-feat').onsubmit=e=>{e.preventDefault();const f=e.target,spec=FEATS.find(x=>x.id===featId);if(!spec)return;
   for(const fd of spec.fields.filter(x=>x.type==='image'&&x.required))if(!$(`.mini[data-img=${fd.name}]`,f).value)return need(f,'먼저 이미지를 올려 주세요.');
-  for(const fd of spec.fields.filter(x=>x.required&&x.type!=='image'))if(!(f.elements[fd.name]?.value||'').trim())return need(f,`'${fd.label}' 칸을 채워 주세요.`);
+  for(const fd of spec.fields.filter(x=>x.required&&x.type==='check'))if(!f.elements[fd.name]?.checked)return need(f,'동의 확인 칸에 체크해 주세요.');
+  for(const fd of spec.fields.filter(x=>x.required&&x.type!=='image'&&x.type!=='check'))if(!(f.elements[fd.name]?.value||'').trim())return need(f,`'${fd.label}' 칸을 채워 주세요.`);
   run('feat',f,{})};
 
 /* ══════════ 설치와 모델 ══════════ */
@@ -1735,6 +1742,8 @@ const GOALS=[
   steps:['영상 만들기 탭에서 장면과 움직임을 문장으로 적어요.','움직이게 할 이미지가 있으면 [이미지 고르기]로 올려요.','크기와 길이를 고르고 [영상 만들기]. 처음엔 3초, 가로 480p로 시험해 보세요.']},
  {t:'글과 가사로 음악을 만들고 싶어요',d:'스타일을 적으면 노래나 연주곡이 나와요.',go:'music',need:()=>(LISTS.musicmodels||[]).length&&LISTS.music_nodes!==false,why:'ACE-Step 음악 모델이 필요해요',
   steps:['음악 만들기 탭에서 스타일을 영어 단어로 적어요(예: lo-fi, chill, piano).','가사가 있으면 적고, 없으면 [가사 없이 연주곡으로]를 켜요.','길이를 고르고 [음악 만들기]. 처음엔 30초로 확인해 보세요.']},
+ {t:'글을 목소리로 읽어 주게 하고 싶어요',d:'적은 글을 음성 파일로 만들어요.',go:'tts',need:()=>true,why:'',
+  steps:['음성 만들기 탭에서 읽을 글을 적어요.','만드는 방법과 목소리를 골라요(윈도우 내장은 인터넷 없이, Edge는 더 자연스럽지만 글이 인터넷으로 전송돼요).','[음성 만들기]를 누르면 재생기가 나와요.']},
  {t:'예전에 만든 그림을 찾고 싶어요',d:'만든 이미지·영상을 모아 보고 검색해요.',go:'gal',need:()=>true,why:'',
   steps:['기록 갤러리 탭을 열어요.','프롬프트나 종류로 검색하고, 마음에 드는 건 ★로 즐겨찾기를 해요.','↻를 누르면 그 그림의 설정을 그대로 불러와 다시 만들 수 있어요.']},
  {t:'마음에 든 사진처럼 만들고 싶어요',d:'사진을 설명하는 프롬프트를 자동으로 뽑아요.',go:'lib',need:()=>true,why:'',
@@ -1779,6 +1788,7 @@ const COACH={
  gen:['모델을 고르고 프롬프트를 적어요.','필요하면 크기와 시드를 정해요(모르면 그대로 둬도 돼요).','[이미지 생성]을 누르고 결과를 확인해요.'],
  up:['사진을 올려요.','빠른 업스케일 / 디테일 재생성 중 방식을 골라요.','[업스케일 실행] 후 [겹쳐서 비교]로 확인해요.'],
  vid:['장면과 움직임을 문장으로 적어요.','움직일 이미지가 있으면 올려요(없어도 돼요).','크기·길이를 고르고 [영상 만들기]. 처음엔 3초로 시험해 보세요.'],
+ tts:['읽을 글을 적어요.','만드는 방법(윈도우 내장 / Edge)과 목소리를 골라요.','[음성 만들기]를 눌러요. 결과는 아래 재생기에서 바로 들어요.'],
  batch:['처리할 사진을 폴더나 파일로 골라요.','크기·배경 지우기·업스케일 중 하나를 골라요.','[처리 시작] — 원본은 그대로, 결과는 새 파일로 저장돼요.'],
  gal:['위 칸에서 프롬프트나 종류로 검색해요.','★로 즐겨찾기, ↻로 같은 설정 다시 만들기.','사진을 클릭하면 크게 볼 수 있어요.','선택 → 이미지 두 장을 고르면 [두 장 비교]가 나와요.'],
  lib:['자주 쓰는 프롬프트를 보관함에 저장해요.','와일드카드로 후보를 무작위로 바꿔 넣어요.','사진에서 프롬프트를 뽑아 바로 생성에 써요.'],
@@ -1873,3 +1883,64 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
     name=`LocalAI-진단-${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}.zip`,a=document.createElement('a');
     a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast('진단 파일을 저장했어요: '+name,6000)}
   catch{toast('진단 파일을 만들지 못했어요.')}b.disabled=false};
+
+/* ══════════ 설정 화면 ══════════ */
+{const D=document.documentElement;
+ $('#cs-nav').onclick=e=>{const b=e.target.closest('button[data-pane]');if(!b)return;
+  $$('#cs-nav button').forEach(x=>x.classList.toggle('on',x===b));$$('.cpane').forEach(p=>p.classList.toggle('on',p.id==='fold-'+b.dataset.pane));
+  if(b.dataset.pane==='notify'){$('#s-sound').checked=qSound();$('#s-desk').checked=qDesk()}if(b.dataset.pane==='gen')prefLoad()};
+ /* 켜고 끄는 값 (이 브라우저에만 기억) */
+ const tog=(id,key,def,fn)=>{const el=$('#'+id);el.checked=ls.get(key,def);el.onchange=()=>{ls.set(key,el.checked);fn&&fn(el.checked)}};
+ tog('opt-motion','opt:motion',false,v=>{if(v)D.dataset.motion='off';else delete D.dataset.motion});
+ tog('opt-hints','opt:hints',false,v=>{if(v)D.dataset.hints='off';else delete D.dataset.hints});
+ tog('opt-ctrl','opt:ctrl',true);tog('opt-slash','opt:slash',true);tog('opt-leave','opt:leave',true);
+ /* 선택 값 */
+ const pick=(id,key,def,fn)=>{const el=$('#'+id);el.value=String(ls.get(key,def));if(el.value!==String(ls.get(key,def)))el.value=String(def);
+  el.onchange=()=>{const v=isNaN(+el.value)||el.value===''?el.value:+el.value;ls.set(key,v);fn&&fn(v)}};
+ pick('opt-chatfs','opt:chatfs',1,v=>D.style.setProperty('--chatfs',v));
+ pick('opt-galsz','opt:galsz',190,v=>D.style.setProperty('--galmin',v));
+ pick('opt-home','opt:home','');
+ /* 강조 색 */
+ {const cur=ls.get('opt:accent','');$$('#accent-pick input').forEach(i=>{i.checked=i.value===cur});
+  $('#accent-pick').onchange=e=>{const v=e.target.value;ls.set('opt:accent',v);if(v)D.dataset.accent=v;else delete D.dataset.accent}}
+ /* 알림 */
+ $('#s-sound').checked=qSound();$('#s-desk').checked=qDesk();
+ $('#s-sound').onchange=e=>{ls.set('q:sound',e.target.checked);if(e.target.checked)qBeep()};
+ $('#s-desk').onchange=async e=>{const q=$('#q-desk');q.checked=e.target.checked;await q.onchange({target:q});e.target.checked=q.checked};
+ $('#s-test').onclick=()=>qNotify({state:'done',label:'알림 시험',error:''});
+ /* 서버에 저장하는 값 */
+ let PF=null;
+ async function prefLoad(){try{PF=await api('/api/prefs')}catch{return}$('#pf-ka').value=PF.chat_keep_alive;$('#pf-speed').checked=!!PF.speed_boost}
+ const pfSave=async body=>{try{const r=await api('/api/prefs',body);if(r.error)return toast(r.error);PF=r.prefs;$('#pf-msg').textContent='저장했어요.'}catch{toast('저장하지 못했어요.')}};
+ $('#pf-ka').onchange=e=>pfSave({chat_keep_alive:e.target.value});
+ $('#pf-speed').onchange=e=>{pfSave({speed_boost:e.target.checked});$('#pf-msg').textContent='프로그램을 다시 시작하면 적용돼요.'};
+ /* 단축키 끄기 (기존 핸들러보다 먼저 막아요) */
+ document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!ls.get('opt:ctrl',true)){e.stopImmediatePropagation();return}
+  if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!ls.get('opt:slash',true)){e.stopImmediatePropagation()}},true);
+ /* 작업 중 창 닫기 경고 */
+ addEventListener('beforeunload',e=>{if(!ls.get('opt:leave',true))return;
+  if(QLAST&&QLAST.items&&QLAST.items.some(r=>r.state==='running'||r.state==='queued')){e.preventDefault();e.returnValue=''}});
+ /* 시작 화면 */
+ {const hv=ls.get('opt:home','');if(hv&&$('#v-'+hv)&&!/[#?]/.test(location.hash))show(hv)}
+}
+
+/* ══════════ 음성 만들기 ══════════ */
+(()=>{const f=$('#f-tts');if(!f)return;let V=null;
+ const save=()=>ls.set('form:f-tts',formVals(f)),vsel=$('#tt-voice');
+ const fill=()=>{if(!V)return;const e=f.elements.engine.value==='edge';
+  vsel.innerHTML=(e?V.edge.map(x=>`<option value="${esc(x.name)}">${esc(x.label)}</option>`):V.sapi.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} (${esc(x.culture)})</option>`)).join('')||'<option value="">(없음)</option>';
+  const sv=ls.get('tts:voice:'+(e?'edge':'sapi'),'');if(sv&&[...vsel.options].some(x=>x.value===sv))vsel.value=sv;
+  $('#tt-edge-warn').hidden=!e||V.edge_ok;
+  const sw=$('#tt-sapi-warn');sw.hidden=e||V.sapi_ok;sw.textContent=!V.windows?'윈도우 내장 음성은 윈도우에서만 쓸 수 있어요. Edge 읽어 주기를 골라 주세요.':'설치된 윈도우 음성을 찾지 못했어요. 윈도우 설정 > 시간 및 언어 > 음성 에서 한국어 음성을 추가해 보세요.';
+  $('#tt-pitch-row').hidden=!e};
+ const load=async()=>{try{V=await api('/api/tts/voices')}catch{return}fill()};
+ const o=ls.get('form:f-tts',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e||k==='voice')continue;e.value=v}
+ f.elements.engine.onchange=()=>{fill();save()};
+ vsel.onchange=()=>ls.set('tts:voice:'+f.elements.engine.value,vsel.value);
+ const cnt=()=>{$('#tt-count').textContent=f.elements.text.value.length};
+ f.addEventListener('input',()=>{cnt();debounce(save,400)()});f.addEventListener('change',save);cnt();
+ $('#tt-install').onclick=async()=>{const b=$('#tt-install'),st=$('#tt-inst-st');b.disabled=true;st.textContent='설치하는 중…(1분쯤 걸려요)';
+  try{const r=await api('/api/tts/install',{});st.textContent=r.ok?'설치했어요.':(r.error||'실패했어요.');if(r.ok)await load()}catch{st.textContent='실패했어요.'}b.disabled=false};
+ f.onsubmit=e=>{e.preventDefault();if(!f.elements.text.value.trim())return setBar($('#v-tts'),'읽을 글을 적어 주세요.','bad');save();run('tts',f)};
+ document.querySelector('#rail nav button[data-v="tts"]').addEventListener('click',load);load()})();

@@ -152,6 +152,18 @@ def wf_detailer(q, img, passes, fill):
     return w.n
 
 
+def wf_faceswap(target, source, swap_model, restore, vis, cf, target_idx, source_idx, fill):
+    """얼굴 교체(ReActor): source 사진의 얼굴을 target 사진에 입혀요."""
+    w = WF()
+    t = w.add("LoadImage", image=target)
+    s = w.add("LoadImage", image=source)
+    ins = fill("ReActorFaceSwap", dict(enabled=True, input_image=[t, 0], source_image=[s, 0], swap_model=swap_model, face_restore_model=restore,
+                                       face_restore_visibility=vis, codeformer_weight=cf, input_faces_index=target_idx, source_faces_index=source_idx))
+    r = w.add("ReActorFaceSwap", **ins)
+    w.add("PreviewImage", images=[r, 0])
+    return w.n
+
+
 def wf_ipadapter(q, ref, preset, weight_type, weight, width, height, fill):
     """참고 이미지(IPAdapter plus): 스타일 또는 얼굴을 따라 새로 그려요."""
     w = WF()

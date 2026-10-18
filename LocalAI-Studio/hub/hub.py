@@ -19,6 +19,7 @@ import meta
 import bgremove
 import modelinfo
 import sam
+import tts
 
 RS = Image.Resampling
 HUB = Path(__file__).resolve().parent
@@ -1290,6 +1291,33 @@ def feat_detailer(p, J):
     return [(res, info_sd(q, res.size, "feat-detailer", Detailer=" + ".join(d for d, _ in passes)), g)]
 
 
+def feat_faceswap(p, J):
+    """얼굴 교체(ReActor). 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요. 동의 확인 없이는 실행하지 않아요."""
+    if not p.get("consent"):
+        raise ValueError("얼굴 교체는 아래 [확인] 칸에 체크해야 쓸 수 있어요. 본인이거나 허락받은 사람, 또는 성인 가상 인물의 사진만 쓰세요.")
+    if not p.get("image") or not p.get("source"):
+        raise ValueError("얼굴을 바꿀 사진과, 가져올 얼굴 사진을 둘 다 올려 주세요.")
+    swaps = combo_opts("ReActorFaceSwap", "swap_model")
+    if not swaps:
+        raise RuntimeError("얼굴 교체 모델이 없어요. 확장 설치 버튼을 누르면 inswapper_128.onnx 를 함께 받아요. 이미 눌렀다면 이미지 엔진을 다시 시작해 주세요.")
+    swap = next((x for x in swaps if x.lower().startswith("inswapper")), swaps[0])
+    rests = combo_opts("ReActorFaceSwap", "face_restore_model")
+    want = {"gfpgan": "gfpganv1.4", "codeformer": "codeformer", "none": "none"}.get(p.get("restore") or "gfpgan", "gfpganv1.4")
+    rest = next((x for x in rests if x.lower().startswith(want)), "none" if "none" in rests else (rests[0] if rests else "none"))
+    idx = lambda k: (str(p.get(k) or "0").replace(" ", "") if re.fullmatch(r"\d+(,\d+)*", str(p.get(k) or "0").replace(" ", "")) else "0")
+    tgt, src = load_img(p["image"]).convert("RGB"), load_img(p["source"]).convert("RGB")
+    for im in (tgt, src):
+        if max(im.size) > 4096:
+            raise ValueError("사진이 너무 커요(긴 변 4096px 이하). 줄여서 올려 주세요.")
+    J["msg"] = "얼굴 찾아서 바꾸는 중"
+    g = flows.wf_faceswap(put_input(tgt, J), put_input(src, J), swap, rest, clamp(num(p, "vis", 1.0), 0.1, 1.0), clamp(num(p, "cf", 0.5), 0.0, 1.0),
+                          idx("target_face"), idx("source_face"), fill_node)
+    res = run_wf(g, J)[0]
+    if res.getbbox() is None or not res.convert("L").getextrema()[1]:
+        raise RuntimeError("결과가 비어 있어요. 안전 검사에서 걸러졌거나, 사진에서 얼굴을 찾지 못한 거예요. 다른 사진으로 해 보세요.")
+    return [(res, dict(kind="feat-faceswap", extra={"FaceSwap": f"{swap} + {rest}"}), g)]
+
+
 def feat_ipadapter(p, J):
     """참고 이미지로 그리기(IPAdapter plus). 스타일/얼굴 중 무엇을 따를지에 따라 프리셋을 골라요."""
     ref = load_img(p["image"]).convert("RGB")
@@ -1315,7 +1343,7 @@ def feat_ipadapter(p, J):
 
 def do_feat(p, J):
     fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color,
-          "detailer": feat_detailer, "ipadapter": feat_ipadapter}.get(p.get("feature"))
+          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
@@ -1483,7 +1511,11 @@ def krea2_parts(p=None):
 K2C_NODES = ("Krea2ControlLoRALoader", "Krea2ControlImageEncode", "Krea2ControlApply")
 K2C_REPO = "https://github.com/facok/comfyui-krea2-controlnet"
 # 허브가 직접 확인해 둔 확장(코드를 읽어 네트워크·실행 호출이 없는 것을 확인한 커밋으로 고정). 목록에 없는 주소는 여전히 설치하지 않아요.
-KNOWN_PACKS = {K2C_REPO: {"ref": "79ebfd3bd80d2180b334dd7ce57f3c9ddaa0848f", "title": "Krea2 Control (comfyui-krea2-controlnet)", "nodes": K2C_NODES}}
+SUBPACK_REPO = "https://github.com/ltdrdata/ComfyUI-Impact-Subpack"
+REACTOR_REPO = "https://github.com/Gourieff/ComfyUI-ReActor"
+KNOWN_PACKS = {REACTOR_REPO: {"ref": "3be5f356fe5b120a7a274d2509c0ecef5d0a7498", "title": "ReActor (얼굴 교체, 안전 필터 포함)", "nodes": ("ReActorFaceSwap",), "install_py": True},
+               SUBPACK_REPO: {"ref": "50c7b71a6a224734cc9b21963c6d1926816a97f1", "title": "Impact Subpack (얼굴·손 감지 노드)", "nodes": ("UltralyticsDetectorProvider",)},
+               K2C_REPO: {"ref": "79ebfd3bd80d2180b334dd7ce57f3c9ddaa0848f", "title": "Krea2 Control (comfyui-krea2-controlnet)", "nodes": K2C_NODES}}
 
 
 def k2_control_loras():
@@ -1857,7 +1889,7 @@ def do_wf(p, J):
 
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악"}
+OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악", "tts": "음성"}
 
 
 def out_path(rel):
@@ -2005,6 +2037,43 @@ def do_music(p, J):
     return [(data, info, Path(name).suffix.lower() or ".mp3") for name, data in res[:1]]
 
 
+TTS_DIR = ROOT / "cache" / "tts"
+
+
+def tts_voices():
+    sap = [{"name": n, "culture": c} for n, c in tts.sapi_voices(TTS_DIR)]
+    return {"sapi": sap, "sapi_ok": bool(sap), "windows": os.name == "nt", "edge": [{"name": n, "label": l} for n, l in tts.EDGE_VOICES], "edge_ok": tts.edge_ready()}
+
+
+def do_tts(p, J):
+    """글을 소리로. 결과: [(바이트, 정보, 확장자)]"""
+    text = (p.get("text") or "").strip()
+    if not text:
+        raise ValueError("읽을 글을 적어 주세요.")
+    if len(text) > tts.MAX_CHARS:
+        raise ValueError(f"글이 너무 길어요({len(text)}자). {tts.MAX_CHARS}자 이하로 나눠서 만들어 주세요.")
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    TTS_DIR.mkdir(parents=True, exist_ok=True)
+    engine = "edge" if p.get("engine") == "edge" else "sapi"
+    speed, vol = clamp(num(p, "speed", 0, int), -10, 10), clamp(num(p, "volume", 100, int), 0, 100)
+    J["msg"] = "목소리 만드는 중"
+    if engine == "edge":
+        voice = p.get("voice") if p.get("voice") in {n for n, _ in tts.EDGE_VOICES} else "ko-KR-SunHiNeural"
+        pitch = clamp(num(p, "pitch", 0, int), -50, 50)
+        data = tts.speak_edge(text, voice, speed * 5, vol - 100, pitch, TTS_DIR)
+        ext = ".mp3"
+    else:
+        if os.name != "nt" and not getattr(tts, "FORCE_SAPI", False):
+            raise RuntimeError("윈도우 내장 음성은 윈도우에서만 쓸 수 있어요. Edge 읽어 주기를 골라 주세요.")
+        names = [n for n, _ in tts.sapi_voices(TTS_DIR)]
+        voice = p.get("voice") if p.get("voice") in names else (names[0] if names else "")
+        data = tts.speak_sapi(text, voice, speed, vol, TTS_DIR)
+        ext = ".wav"
+    info = dict(kind="tts", prompt=text[:200], engine=engine, voice=voice, speed=speed, volume=vol)
+    return [(data, info, ext)]
+
+
 def do_vid(p, J):
     if p.get("wan_ver") == "14b":
         return do_vid14(p, J)
@@ -2101,16 +2170,18 @@ def do_vpost(p, J):
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
-        if p["kind"] != "batch" or p.get("op") == "upscale":      # 일괄 처리의 배경 지우기·크기 변경은 ComfyUI 가 필요 없어요
+        if p["kind"] == "tts":
+            pass                                          # 음성 만들기는 ComfyUI 를 쓰지 않아요
+        elif p["kind"] != "batch" or p.get("op") == "upscale":      # 일괄 처리의 배경 지우기·크기 변경은 ComfyUI 가 필요 없어요
             wait_comfy()
             claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "music": do_music, "batch": do_batch}[p["kind"]](p, J)
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "music": do_music, "tts": do_tts, "batch": do_batch}[p["kind"]](p, J)
         sub = OUT_SUB["vid"] if p["kind"] == "vpost" else OUT_SUB.get(p["kind"], "기타")
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
         for i, (im, info, graph) in enumerate(items):
-            if p["kind"] in ("vid", "vpost", "music"):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
-                name = f'{stamp}-{uuid.uuid4().hex[:4]}-{"music" if p["kind"] == "music" else "vid"}-{i}{graph}'
+            if p["kind"] in ("vid", "vpost", "music", "tts"):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
+                name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts") else "vid"}-{i}{graph}'
                 (OUT / sub / name).write_bytes(im)
                 (OUT / sub / (name + ".json")).write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
                 J["images"].append("/out/" + urllib.parse.quote(sub) + "/" + name)
@@ -2152,7 +2223,7 @@ def _clean_tmp(J):
 QUEUE, QP = [], {}
 _QCV = threading.Condition()
 _QW = {"t": None}
-KIND_NAME = {"edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "music": "음악 만들기", "batch": "일괄 처리"}
+KIND_NAME = {"edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리"}
 DONE_STATES = ("done", "error", "cancelled")
 
 
@@ -3064,10 +3135,24 @@ def _node_install(repo):
         zp.unlink(missing_ok=True)
         req = dest / "requirements.txt"
         note = ""
-        if req.is_file():
+        if (KNOWN_PACKS.get(repo) or {}).get("install_py") and (dest / "install.py").is_file():
+            # 이 확장은 자기 설치 스크립트가 부품·모델(inswapper 등)을 받아요 — 확인해 둔 커밋의 스크립트만 실행해요
+            if PY.exists():
+                J["msg"] = "부품과 얼굴 교체 모델을 내려받는 중…(몇 분 걸릴 수 있어요)"
+                r = subprocess.run([str(PY), "-s", "install.py"], cwd=str(dest), capture_output=True, text=True, timeout=2400)
+                if r.returncode:
+                    note = " 다만 부품·모델 설치에 실패했어요(logs\\nodes.log 참고). 인터넷 연결을 확인하고 이 버튼을 다시 눌러 주세요."
+                    LOGS.mkdir(exist_ok=True)
+                    (LOGS / "nodes.log").write_text((r.stdout or "")[-4000:] + (r.stderr or "")[-4000:], encoding="utf-8")
+            else:
+                note = " (python_embeded 를 찾지 못해 부품 설치는 건너뛰었어요.)"
+        elif req.is_file():
             if PY.exists():
                 J["msg"] = "필요한 파이썬 패키지 설치 중…(몇 분 걸릴 수 있어요)"
-                r = subprocess.run([str(PY), "-s", "-m", "pip", "install", "-r", str(req), "--no-warn-script-location"], cwd=HOME,
+                lines = [x for x in req.read_text(encoding="utf-8", errors="ignore").splitlines() if x.strip() and not x.strip().startswith(("git+", "#"))]
+                req2 = tmp / (dest.name + "-req.txt")       # git 이 없는 PC 에서도 되도록 git+ 주소 줄은 빼고 설치해요
+                req2.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                r = subprocess.run([str(PY), "-s", "-m", "pip", "install", "-r", str(req2), "--no-warn-script-location"], cwd=HOME,
                                    capture_output=True, text=True, timeout=1500)
                 if r.returncode:
                     note = " 다만 필요한 패키지 설치에 실패했어요(logs\\nodes.log 참고). 노드가 동작하지 않으면 ComfyUI Manager 로 설치해 보세요."
@@ -3809,6 +3894,31 @@ def save_settings(d):
         pass
 
 
+PREF_DEF = {"chat_keep_alive": "5m", "speed_boost": True}
+PREF_KEEP = ("0", "5m", "30m", "2h", "-1")
+
+
+def prefs():
+    d = settings()
+    out = dict(PREF_DEF)
+    if d.get("chat_keep_alive") in PREF_KEEP:
+        out["chat_keep_alive"] = d["chat_keep_alive"]
+    out["speed_boost"] = bool(d.get("speed_boost", True))
+    return out
+
+
+def set_prefs(p):
+    d = settings()
+    if "chat_keep_alive" in p:
+        if p["chat_keep_alive"] not in PREF_KEEP:
+            return {"error": "허용되지 않는 값이에요."}
+        d["chat_keep_alive"] = p["chat_keep_alive"]
+    if "speed_boost" in p:
+        d["speed_boost"] = bool(p["speed_boost"])
+    save_settings(d)
+    return {"ok": True, "prefs": prefs()}
+
+
 def set_token(name, value):
     if name not in ("civitai", "hf"):
         return {"error": "알 수 없는 사이트"}
@@ -4382,12 +4492,12 @@ def caps_info():
 # ───────────────────────── HTTP 서버 ─────────────────────────
 def folder_map():
     m = {"outputs": OUT, "logs": LOGS, "root": ROOT, "llm": ROOT / "models" / "llm", "wildcards": ROOT / "wildcards",
-         "backup": ROOT / "backup", "tags": ROOT / "tags", "music": OUT / "음악"}
+         "backup": ROOT / "backup", "tags": ROOT / "tags", "music": OUT / "음악", "tts": OUT / "음성"}
     m.update({k: MODELS / k for k in FOLDERS})
     return m
 
 
-MEDIA = {".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
+MEDIA = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 
@@ -4497,6 +4607,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(sam_status())
         if u == "/api/dl/tokens":
             return self.send_json(token_state())
+        if u == "/api/prefs":
+            return self.send_json(prefs())
+        if u == "/api/tts/voices":
+            return self.send_json(tts_voices())
         if u == "/api/model-tidy":
             return self.send_json(model_tidy())
         if u == "/api/disk":
@@ -4575,7 +4689,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/chat":
             return self.chat(p)
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "music", "batch"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "music", "tts", "batch"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if len(JOBS) > 50:
                 for k, v in list(JOBS.items()):
@@ -4611,6 +4725,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(dl_get(p))
         if u == "/api/dl/token":
             return self.send_json(set_token(p.get("name"), p.get("value")))
+        if u == "/api/prefs":
+            return self.send_json(set_prefs(p))
+        if u == "/api/tts/install":
+            ok_, tail = tts.install_edge()
+            if not ok_:
+                log("[TTS 부품 설치 오류]", tail)
+            return self.send_json({"ok": ok_, "error": "" if ok_ else "부품을 설치하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요."})
         if u == "/api/sam/install":
             return self.send_json(sam_install())
         if u == "/api/sam/segment":
@@ -4734,6 +4855,9 @@ class Handler(BaseHTTPRequestHandler):
             return err(BLOCK_MSG)
         claim("chat")
         try:
+            p = dict(p)
+            ka = prefs()["chat_keep_alive"]
+            p["keep_alive"] = -1 if ka == "-1" else (0 if ka == "0" else ka)
             req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(p).encode(),
                                          headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=900) as r:

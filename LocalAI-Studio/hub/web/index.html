@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
+<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190))}catch(e){}</script>
 <script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}try{var z=parseFloat(localStorage.getItem('ui:scale'));if(z>=0.8&&z<=1.6)document.documentElement.style.setProperty('--ui',z)}catch(e){}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
@@ -25,6 +26,7 @@
       <button data-v="up" title="업스케일"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg><span>업스케일</span></button>
       <button data-v="vid" title="영상 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>영상 만들기</span></button>
       <button data-v="music" title="음악 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="16" r="2.5"/></svg><span>음악 만들기</span></button>
+      <button data-v="tts" title="음성 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>음성 만들기</span></button>
     </div>
     <div class="ng"><span class="ngt">내 작업</span>
       <button data-v="gal" title="기록 갤러리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>기록 갤러리</span></button>
@@ -502,6 +504,29 @@
   </div>
 </section>
 
+<section class="view split" id="v-tts">
+  <form id="f-tts" autocomplete="off" novalidate>
+    <button class="go">음성 만들기</button>
+    <p class="hint plain">읽어 줄 글을 적고 목소리를 고르면 음성 파일(소리)이 나와요. 영상이나 설명에 목소리를 입힐 때 쓰세요.</p>
+    <label class="f">읽을 글<textarea name="text" rows="9" maxlength="5000" placeholder="예: 안녕하세요, 오늘은 로컬 AI 스튜디오를 소개해 드릴게요."></textarea></label>
+    <p class="hint plain note"><span id="tt-count">0</span> / 5000자</p>
+    <label class="f">만드는 방법<select name="engine" id="tt-engine"><option value="sapi">윈도우 내장 음성 (내 PC 안에서만, 인터넷 불필요)</option><option value="edge">Edge 읽어 주기 (더 자연스러움, 글이 마이크로소프트 서버로 전송돼요)</option></select></label>
+    <p class="warn" id="tt-edge-warn" hidden>Edge 읽어 주기 부품이 아직 없어요. <button type="button" class="ghost sm" id="tt-install">부품 설치</button> <span class="mute" id="tt-inst-st"></span></p>
+    <p class="warn" id="tt-sapi-warn" hidden></p>
+    <label class="f">목소리<select name="voice" id="tt-voice"></select></label>
+    <div class="row">
+      <label class="f">속도<select name="speed"><option value="-4">많이 느리게</option><option value="-2">조금 느리게</option><option value="0" selected>보통</option><option value="2">조금 빠르게</option><option value="4">많이 빠르게</option></select></label>
+      <label class="f">음량<select name="volume"><option value="100" selected>보통</option><option value="70">작게</option><option value="40">아주 작게</option></select></label>
+    </div>
+    <label class="f" id="tt-pitch-row">높낮이 (Edge만)<select name="pitch"><option value="-20">낮게</option><option value="0" selected>보통</option><option value="20">높게</option></select></label>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"></div>
+  </div>
+</section>
+
 <!-- 기록 갤러리 -->
 <section class="view" id="v-gal">
   <h2>기록 갤러리</h2>
@@ -655,6 +680,8 @@
     <tr><td>LoRA 가 어느 모델용인지 확인</td><td class="y">지원</td><td>이미지 생성·편집·업스케일의 LoRA 칸</td></tr>
     <tr><td>Stable Diffusion 3.5 · HiDream · Lumina 2</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류 (설치와 모델에서 받아요)</td></tr>
     <tr><td>음악 만들기 (ACE-Step 1.5)</td><td class="p">미검증</td><td>사이드바 [음악 만들기] — 스타일과 가사로 곡을 만들어요</td></tr>
+    <tr><td>음성 만들기 (글 읽어 주기 — 윈도우 내장 음성 · Edge 읽어 주기)</td><td class="p">미검증</td><td>사이드바 [음성 만들기] — ComfyUI 없이 동작해요. Edge 방식은 글이 마이크로소프트 서버로 전송돼요</td></tr>
+    <tr><td>얼굴 교체 (ReActor)</td><td class="p">미검증</td><td>기능 모음 → 얼굴 교체 — 동의 확인 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
     <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
     <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
@@ -827,26 +854,38 @@
 </section>
 <section class="view" id="v-conf">
   <h2>설정</h2>
-  <p class="hint plain">화면 모양, 백업, 문제 해결, 프로그램 관리를 모았어요. 모델 설치와 폴더는 <a href="#" data-go="setup">설치와 모델</a>에 있어요.</p>
-  <details class="fold" id="fold-ui" open><summary>화면 · 입력 · 단축키</summary>
-    <h4>화면 크기</h4>
-    <label class="f ui-scale">글자·메뉴 크기<select id="ui-scale"><option value="0.9">작게 (90%)</option><option value="1">보통 (100%)</option><option value="1.1">조금 크게 (110%)</option><option value="1.25">크게 (125%)</option><option value="1.5">아주 크게 (150%)</option></select></label>
-    <p class="hint plain">글자와 왼쪽 메뉴가 같이 커지거나 작아져요. 브라우저의 Ctrl + 휠(확대)과 따로 기억돼요.</p>
-    <h4>화면 색</h4>
-    <div class="theme-pick" id="theme-pick"><label><input type="radio" name="theme" value="auto"> 컴퓨터 설정에 맞춤</label><label><input type="radio" name="theme" value="dark"> 어둡게</label><label><input type="radio" name="theme" value="light"> 밝게</label></div>
-    <h4>프롬프트 입력</h4>
-    <label class="chk"><input type="checkbox" id="tag-on"> 태그 자동완성 — 프롬프트 칸에 두 글자 이상 쓰면 아래에 후보를 보여줘요</label>
-    <p class="hint plain">기본 태그에 더해 내가 저장한 프롬프트, LoRA 트리거 단어, <code>__와일드카드__</code>도 나와요. <kbd>↓</kbd><kbd>↑</kbd>로 고르고 <kbd>Tab</kbd>이나 <kbd>Enter</kbd>로 넣어요. danbooru 형식 태그 목록(csv)을 <b>tags</b> 폴더에 넣으면 그것도 같이 써요. <button type="button" class="mini" data-open="tags">tags 폴더 열기</button></p>
-    <h4>단축키</h4>
-    <table class="keys"><tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>지금 화면의 [만들기·실행] 버튼을 눌러요 (Mac은 <kbd>⌘</kbd>)</td></tr>
-    <tr><td><kbd>/</kbd></td><td>기록 갤러리·프롬프트 화면에서 검색 칸으로 이동해요</td></tr>
-    <tr><td><kbd>Esc</kbd></td><td>열린 창(확대 보기, 대기열)을 닫아요</td></tr></table>
-  </details>
-  <details class="fold" id="fold-diag"><summary>문제가 생겼을 때 — 진단 파일 만들기</summary>
-    <p class="hint plain">안 되는 기능이 있을 때 원인을 찾는 데 필요한 정보(버전, 그래픽카드, 설치된 확장·모델 파일 이름, 최근 오류, 로그 끝부분)를 zip 하나로 묶어요. <b>프롬프트·만든 이미지·API 키는 들어가지 않아요.</b> 보내기 전에 안의 txt 파일을 열어 확인할 수 있어요.</p>
-    <div class="actions"><button type="button" class="ghost" id="diag-go">진단 파일 저장</button></div>
-  </details>
-  <details class="fold" id="fold-backup"><summary>설정 백업 · 복원</summary>
+  <p class="hint plain">모델 설치와 폴더는 <a href="#" data-go="setup">설치와 모델</a>에 있어요. 바꾼 값은 바로 적용되고 이 컴퓨터에 기억돼요.</p>
+  <div class="cs"><nav class="cs-nav" id="cs-nav" aria-label="설정 분류"><button type="button" data-pane="ui" class="on">화면</button><button type="button" data-pane="input">입력·단축키</button><button type="button" data-pane="notify">알림</button><button type="button" data-pane="gen">메모리·속도</button><button type="button" data-pane="backup">백업·복원</button><button type="button" data-pane="diag">문제 해결</button><button type="button" data-pane="app">프로그램</button></nav>
+  <div class="cs-body">
+  <div class="cpane on" id="fold-ui"><div class="card"><h3>모양</h3>
+<div class="row"><div class="rl"><b>글자·메뉴 크기</b><span>글자와 왼쪽 메뉴가 같이 커지거나 작아져요. 브라우저 확대(Ctrl + 휠)와 따로 기억돼요.</span></div><div class="rc"><select id="ui-scale"><option value="0.9">작게 (90%)</option><option value="1">보통 (100%)</option><option value="1.1">조금 크게 (110%)</option><option value="1.25">크게 (125%)</option><option value="1.5">아주 크게 (150%)</option></select></div></div>
+<div class="row"><div class="rl"><b>화면 색</b><span>어둡게·밝게, 또는 컴퓨터 설정을 따라가요.</span></div><div class="rc"><div class="theme-pick" id="theme-pick"><label><input type="radio" name="theme" value="auto"> 컴퓨터 설정에 맞춤</label><label><input type="radio" name="theme" value="dark"> 어둡게</label><label><input type="radio" name="theme" value="light"> 밝게</label></div></div></div>
+<div class="row"><div class="rl"><b>강조 색</b><span>버튼과 선택 표시에 쓰는 색이에요.</span></div><div class="rc"><div class="swatches" id="accent-pick"><label class="swatch" title="기본"><input type="radio" name="accent" value=""><i class="a-def"></i></label><label class="swatch" title="초록"><input type="radio" name="accent" value="green"><i class="a-green"></i></label><label class="swatch" title="주황"><input type="radio" name="accent" value="orange"><i class="a-orange"></i></label><label class="swatch" title="분홍"><input type="radio" name="accent" value="pink"><i class="a-pink"></i></label><label class="swatch" title="청록"><input type="radio" name="accent" value="teal"><i class="a-teal"></i></label></div></div></div>
+<div class="row"><div class="rl"><b>대화 글자 크기</b><span>대화 화면의 글자만 따로 키우거나 줄여요.</span></div><div class="rc"><select id="opt-chatfs"><option value="0.9">작게</option><option value="1">보통</option><option value="1.15">크게</option><option value="1.3">아주 크게</option></select></div></div>
+<div class="row"><div class="rl"><b>움직임 줄이기</b><span>화면 전환·버튼의 애니메이션을 꺼요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-motion"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>안내 문구 줄이기</b><span>각 화면의 회색 설명 글을 숨겨서 더 간결하게 보여 줘요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-hints"><i></i></label></div></div>
+</div>
+<div class="card"><h3>시작과 목록</h3>
+<div class="row"><div class="rl"><b>시작할 때 열 화면</b><span>스튜디오를 열 때 맨 처음 보이는 화면이에요.</span></div><div class="rc"><select id="opt-home"><option value="">대화 (기본)</option><option value="start">시작하기</option><option value="gen">이미지 생성</option><option value="edit">이미지 편집</option><option value="vid">영상 만들기</option><option value="music">음악 만들기</option><option value="gal">기록 갤러리</option><option value="feat">기능 모음</option></select></div></div>
+<div class="row"><div class="rl"><b>갤러리 미리보기 크기</b><span>기록 갤러리의 그림 크기예요.</span></div><div class="rc"><select id="opt-galsz"><option value="150">작게</option><option value="190">보통</option><option value="250">크게</option><option value="340">아주 크게</option></select></div></div>
+</div></div>
+  <div class="cpane" id="fold-input"><div class="card"><h3>프롬프트 입력</h3>
+<div class="row"><div class="rl"><b>태그 자동완성</b><span>프롬프트 칸에 두 글자 이상 쓰면 아래에 후보를 보여줘요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="tag-on"><i></i></label></div></div>
+<p class="hint plain note">기본 태그에 더해 내가 저장한 프롬프트, LoRA 트리거 단어, <code>__와일드카드__</code>도 나와요. <kbd>↓</kbd><kbd>↑</kbd>로 고르고 <kbd>Tab</kbd>이나 <kbd>Enter</kbd>로 넣어요. danbooru 형식 태그 목록(csv)을 <b>tags</b> 폴더에 넣으면 그것도 같이 써요. <button type="button" class="mini" data-open="tags">tags 폴더 열기</button></p></div>
+<div class="card"><h3>단축키</h3>
+<div class="row"><div class="rl"><b>Ctrl + Enter 로 만들기</b><span>지금 화면의 [만들기·실행] 버튼을 눌러요 (Mac은 ⌘).</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-ctrl"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>/ 키로 검색 칸 이동</b><span>기록 갤러리·프롬프트 화면에서 검색 칸으로 바로 가요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-slash"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>Esc</b><span>열린 창(확대 보기, 대기열)을 닫아요. 항상 켜져 있어요.</span></div></div></div></div>
+  <div class="cpane" id="fold-notify"><div class="card"><h3>작업이 끝났을 때</h3>
+<div class="row"><div class="rl"><b>소리로 알려주기</b><span>작업이 끝나면 짧은 알림음을 내요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="s-sound"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>바탕화면 알림</b><span>다른 창을 보는 중일 때 작업이 끝나면 알림을 띄워요. 처음 켤 때 브라우저가 허락을 물어봐요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="s-desk"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>창을 닫을 때 경고</b><span>작업이 진행 중인데 탭을 닫거나 새로고침하면 한 번 물어봐요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-leave"><i></i></label></div></div>
+<div class="actions"><button type="button" class="ghost sm" id="s-test">알림 시험해 보기</button></div></div></div>
+  <div class="cpane" id="fold-gen"><div class="card"><h3>메모리와 속도</h3>
+<div class="row"><div class="rl"><b>대화 모델을 메모리에 두는 시간</b><span>마지막 대화 뒤 이 시간이 지나면 모델을 내려서 그래픽 메모리를 비워요. 길수록 다음 대답이 빠르고, 짧을수록 이미지 생성에 메모리를 더 줘요.</span></div><div class="rc"><select id="pf-ka"><option value="0">바로 내리기</option><option value="5m">5분 (기본)</option><option value="30m">30분</option><option value="2h">2시간</option><option value="-1">계속 두기</option></select></div></div>
+<div class="row"><div class="rl"><b>이미지 속도 옵션 (fp16 누적)</b><span>ComfyUI가 지원할 때만 쓰는 안전한 속도 옵션이에요. 문제가 생기면 끄세요. 프로그램을 다시 시작해야 적용돼요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="pf-speed"><i></i></label></div></div>
+<p class="hint plain note" id="pf-msg"></p></div></div>
+  <div class="cpane" id="fold-backup"><div class="card"><h3>설정 백업 · 복원</h3>
     <p class="hint plain">프롬프트 보관함, 와일드카드, 즐겨찾기, 내가 적은 LoRA 정보(트리거 단어·종류), 화면별 프리셋을 파일 하나로 저장하거나 되살려요. 다른 PC로 옮기거나 재설치 전에 쓰면 좋아요. 모델·결과 이미지는 용량이 커서 포함하지 않아요.</p>
     <div class="actions"><button class="ghost" id="bk-export" type="button">백업 파일 저장</button>
       <label class="ghost filebtn">백업 파일 불러오기<input id="bk-file" type="file" accept=".json,application/json" hidden></label></div>
@@ -857,8 +896,12 @@
       <div class="actions"><button class="go" id="bk-go" type="button">되살리기</button><button class="ghost" id="bk-cancel" type="button">취소</button></div>
       <p class="hint plain">어느 쪽이든 아무것도 지우지 않아요. 바꾸기 전 파일은 <b>backups</b> 폴더에 복사해 둬요.</p>
     </div>
-  </details>
-  <details class="fold" id="fold-app"><summary>프로그램 관리 (다시 시작 · 위치 옮기기)</summary>
+  </div></div>
+  <div class="cpane" id="fold-diag"><div class="card"><h3>문제가 생겼을 때</h3>
+    <p class="hint plain">안 되는 기능이 있을 때 원인을 찾는 데 필요한 정보(버전, 그래픽카드, 설치된 확장·모델 파일 이름, 최근 오류, 로그 끝부분)를 zip 하나로 묶어요. <b>프롬프트·만든 이미지·API 키는 들어가지 않아요.</b> 보내기 전에 안의 txt 파일을 열어 확인할 수 있어요.</p>
+    <div class="actions"><button type="button" class="ghost" id="diag-go">진단 파일 저장</button></div>
+  </div></div>
+  <div class="cpane" id="fold-app"><div class="card"><h3>프로그램 관리</h3>
     <p class="hint plain">지금 설치 위치: <b id="app-root"></b></p>
     <div class="actions"><button class="ghost" id="app-restart" type="button">프로그램 다시 시작</button><button class="ghost" type="button" data-go="log">버전별 변경 사항 보기</button></div>
     <h4>프로그램 위치 옮기기</h4>
@@ -867,7 +910,8 @@
     <label class="f">새 위치 (전체 경로)<input id="app-dest" placeholder="예: E:\sd\LocalAI"></label>
     <div class="actions"><button class="ghost" id="app-up" type="button">바깥 폴더로 한 단계 올리기</button><button class="ghost" id="app-check" type="button">확인</button><button class="go" id="app-go" type="button" hidden>옮기기 시작</button></div>
     <p id="app-plan" class="hint plain"></p>
-  </details>
+  </div></div>
+  </div></div>
 </section>
 </main>
 

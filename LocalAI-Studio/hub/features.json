@@ -777,5 +777,97 @@
     "advanced": true
    }
   ]
+ },
+ {
+  "id": "faceswap",
+  "title": "얼굴 교체 (미검증)",
+  "icon": "☺",
+  "summary": "한 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요(ReActor). 본인이거나 허락받은 사람, 성인 가상 인물의 사진에만 쓰세요. 확장 설치 때 모델(inswapper, 연구·비상업 용도)도 함께 받아서 용량이 커요. 확장 안에 자체 안전 검사(부적절한 이미지는 건너뜀)가 들어 있어요. ※ 이 기능은 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+  "steps": [
+   "얼굴을 바꿀 사진(바탕)을 올려요",
+   "가져올 얼굴이 있는 사진을 올려요",
+   "동의 확인에 체크하고 [만들기]를 눌러요 — 사진에 얼굴이 여러 개면 '고급 설정'에서 번호를 골라요(0부터, 큰 얼굴 순)"
+  ],
+  "needs": {
+   "nodes": [
+    "ReActorFaceSwap"
+   ],
+   "pack": "ComfyUI-ReActor"
+  },
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "바탕 사진 (얼굴이 바뀔 사진)",
+    "required": true
+   },
+   {
+    "name": "source",
+    "type": "image",
+    "label": "가져올 얼굴 사진",
+    "required": true
+   },
+   {
+    "name": "consent",
+    "type": "check",
+    "label": "[확인] 사진 속 사람은 본인이거나 사용을 허락한 성인이고, 가상 인물이라면 성인으로 설정된 인물이에요. 타인을 속이거나 괴롭히는 데 쓰지 않아요.",
+    "required": true
+   },
+   {
+    "name": "restore",
+    "type": "select",
+    "label": "얼굴 다듬기",
+    "options": [
+     [
+      "gfpgan",
+      "GFPGAN (자연스럽게)"
+     ],
+     [
+      "codeformer",
+      "CodeFormer (또렷하게)"
+     ],
+     [
+      "none",
+      "안 함"
+     ]
+    ],
+    "default": "gfpgan"
+   },
+   {
+    "name": "vis",
+    "type": "number",
+    "label": "다듬기 세기",
+    "default": 1.0,
+    "min": 0.1,
+    "max": 1.0,
+    "step": 0.05,
+    "advanced": true
+   },
+   {
+    "name": "cf",
+    "type": "number",
+    "label": "CodeFormer 가중치",
+    "default": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.05,
+    "advanced": true
+   },
+   {
+    "name": "target_face",
+    "type": "text",
+    "label": "바탕 사진에서 바꿀 얼굴 번호",
+    "default": "0",
+    "hint": "0부터 시작, 큰 얼굴 순서예요. 여러 개는 쉼표로(예: 0,1)",
+    "advanced": true
+   },
+   {
+    "name": "source_face",
+    "type": "text",
+    "label": "가져올 사진에서 쓸 얼굴 번호",
+    "default": "0",
+    "advanced": true
+   }
+  ]
  }
 ]
