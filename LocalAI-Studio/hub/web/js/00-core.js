@@ -567,3 +567,7 @@ $('#lb-star').onclick=async()=>{const it=LB.list[LB.i];if(!it)return;const on=!i
   if(r.error)return toast(r.error);it.fav=on;const b=$('#lb-star');b.textContent=(on?'★':'☆')+' 즐겨찾기';b.classList.toggle('on',on);
   const g=(typeof GAL!=='undefined'&&GAL.items||[]).find(x=>x.url===it.url);if(g)g.fav=on;
   $$('[data-star]').forEach(e=>{if(e.dataset.star===it.url){e.classList.toggle('on',on);e.textContent=on?'★':'☆'}})};
+/* 모델 파일을 바꾸면 텍스트 인코더·VAE 고름은 '자동'으로 되돌려요(전 모델용 파일이 남아 오류가 나는 걸 막아요) */
+document.addEventListener('change',e=>{const s=e.target;if(!s||s.name!=='fx_model'||!e.isTrusted)return;const f=s.form;if(!f)return;
+  for(const k of ['fx_t5','fx_clip','fx_vae','k2_te','k2_vae'])if(f.elements[k])f.elements[k].value='';
+  try{saveForm(f)}catch{}});
