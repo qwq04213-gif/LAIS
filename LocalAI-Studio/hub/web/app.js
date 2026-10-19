@@ -277,7 +277,7 @@ function show(v){
   if(v==='gal')galLoad();else if(v==='lib')libShow();
   if(v==='log')logInit();
   if(v==='setup'||v==='conf'){appInit()}
-  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
+  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v==='vmix')vmixLoad();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
 }
 $$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
 function toast(t,ms,go){
@@ -811,7 +811,7 @@ addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])][0],on=$('
 /* ══════════ 이미지 작업 실행 / 결과 ══════════ */
 function addVideoResults(sec,j){
   const used=(j.used||[]).filter(Boolean),mi=(u,to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${tip}"`:''}>${t}</button>`;
-  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>{const an=/\.webp$/i.test(u);return `<figure class="vfig">${an?`<img src="${u}" alt="움직이는 WebP">`:`<video src="${u}" controls loop muted playsinline preload="metadata"></video>`}<figcaption><a href="${u}" download>저장</a>${an?'':mi(u,'vcont','이어서 만들기','이 영상의 마지막 장면을 시작 이미지로 넣어서, 그다음 장면을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>{const an=/\.webp$/i.test(u);return `<figure class="vfig">${an?`<img src="${u}" alt="움직이는 WebP">`:`<video src="${u}" controls loop muted playsinline preload="metadata"></video>`}<figcaption><a href="${u}" download>저장</a>${an?'':mi(u,'vmix','소리·자막 넣기','이 영상에 음성·음악을 입히고 자막을 넣어 새 영상으로 저장해요')}${an?'':mi(u,'vcont','이어서 만들기','이 영상의 마지막 장면을 시작 이미지로 넣어서, 그다음 장면을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
     an?'':mi(u,'vp:interp','프레임 늘리기 (부드럽게)','중간 장면을 만들어 넣어 움직임을 2배로 부드럽게 해요 · RIFE 확장 필요(미검증)')+mi(u,'vp:upscale','해상도 키우기','업스케일 모델로 모든 장면을 키워요 (설치와 모델에서 받은 모델 사용) · 미검증')+mi(u,'vp:webp','움직이는 WebP로 저장','용량이 작은 움직이는 그림 파일로 바꿔요 · 미검증')}${mi(u,'folder','출력 폴더 열기','이 파일이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`}).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const v=$('.res .batch video',sec);if(v){v.scrollIntoView({block:'nearest'});v.play().catch(()=>{})}
@@ -823,17 +823,17 @@ function lastFrame(u){return new Promise((ok,bad)=>{const v=document.createEleme
   v.onseeked=()=>{try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);ok(c.toDataURL('image/png'))}catch{fail()}}})}
 function addMusicResults(sec,j){
   const used=(j.used||[]).filter(Boolean);
-  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig mfig"><audio src="${u}" controls preload="metadata"></audio><figcaption><a href="${u}" download>저장</a> <button type="button" class="link" data-open="music">음악 폴더 열기</button></figcaption></figure>`).join('')}${used.length?`<details><summary>사용된 스타일</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig mfig"><audio src="${u}" controls preload="metadata"></audio><figcaption><a href="${u}" download>저장</a> <button type="button" class="link" data-u="${u}" data-to="vmixa" title="이 음악을 영상에 입혀요">영상에 넣기</button> <button type="button" class="link" data-open="music">음악 폴더 열기</button></figcaption></figure>`).join('')}${used.length?`<details><summary>사용된 스타일</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const a=$('.res .batch audio',sec);if(a){a.scrollIntoView({block:'nearest'});a.play().catch(()=>{})}
 }
 function addTtsResults(sec,j){
-  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig mfig"><audio src="${u}" controls preload="metadata"></audio><figcaption><a href="${u}" download>저장</a> <button type="button" class="link" data-open="tts">음성 폴더 열기</button></figcaption></figure>`).join('')}</div>`);
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>`<figure class="vfig mfig"><audio src="${u}" controls preload="metadata"></audio><figcaption><a href="${u}" download>저장</a> <button type="button" class="link" data-u="${u}" data-to="vmixa" title="이 음성을 영상에 입혀요">영상에 넣기</button> <button type="button" class="link" data-open="tts">음성 폴더 열기</button></figcaption></figure>`).join('')}</div>`);
   const a=$('.res .batch audio',sec);if(a){a.scrollIntoView({block:'nearest'});a.play().catch(()=>{})}
 }
 function addResults(sec,j,kind){
   if(kind==='music')return addMusicResults(sec,j);
   if(kind==='tts')return addTtsResults(sec,j);
-  if(kind==='vid'||kind==='vpost')return addVideoResults(sec,j);
+  if(kind==='vid'||kind==='vpost'||kind==='vmix')return addVideoResults(sec,j);
   const first=kind==='edit'?'이어서 편집':'편집으로';
   const used=(j.used||[]).filter(Boolean);
   const mi=(u,to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${tip}"`:''}>${t}</button>`;
@@ -921,6 +921,44 @@ let VID_IMG=null;
   window.vidSetImage=setImg;vidSync();
 })();
 const need=(f,t)=>setBar(f.closest('.view'),t,'bad');
+
+/* ══════════ 영상 소리·자막 ══════════ */
+let VM={videos:[],audios:[],upv:[],upa:[],urls:{},p:null};
+const VMKEEP=['vol','delay','fit','fade','amode','ovol','sub_size','sub_pos','sub_color','sub_outline','sub_bg','save_srt'];
+const vmDate=t=>new Date(t*1000).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+function vmixLoad(){return VM.p=(async()=>{let r;try{r=await api('/api/vmix/list')}catch{return}
+  VM.videos=r.videos||[];VM.audios=r.audios||[];$('#vm-noff').hidden=r.ffmpeg!==false;vmFill();vmSync()})()}
+function vmFill(){const f=$('#f-vmix'),sv=f.video.value,sa=f.audio.value;
+  f.video.innerHTML=(VM.upv.map(x=>`<option value="${x.id}">📎 ${esc(x.name)} (올린 파일)</option>`).join('')+VM.videos.map(x=>`<option value="${esc(x.url)}">${esc(vmDate(x.time))} · ${esc(x.text?x.text.slice(0,34):x.name)}</option>`).join(''))||'<option value="">영상이 없어요 — 먼저 영상을 만들거나 내 컴퓨터에서 고르세요</option>';
+  f.audio.innerHTML='<option value="">소리 넣지 않기</option>'+VM.upa.map(x=>`<option value="${x.id}">📎 ${esc(x.name)} (올린 파일)</option>`).join('')+VM.audios.map(x=>`<option value="${esc(x.url)}">${x.kind==='음악'?'♪ 음악':'🗣 음성'} · ${esc(vmDate(x.time))} · ${esc(x.text?x.text.slice(0,30):x.name)}</option>`).join('');
+  if([...f.video.options].some(o=>o.value===sv))f.video.value=sv;if([...f.audio.options].some(o=>o.value===sa))f.audio.value=sa}
+function vmSync(){const f=$('#f-vmix'),vp=$('#vm-vprev'),ap=$('#vm-aprev'),v=f.video.value,a=f.audio.value,src=x=>x&&x.startsWith('/out/')?x:(VM.urls[x]||'');
+  const vs=src(v),as=src(a);if(vp.getAttribute('src')!==vs){vp.hidden=!vs;if(vs)vp.src=vs;else vp.removeAttribute('src')}
+  if(ap.getAttribute('src')!==as){ap.hidden=!as;if(as)ap.src=as;else ap.removeAttribute('src')}
+  $('#vm-aopts').hidden=!a;const it=VM.audios.find(x=>x.url===a);$('#vm-fromtts').hidden=!(it&&it.text&&it.kind==='음성');
+  $('#vm-subclear').hidden=!f.subs.value}
+async function vmUpload(kind,file){if(!file)return;toast(`올리는 중… ${file.name}`,4000);
+  try{const r=await fetch(`/api/vmix/upload?kind=${kind}&name=${encodeURIComponent(file.name)}`,{method:'POST',body:file}),j=await r.json();if(j.error)return toast(j.error,6000);
+    VM.urls[j.id]=URL.createObjectURL(file);(kind==='video'?VM.upv:VM.upa).unshift({id:j.id,name:j.name});vmFill();$('#f-vmix')[kind].value=j.id;vmSync();toast('올렸어요: '+j.name)}
+  catch{toast('파일을 올리지 못했어요.')}}
+async function vmixOpen(o={}){show('vmix');await VM.p;const f=$('#f-vmix');
+  const put=(sel,val,label)=>{if(![...sel.options].some(x=>x.value===val))sel.insertAdjacentHTML('afterbegin',`<option value="${esc(val)}">${esc(label)}</option>`);sel.value=val};
+  if(o.video)put(f.video,o.video,decodeURIComponent(o.video.split('/').pop()));
+  if(o.audio){put(f.audio,o.audio,decodeURIComponent(o.audio.split('/').pop()));f.audio.dispatchEvent(new Event('change'))}
+  vmSync()}
+(()=>{const f=$('#f-vmix');if(!f)return;
+  const o=ls.get('form:f-vmix',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e||!VMKEEP.includes(k))continue;if(e.type==='checkbox')e.checked=!!v;else e.value=v}
+  const save=()=>ls.set('form:f-vmix',Object.fromEntries(VMKEEP.map(k=>[k,f.elements[k].type==='checkbox'?f.elements[k].checked:f.elements[k].value])));
+  f.addEventListener('change',()=>{save();vmSync()});f.addEventListener('input',()=>{$('#vm-subclear').hidden=!f.subs.value});
+  f.audio.addEventListener('change',()=>{const it=VM.audios.find(x=>x.url===f.audio.value);if(it&&it.text&&it.kind==='음성'&&!f.subs.value.trim()){f.subs.value=it.text;toast('음성을 만들 때 쓴 글을 자막 칸에 넣었어요.')}vmSync()});
+  $('#vm-fromtts').onclick=()=>{const it=VM.audios.find(x=>x.url===f.audio.value);if(it&&it.text){f.subs.value=it.text;vmSync()}};
+  $('#vm-subclear').onclick=()=>{f.subs.value='';vmSync()};
+  $('#vm-vfile').onchange=async e=>{await vmUpload('video',e.target.files[0]);e.target.value=''};
+  $('#vm-afile').onchange=async e=>{const fl=e.target.files[0];await vmUpload('audio',fl);e.target.value='';f.audio.dispatchEvent(new Event('change'))};
+  $('#vm-srtfile').onchange=async e=>{const fl=e.target.files[0];e.target.value='';if(!fl)return;const buf=await fl.arrayBuffer();let t=new TextDecoder('utf-8').decode(buf);if(t.includes('�'))t=new TextDecoder('euc-kr').decode(buf);f.subs.value=t;vmSync();toast('자막 파일을 불러왔어요.')};
+  f.onsubmit=e=>{e.preventDefault();if(!f.video.value)return need(f,'영상을 골라 주세요.');if(!f.audio.value&&!f.subs.value.trim())return need(f,'넣을 소리나 자막을 하나 이상 골라 주세요.');
+    run('vmix',f,{fade:f.fade.checked,sub_outline:f.sub_outline.checked,sub_bg:f.sub_bg.checked,save_srt:f.save_srt.checked})};
+})();
 document.addEventListener('click',e=>{const b=e.target.closest('.seed-rand,.seed-pick');if(!b)return;const i=b.parentElement.querySelector('input');
   i.value=b.classList.contains('seed-rand')?-1:Math.floor(Math.random()*2147483647);i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}))});
 $('.exprs').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const f=$('#f-edit'),sd=f.engine.value==='sdxl'||(f.engine.value==='flux'&&!/kontext/i.test(f.fx_model.value));
@@ -973,6 +1011,7 @@ document.addEventListener('click',async e=>{
   if(to==='up'&&b.closest('.gt,#lb')){IV.up.set(await urlToDataURL(u));show('up');return}
   if(to==='vcont'){try{b.disabled=true;window.vidSetImage(await lastFrame(u));show('vid');toast('마지막 장면을 시작 이미지로 넣었어요. 장면 설명을 이어지게 바꿔서 [영상 만들기]를 눌러 보세요.',6000)}catch(er){toast(er.message)}b.disabled=false;return}
   if(to.startsWith('vp:')){b.closest('.more').open=false;run('vpost',$('#f-vid'),{op:to.slice(3),video:u,upm:($('#f-up')&&$('#f-up').elements.upm.value)||''});return}
+  if(to==='vmix'||to==='vmixa'){vmixOpen(to==='vmix'?{video:u}:{audio:u});return}
   if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
   IV[to].set(await urlToDataURL(u));show(to);
@@ -1102,7 +1141,7 @@ async function nodeDiag(repo,host){host.innerHTML='<span class="mute">원인을 
   try{d=await api('/api/nodes/diagnose',{repo})}catch{host.textContent='서버와 연결되지 않았어요.';return}
   if(d.error){host.textContent=d.error;return}
   const rs=`<button type="button" class="ghost sm nd-rs">이미지 엔진 다시 시작</button>`;
-  if(d.missing.length){host.innerHTML=`<b>이 확장이 쓰는 파이썬 부품이 빠져 있어요:</b> ${d.missing.map(m=>esc(m.pip)).join(', ')}.${d.reason?`<br><small class="mute">엔진 기록: ${esc(d.reason)}</small>`:''}<br><button type="button" class="ghost sm nd-fix">빠진 부품 설치</button> <span class="mute nd-st"></span>`;
+  if(d.missing.length||(d.setup&&d.reason)){host.innerHTML=`<b>${d.missing.length?'이 확장이 쓰는 파이썬 부품이 빠져 있어요: '+d.missing.map(m=>esc(m.pip)).join(', ')+'.':'엔진이 이 확장을 불러오다 멈췄어요. 설치 단계(부품·모델 받기)를 다시 하면 고쳐질 수 있어요.'}</b>${d.reason?`<br><small class="mute">엔진 기록: ${esc(d.reason)}</small>`:''}<br><button type="button" class="ghost sm nd-fix">${d.setup?'설치 단계 다시 하기':'빠진 부품 설치'}</button> <span class="mute nd-st"></span>`;
     $('.nd-fix',host).onclick=async e=>{const b=e.target;b.disabled=true;const st=$('.nd-st',host);const r=await api('/api/nodes/fixdeps',{repo});if(r.error){st.textContent=r.error;b.disabled=false;return}
       for(;;){await sleep(1500);let j;try{j=(await api('/api/nodes/status'))[repo]}catch{continue}if(!j)continue;st.textContent=j.msg;if(j.state!=='running'){b.disabled=false;if(j.state==='done'){host.insertAdjacentHTML('beforeend',' '+rs);$('.nd-rs',host).onclick=ndRestart}break}}};return}
   host.innerHTML=(d.reason?`<b>엔진이 이 확장을 불러오다 멈췄어요:</b> <small>${esc(d.reason)}</small><br>`:'<b>부품은 다 갖춰져 있어요.</b> ')+(d.reason?'위 오류가 사라지지 않으면 확장이 이 ComfyUI 버전과 안 맞는 걸 수 있어요. ':'')+`이미지 엔진을 다시 시작하면 노드가 보여요. ${rs}`;$('.nd-rs',host).onclick=ndRestart}
@@ -1496,25 +1535,28 @@ function libShow(){chLoad();plLoad();wcLoad();i2pInit()}
 /* ══════════ 기록 갤러리 ══════════ */
 let GAL={off:0,items:[]};
 async function galLoad(more){
-  if(!more){GAL={off:0,items:[],last:''};$('#gal-grid').innerHTML=''}
-  const qs=new URLSearchParams({q:$('#gal-q').value.trim(),kind:$('#gal-kind').value,fav:$('#gal-fav').checked?'1':'',date:$('#gal-date').value,offset:GAL.off});
+  if(!more){GAL={off:0,items:[],last:'',lastg:''};$('#gal-grid').innerHTML=''}
+  const qs=new URLSearchParams({q:$('#gal-q').value.trim(),kind:$('#gal-kind').value,fav:$('#gal-fav').checked?'1':'',date:$('#gal-date').value,sort:$('#gal-sort').value,same:$('#gal-same').checked?'1':'',offset:GAL.off});
   let r;try{r=await api('/api/gallery?'+qs)}catch{return}
   GAL.items.push(...r.items);GAL.off+=r.items.length;
   const dmap=Object.fromEntries(r.days||[]),today=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),
     wd=d=>['일','월','화','수','목','금','토'][new Date(d+'T12:00:00').getDay()];
   if(!more){const sel=$('#gal-date'),keep=sel.value;sel.innerHTML='<option value="">모든 날짜</option>'+(r.days||[]).map(([d,n])=>`<option value="${d}">${d} (${wd(d)})${d===today?' · 오늘':''} · ${n}개</option>`).join('');
     sel.value=[...sel.options].some(o=>o.value===keep)?keep:''}
-  const grouped=$('#gal-group').checked;
+  const same=$('#gal-same').checked,grouped=$('#gal-group').checked&&!same;
   const fmt=t=>new Date(t*1000).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   $('#gal-grid').insertAdjacentHTML('beforeend',r.items.map(x=>{const tn=x.url.replace('/out/','/thumb/');
-    let head='';if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
+    let head='';if(same&&x.g&&x.g!==GAL.lastg){GAL.lastg=x.g;head=`<h3 class="gday" data-g="${x.g}">${x.gp?'같은 프롬프트':'프롬프트 정보 없음'} · ${x.gn}장 <small title="${esc(x.gp||'')}">${esc((x.gp||'').slice(0,60))}</small></h3>`}
+    else if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
     const noprev=D.dataset.galprev==='off';
     return head+`<figure class="gt${noprev?' noprev':''}" data-u="${x.url}">${noprev?`<div class="gnoimg" title="${esc(x.prompt||x.name)}"><b>${x.video?'▶ ':''}${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span></div>`:x.video?`<video src="${x.url}" controls muted loop playsinline preload="metadata"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
-    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?'':`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
+    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?`<button type="button" data-u="${x.url}" data-to="vmix" title="이 영상에 소리·자막 넣기">♪</button>`:`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
   $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value||$('#gal-date').value);
 }
 $('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=$('#gal-date').onchange=()=>galLoad();
+$('#gal-sort').value=ls.get('gal:sort','new');if(!$('#gal-sort').value)$('#gal-sort').value='new';$('#gal-same').checked=!!ls.get('gal:same',false);
+$('#gal-sort').onchange=()=>{ls.set('gal:sort',$('#gal-sort').value);galLoad()};$('#gal-same').onchange=()=>{ls.set('gal:same',$('#gal-same').checked);$('#gal-group').disabled=$('#gal-same').checked;galLoad()};$('#gal-group').disabled=$('#gal-same').checked;
 $('#gal-group').checked=!!ls.get('gal:group',false);$('#gal-group').onchange=()=>{ls.set('gal:group',$('#gal-group').checked);galLoad()};$('#gal-more').onclick=()=>galLoad(true);
 let GSEL=false,GPICK=new Set();
 const galSelUi=()=>{$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?'선택 끝내기':'선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
@@ -1573,12 +1615,13 @@ async function chLoad(){try{const r=await api('/api/chars',{action:'list'});CH=r
   $('#ch-form').elements.kind.innerHTML=CHKINDS.map(k=>`<option>${esc(k)}</option>`).join('');
   $('#ch-models').innerHTML=(LISTS.checkpoints||[]).map(x=>`<option value="${esc(x)}">`).join('');chRender()}
 function chRender(){const box=$('#ch-list');if(!box)return;const q=($('#ch-q').value||'').trim().toLowerCase(),k=$('#ch-kind').value;
-  const list=CH.filter(x=>(!k||x.kind===k)&&(!q||(x.name+' '+x.prompt+' '+x.note+' '+x.loras.map(l=>l[0]).join(' ')).toLowerCase().includes(q)));
+  let list=CH.filter(x=>(!k||x.kind===k)&&(!q||(x.name+' '+x.prompt+' '+x.note+' '+x.loras.map(l=>l[0]).join(' ')).toLowerCase().includes(q)));
+  const so=$('#ch-sort').value;if(so==='name')list=[...list].sort((a,b)=>a.name.localeCompare(b.name,'ko'));else if(so==='used')list=[...list].sort((a,b)=>(b.used||0)-(a.used||0)||(b.created||0)-(a.created||0));
   box.innerHTML=list.length?list.map(x=>`<div class="chcard" data-id="${esc(x.id)}">${x.refs.length?`<img loading="lazy" src="${chImg(x.refs[0],1)}" alt="${esc(x.name)}">`:'<div class="chnoimg">대표 이미지 없음</div>'}
     <div class="chbody"><div class="plh"><b>${esc(x.name)}</b><span class="badge">${esc(x.kind)}</span></div>
     <p class="plt">${esc((x.prompt||'').slice(0,110))}${(x.prompt||'').length>110?'…':''}</p>
     <small class="mute">${x.loras.length?'LoRA '+x.loras.map(l=>esc(l[0].replace(/\.safetensors$/i,''))+' ('+l[1]+')').join(', ')+' · ':''}${x.seed!=null?'시드 '+x.seed+' · ':''}${x.refs.length?'참고 이미지 '+x.refs.length+'장':''}${esc(x.note?' · '+x.note:'')}</small>
-    <div class="plb"><button type="button" class="ghost sm" data-ch="gen" title="프롬프트·LoRA·시드·모델을 이미지 생성 화면에 넣어요(프롬프트는 뒤에 이어 붙여요)">이미지 생성에 넣기</button><button type="button" class="ghost sm" data-ch="edit" title="참고 이미지를 이미지 편집의 참조 이미지 칸에 넣어요">편집에 참고로</button><button type="button" class="ghost sm" data-ch="ipa" title="참고 이미지와 프롬프트를 '참고 이미지로 그리기' 기능에 넣어요">참고 이미지로 그리기</button><button type="button" class="ghost sm" data-ch="edit-item">수정</button><button type="button" class="ghost sm" data-ch="del">삭제</button></div></div></div>`).join(''):`<p class="mute">${CH.length?'조건에 맞는 항목이 없어요.':'아직 저장한 캐릭터·스타일이 없어요. [+ 새로 만들기]를 누르거나, 마음에 드는 그림의 [이어서 작업]에서 저장해 보세요.'}</p>`}
+    <div class="plb"><button type="button" class="ghost sm" data-ch="gen" title="프롬프트·LoRA·시드·모델을 이미지 생성 화면에 넣어요(프롬프트는 뒤에 이어 붙여요)">이미지 생성에 넣기</button><button type="button" class="ghost sm" data-ch="edit" title="참고 이미지를 이미지 편집의 참조 이미지 칸에 넣어요">편집에 참고로</button><button type="button" class="ghost sm" data-ch="ipa" title="참고 이미지와 프롬프트를 '참고 이미지로 그리기' 기능에 넣어요">참고 이미지로 그리기</button><button type="button" class="ghost sm" data-ch="edit-item">수정</button><button type="button" class="ghost sm" data-ch="dup" title="설정과 참고 이미지를 그대로 복사해 새 항목을 만들어요">복제</button><button type="button" class="ghost sm" data-ch="del">삭제</button></div></div></div>`).join(''):`<p class="mute">${CH.length?'조건에 맞는 항목이 없어요.':'아직 저장한 캐릭터·스타일이 없어요. [+ 새로 만들기]를 누르거나, 마음에 드는 그림의 [이어서 작업]에서 저장해 보세요.'}</p>`}
 function chLoraRow(name,w){const i=document.createElement('div');i.className='ch-lrow';const all=[...(LISTS.loras||[])];if(name&&!all.includes(name))all.unshift(name);
   i.innerHTML=`<select class="ch-lora"><option value="">사용 안 함</option>${all.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select><input type="number" class="ch-w" step="0.05" min="-2" max="2" value="${w??0.8}" title="강도"><button type="button" class="x" title="이 줄 지우기">×</button>`;
   $('select',i).value=name||'';$('.x',i).onclick=()=>i.remove();$('#ch-loras').append(i)}
@@ -1597,7 +1640,8 @@ $('#ch-copy').onclick=async()=>{const f=$('#ch-form'),g=chFromGenForm(),on=k=>$(
   toast(got.length?`가져왔어요: ${got.join(', ')}`:'가져올 내용이 없어요. 이미지 생성 화면에 값을 먼저 채워 주세요.',4000)};
 $('#ch-addl').onclick=()=>chLoraRow();
 $('#ch-new').onclick=()=>chOpen();$('#ch-cancel').onclick=()=>{$('#ch-form').hidden=true};
-$('#ch-q').oninput=chRender;$('#ch-kind').onchange=chRender;
+$('#ch-sort').value=ls.get('ch:sort','saved');if(!$('#ch-sort').value)$('#ch-sort').value='saved';
+$('#ch-q').oninput=chRender;$('#ch-kind').onchange=chRender;$('#ch-sort').onchange=()=>{ls.set('ch:sort',$('#ch-sort').value);chRender()};
 function chFromGenForm(){const f=$('#f-gen');const rows=$$('.lora-row',f).map(r=>[$('select',r).value,+$('input',r).value]).filter(r=>r[0]);
   const seed=+f.elements.seed.value;return{prompt:String(f.elements.prompt.value||'').replace(/\s*<lora:[^>]*>/gi,'').trim(),negative:f.elements.negative?f.elements.negative.value.trim():'',
     loras:rows,seed:seed>=0?seed:null,model:(f.elements.ckpt&&f.elements.ckpt.value||'').replace(/^ckpt::/,'')}}
@@ -1611,6 +1655,8 @@ $('#ch-form').onsubmit=async e=>{e.preventDefault();const f=e.target;if(!f.eleme
 async function chImgData(n){return urlToDataURL(chImg(n))}
 $('#ch-list').addEventListener('click',async e=>{const b=e.target.closest('[data-ch]');if(!b)return;const it=CH.find(x=>x.id===b.closest('.chcard').dataset.id);if(!it)return;const a=b.dataset.ch;
   if(a==='edit-item')return chOpen(it);
+  if(a==='dup'){const r=await api('/api/chars',{action:'dup',id:it.id});if(r.error)return toast(r.error);CH=r.items||[];chRender();return toast(`'${it.name}' 을(를) 복제했어요. 이름 뒤에 (복사)가 붙어요.`)}
+  if(a==='gen'||a==='edit'||a==='ipa'){it.used=Math.floor(Date.now()/1000);api('/api/chars',{action:'use',id:it.id}).catch(()=>{})}
   if(a==='del'){if(!confirm(`'${it.name}' 을(를) 보관함에서 지울까요?\n저장해 둔 참고 이미지도 함께 지워져요. 되돌릴 수 없어요.`))return;
     const r=await api('/api/chars',{action:'delete',id:it.id});CH=r.items||[];chRender();return}
   if(a==='gen'){const f=$('#f-gen'),t=f.elements.prompt,cur=t.value.trim(),miss=[];
@@ -1763,7 +1809,7 @@ const QST={running:'진행 중',queued:'대기',done:'완료',error:'실패',can
 const qSound=()=>ls.get('q:sound',true),qDesk=()=>ls.get('q:desk',false);
 let QSEEN=new Map(),QINIT=false,QLAST=null,QUSER=null;     // QUSER: 사용자가 직접 연 'open' / 닫은 'closed' / 아직 안 건드림 null
 const qPin=()=>ls.get('q:pin',true);
-const QVIEW={gen:'gen',edit:'edit',up:'up',wf:'wf',feat:'feat',vid:'vid',vpost:'vid',music:'music',tts:'tts',batch:'batch'};
+const QVIEW={gen:'gen',edit:'edit',up:'up',wf:'wf',feat:'feat',vid:'vid',vpost:'vid',vmix:'vmix',music:'music',tts:'tts',batch:'batch'};
 function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
   try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=window.QCTX||(window.QCTX=new A());if(c.state==='suspended')c.resume();
     [[880,0],[1175,.16]].forEach(([f,t])=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);
@@ -2191,27 +2237,46 @@ async function checkScan(){const st=$('#chk-st'),B=$('#chk');st.textContent='점
   st.textContent=nb?`고쳐야 할 곳이 ${nb}군데 있어요.`:nw?'꼭 필요한 것은 갖춰졌어요. 선택 항목만 비어 있어요.':'모두 갖춰졌어요.';
   B.innerHTML=r.groups.map(g=>`<div class="chk-g s-${g.state}" data-g="${esc(g.id)}"><div class="chk-h"><span class="chk-i">${ic[g.state]}</span><b>${esc(g.title)}</b>${g.view?`<button type="button" class="ghost sm" data-chk="open" data-v="${esc(g.view)}">화면 열기</button>`:''}</div>${g.note?`<p class="hint plain chk-n">${esc(g.note)}</p>`:''}
     ${g.rows.map((x,i)=>`<div class="chk-r ${x.ok===true?'ok':x.ok===false?(x.opt?'opt':'bad'):'unk'}" data-r="${i}"><i></i><span class="chk-l">${esc(x.label)}${x.opt&&x.ok===false?' <small class="mute">(선택)</small>':''}</span><small class="mute chk-d">${esc(x.detail||'')}</small>${x.fix?`<button type="button" class="ghost sm" data-chk="fix" data-gi="${esc(g.id)}" data-ri="${i}">${esc(x.fixlabel||'고치기')}</button>`:''}<span class="mute chk-s"></span></div>`).join('')}</div>`).join('');
-  window.CHK=r}
+  window.CHK=r;{const n=chkAutoRows().length;const b=$('#chk-fixall');b.hidden=!n;b.textContent=`자동으로 고칠 수 있는 것 전부 고치기 (${n}개)`}}
 async function chkPoll(url,key,st){for(;;){await sleep(1500);let s;try{s=await api(url)}catch{continue}s=key?s[key]:s;if(!s)continue;st.textContent=s.msg||'';if(s.state!=='running')return s}}
-async function chkFix(btn){const g=CHK.groups.find(x=>x.id===btn.dataset.gi),x=g.rows[+btn.dataset.ri],f=x.fix,row=btn.closest('.chk-r'),st=$('.chk-s',row);btn.disabled=true;
-  const done=(msg,rs)=>{st.innerHTML=esc(msg)+(rs?' <button type="button" class="ghost sm" data-chk="again">다시 점검</button>':'');btn.disabled=false};
+/* 꼭 필요한데 빠졌고(선택 항목 제외), 설치로 고칠 수 있는 줄 */
+function chkAutoRows(){const out=[];(window.CHK?CHK.groups:[]).forEach(g=>g.rows.forEach((x,i)=>{if(x.ok===false&&!x.opt&&x.fix&&['nodes','pymods','swap'].includes(x.fix.a))out.push([g.id,i])}));return out}
+async function nodeFixNow(repo,st){let d;try{d=await api('/api/nodes/diagnose',{repo})}catch{return 'err'}
+  if(d.error)return 'err';
+  if(d.missing.length||(d.setup&&d.reason)){const r=await api('/api/nodes/fixdeps',{repo});if(r.error){st.textContent=r.error;return 'err'}
+    const s=await chkPoll('/api/nodes/status',repo,st);return s.state==='done'?'ok':'err'}
+  return 'restart'}
+async function chkFix(btn,auto){const g=CHK.groups.find(x=>x.id===btn.dataset.gi),x=g.rows[+btn.dataset.ri],f=x.fix,row=btn.closest('.chk-r'),st=$('.chk-s',row);btn.disabled=true;row.dataset.res='err';
+  const done=(msg,rs)=>{row.dataset.res=rs?'restart':'err';st.innerHTML=esc(msg)+(rs?' <button type="button" class="ghost sm" data-chk="again">다시 점검</button>':'');btn.disabled=false};
   try{
    if(f.a==='view'){show(f.v);btn.disabled=false;return}
    if(f.a==='restart'||f.a==='restart_all'){if(f.a==='restart_all'){btn.disabled=false;return appRestart()}
      st.textContent='다시 시작하는 중…';const r=await api('/api/engine/restart',{});if(r.error)return done(r.error);await sleep(9000);await loadCaps();await checkScan();return}
    if(f.a==='nodes'){st.textContent='설치할 확장을 찾는 중…';const r=await api('/api/nodes/sources',{missing:f.missing});if(r.error)return done(r.error);
-     const todo=(r.repos||[]).filter(q=>!q.installed||q.incomplete);const have=(r.repos||[]).filter(q=>q.installed&&(q.nodes||[]).length);if(!todo.length&&have.length){st.innerHTML='';const box=document.createElement('div');box.className='chk-diag';row.append(box);btn.disabled=false;return nodeDiag(have[0].repo,box)}
+     const todo=(r.repos||[]).filter(q=>!q.installed||q.incomplete);const have=(r.repos||[]).filter(q=>q.installed&&(q.nodes||[]).length);if(!todo.length&&have.length&&auto){const res=await nodeFixNow(have[0].repo,st);row.dataset.res=res;st.textContent=res==='ok'?'부품을 설치했어요.':res==='restart'?'부품은 갖춰져 있어요. 이미지 엔진을 다시 시작하면 적용돼요.':(st.textContent||'고치지 못했어요.');btn.disabled=false;return}
+     if(!todo.length&&have.length){st.innerHTML='';const box=document.createElement('div');box.className='chk-diag';row.append(box);btn.disabled=false;return nodeDiag(have[0].repo,box)}
      if(!todo.length&&!(r.unknown||[]).length)return done('이미 설치돼 있어요. 이미지 엔진을 다시 시작하면 적용돼요.',true);
      for(const q of todo){const i=await api('/api/nodes/install',{repo:q.repo});if(i.error){st.textContent=q.title+': '+i.error;continue}st.textContent=q.title+' 설치 중…';const s=await chkPoll('/api/nodes/status',q.repo,st);if(s.state==='error'){st.textContent=q.title+': '+s.msg;btn.disabled=false;return}}
      if((r.unknown||[]).length)return done('설치할 곳을 못 찾은 노드: '+r.unknown.join(', ')+' — ComfyUI 를 업데이트하거나 직접 설치해야 해요.');
-     st.innerHTML='설치했어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>';btn.disabled=false;return}
+     row.dataset.res='ok';st.innerHTML='설치했어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>';btn.disabled=false;return}
    if(f.a==='pymods'){for(const m of f.modules){st.textContent=m.pip+' 설치 중…(1~3분)';const r=await api('/api/pymod/install',{module:m.module});if(r.error){st.textContent=r.error;btn.disabled=false;return}
        const s=await chkPoll('/api/pymod/status',m.module,st);if(s.state==='error'){st.textContent=m.pip+': '+s.msg;btn.disabled=false;return}}
-     st.innerHTML='설치했어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>';btn.disabled=false;return}
+     row.dataset.res='ok';st.innerHTML='설치했어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>';btn.disabled=false;return}
    if(f.a==='swap'){const r=await api('/api/faceswap/model',{});if(r.error)return done(r.error);st.textContent='받는 중…';const s=await chkPoll('/api/faceswap/model',null,st);
-     return s.state==='error'?done(s.msg):st.innerHTML='받았어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>'}
+     return s.state==='error'?done(s.msg):(row.dataset.res='ok',st.innerHTML='받았어요. <button type="button" class="ghost sm" data-chk="restart">이미지 엔진 다시 시작</button>')}
   }catch{done('서버와 연결되지 않았어요.')}}
 $('#chk-run').onclick=checkScan;
+$('#chk-diag').onclick=()=>$('#diag-go').click();
+$('#chk-fixall').onclick=async()=>{const rows=chkAutoRows();if(!rows.length)return;
+  if(!confirm(`꼭 필요한 항목 ${rows.length}개를 순서대로 설치해요.\n설치에는 몇 분 걸릴 수 있고, 아무것도 지우지는 않아요.\n이미지 엔진 다시 시작은 맨 마지막에 한 번만 안내해요. 진행할까요?`))return;
+  const b=$('#chk-fixall'),box=$('#chk-all'),cnt={ok:0,restart:0,err:0};b.disabled=true;box.hidden=false;
+  for(const [i,[gid,ri]] of rows.entries()){box.textContent=`고치는 중… (${i+1}/${rows.length})`;const btn=$(`#chk [data-chk=fix][data-gi="${gid}"][data-ri="${ri}"]`);if(!btn){cnt.err++;continue}
+    await chkFix(btn,true);const res=btn.closest('.chk-r').dataset.res||'err';cnt[res]=(cnt[res]||0)+1}
+  box.innerHTML=`<b>끝났어요.</b> 설치 ${cnt.ok}개 · 다시 시작하면 적용되는 것 ${cnt.restart}개 · 고치지 못한 것 ${cnt.err}개${cnt.err?' (각 줄의 안내를 확인하거나 [진단 파일 저장]으로 원인을 모아 보세요)':''}.${cnt.ok+cnt.restart?' <button type="button" class="ghost sm" id="chk-all-rs">이미지 엔진 다시 시작</button>':''} <button type="button" class="ghost sm" id="chk-all-again">다시 점검</button>`;
+  b.disabled=false};
+$('#chk-all').addEventListener('click',async e=>{const t=e.target;
+  if(t.id==='chk-all-again'){$('#chk-all').hidden=true;checkScan()}
+  else if(t.id==='chk-all-rs'){t.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 다시 점검해요.',5000);await sleep(9000);await loadCaps();$('#chk-all').hidden=true;checkScan()}});
 $('#fold-check').addEventListener('toggle',e=>{if(e.target.open&&!window.CHK)checkScan()});
 $('#chk').addEventListener('click',async e=>{const b=e.target.closest('[data-chk]');if(!b)return;const k=b.dataset.chk;
   if(k==='open'){const v=b.dataset.v;if(v.startsWith('feat:')){show('feat');setTimeout(()=>featForm(v.slice(5),true),400)}else show(v)}

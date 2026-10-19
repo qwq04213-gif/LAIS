@@ -37,6 +37,7 @@
       <button data-v="feat" title="기능 모음"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0-5 5L3.5 17.5l3 3 6-6a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/></svg><span>기능 모음</span></button>
       <button data-v="batch" title="일괄 처리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>일괄 처리</span></button>
       <button data-v="wf" title="워크플로"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="9" y="15" width="6" height="5" rx="1"/><path d="M6 9v2.5h12V9M12 11.5V15"/></svg><span>워크플로</span></button>
+      <button data-v="vmix" title="영상 소리·자막"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 14.5h3.5M13 14.5h4M7 10.5h2.5M12 10.5h5"/></svg><span>영상 소리·자막</span></button>
     </div>
     <div class="ng"><span class="ngt">관리</span>
       <button data-v="dl" title="다운로드"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></svg><span>다운로드</span></button>
@@ -504,6 +505,55 @@
   </div>
 </section>
 
+<!-- 영상 소리·자막 -->
+<section class="view split" id="v-vmix">
+  <form id="f-vmix" autocomplete="off" novalidate>
+    <button class="go">합쳐서 새 영상 만들기</button>
+    <p class="warn" id="vm-noff" hidden>영상을 합치려면 ffmpeg 가 필요해요. [합쳐서 새 영상 만들기]를 누르면 나오는 [빠진 부품 설치] 버튼으로 한 번만 설치하면 돼요.</p>
+    <p class="hint plain">영상에 음성·음악을 입히고 자막을 넣어 <b>새 영상 파일</b>로 저장해요. 원본 영상은 그대로 남아요. 음성은 [음성 만들기], 음악은 [음악 만들기]에서 먼저 만들어 두면 아래 목록에 나와요.</p>
+    <div class="f"><span>영상</span>
+      <div class="vmrow"><select name="video" id="vm-video"></select><label class="ghost vpick">내 컴퓨터에서 고르기<input type="file" accept="video/*,.mkv" hidden id="vm-vfile"></label></div>
+      <video id="vm-vprev" controls muted preload="metadata" hidden></video>
+    </div>
+    <div class="f"><span>소리 (선택)</span>
+      <div class="vmrow"><select name="audio" id="vm-audio"><option value="">소리 넣지 않기</option></select><label class="ghost vpick">내 컴퓨터에서 고르기<input type="file" accept="audio/*" hidden id="vm-afile"></label></div>
+      <audio id="vm-aprev" controls preload="metadata" hidden></audio>
+    </div>
+    <div id="vm-aopts" hidden>
+      <div class="row">
+        <label class="f">소리 크기 (%)<input type="number" name="vol" value="100" min="0" max="300" step="5"></label>
+        <label class="f">소리 시작 위치 (초)<input type="number" name="delay" value="0" min="0" max="600" step="0.5"></label>
+      </div>
+      <label class="f">영상과 소리 길이가 다를 때<select name="fit"><option value="video">영상 길이에 맞춰요 (소리가 길면 자르고, 짧으면 뒤는 조용해요)</option><option value="audio">소리 길이에 맞춰요 (영상이 짧으면 마지막 장면에서 멈춰 있어요)</option></select></label>
+      <label class="chk"><input type="checkbox" name="fade" checked> 소리가 잘릴 때 끝을 서서히 줄이기</label>
+      <div class="row" id="vm-orig" hidden>
+        <label class="f">영상의 원래 소리<select name="amode"><option value="replace">없애고 새 소리만</option><option value="mix">새 소리와 같이 들려요</option></select></label>
+        <label class="f">원래 소리 크기 (%)<input type="number" name="ovol" value="100" min="0" max="300" step="5"></label>
+      </div>
+    </div>
+    <label class="f">자막 (선택)<textarea name="subs" rows="6" placeholder="예:&#10;안녕하세요, 오늘은 로컬 AI 스튜디오를 소개해 드릴게요.&#10;설치부터 첫 영상까지 차근차근 보여 드려요."></textarea></label>
+    <p class="hint plain">줄마다 자막 한 칸이에요(긴 줄은 문장 단위로 나눠요). 시간을 적지 않으면 소리 길이에 맞춰(소리가 없으면 영상 길이에 맞춰) 글자 수대로 나눠 넣어요. 시간을 직접 정하려면 <b>0:01 ~ 0:04 안녕하세요</b> 처럼 적거나 .srt 파일을 불러오세요.</p>
+    <div class="vmrow"><button type="button" class="ghost" id="vm-fromtts" hidden>이 음성을 만들 때 쓴 글 가져오기</button><label class="ghost vpick">자막 파일(.srt) 불러오기<input type="file" accept=".srt,.txt" hidden id="vm-srtfile"></label><button type="button" class="ghost" id="vm-subclear" hidden>자막 지우기</button></div>
+    <details><summary>자막 모양</summary>
+      <div class="row">
+        <label class="f">글자 크기<select name="sub_size"><option value="4">작게</option><option value="5.5" selected>보통</option><option value="7.5">크게</option><option value="10">아주 크게</option></select></label>
+        <label class="f">위치<select name="sub_pos"><option value="bottom" selected>아래</option><option value="middle">가운데</option><option value="top">위</option></select></label>
+      </div>
+      <div class="row">
+        <label class="f">글자 색<input type="color" name="sub_color" value="#ffffff"></label>
+        <div class="f"><label class="chk"><input type="checkbox" name="sub_outline" checked> 글자 테두리 (밝은 장면에서도 잘 보여요)</label><label class="chk"><input type="checkbox" name="sub_bg"> 반투명 검은 배경 상자</label></div>
+      </div>
+    </details>
+    <label class="chk"><input type="checkbox" name="save_srt"> 자막 파일(.srt)도 같이 저장</label>
+    <p class="hint plain">결과는 기록 갤러리의 [영상]에 쌓여요. 영상이 길수록 시간이 걸려요(1분 영상은 보통 1~2분). 그래픽카드는 쓰지 않아요.</p>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"></div>
+  </div>
+</section>
+
 <section class="view split" id="v-tts">
   <form id="f-tts" autocomplete="off" novalidate>
     <button class="go">음성 만들기</button>
@@ -552,7 +602,9 @@
     <input id="gal-q" type="search" placeholder="프롬프트나 파일 이름으로 검색">
     <select id="gal-kind"><option value="">전체</option><option>생성</option><option>편집</option><option>업스케일</option><option>워크플로</option><option>기능</option><option>영상</option><option>일괄</option></select>
     <select id="gal-date" title="날짜 고르기"><option value="">모든 날짜</option></select>
+    <select id="gal-sort" title="정렬"><option value="new">최신순</option><option value="old">오래된 순</option><option value="name">파일 이름순</option></select>
     <label class="chk"><input type="checkbox" id="gal-group"> 날짜별로 묶어 보기</label>
+    <label class="chk" title="프롬프트가 같은 그림끼리 한 묶음으로 모아 보여 줘요(그림 정보가 없는 파일은 맨 뒤)"><input type="checkbox" id="gal-same"> 같은 프롬프트끼리 모아 보기</label>
     <label class="chk"><input type="checkbox" id="gal-fav"> ★ 즐겨찾기만</label>
     <span class="mute" id="gal-n"></span>
     <button type="button" class="ghost sm" data-open="outputs" title="결과 파일이 저장된 outputs 폴더를 탐색기로 열어요">outputs 폴더 열기</button>
@@ -576,7 +628,7 @@
   <h2>프롬프트</h2>
   <details class="fold" id="fold-chars" open><summary>캐릭터·스타일 보관함</summary>
     <p class="hint plain">자주 쓰는 캐릭터나 그림체를 <b>프롬프트·LoRA(강도 포함)·시드·모델·참고 이미지</b> 묶음으로 저장해 두고, 이미지 생성·편집·참고 이미지 기능에 한 번에 불러와요. 마음에 드는 그림의 [이어서 작업 → 캐릭터·스타일로 저장]이나 이미지 생성 화면의 [캐릭터·스타일로 저장]으로도 만들 수 있어요. 파일은 프로그램 폴더의 <code>library</code> 폴더에 쌓여요.</p>
-    <div class="plbar"><input id="ch-q" type="search" placeholder="보관함 검색"><select id="ch-kind" aria-label="종류"><option value="">전체</option></select><button type="button" class="ghost" id="ch-new">+ 새로 만들기</button><button type="button" class="ghost" id="ch-fromgen" title="지금 이미지 생성 화면에 채워 둔 프롬프트·LoRA·시드·모델로 새 항목을 만들어요">+ 생성 화면 설정으로 새로 만들기</button></div>
+    <div class="plbar"><input id="ch-q" type="search" placeholder="보관함 검색"><select id="ch-kind" aria-label="종류"><option value="">전체</option></select><select id="ch-sort" aria-label="정렬"><option value="saved">저장한 순</option><option value="name">이름순</option><option value="used">최근 사용순</option></select><button type="button" class="ghost" id="ch-new">+ 새로 만들기</button><button type="button" class="ghost" id="ch-fromgen" title="지금 이미지 생성 화면에 채워 둔 프롬프트·LoRA·시드·모델로 새 항목을 만들어요">+ 생성 화면 설정으로 새로 만들기</button></div>
     <div id="ch-list" class="chgrid"></div>
     <form id="ch-form" hidden autocomplete="off">
       <input type="hidden" name="id">
@@ -689,6 +741,7 @@
     <dt>인터넷에서 받은 ComfyUI 워크플로를 돌려 보고 싶어요</dt><dd><b>워크플로</b> 탭 → [파일 열기]에 JSON이나 PNG를 올려요. 없는 노드가 있으면 알려 줘요.</dd>
     <dt>새 모델·LoRA 파일을 폴더에 직접 넣었어요</dt><dd>왼쪽 아래 <b>[↻ 모델 목록 새로고침]</b>을 누르면 바로 목록에 나와요.</dd>
     <dt>그림을 영상으로 움직이고 싶어요</dt><dd><b>영상 만들기</b> 탭 → 시작 이미지를 고르고 어떻게 움직일지 적어요. 이미지 결과 아래 <b>[영상으로]</b> 버튼을 눌러도 돼요. 영상 한 편에 몇 분 걸려요.</dd>
+    <dt>만든 영상에 목소리나 음악, 자막을 넣고 싶어요</dt><dd>왼쪽 <b>도구 → 영상 소리·자막</b>. 영상과 소리(음성 만들기·음악 만들기 결과, 또는 내 파일)를 고르고 자막을 적으면 새 영상으로 합쳐 줘요. 음성을 고르면 그때 쓴 글이 자막 칸에 자동으로 들어가요. 영상 결과 아래 [소리·자막 넣기], 음성·음악 결과 아래 [영상에 넣기], 갤러리 영상의 ♪ 버튼으로도 열 수 있어요. 처음 한 번은 ffmpeg 부품 설치가 필요해요.</dd>
     <dt>예전에 만든 그림을 찾고 싶어요</dt><dd><b>기록 갤러리</b> 탭 → 프롬프트나 종류로 검색하고, ★로 즐겨찾기를 해 둬요. 마음에 드는 건 ↻로 같은 설정으로 다시 만들 수 있어요.</dd>
     <dt>좋아하는 프롬프트를 저장해 두고 싶어요</dt><dd><b>프롬프트</b> 탭 → 보관함. 생성·편집·영상 화면의 [📚 보관함에서 넣기]로 불러와요. 후보를 무작위로 바꿔 넣는 <b>와일드카드</b>도 여기서 만들어요.</dd>
     <dt>마음에 든 사진과 비슷하게 만들고 싶어요</dt><dd><b>프롬프트</b> 탭 → [이미지에서 프롬프트 뽑기]. 사진을 올리면 설명(프롬프트)을 만들어 줘요. 이미지를 보는 대화 모델(Qwen2.5-VL)이 필요해요.</dd>
@@ -722,9 +775,12 @@
     <tr><td>음성 만들기 (글 읽어 주기 — 윈도우 내장 음성 · Edge 읽어 주기)</td><td class="p">미검증</td><td>사이드바 [음성 만들기] — ComfyUI 없이 동작해요. Edge 방식은 글이 마이크로소프트 서버로 전송돼요</td></tr>
     <tr><td>얼굴 교체 (ReActor)</td><td class="y">지원</td><td>기능 모음 → 얼굴 교체 — 동의 확인 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
+    <tr><td>영상에 소리·자막 넣기 (음성·음악 합치기, 자막 입히기·.srt 저장)</td><td class="p">미검증</td><td>도구 → 영상 소리·자막 — ComfyUI·그래픽카드 없이 ffmpeg 로 합쳐요. 만든 쪽에서 실제 PC로 확인하지 못했어요</td></tr>
     <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
     <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
     <tr><td>결과 삭제 · 날짜별 폴더 정리 · 날짜별로 보기 · outputs 폴더 열기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
+    <tr><td>갤러리 정렬(최신·오래된·이름순) · 같은 프롬프트끼리 모아 보기 · 보관함 정렬·복제</td><td class="y">지원</td><td>기록 갤러리, 프롬프트 → 캐릭터·스타일 보관함</td></tr>
+    <tr><td>내 PC 점검: 자동으로 전부 고치기 · 진단 파일 · 설치됐는데 안 보이는 확장 원인 확인</td><td class="p">미검증</td><td>설치와 모델 → 내 PC 점검 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
     <tr><td>버전별 변경 사항 보기</td><td class="y">지원</td><td>왼쪽 위 버전 표시를 누르거나 설정 → 프로그램 관리</td></tr>
     <tr><td>대화 목록 저장 · 검색 · 내보내기, 대화에 사진 붙여 묻기 (이미지 보는 모델 필요)</td><td class="y">지원</td><td>대화</td></tr>
     <tr><td>태그 자동완성 (내 프롬프트 · LoRA 트리거 · 와일드카드 포함)</td><td class="y">지원</td><td>프롬프트 칸 (끄기: 설정 → 화면 · 입력 · 단축키)</td></tr>
@@ -854,7 +910,8 @@
   </div>
   <details class="fold" id="fold-check"><summary>내 PC 점검 (기능별로 빠진 부품 찾기)</summary>
     <p class="hint plain">기능마다 필요한 확장·파이썬 부품·모델이 갖춰졌는지 한 번에 보여 줘요. 빠진 것은 옆의 버튼으로 바로 고칠 수 있어요. 아무것도 지우거나 바꾸지 않고, 눌러야만 설치해요.</p>
-    <div class="diskbar"><button type="button" class="ghost" id="chk-run">점검하기</button><span class="mute" id="chk-st"></span></div>
+    <div class="diskbar"><button type="button" class="ghost" id="chk-run">점검하기</button><button type="button" class="ghost" id="chk-fixall" hidden title="꼭 필요한 항목 중 설치로 고칠 수 있는 것을 순서대로 모두 고쳐요. 이미지 엔진 다시 시작은 맨 마지막에 한 번만 해요.">자동으로 고칠 수 있는 것 전부 고치기</button><button type="button" class="ghost" id="chk-diag" title="문제가 계속될 때 보내는 진단 파일(zip)을 저장해요. 프롬프트·이미지·API 키는 들어가지 않아요.">진단 파일 저장</button><span class="mute" id="chk-st"></span></div>
+    <div id="chk-all" class="chk-all" hidden></div>
     <div id="chk"></div>
   </details>
   <h3>폴더 열기</h3>

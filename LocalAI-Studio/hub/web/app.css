@@ -535,3 +535,5 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 .chk-diag{flex-basis:100%;margin:4px 0 4px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:calc(12.5px*var(--ui,1))}
 .nrow .nst .nd-st{margin-left:6px}
 .chcopy{border:1px dashed var(--line);border-radius:8px;padding:10px 12px;margin:0 0 12px;display:flex;flex-direction:column;gap:6px}.chcopy-r{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.vmrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.vmrow select{flex:1 1 220px;min-width:0}#vm-vprev{width:100%;max-height:220px;margin-top:6px;border-radius:8px;background:#000}#vm-aprev{width:100%;margin-top:6px}input[type=color]{height:36px;padding:2px;width:64px}
+.chk-all{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--raised);font-size:calc(13px*var(--ui,1))}
