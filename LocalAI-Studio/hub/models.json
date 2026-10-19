@@ -152,7 +152,7 @@
    "id": "controlnet-flux-union",
    "name": "FLUX ControlNet Union Pro 2.0 (포즈·윤곽·깊이 등)",
    "gb": 4.3,
-   "desc": "이미지 생성 탭에서 'FLUX.1 · Krea 계열'을 고르면 쓸 수 있는 ControlNet 이에요(포즈·캐니·깊이·소프트에지·회색조를 한 모델로). 추천 강도 0.7 안팎. Chroma·Krea 2 에는 쓸 수 없어요. ※ 미검증",
+   "desc": "이미지 생성 탭에서 'FLUX.1 · Krea 계열'을 고르면 쓸 수 있는 ControlNet 이에요(포즈·캐니·깊이·소프트에지·회색조를 한 모델로). 추천 강도 0.7 안팎. Chroma·Krea 2 에는 쓸 수 없어요.",
    "files": [
     {
      "dir": "controlnet",
@@ -316,7 +316,7 @@
    "id": "adetailer",
    "name": "얼굴·손 감지 모델 (ADetailer)",
    "gb": 0.1,
-   "desc": "기능 모음의 '얼굴·손 자동 보정'에 쓰는 감지 모델 두 개. ComfyUI 확장 'ComfyUI-Impact-Pack'과 'ComfyUI-Impact-Subpack'도 필요해요(설치 후 ComfyUI 재시작). ※ 미검증",
+   "desc": "기타 기능의 '얼굴·손 자동 보정'에 쓰는 감지 모델 두 개. ComfyUI 확장 'ComfyUI-Impact-Pack'과 'ComfyUI-Impact-Subpack'도 필요해요(설치 후 ComfyUI 재시작).",
    "files": [
     {
      "dir": "ultralytics/bbox",
@@ -332,7 +332,7 @@
    "id": "ipadapter-sdxl",
    "name": "IP-Adapter SDXL (스타일·얼굴 참고)",
    "gb": 3.1,
-   "desc": "기능 모음의 '참고 이미지로 그리기'에 쓰는 모델(IP-Adapter plus / plus-face + CLIP 이미지 인코더). ComfyUI 확장 'ComfyUI_IPAdapter_plus'도 필요해요. ※ 미검증",
+   "desc": "기타 기능의 '참고 이미지로 그리기'에 쓰는 모델(IP-Adapter plus / plus-face + CLIP 이미지 인코더). ComfyUI 확장 'ComfyUI_IPAdapter_plus'도 필요해요.",
    "files": [
     {
      "dir": "ipadapter",
@@ -353,7 +353,7 @@
    "id": "krea2-style-reference",
    "name": "Krea 2 스타일 참조 LoRA (참고 이미지 따라 그리기)",
    "gb": 0.46,
-   "desc": "기능 모음의 '참고 이미지로 그리기'에서 Krea 2 모델을 고르면 쓰는 공식 스타일 참조 LoRA 예요(Comfy-Org). Turbo 기준이고 Krea 2 공용 파일과 Krea 2 모델이 먼저 있어야 해요. ※ 미검증",
+   "desc": "기타 기능의 '참고 이미지로 그리기'에서 Krea 2 모델을 고르면 쓰는 공식 스타일 참조 LoRA 예요(Comfy-Org). Turbo 기준이고 Krea 2 공용 파일과 Krea 2 모델이 먼저 있어야 해요.",
    "files": [
     {
      "dir": "loras",
@@ -365,7 +365,7 @@
    "id": "flux-redux",
    "name": "FLUX.1 Redux (참고 이미지 따라 그리기)",
    "gb": 0.97,
-   "desc": "기능 모음의 '참고 이미지로 그리기'에서 FLUX.1 모델을 고르면 쓰는 Redux(분위기·구성 참고)와 CLIP 비전 모델이에요. Redux 파일은 HuggingFace 에서 'FLUX.1-Redux-dev' 사용 동의를 한 뒤, 다운로드 탭에 HuggingFace API 키를 넣어야 받을 수 있어요(비상업 라이선스). 설치 후 이미지 엔진을 다시 시작해 주세요. ※ 미검증",
+   "desc": "기타 기능의 '참고 이미지로 그리기'에서 FLUX.1 모델을 고르면 쓰는 Redux(분위기·구성 참고)와 CLIP 비전 모델이에요. Redux 파일은 HuggingFace 에서 'FLUX.1-Redux-dev' 사용 동의를 한 뒤, 다운로드 탭에 HuggingFace API 키를 넣어야 받을 수 있어요(비상업 라이선스). 설치 후 이미지 엔진을 다시 시작해 주세요.",
    "files": [
     {
      "dir": "clip_vision",
@@ -391,13 +391,13 @@
   },
   {
    "id": "wan22-14b-t2v",
-   "name": "Wan 2.2 14B 글→영상 (고화질, 미검증)",
+   "name": "Wan 2.2 14B 글→영상 (고화질)",
    "gb": 28.6,
    "requires": [
     "wan-common",
     "wan21-vae"
    ],
-   "desc": "5B보다 훨씬 선명하고 움직임이 자연스러운 글→영상 모델(고노이즈+저노이즈 두 파일). 용량이 크고 VRAM 16GB 이상 권장, 영상 한 편에 오래 걸려요. ※ 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+   "desc": "5B보다 훨씬 선명하고 움직임이 자연스러운 글→영상 모델(고노이즈+저노이즈 두 파일). 용량이 크고 VRAM 16GB 이상 권장, 영상 한 편에 오래 걸려요.",
    "files": [
     {
      "dir": "diffusion_models",
@@ -411,13 +411,13 @@
   },
   {
    "id": "wan22-14b-i2v",
-   "name": "Wan 2.2 14B 이미지→영상 (고화질, 미검증)",
+   "name": "Wan 2.2 14B 이미지→영상 (고화질)",
    "gb": 28.6,
    "requires": [
     "wan-common",
     "wan21-vae"
    ],
-   "desc": "올린 이미지가 자연스럽게 움직이는 고화질 영상 모델(고노이즈+저노이즈 두 파일). 용량이 크고 VRAM 16GB 이상 권장. ※ 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+   "desc": "올린 이미지가 자연스럽게 움직이는 고화질 영상 모델(고노이즈+저노이즈 두 파일). 용량이 크고 VRAM 16GB 이상 권장.",
    "files": [
     {
      "dir": "diffusion_models",
@@ -431,7 +431,7 @@
   },
   {
    "id": "wan22-lightning",
-   "name": "Wan 2.2 4단계 가속 LoRA (14B용, 미검증)",
+   "name": "Wan 2.2 4단계 가속 LoRA (14B용)",
    "gb": 2.4,
    "desc": "14B 영상을 20단계 대신 4단계로 만들어 몇 배 빨라지는 LoRA(LightX2V). 영상 만들기 화면의 '4단계 가속'을 켜면 쓰여요. 14B 모델 설치가 필요해요.",
    "files": [
@@ -457,7 +457,7 @@
    "id": "sd35-common",
    "name": "SD3.5 공용 파일 (텍스트 인코더 3개)",
    "gb": 6.8,
-   "desc": "SD3.5 Large 가 쓰는 CLIP-L·CLIP-G·T5(fp8). 아래 SD3.5 Large 를 고르면 자동으로 함께 설치돼요. SD3.5 Medium 은 이 파일이 이미 들어 있어서 필요 없어요. ※ 미검증",
+   "desc": "SD3.5 Large 가 쓰는 CLIP-L·CLIP-G·T5(fp8). 아래 SD3.5 Large 를 고르면 자동으로 함께 설치돼요. SD3.5 Medium 은 이 파일이 이미 들어 있어서 필요 없어요.",
    "files": [
     {
      "dir": "text_encoders",
@@ -480,7 +480,7 @@
    "requires": [
     "sd35-common"
    ],
-   "desc": "문장 이해가 좋은 SD3.5 대형 모델. 이미지 생성 탭에서 '모델 종류'를 Stable Diffusion 3.5 로 골라요. VRAM 16GB 이상 권장. Stability AI 커뮤니티 라이선스를 확인하세요. ※ 미검증",
+   "desc": "문장 이해가 좋은 SD3.5 대형 모델. 이미지 생성 탭에서 '모델 종류'를 Stable Diffusion 3.5 로 골라요. VRAM 16GB 이상 권장. Stability AI 커뮤니티 라이선스를 확인하세요.",
    "files": [
     {
      "dir": "checkpoints",
@@ -492,7 +492,7 @@
    "id": "sd35-medium",
    "name": "Stable Diffusion 3.5 Medium (텍스트 인코더 내장)",
    "gb": 11.6,
-   "desc": "텍스트 인코더가 한 파일에 들어 있어서 이것만 받으면 돼요. 이미지 생성 탭에서 '모델 종류'를 Stable Diffusion 3.5 로 골라요. ※ 미검증",
+   "desc": "텍스트 인코더가 한 파일에 들어 있어서 이것만 받으면 돼요. 이미지 생성 탭에서 '모델 종류'를 Stable Diffusion 3.5 로 골라요.",
    "files": [
     {
      "dir": "checkpoints",
@@ -504,7 +504,7 @@
    "id": "hidream-common",
    "name": "HiDream 공용 파일 (텍스트 인코더 4개 + VAE)",
    "gb": 16.2,
-   "desc": "HiDream 이 쓰는 CLIP-L·CLIP-G·T5·Llama 3.1 텍스트 인코더와 VAE. 아래 HiDream 모델을 고르면 자동으로 함께 설치돼요. ※ 미검증",
+   "desc": "HiDream 이 쓰는 CLIP-L·CLIP-G·T5·Llama 3.1 텍스트 인코더와 VAE. 아래 HiDream 모델을 고르면 자동으로 함께 설치돼요.",
    "files": [
     {
      "dir": "text_encoders",
@@ -535,7 +535,7 @@
    "requires": [
     "hidream-common"
    ],
-   "desc": "가장 빠른 HiDream. 16단계, CFG 1. 이미지 생성 탭에서 '모델 종류'를 HiDream 으로 골라요. VRAM 16GB 이상 권장. ※ 미검증",
+   "desc": "가장 빠른 HiDream. 16단계, CFG 1. 이미지 생성 탭에서 '모델 종류'를 HiDream 으로 골라요. VRAM 16GB 이상 권장.",
    "files": [
     {
      "dir": "diffusion_models",
@@ -550,7 +550,7 @@
    "requires": [
     "hidream-common"
    ],
-   "desc": "속도와 품질 균형. 28단계, CFG 1. ※ 미검증",
+   "desc": "속도와 품질 균형. 28단계, CFG 1.",
    "files": [
     {
      "dir": "diffusion_models",
@@ -565,7 +565,7 @@
    "requires": [
     "hidream-common"
    ],
-   "desc": "가장 품질이 좋은 HiDream. 50단계, CFG 5라 느려요. ※ 미검증",
+   "desc": "가장 품질이 좋은 HiDream. 50단계, CFG 5라 느려요.",
    "files": [
     {
      "dir": "diffusion_models",
@@ -577,7 +577,7 @@
    "id": "lumina2-common",
    "name": "Lumina 2 공용 파일 (Gemma 2 텍스트 인코더 + VAE)",
    "gb": 5.6,
-   "desc": "Lumina 2 가 쓰는 Gemma 2 텍스트 인코더와 VAE. 아래 Lumina 2 를 고르면 자동으로 함께 설치돼요. ※ 미검증",
+   "desc": "Lumina 2 가 쓰는 Gemma 2 텍스트 인코더와 VAE. 아래 Lumina 2 를 고르면 자동으로 함께 설치돼요.",
    "files": [
     {
      "dir": "text_encoders",
@@ -596,7 +596,7 @@
    "requires": [
     "lumina2-common"
    ],
-   "desc": "가볍고 빠른 문장형 모델(약 2.6B). 이미지 생성 탭에서 '모델 종류'를 Lumina 2 로 골라요. VRAM 8GB 부터 가능해요. ※ 미검증",
+   "desc": "가볍고 빠른 문장형 모델(약 2.6B). 이미지 생성 탭에서 '모델 종류'를 Lumina 2 로 골라요. VRAM 8GB 부터 가능해요.",
    "files": [
     {
      "dir": "diffusion_models",
@@ -608,7 +608,7 @@
    "id": "krea2-depth-control",
    "name": "Krea 2 깊이 컨트롤 LoRA (구도·깊이 따라 하기)",
    "gb": 0.86,
-   "desc": "사진의 깊이(앞뒤 구조)를 따라 Krea 2 로 새로 그려요. 이미지 생성 탭에서 '모델 종류'를 Krea 2 로 고르고 ControlNet 칸에서 이 파일을 골라요. Krea 2 Raw 기준으로 학습됐고 Turbo 에도 쓸 수 있어요. 'comfyui-krea2-controlnet' 확장이 필요해요(같은 칸의 설치 버튼). ※ 미검증",
+   "desc": "사진의 깊이(앞뒤 구조)를 따라 Krea 2 로 새로 그려요. 이미지 생성 탭에서 '모델 종류'를 Krea 2 로 고르고 ControlNet 칸에서 이 파일을 골라요. Krea 2 Raw 기준으로 학습됐고 Turbo 에도 쓸 수 있어요. 'comfyui-krea2-controlnet' 확장이 필요해요(같은 칸의 설치 버튼).",
    "files": [
     {
      "dir": "loras",
@@ -621,7 +621,7 @@
    "id": "ace-step-15-turbo",
    "name": "ACE-Step 1.5 Turbo — 음악 만들기 (올인원)",
    "gb": 10.0,
-   "desc": "글(스타일 태그)과 가사로 노래·연주곡을 만들어요. 사이드바 [음악 만들기]에서 써요. 한 파일에 텍스트 인코더와 VAE가 모두 들어 있어요. 8단계로 빨라요. VRAM 12GB 이상 권장, 라이선스는 모델 페이지에서 확인하세요. ※ 미검증",
+   "desc": "글(스타일 태그)과 가사로 노래·연주곡을 만들어요. 사이드바 [음악 만들기]에서 써요. 한 파일에 텍스트 인코더와 VAE가 모두 들어 있어요. 8단계로 빨라요. VRAM 12GB 이상 권장, 라이선스는 모델 페이지에서 확인하세요.",
    "files": [
     {
      "dir": "checkpoints",

@@ -269,17 +269,34 @@ function mini(box,label){
 $$('.mini[data-img]').forEach(b=>mini(b));
 
 /* ══════════ 화면 전환 ══════════ */
-function show(v){
-  $$('#rail nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+let FEATS=[],featId=null;      // 기타 기능 화면 상태(사이드바 표시에도 쓰여요)
+function show(v,f){
+  if(v==='feat'&&f)featId=f;
+  navMark(v);
   $$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   if(v==='start')startInit();
   if(v==='batch')loadLists().then(()=>window.btInit&&btInit());
   if(v==='gal')galLoad();else if(v==='lib')libShow();
   if(v==='log')logInit();
   if(v==='setup'||v==='conf'){appInit()}
-  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat();else if(v==='vmix')vmixLoad();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
+  paneShown(v);
+  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat(f);else if(v==='vmix')vmixLoad();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
 }
-$$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+$$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v,b.dataset.f));
+/* 왼쪽 분류 + 오른쪽 카드 화면(설정·설치와 모델·프롬프트·다운로드)의 분류 전환. 고른 분류는 기억하고, 열릴 때 'paneopen' 알림을 보내 필요한 목록을 불러오게 해요. */
+function paneGo(nav,pane,save){const cs=nav.closest('.cs');if(!cs||!pane)return;
+  nav.querySelectorAll('button[data-pane]').forEach(x=>x.classList.toggle('on',x.dataset.pane===pane));
+  cs.querySelectorAll(':scope>.cs-body>.cpane').forEach(p=>p.classList.toggle('on',p.id==='fold-'+pane));
+  if(save&&nav.dataset.key)try{localStorage.setItem('pane:'+nav.dataset.key,pane)}catch{}
+  const el=document.getElementById('fold-'+pane);if(el&&el.closest('.view.on'))el.dispatchEvent(new Event('paneopen'))}
+document.addEventListener('click',e=>{const b=e.target.closest('.cs-nav button[data-pane]');if(b)paneGo(b.closest('.cs-nav'),b.dataset.pane,true)});
+$$('.cs-nav[data-key]').forEach(n=>{let p=null;try{p=localStorage.getItem('pane:'+n.dataset.key)}catch{}if(!(p&&n.querySelector(`button[data-pane="${p}"]`)))p=(n.querySelector('button[data-pane].on')||n.querySelector('button[data-pane]')||{dataset:{}}).dataset.pane;paneGo(n,p)}); // 처음 열 때는 첫 칸(또는 표시된 칸)을 보여줘요
+function paneShown(v){$$('#v-'+v+' .cs>.cs-body>.cpane.on').forEach(p=>p.dispatchEvent(new Event('paneopen')))}
+/* 사이드바 '기타 기능' 접기/펼치기 — 기능 화면에 있을 때는 자동으로 펼쳐요 */
+function navMark(v){$$('#rail nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v&&(!b.dataset.f||b.dataset.f===featId)));if(v==='feat')moreOpen(true)}
+function moreOpen(on,save){const h=$('#ng-more'),b=$('#ng-more-body');if(!h||!b)return;b.hidden=!on;h.setAttribute('aria-expanded',on?'true':'false');h.classList.toggle('open',!!on);if(save)try{localStorage.setItem('nav:more',on?'1':'0')}catch{}}
+{const h=$('#ng-more');let o=false;try{o=localStorage.getItem('nav:more')==='1'}catch{}moreOpen(o);
+ h.onclick=()=>moreOpen($('#ng-more-body').hidden,true);h.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();h.onclick()}}}
 function toast(t,ms,go){
   let b=$('#toast');if(!b){b=document.createElement('div');b.id='toast';b.setAttribute('role','status');document.body.append(b)}
   b.textContent=t;b.hidden=false;clearTimeout(b._t);b.classList.toggle('go-toast',!!go);b.onclick=go?()=>{b.hidden=true;go()}:null;if(go)b.title='누르면 결과 화면으로 이동해요';else b.removeAttribute('title');b._t=setTimeout(()=>{b.hidden=true},ms||Math.round(ls.get('opt:toast',3.5)*1000));
@@ -353,7 +370,7 @@ let listsAt=0;
 async function loadLists(force){
   if(!force&&Date.now()-listsAt<8000&&LISTS.llm)return;   // 탭을 오갈 때마다 서버를 다시 훑지 않아요(파일을 넣고 돌아오면 focus 로 새로고침)
   try{LISTS=await api('/api/lists');listsAt=Date.now()}catch{return}
-  fill('#llm',LISTS.llm);fill('select[name=ckpt]',LISTS.checkpoints);fill('select[name=vae]',LISTS.vaes,'체크포인트 내장');
+  fill('#llm',LISTS.llm);fill('select[name=ckpt]:not(#feat-form select)',LISTS.checkpoints);      /* 기타 기능 화면의 모델 칸은 FLUX·Krea 2 묶음이 있어서 따로 그려요 */ fill('select[name=vae]',LISTS.vaes,'체크포인트 내장');
   $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');$$('select[name=cn_model]').forEach(s=>s.form&&cnFilter(s.form));
   fill('select[name=fx_vae],select[name=q_vae],select[name=k2_vae]',LISTS.vaes,'자동');fill('select[name=fx_t5],select[name=fx_clip],select[name=q_te],select[name=k2_te]',LISTS.text_encoders||[],'자동');fill('select[name=q_unet]',LISTS.diffusion||[],'자동');
   fillFx();
@@ -812,7 +829,7 @@ addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])][0],on=$('
 function addVideoResults(sec,j){
   const used=(j.used||[]).filter(Boolean),mi=(u,to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${tip}"`:''}>${t}</button>`;
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>{const an=/\.webp$/i.test(u);return `<figure class="vfig">${an?`<img src="${u}" alt="움직이는 WebP">`:`<video src="${u}" controls loop muted playsinline preload="metadata"></video>`}<figcaption><a href="${u}" download>저장</a>${an?'':mi(u,'vmix','소리·자막 넣기','이 영상에 음성·음악을 입히고 자막을 넣어 새 영상으로 저장해요')}${an?'':mi(u,'vcont','이어서 만들기','이 영상의 마지막 장면을 시작 이미지로 넣어서, 그다음 장면을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
-    an?'':mi(u,'vp:interp','프레임 늘리기 (부드럽게)','중간 장면을 만들어 넣어 움직임을 2배로 부드럽게 해요 · RIFE 확장 필요(미검증)')+mi(u,'vp:upscale','해상도 키우기','업스케일 모델로 모든 장면을 키워요 (설치와 모델에서 받은 모델 사용) · 미검증')+mi(u,'vp:webp','움직이는 WebP로 저장','용량이 작은 움직이는 그림 파일로 바꿔요 · 미검증')}${mi(u,'folder','출력 폴더 열기','이 파일이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`}).join('')}${
+    an?'':mi(u,'vp:interp','프레임 늘리기 (부드럽게)','중간 장면을 만들어 넣어 움직임을 2배로 부드럽게 해요 · RIFE 확장 필요')+mi(u,'vp:upscale','해상도 키우기','업스케일 모델로 모든 장면을 키워요 (설치와 모델에서 받은 모델 사용)')+mi(u,'vp:webp','움직이는 WebP로 저장','용량이 작은 움직이는 그림 파일로 바꿔요')}${mi(u,'folder','출력 폴더 열기','이 파일이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`}).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const v=$('.res .batch video',sec);if(v){v.scrollIntoView({block:'nearest'});v.play().catch(()=>{})}
 }
@@ -1205,14 +1222,12 @@ $('#f-wf').onsubmit=e=>{e.preventDefault();if(!WFX.a)return;
 };
 
 /* ══════════ 기능 모음 (초보자용 템플릿) ══════════ */
-let FEATS=[],featId=null;
 async function loadFeat(){
   try{LISTS=await api('/api/lists')}catch{}
   try{FEATS=await api('/api/features')}catch{FEATS=[]}
-  const sig=JSON.stringify([FEATS,LISTS.checkpoints,LISTS.fluxmodels,LISTS.krea2models,LISTS.chromamodels]);if(sig===loadFeat.sig&&$('#feat-form').children.length)return; // 바뀐 게 없으면 다시 그리지 않아요
+  const sig=JSON.stringify([FEATS,LISTS.checkpoints,LISTS.fluxmodels,LISTS.krea2models,LISTS.chromamodels,featId]);if(sig===loadFeat.sig&&$('#feat-form').children.length&&$('#feat-form').dataset.f===featId)return; // 바뀐 게 없으면 다시 그리지 않아요
   loadFeat.sig=sig;
-  $('#feat-pick').innerHTML=FEATS.map(f=>`<button type="button" class="fcard${f.id===featId?' on':''}" data-f="${esc(f.id)}"><span>${esc(f.icon||'')}</span><b>${esc(f.title)}</b></button>`).join('');
-  if(featId)featForm(featId,true);else if(FEATS[0])featForm(FEATS[0].id);
+  if(featId&&FEATS.some(x=>x.id===featId))featForm(featId,true);else if(FEATS[0])featForm(FEATS[0].id);
 }
 const fieldHTML=f=>{
   const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'';
@@ -1232,8 +1247,8 @@ const fieldHTML=f=>{
   return '';
 };
 function featForm(id,keep){
-  const f=FEATS.find(x=>x.id===id);if(!f)return;featId=id;
-  $$('#feat-pick .fcard').forEach(b=>b.classList.toggle('on',b.dataset.f===id));
+  const f=FEATS.find(x=>x.id===id);if(!f)return;if($('#feat-form').dataset.f!==id)keep=false; // 다른 기능으로 바뀐 거면 이전 입력값은 가져오지 않아요
+  featId=id;$('#feat-form').dataset.f=id;navMark($('#v-feat.on')?'feat':'');
   const keepVals=keep?Object.fromEntries(new FormData($('#f-feat'))):{};
   const keepImgs=keep?Object.fromEntries($$('#feat-form .mini[data-img]').filter(m=>m.value).map(m=>[m.dataset.img,m.value])):{}; // 창이 다시 활성화되며 목록을 새로 그려도 올린 이미지는 유지
   const miss=[...(f.missing_nodes||[]).map(n=>`노드 ${n}`),...(f.missing_lists||[]).map(k=>({checkpoints:'체크포인트',anymodels:'이미지 모델'}[k]||k))];
@@ -1253,7 +1268,6 @@ function featForm(id,keep){
   {const lb=$('#feat-form .loras');if(lb){if(keep&&Object.keys(keepVals).some(k=>/^lora\d+$/.test(k)))setLoras($('#f-feat'),keepVals);else addLora(lb)}}
   if(keep)for(const [k,v] of Object.entries(keepVals)){const el=$('#f-feat').elements[k];if(el&&el.type!=='file'&&v!=='')el.value=v}
 }
-$('#feat-pick').onclick=e=>{const b=e.target.closest('.fcard');if(b)featForm(b.dataset.f)};
 $('#f-feat').onsubmit=e=>{e.preventDefault();const f=e.target,spec=FEATS.find(x=>x.id===featId);if(!spec)return;
   for(const fd of spec.fields.filter(x=>x.type==='image'&&x.required))if(!$(`.mini[data-img=${fd.name}]`,f).value)return need(f,'먼저 이미지를 올려 주세요.');
   for(const fd of spec.fields.filter(x=>x.required&&x.type==='check'))if(!f.elements[fd.name]?.checked)return need(f,'동의 확인 칸에 체크해 주세요.');
@@ -1262,12 +1276,18 @@ $('#f-feat').onsubmit=e=>{e.preventDefault();const f=e.target,spec=FEATS.find(x=
 
 /* ══════════ 설치와 모델 ══════════ */
 let tPoll=null,busy=false;
+/* 받기·설치 작업 한 줄 (설치와 모델, 다운로드 화면이 같이 써요). 받는 중이거나 기다리는 파일·대화 모델은 [취소]가 있어요. */
+const taskRow=x=>{const act=x.state==='queued'||x.state==='running';
+  return `<div class="task ${x.state}"><div class="trow"><b>${esc(x.label)}</b>${act&&(x.kind==='file'||x.kind==='ollama')?`<button type="button" class="ghost sm tcancel" data-id="${esc(x.id)}">취소</button>`:''}</div><span>${x.state==='queued'?'대기 중':esc(x.msg||'진행 중')}</span>${
+    x.total&&x.state==='running'?`<progress value="${x.done}" max="${x.total}"></progress><small>${fmtSize(x.done)} / ${fmtSize(x.total)}</small>`:''}</div>`};
+const taskHead=t=>{const n=t.filter(x=>(x.state==='queued'||x.state==='running')&&(x.kind==='file'||x.kind==='ollama')).length;return n>1?`<div class="trow tall"><span class="mute">${n}개를 받는 중이거나 기다려요</span><button type="button" class="ghost sm tcancel" data-all="1">모두 취소</button></div>`:''};
+document.addEventListener('click',async e=>{const b=e.target.closest('.tcancel');if(!b)return;
+  if(!confirm(b.dataset.all?'받는 중이거나 기다리는 항목을 모두 취소할까요? 받던 임시 파일도 같이 지워요(이미 받아 둔 모델은 그대로예요).':'이 항목을 취소할까요? 받던 임시 파일도 같이 지워요(이미 받아 둔 모델은 그대로예요).'))return;
+  b.disabled=true;let r;try{r=await api('/api/install/cancel',b.dataset.all?{all:true}:{id:b.dataset.id})}catch{r={error:'취소하지 못했어요.'}}
+  toast(r.error||(r.n!=null?`${r.n}개를 취소했어요.`:'취소했어요.'));loadTasks();if($('#dl-tasks'))loadDlTasks()});
 async function loadTasks(){
   const t=await api('/api/install');
-  $('#tasks').innerHTML=t.length?t.map(x=>`<div class="task ${x.state}"><b>${esc(x.label)}</b><span>${
-    x.state==='queued'?'대기 중':esc(x.msg||'진행 중')}</span>${
-    x.total&&x.state==='running'?`<progress value="${x.done}" max="${x.total}"></progress><small>${(x.done/1e9).toFixed(2)} / ${(x.total/1e9).toFixed(2)} GB</small>`:''}</div>`).join('')
-    :'<p class="empty">진행 중인 설치가 없어요.</p>';
+  $('#tasks').innerHTML=t.length?taskHead(t)+t.map(taskRow).join(''):'<p class="empty">진행 중인 설치가 없어요.</p>';
   clearTimeout(tPoll);
   if(t.some(x=>x.state==='queued'||x.state==='running')){busy=true;tPoll=setTimeout(loadTasks,1000)}
   else if(busy){busy=false;loadSetup();loadLists(true)}
@@ -1280,21 +1300,29 @@ async function loadSetup(){
   loadManage();
   $('#cat-llm').innerHTML=c.llm.map(row).join('');$('#cat-img').innerHTML=c.image.map(row).join('');
   $$('#v-setup .item input').forEach(i=>{if(keep.has(i.value))i.checked=true});
-  loadTasks();
+  CATALOG_NOW=c;selSummary();loadTasks();
 }
+/* 체크한 항목 요약: 무엇을 얼마나 받는지 */
+let CATALOG_NOW={llm:[],image:[]};
+function selSummary(){const box=$('#sel-sum');if(!box)return;
+  const all=[...CATALOG_NOW.llm,...CATALOG_NOW.image],by=Object.fromEntries(all.map(m=>[m.id,m])),ids=$$('#v-setup .item input:checked').map(i=>i.value),seen=[],q=[...ids];
+  while(q.length){const i=q.shift();if(by[i]&&!seen.includes(i)){seen.push(i);q.push(...(by[i].requires||[]))}}
+  const todo=seen.map(i=>by[i]).filter(m=>!m.installed),gb=todo.reduce((a,m)=>a+(m.gb||0),0);
+  box.innerHTML=ids.length?(todo.length?`<b>선택한 항목 ${ids.length}개</b> — ${todo.map(m=>esc(m.name)).join(' · ')}<br><small>함께 필요한 파일까지 합쳐 약 ${gb.toFixed(1)}GB를 받아요.</small>`:'<b>선택한 항목은 이미 모두 설치돼 있어요.</b>'):'<span class="mute">받을 모델을 체크하면 여기에 무엇을 얼마나 받는지 보여 줘요.</span>'}
+document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))selSummary()});
 $('#rec').onclick=()=>{
   const v=GPU?GPU.vram_gb:0;
   const ids=v>=24?['qwen3-32b','qwen-edit','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
     :v>=10?['qwen3-14b','qwen-edit','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
     :['qwen3-8b','noobai','sdxl-vae-fix','esrgan'];
-  $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.includes(i.value)});
+  $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.includes(i.value)});selSummary();
 };
 $('#inst').onclick=async()=>{
   const ids=$$('#v-setup .item input:checked').map(i=>i.value);
   if(!ids.length)return;
   const r=await api('/api/install',{ids});
   if(r.error){alert(r.error);return}
-  $$('#v-setup .item input').forEach(i=>i.checked=false);loadTasks();
+  $$('#v-setup .item input').forEach(i=>i.checked=false);selSummary();loadTasks();
 };
 async function refreshModels(){
   const b=$$('.refresh-models,#refresh-models,#refresh-models2');b.forEach(x=>x.disabled=true);
@@ -1437,8 +1465,7 @@ $('#f-direct').onsubmit=async e=>{
 let dPoll=null;
 async function loadDlTasks(){
   let t;try{t=await api('/api/install')}catch{return}
-  $('#dl-tasks').innerHTML=t.length?t.slice().reverse().map(x=>`<div class="task ${x.state}"><b>${esc(x.label)}</b><span>${x.state==='queued'?'대기 중':esc(x.msg||'진행 중')}</span>${
-    x.total&&x.state==='running'?`<progress value="${x.done}" max="${x.total}"></progress><small>${fmtSize(x.done)} / ${fmtSize(x.total)}</small>`:''}</div>`).join(''):'<p class="empty">받는 중인 파일이 없어요.</p>';
+  $('#dl-tasks').innerHTML=t.length?taskHead(t)+t.slice().reverse().map(taskRow).join(''):'<p class="empty">받는 중인 파일이 없어요.</p>';
   clearTimeout(dPoll);
   if(t.some(x=>x.state==='queued'||x.state==='running')){dPoll=setTimeout(loadDlTasks,1000);dlBusy=true}
   else if(dlBusy){dlBusy=false;loadLists(true);if($('#v-dl.on')){dlSearch(false)}}
@@ -1674,7 +1701,7 @@ $('#ch-list').addEventListener('click',async e=>{const b=e.target.closest('[data
   if(!it.refs.length)return toast('이 항목에는 참고 이미지가 없어요. [수정]에서 추가할 수 있어요.');
   if(a==='edit'){const f=$('#f-edit');for(const [i,k] of ['ref1','ref2'].entries())if(it.refs[i])$(`.mini[data-img=${k}]`,f).set(await chImgData(it.refs[i]));
     show('edit');toast('참조 이미지 칸에 넣었어요. 고칠 사진은 따로 올려 주세요.',5000);return}
-  if(a==='ipa'){show('feat');await sleep(300);await featForm('ipadapter',true);const ff=$('#feat-form');const m=$('.mini[data-img=image]',ff);
+  if(a==='ipa'){show('feat','ipadapter');await sleep(300);await featForm('ipadapter',true);const ff=$('#feat-form');const m=$('.mini[data-img=image]',ff);
     if(m)m.set(await chImgData(it.refs[0]));{const pt=$('[name=prompt]',ff);if(pt&&it.prompt){pt.value=it.prompt;pt.dispatchEvent(new Event('input',{bubbles:true}))}}toast('참고 이미지와 프롬프트를 넣었어요.',4000)}});
 document.addEventListener('click',async e=>{const b=e.target.closest('.ch-save-gen');if(!b)return;const g=chFromGenForm();if(!g.prompt&&!g.loras.length)return toast('먼저 프롬프트를 적거나 LoRA를 골라 주세요.');
   show('lib');await sleep(200);chOpen({...g,name:'',kind:'캐릭터'})});
@@ -1783,7 +1810,7 @@ $('#mi-list').addEventListener('click',async e=>{
 $('#mi-list').addEventListener('change',async e=>{const s=e.target.closest('select[data-act=kind]');if(s)await miSaveUser(s.dataset.n,{kind:s.value})});
 $('#mi-list').addEventListener('keydown',e=>{const i=e.target.closest('input[data-addtr]');if(i&&e.key==='Enter'){e.preventDefault();i.parentElement.querySelector('[data-act=addtr]').click()}});
 $('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-filter').onchange=miRender;$('#mi-reload').onclick=()=>miLoad(true);
-$('#fold-minfo').addEventListener('toggle',e=>{if(e.target.open&&!MI.length)miLoad()});
+$('#fold-minfo').addEventListener('paneopen',()=>{if(!MI.length)miLoad()});
 /* ══════════ 설정 백업 · 복원 ══════════ */
 let BK=null;
 function bkPresets(){const o={};try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('preset:'))o[k]=ls.get(k,{})}}catch{}return o}
@@ -1817,7 +1844,7 @@ function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
       const t0=c.currentTime+t;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.18,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.3);o.start(t0);o.stop(t0+.32)})}catch{}}
 function qGo(r){const v=QVIEW[r.kind];if(!v)return;show(v);if(v==='feat'&&r.feature&&typeof featForm==='function')setTimeout(()=>featForm(r.feature,true),400)}
 function qNotify(r){const ok=r.state==='done',t=ok?`✔ ${r.label} — 끝났어요`:`⚠ ${r.label} — 실패했어요`+(r.error?`: ${r.error}`:'');
-  toast(t+(r.kind?'  (누르면 이동)':''),7000,r.kind&&QVIEW[r.kind]?()=>qGo(r):null);qBeep();
+  toast(t,7000,r.kind&&QVIEW[r.kind]?()=>qGo(r):null);qBeep();
   if(qDesk()&&document.hidden&&window.Notification&&Notification.permission==='granted'){try{new Notification(ok?'작업이 끝났어요':'작업에 실패했어요',{body:r.label+(ok||!r.error?'':'\n'+r.error)})}catch{}}}
 function qRender(q){const L=$('#qlist');if(!L)return;
   if(!q.items.length){L.innerHTML='<p class="mute">지금 진행 중이거나 기다리는 작업이 없어요.</p>';return}
@@ -2083,8 +2110,8 @@ document.addEventListener('keydown',e=>{
  document.addEventListener('focusout',e=>{if(e.target===ta)setTimeout(close,120)});
  addEventListener('scroll',()=>{if(!box.hidden)close()},true);addEventListener('resize',close)}
 
-{const sel=$('#ui-scale'),get=()=>{try{return parseFloat(localStorage.getItem('ui:scale'))||1}catch{return 1}};
- sel.value=String(get());if(sel.value!==String(get()))sel.value='1';
+{const sel=$('#ui-scale'),get=()=>{try{return parseFloat(localStorage.getItem('ui:scale'))||1.25}catch{return 1.25}};
+ {const ops=[...sel.options].map(o=>+o.value),g=get();sel.value=String(ops.reduce((a,b)=>Math.abs(b-g)<Math.abs(a-g)?b:a))}      // 예전에 저장된 값이 목록에 없으면 가장 가까운 크기로 보여요
  sel.onchange=()=>{try{localStorage.setItem('ui:scale',sel.value)}catch{}document.documentElement.style.setProperty('--ui',sel.value)}}
 $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
   try{const r=await fetch('/api/diag/export');if(!r.ok)throw 0;const blob=await r.blob(),n=new Date(),p=x=>String(x).padStart(2,'0'),
@@ -2094,9 +2121,8 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
 
 /* ══════════ 설정 화면 ══════════ */
 {const D=document.documentElement;
- $('#cs-nav').onclick=e=>{const b=e.target.closest('button[data-pane]');if(!b)return;
-  $$('#cs-nav button').forEach(x=>x.classList.toggle('on',x===b));$$('.cpane').forEach(p=>p.classList.toggle('on',p.id==='fold-'+b.dataset.pane));
-  if(b.dataset.pane==='notify'){$('#s-sound').checked=qSound();$('#s-desk').checked=qDesk()}if(b.dataset.pane==='gen')prefLoad()};
+ $('#cs-nav').addEventListener('click',e=>{const b=e.target.closest('button[data-pane]');if(!b)return;
+  if(b.dataset.pane==='notify'){$('#s-sound').checked=qSound();$('#s-desk').checked=qDesk()}if(b.dataset.pane==='gen')prefLoad()});
  /* 켜고 끄는 값 (이 브라우저에만 기억) */
  const tog=(id,key,def,fn)=>{const el=$('#'+id);el.checked=ls.get(key,def);el.onchange=()=>{ls.set(key,el.checked);fn&&fn(el.checked)}};
  tog('opt-motion','opt:motion',false,v=>{if(v)D.dataset.motion='off';else delete D.dataset.motion});
@@ -2113,6 +2139,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
  pick('opt-bubw','opt:bubw',72,v=>D.style.setProperty('--bubw',v));
  pick('opt-toast','opt:toast',3.5);
  tog('opt-gosticky','opt:gosticky',true,v=>{if(v)delete D.dataset.gosticky;else D.dataset.gosticky='off'});
+ if(ls.get('opt:qpos','side')==='dock')ls.set('opt:qpos','side');      // ‘만들기 버튼 아래’ 위치는 없어졌어요
  pick('opt-qpos','opt:qpos','side',v=>{D.dataset.qpos=v;qApply();qPlace()});
  $('#opt-qreset').onclick=()=>{ls.set('opt:qxy',null);ls.set('opt:qpos','side');D.dataset.qpos='side';$('#opt-qpos').value='side';qPlace();toast('대기열 위치를 사이드바 버튼으로 되돌렸어요.')};
  pick('opt-home','opt:home','');
@@ -2231,7 +2258,7 @@ async function cachePanel(){const box=$('#cachein');clearTimeout(cacheT);if(!box
   const mv=$('#cache-move');if(mv)mv.onclick=async()=>{if(!confirm(`위 캐시 ${fmtSize(tot)} 를 프로그램 폴더 안으로 옮길까요?\n복사가 끝나고 크기가 맞으면 원래 폴더를 지워요. 몇 분 걸릴 수 있고, 끝난 뒤 프로그램을 다시 시작해야 적용돼요.`))return;
     const x=await api('/api/cachein/move',{});if(x.error)return toast(x.error,6000);cachePanel()};
   const tg=$('#cache-tog');if(tg)tg.onclick=async()=>{const x=await api('/api/cachein',{on:!r.on});toast(x.error||'바꿨어요. 적용하려면 프로그램을 다시 시작해 주세요.',6000);cachePanel();diskScan()}}
-$('#fold-disk').addEventListener('toggle',e=>{if(e.target.open)cachePanel()});
+$('#fold-disk').addEventListener('paneopen',()=>cachePanel());
 /* ── 내 PC 점검 ── */
 async function checkScan(){const st=$('#chk-st'),B=$('#chk');st.textContent='점검 중이에요…';let r;try{r=await api('/api/selfcheck')}catch{st.textContent='점검하지 못했어요.';return}
   const ic={ok:'✔',warn:'△',bad:'✖'},nb=r.groups.filter(g=>g.state==='bad').length,nw=r.groups.filter(g=>g.state==='warn').length;
@@ -2278,9 +2305,9 @@ $('#chk-fixall').onclick=async()=>{const rows=chkAutoRows();if(!rows.length)retu
 $('#chk-all').addEventListener('click',async e=>{const t=e.target;
   if(t.id==='chk-all-again'){$('#chk-all').hidden=true;checkScan()}
   else if(t.id==='chk-all-rs'){t.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 다시 점검해요.',5000);await sleep(9000);await loadCaps();$('#chk-all').hidden=true;checkScan()}});
-$('#fold-check').addEventListener('toggle',e=>{if(e.target.open&&!window.CHK)checkScan()});
+$('#fold-check').addEventListener('paneopen',()=>{if(!window.CHK)checkScan()});
 $('#chk').addEventListener('click',async e=>{const b=e.target.closest('[data-chk]');if(!b)return;const k=b.dataset.chk;
-  if(k==='open'){const v=b.dataset.v;if(v.startsWith('feat:')){show('feat');setTimeout(()=>featForm(v.slice(5),true),400)}else show(v)}
+  if(k==='open'){const v=b.dataset.v;if(v.startsWith('feat:')){show('feat',v.slice(5));setTimeout(()=>featForm(v.slice(5),true),400)}else show(v)}
   else if(k==='fix')chkFix(b);else if(k==='again')checkScan();
   else if(k==='restart'){b.disabled=true;const r=await api('/api/engine/restart',{});toast(r.error||'이미지 엔진을 다시 시작했어요. 잠시 뒤 다시 점검해요.',5000);await sleep(9000);await loadCaps();checkScan()}});
 
@@ -2300,7 +2327,7 @@ function qPlace(){const D=document.documentElement,pill=$('#qfloat'),pan=$('#qpa
   if(!pan.hidden){const w=pan.offsetWidth;pan.style.left=cl(x,8,Math.max(8,innerWidth-w-8))+'px';pan.style.right='auto';
     if(y>innerHeight/2){pan.style.bottom=(innerHeight-y+8)+'px';pan.style.top='auto'}else{pan.style.top=(y+ph+8)+'px';pan.style.bottom='auto'}}}
 {let raf=0;const kick=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;qPlace()})};
- addEventListener('scroll',kick,true);addEventListener('resize',kick);setInterval(()=>{if(document.documentElement.dataset.qpos==='dock')qPlace()},400);qPlace();
+ addEventListener('scroll',kick,true);addEventListener('resize',kick);qPlace();
  const pill=$('#qfloat');let st=null,dragged=false;
  pill.addEventListener('pointerdown',e=>{if(e.button!==0||innerWidth<=860)return;const r=pill.getBoundingClientRect();st={dx:e.clientX-r.left,dy:e.clientY-r.top,x0:e.clientX,y0:e.clientY,on:false};try{pill.setPointerCapture(e.pointerId)}catch{}});
  pill.addEventListener('pointermove',e=>{if(!st)return;if(!st.on){if(Math.hypot(e.clientX-st.x0,e.clientY-st.y0)<6)return;st.on=true;pill.classList.add('drag');

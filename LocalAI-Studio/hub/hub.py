@@ -349,16 +349,50 @@ def tidy():
 
 
 def speed_args():
-    """ComfyUI 가 지원할 때만 쓰는 안전한 속도 옵션(fp16 누적 연산). settings.json 에 "speed_boost": false 를 적으면 꺼요."""
+    """ComfyUI 가 지원할 때만 쓰는 안전한 속도 옵션(fp16 누적 연산). settings.json 에 "speed_boost": false 를 적으면 꺼요.
+    ComfyUI 에 '--help' 를 물어 보는 데 몇 초 걸려서, main.py 가 바뀌지 않았으면 지난번 결과를 그대로 써요."""
     if not settings().get("speed_boost", True) or not PY.exists():
         return []
+    mp = COMFY / "main.py"
     try:
-        r = subprocess.run([str(PY), "-s", str(COMFY / "main.py"), "--help"], cwd=HOME, capture_output=True, text=True, timeout=40)
+        st = mp.stat(); sig = f"{st.st_mtime_ns}:{st.st_size}"
+    except OSError:
+        sig = ""
+    cache = LOGS / "speed_args.json"
+    try:
+        c = json.loads(cache.read_text(encoding="utf-8"))
+        if sig and c.get("sig") == sig:
+            return list(c.get("args", []))
+    except (OSError, ValueError):
+        pass
+    args = []
+    try:
+        r = subprocess.run([str(PY), "-s", str(mp), "--help"], cwd=HOME, capture_output=True, text=True, timeout=40)
         if "fp16_accumulation" in (r.stdout or ""):
-            return ["--fast", "fp16_accumulation"]
+            args = ["--fast", "fp16_accumulation"]
+        if sig:
+            try:
+                LOGS.mkdir(exist_ok=True)
+                cache.write_text(json.dumps({"sig": sig, "args": args}), encoding="utf-8")
+            except OSError:
+                pass
     except Exception:  # noqa: BLE001
         pass
-    return []
+    return args
+
+
+ENG_T = {}   # 이미지 엔진 시작 시간 기록(단계별 초) — 느려졌을 때 어디서 걸리는지 보려고 남겨요
+
+
+def _boot_watch(t0):
+    """엔진이 뜨는 데 걸린 시간을 재서 로그에 남기고, 뜨자마자 기능 목록(object_info)을 미리 읽어 첫 작업을 빠르게 해요."""
+    for _ in range(600):
+        if alive(CUI + "/system_stats"):
+            ENG_T["ready"] = round(time.time() - t0, 1)
+            t1 = time.time(); caps(force=True); ENG_T["nodes"] = round(time.time() - t1, 1)
+            log(f"[시작 시간] 이미지 엔진 준비 {ENG_T['ready']}초 (시작 옵션 확인 {ENG_T.get('args', 0)}초, 노드 목록 읽기 {ENG_T['nodes']}초)")
+            return
+        time.sleep(0.5)
 
 
 def start_engines():
@@ -369,10 +403,12 @@ def start_engines():
         procs.append(subprocess.Popen([str(OLLAMA_EXE), "serve"], cwd=OLLAMA_EXE.parent, env=env,
                                       stdout=open(LOGS / "ollama.log", "ab"), stderr=subprocess.STDOUT))
     if PY.exists() and not alive(CUI + "/system_stats"):
+        t0 = time.time(); sa = speed_args(); ENG_T["args"] = round(time.time() - t0, 1)
         cmd = [str(PY), "-s", str(COMFY / "main.py"), "--windows-standalone-build",
-               "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"] + speed_args()
+               "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"] + sa
         procs.append(subprocess.Popen(cmd, cwd=HOME, stdout=open(LOGS / "comfyui.log", "ab"),
                                       stderr=subprocess.STDOUT))
+        threading.Thread(target=_boot_watch, args=(t0,), daemon=True).start()
 
 
 def free_ollama():
@@ -4510,11 +4546,49 @@ def add_task(label, **kw):
     return t
 
 
+class TaskCancelled(Exception):
+    pass
+
+
+def part_of(t):
+    """파일 받기 작업이 임시로 받아 두는 파일(.part) 위치."""
+    return MODELS / t["dir"] / (hashlib.sha1(t["url"].encode()).hexdigest()[:12] + ".part")
+
+
+def cancel_task(tid):
+    """받기·설치 작업 취소. 기다리는 중이면 바로 취소하고, 받는 중이면 다음 조각에서 멈춰요. 이 작업이 받던 임시 파일(.part)만 지우고 완성된 모델은 건드리지 않아요."""
+    t = next((x for x in TASKS if x["id"] == tid), None)
+    if not t:
+        return {"error": "작업을 찾지 못했어요."}
+    if t["state"] not in ("queued", "running"):
+        return {"error": "이미 끝난 작업이에요."}
+    if t.get("kind") not in ("file", "ollama"):
+        return {"error": "이 작업은 취소할 수 없어요."}
+    t["cancel"] = True
+    if t["state"] == "queued":
+        t["state"], t["msg"] = "cancelled", "취소했어요"
+        _drop_part(t)
+    return {"ok": True}
+
+
+def _drop_part(t):
+    if t.get("kind") != "file":
+        return
+    try:
+        pt = part_of(t)
+        if pt.is_file():
+            pt.unlink()
+    except OSError as e:
+        log("[임시 파일 삭제 실패]", repr(e))
+
+
 def pull(t):
     body = json.dumps({"name": t["model"], "model": t["model"], "stream": True}).encode()
     req = urllib.request.Request(OLLAMA + "/api/pull", data=body, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=7200) as r:
         for line in r:
+            if t.get("cancel"):
+                raise TaskCancelled()
             d = json.loads(line)
             if "error" in d:
                 raise RuntimeError(d["error"])
@@ -4592,6 +4666,8 @@ def download(t):
         done = pos
         with open(part, "ab" if pos else "wb") as f:
             while chunk := r.read(1 << 20):
+                if t.get("cancel"):
+                    raise TaskCancelled()
                 f.write(chunk)
                 done += len(chunk)
                 t.update(done=done, total=total, msg="다운로드 중")
@@ -4608,8 +4684,13 @@ def worker():
             continue
         t["state"] = "running"
         try:
+            if t.get("cancel"):
+                raise TaskCancelled()
             pull(t) if t["kind"] == "ollama" else sam_run_install(t) if t["kind"] == "sam" else rmbg_run_install(t) if t["kind"] == "rmbg" else download(t)
             t["state"], t["msg"] = "done", t["msg"] if t["msg"] == "이미 설치되어 있어요" else "완료"
+        except TaskCancelled:
+            _drop_part(t)
+            t["state"], t["msg"] = "cancelled", "취소했어요" + (" (받던 임시 파일은 지웠어요)" if t.get("kind") == "file" else "")
         except Exception as e:
             t["state"], t["msg"] = "error", str(e)
             log("[설치 오류]", t["label"], t["msg"])
@@ -5995,6 +6076,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"id": J["id"]})
         if u == "/api/install":
             return self.send_json(install(p))
+        if u == "/api/install/cancel":
+            if p.get("all"):
+                n = sum(1 for x in list(TASKS) if x["state"] in ("queued", "running") and cancel_task(x["id"]).get("ok"))
+                return self.send_json({"ok": True, "n": n})
+            return self.send_json(cancel_task(str(p.get("id"))))
         if u == "/api/dl/search":
             try:
                 return self.send_json(dl_search(p))
