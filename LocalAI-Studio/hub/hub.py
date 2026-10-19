@@ -1844,7 +1844,12 @@ def flux_setup(p, J, fam):
         sel = sel[6:]
         if sel not in files("checkpoints"):
             raise RuntimeError("선택한 체크포인트 파일을 찾을 수 없어요.")
-        f = dict(unet=sel, t5=None, clip_l=None, vae=None)
+        if not model_family("checkpoints", sel)[1]:
+            # checkpoints 폴더에 있어도 텍스트 인코더·VAE 가 없는 '모델만' 파일이면 공용 파일을 따로 붙여요(모델은 체크포인트 로더로 읽음)
+            allin = False
+            f = dict(unet=sel, ckpt_only=True, **flux_parts(p))
+        else:
+            f = dict(unet=sel, t5=None, clip_l=None, vae=None)
     else:
         f = dict(unet=sel, **flux_parts(p))
     if fam != "krea2" and not allin and not all(f[k] for k in (["unet", "t5", "vae"] + (["clip_l"] if fam == "flux" else []))):

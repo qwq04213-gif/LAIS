@@ -187,7 +187,10 @@ def flux_stack(w, q):
         unet, clip, vae = ck, ck, [ck, 2]
         clip_idx = 1
     else:
-        unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
+        if q.get("ckpt_only"):      # checkpoints 폴더의 '모델만' 파일: 체크포인트 로더로 모델만 쓰고 인코더·VAE 는 따로
+            unet = w.add("CheckpointLoaderSimple", ckpt_name=q["unet"])
+        else:
+            unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
         if q["family"] == "krea2":
             clip = w.add("CLIPLoader", clip_name=q["t5"], type="krea2", device="default")
         elif q["family"] == "chroma":
