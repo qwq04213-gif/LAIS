@@ -1801,8 +1801,14 @@ def flux_parts(p=None):
              vae=flux_vae() or next((n for n in files("vae") if not re.search(r"qwen|sdxl|wan|sd15|sd_xl", n.lower())), None))
     if p:
         for key, field, sub in (("t5", "fx_t5", "text_encoders"), ("clip_l", "fx_clip", "text_encoders"), ("vae", "fx_vae", "vae")):
-            if p.get(field) and p[field] in files(sub):
-                r[key] = p[field]
+            v = p.get(field)
+            if v and v in files(sub):
+                # 엉뚱한 종류를 골랐으면(예: T5 칸에 Qwen) 무시하고 자동으로 찾아요 — 그대로 쓰면 'meta tensor' 오류가 나요
+                if key == "t5" and not is_t5(v):
+                    continue
+                if key == "clip_l" and (is_t5(v) or re.search(r"qwen|umt5", low(v))):
+                    continue
+                r[key] = v
     return r
 
 
