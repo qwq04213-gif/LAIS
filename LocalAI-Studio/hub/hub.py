@@ -4461,13 +4461,19 @@ def lora_user_api(p):
             if k and k not in modelinfo.KINDS:
                 return {"error": "알 수 없는 종류예요."}
             cur["kind"] = k
-        if cur.get("trigger") or cur.get("kind"):
+        if "family" in p:
+            f = str(p.get("family") or "")
+            if f and f not in FAMILY_CHOICES:
+                return {"error": "알 수 없는 계열이에요."}
+            cur["family"] = f
+        if cur.get("trigger") or cur.get("kind") or cur.get("family"):
             d[name] = cur
         else:
             d.pop(name, None)
         LORA_USER.parent.mkdir(parents=True, exist_ok=True)
         LORA_USER.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-    return {"ok": True, **lora_user().get(name, {"trigger": [], "kind": ""})}
+        _LC["key"] = None      # 목록 캐시에 들어 있는 종류·계열도 다시 만들어요
+    return {"ok": True, **lora_user().get(name, {"trigger": [], "kind": "", "family": ""})}
 
 
 def lora_preview_api(p):
@@ -4515,6 +4521,10 @@ def model_cards(kind):
                 c = {"name": n, "family": "unknown", "trigger": [], "tags": [], "kind_auto": "unknown"}
             c["kind"], c["kind_set"] = lora_final(c, user)
             c["user_trigger"] = (user.get(n) or {}).get("trigger", [])
+            uf = (user.get(n) or {}).get("family")
+            c["family_auto"], c["family_set"] = c.get("family", "unknown"), bool(uf)
+            if uf:
+                c["family"] = uf
             c["preview"] = bool(model_preview("loras", n))
             out.append(c)
     else:
@@ -5831,7 +5841,7 @@ def _lists_build():
         ox_ready[k] = True if k == "sd35" else bool(all(pr["te"].values()) and pr["vae"])
     loras = files("loras")
     return {"llm": llms(), "checkpoints": sdxl, "loras": loras, "families": info,
-            "lora_info": {n: modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras}, "lora_kind": lora_kinds(),
+            "lora_info": {n: (lora_user().get(n) or {}).get("family") or modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras}, "lora_kind": lora_kinds(),
             "upscalers": files("upscale_models"), "controlnets": files("controlnet"),
             "vaes": files("vae"), "text_encoders": files("text_encoders"), "diffusion": files("diffusion_models"),
             "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2, "anymodels": sdxl + flux + chroma + krea2,

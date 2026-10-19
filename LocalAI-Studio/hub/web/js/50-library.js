@@ -252,7 +252,8 @@ $('#app-go').onclick=async()=>{if(!APP_PLAN)return;
 /* ══════════ LoRA · 모델 정보 ══════════ */
 document.addEventListener('click',e=>{const c=e.target.closest('.lt-chip');if(!c)return;const f=c.closest('form'),t=f&&f.elements.prompt;if(!t)return;
   const cur=t.value.trim();t.value=cur?cur.replace(/[\s,]+$/,'')+', '+c.dataset.t:c.dataset.t;t.dispatchEvent(new Event('input',{bubbles:true}));toast(`'${c.dataset.t}' 을(를) 넣었어요.`)});
-let MI=[];
+let MI=[],MIM='';
+$('#mi-models').addEventListener('click',e=>{const b=e.target.closest('[data-mm]');if(!b)return;MIM=b.dataset.mm;miRender()});
 async function miLoad(force,silent){const kind=$('#mi-kind').value;if(!silent)$('#mi-list').innerHTML='<p class="mute">읽는 중…</p>';
   if(force)await loraCards(true);
   try{MI=(await api('/api/models/cards?kind='+kind)).items}catch{MI=[]}
@@ -261,8 +262,14 @@ async function miLoad(force,silent){const kind=$('#mi-kind').value;if(!silent)$(
 const kindBadge=c=>{const k=LKIND[c.kind]||LKIND.unknown;return c.kind==='unknown'?`<span class="badge kind k-unknown" title="종류를 아직 모르겠어요. 아래 ‘설정’에서 직접 골라 주세요.">미분류</span>`:`<span class="badge kind k-${c.kind}" title="${c.kind_set?'내가 고른 종류':'이름·태그로 추정한 종류 — 틀리면 ‘설정’에서 바꿔 주세요'}">${k[1]}${c.kind_set?'':' <i>추정</i>'}</span>`};
 function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('#mi-kind').value,kf=$('#mi-filter').value;
   $('#mi-filter').hidden=kind!=='loras';
-  const list=MI.filter(c=>(!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.user_trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q))&&(kind!=='loras'||kf==='all'||c.kind===kf));
-  const famOf=c=>LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),grp=$('#mi-group').value==='family',
+  {const box=$('#mi-models');box.hidden=kind!=='loras';
+   if(kind==='loras'){const ms=Object.entries(LISTS.families||{}).filter(([k,v])=>v&&v.family&&v.family!=='hidden'&&v.family!=='unknown').map(([k,v])=>[k,v.family]);
+    if(MIM&&!ms.some(m=>m[0]===MIM))MIM='';
+    box.innerHTML='<span class="mute">모델별로 보기</span> <button type="button" class="ghost sm'+(MIM?'':' on')+'" data-mm="">전체</button>'+ms.map(([k,f])=>`<button type="button" class="ghost sm${k===MIM?' on':''}" data-mm="${esc(k)}" title="${esc(LFAM[f]||f)}용 LoRA 만 보여요">${esc(k.replace(/^[^/]+\//,'').replace(/\.(safetensors|ckpt|gguf)$/i,''))}</button>`).join('')
+     +(MIM?`<span class="mute"> · ${esc(LFAM[MFAM]||MFAM)}용 LoRA 만 보고 있어요. 계열을 모르는 LoRA 는 '전체'에서 계열을 지정해 주세요.</span>`:'')}}
+  const MFAM=MIM?((LISTS.families||{})[MIM]||{}).family:'';
+  const list=MI.filter(c=>(kind!=='loras'||!MIM||c.family===MFAM)&&(!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.user_trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q))&&(kind!=='loras'||kf==='all'||c.kind===kf));
+  const famOf=c=>LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),grp=false,
     lst=grp?[...list].sort((a,b)=>famOf(a).localeCompare(famOf(b),'ko')||a.name.localeCompare(b.name)):list,cnt={};lst.forEach(c=>cnt[famOf(c)]=(cnt[famOf(c)]||0)+1);let lastFam=null;
   $('#mi-list').innerHTML=lst.length?lst.map(c=>{const fam=LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),L=kind==='loras',
     dir=L?'loras':c.dir,pic=c.preview?`<img class="mimg" loading="lazy" src="/mprev/${dir}/${encodeURIComponent(c.name)}?t=${MIT}" alt="">`:'<div class="mimg none">사진 없음</div>',
@@ -272,8 +279,9 @@ function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('
     copyAll=allT.length>1?`<div class="mchips"><button type="button" class="ghost sm" data-copy="${esc(allT.join(', '))}" title="트리거 단어 ${allT.length}개를 쉼표로 이어서 복사해요">트리거 단어 전체 복사 (${allT.length}개)</button></div>`:'';
     const mine=(c.user_trigger||[]).length?`<div class="mchips"><span class="mute">내가 적은 단어</span> ${c.user_trigger.map(t=>`<span class="badge mine" title="클릭하면 복사해요" data-copy="${esc(t)}">${esc(t)}</span><button type="button" class="chipx" data-act="deltr" data-n="${esc(c.name)}" data-t="${esc(t)}" title="이 단어 지우기" aria-label="${esc(t)} 지우기">×</button>`).join('')}</div>`:'';
     const acts=L?`<div class="macts"><button type="button" class="ghost sm" data-act="use" data-f="gen" data-n="${esc(c.name)}">✎ 생성에 쓰기</button><button type="button" class="ghost sm" data-act="use" data-f="edit" data-n="${esc(c.name)}">✎ 편집에 쓰기</button></div>`:'';
-    const cfg=L?`<details class="mcfg"><summary>설정 · 종류 · 트리거 단어 · 미리보기</summary><div class="mcfg-in">
+    const cfg=L?`<details class="mcfg"><summary>설정</summary><div class="mcfg-in">
       <label class="f"><span class="lt">종류</span><select data-act="kind" data-n="${esc(c.name)}"><option value=""${c.kind_set?'':' selected'}>자동${c.kind_set?'':' ('+LKIND[c.kind][1]+')'}</option>${['character','style','background','other'].map(k=>`<option value="${k}"${c.kind_set&&c.kind===k?' selected':''}>${LKIND[k][1]}</option>`).join('')}</select></label>
+      <label class="f"><span class="lt">계열</span><select data-act="family" data-n="${esc(c.name)}" title="어느 모델용 LoRA 인지 직접 정해요. 판별 불가일 때 골라 주세요."><option value=""${c.family_set?'':' selected'}>자동${c.family_set?'':' ('+(LFAM[c.family]||'판별 불가')+')'}</option>${Object.entries(LFAM).filter(([k])=>k!=='unknown').map(([k,v])=>`<option value="${k}"${c.family_set&&c.family===k?' selected':''}>${esc(v)}</option>`).join('')}</select></label>
       <div class="mrow"><input type="text" data-addtr="${esc(c.name)}" placeholder="트리거 단어 직접 추가 (쉼표로 여러 개)" maxlength="200"><button type="button" class="ghost sm" data-act="addtr" data-n="${esc(c.name)}">추가</button></div>
 </div></details>`:'';
     const head=grp&&fam!==lastFam?(lastFam=fam,`<h4 class="mfam">${esc(fam)} <small>${cnt[fam]}개</small></h4>`):'';
@@ -307,9 +315,9 @@ $('#mi-list').addEventListener('click',async e=>{
       const r=await api('/api/lora/preview',{name:n,dir:a.dataset.d||'loras',remove:true});if(r.error)return toast(r.error);MIT=Date.now();return void await miLoad(false,true)}
     if(act==='pick'){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=()=>miPrev(n,a.dataset.d,i.files[0]);i.click();return}}
   const b=e.target.closest('[data-copy]');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.copy);toast(`'${b.dataset.copy}' 을(를) 복사했어요.`)}catch{toast('복사하지 못했어요.')}});
-$('#mi-list').addEventListener('change',async e=>{const s=e.target.closest('select[data-act=kind]');if(s)await miSaveUser(s.dataset.n,{kind:s.value})});
+$('#mi-list').addEventListener('change',async e=>{const s=e.target.closest('select[data-act=kind]');if(s)await miSaveUser(s.dataset.n,{kind:s.value});const f=e.target.closest('select[data-act=family]');if(f)await miSaveUser(f.dataset.n,{family:f.value})});
 $('#mi-list').addEventListener('keydown',e=>{const i=e.target.closest('input[data-addtr]');if(i&&e.key==='Enter'){e.preventDefault();i.parentElement.querySelector('[data-act=addtr]').click()}});
-$('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-filter').onchange=$('#mi-group').onchange=miRender;$('#mi-reload').onclick=()=>miLoad(true);
+$('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-filter').onchange=miRender;$('#mi-reload').onclick=()=>miLoad(true);
 $('#fold-minfo').addEventListener('paneopen',()=>{if(!MI.length)miLoad()});
 /* ══════════ 설정 백업 · 복원 ══════════ */
 let BK=null;
