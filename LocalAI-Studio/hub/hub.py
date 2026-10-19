@@ -1696,12 +1696,18 @@ def control_prep(p):
     li = w.add("LoadImage", image=put_input(img, J))
     ins = {"image": [li, 0]}
     res = clamp(max(img.size) // 64 * 64, 512, 1024)
-    for k, spec in ((caps()["info"].get(node) or {}).get("input", {}).get("required", {}) or {}).items():
+    inp = (caps()["info"].get(node) or {}).get("input", {}) or {}
+    opt = inp.get("optional", {}) or {}
+    # 선택 입력(예: 선화의 coarse)도 확장 코드가 kwargs["이름"] 으로 바로 읽는 경우가 있어 기본값을 채워 줘요
+    for k, spec in {**opt, **(inp.get("required", {}) or {})}.items():
         if k == "image" or not isinstance(spec, list) or not spec:
             continue
         t, o = spec[0], (spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {})
         if isinstance(t, list):
-            ins[k] = "enable" if "enable" in t else (t[0] if t else "")
+            if k in opt and k not in (inp.get("required") or {}):
+                ins[k] = o["default"] if o.get("default") in t else (t[0] if t else "")
+            else:
+                ins[k] = "enable" if "enable" in t else (t[0] if t else "")
         elif k == "resolution":
             ins[k] = res
         elif "default" in o:
