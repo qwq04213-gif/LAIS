@@ -453,8 +453,8 @@
       <label class="f">크기<select name="size"><option value="832x480">가로 480p (기본)</option><option value="480x832">세로 480p</option><option value="640x640">정사각</option><option value="1280x704">가로 720p (VRAM 많이 필요)</option></select></label>
       <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option></select></label>
     </div>
-    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림 (미검증)</option></select></label>
-    <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. <b>※ 만든 쪽에서 실제 PC로 검증하지 못한 기능이에요.</b> 안 되면 5B 를 쓰세요.</p>
+    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option></select></label>
+    <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. 안 되면 5B 를 쓰세요.</p>
     <p class="warn" id="w-vid14" hidden></p>
     <label class="chk" id="vid-fast-row" hidden><input type="checkbox" name="fast"> 4단계 가속 (LoRA — 몇 배 빨라요) <span class="mute" id="vid-fast-hint"></span></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
@@ -795,12 +795,12 @@
     <tr><td>음성 만들기 (글 읽어 주기 — 윈도우 내장 음성 · Edge 읽어 주기)</td><td class="p">미검증</td><td>사이드바 [음성 만들기] — ComfyUI 없이 동작해요. Edge 방식은 글이 마이크로소프트 서버로 전송돼요</td></tr>
     <tr><td>얼굴 교체 (ReActor)</td><td class="y">지원</td><td>기타 기능 → 얼굴 교체 — 동의 확인 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
-    <tr><td>영상에 소리·자막 넣기 (음성·음악 합치기, 자막 입히기·.srt 저장)</td><td class="p">미검증</td><td>도구 → 영상 소리·자막 — ComfyUI·그래픽카드 없이 ffmpeg 로 합쳐요. 만든 쪽에서 실제 PC로 확인하지 못했어요</td></tr>
-    <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
+    <tr><td>영상에 소리·자막 넣기 (음성·음악 합치기, 자막 입히기·.srt 저장)</td><td class="p">미검증</td><td>도구 → 영상 소리·자막 — ComfyUI·그래픽카드 없이 ffmpeg 로 합쳐요</td></tr>
+    <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델</td></tr>
     <tr><td>사진에서 포즈·윤곽·깊이 따라 그리기 (ControlNet 쉬운 모드)</td><td class="y">지원</td><td>이미지 생성·편집의 ControlNet 칸 (포즈·깊이·선화는 전처리 확장 필요)</td></tr>
     <tr><td>결과 삭제 · 날짜별 폴더 정리 · 날짜별로 보기 · outputs 폴더 열기</td><td class="y">지원</td><td>기록 갤러리</td></tr>
     <tr><td>갤러리 정렬(최신·오래된·이름순) · 같은 프롬프트끼리 모아 보기 · 보관함 정렬·복제</td><td class="y">지원</td><td>기록 갤러리, 프롬프트 → 캐릭터·스타일 보관함</td></tr>
-    <tr><td>내 PC 점검: 자동으로 전부 고치기 · 진단 파일 · 설치됐는데 안 보이는 확장 원인 확인</td><td class="p">미검증</td><td>설치와 모델 → 내 PC 점검 (만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
+    <tr><td>내 PC 점검: 자동으로 전부 고치기 · 진단 파일 · 설치됐는데 안 보이는 확장 원인 확인</td><td class="p">미검증</td><td>설치와 모델 → 내 PC 점검</td></tr>
     <tr><td>버전별 변경 사항 보기</td><td class="y">지원</td><td>왼쪽 위 버전 표시를 누르거나 설정 → 프로그램 관리</td></tr>
     <tr><td>대화 목록 저장 · 검색 · 내보내기, 대화에 사진 붙여 묻기 (이미지 보는 모델 필요)</td><td class="y">지원</td><td>대화</td></tr>
     <tr><td>태그 자동완성 (내 프롬프트 · LoRA 트리거 · 와일드카드 포함)</td><td class="y">지원</td><td>프롬프트 칸 (끄기: 설정 → 화면 · 입력 · 단축키)</td></tr>
@@ -812,7 +812,7 @@
     <tr><td>LoRA 트리거 단어·학습 정보·미리보기 보기</td><td class="y">지원</td><td>설치와 모델 → LoRA·모델 정보, LoRA 칸 아래</td></tr>
     <tr><td>프로그램 다시 시작 · 설치 위치 옮기기</td><td class="y">지원</td><td>왼쪽 아래 버튼, 설정 → 프로그램 관리</td></tr>
     <tr><td>워크플로의 없는 커스텀 노드 설치</td><td class="y">지원</td><td>워크플로 (노드 도우미)</td></tr>
-    <tr><td>얼굴·손 자동 보정 · 참고 이미지(IP-Adapter)로 스타일·얼굴 유지</td><td class="p">미검증</td><td>기타 기능 (확장 설치 도우미 포함, 만든 쪽에서 실제 PC로 확인하지 못했어요)</td></tr>
+    <tr><td>얼굴·손 자동 보정 · 참고 이미지(IP-Adapter)로 스타일·얼굴 유지</td><td class="p">미검증</td><td>기타 기능 (확장 설치 도우미 포함, FLUX·Krea 2 모델 선택 가능)</td></tr>
     <tr><td>ComfyUI에서 저장한 워크플로의 서브그래프(묶음 노드)</td><td class="y">지원</td><td>워크플로 탭에서 그대로 열어요(안쪽 노드를 펼쳐서 실행해요)</td></tr>
     <tr><td>오디오 · 3D 생성</td><td class="n">미지원</td><td>ComfyUI 고급 화면</td></tr>
   </tbody></table>
@@ -1027,6 +1027,8 @@
 <div class="card"><h3>단축키</h3>
 <div class="row"><div class="rl"><b>Ctrl + Enter 로 만들기</b><span>지금 화면의 [만들기·실행] 버튼을 눌러요 (Mac은 ⌘).</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-ctrl"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>/ 키로 검색 칸 이동</b><span>기록 갤러리·프롬프트 화면에서 검색 칸으로 바로 가요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-slash"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>마우스 뒤로·앞으로 버튼</b><span>마우스 옆면의 4번(뒤로)·5번(앞으로) 버튼으로 직전에 보던 화면으로 가요. 열린 확대 보기나 대기열이 있으면 먼저 닫아요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-mouseback"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>화면 이동 키</b><span><kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd> 뒤로·앞으로, <kbd>Alt</kbd>+<kbd>1</kbd>~<kbd>9</kbd> 대화·이미지 생성·이미지 편집·업스케일·갤러리·프롬프트·설치와 모델·설정·시작하기로 바로 이동, <kbd>?</kbd> 이 단축키 목록 열기.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-navkeys"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>Esc</b><span>열린 창(확대 보기, 대기열)을 닫아요. 항상 켜져 있어요.</span></div></div></div></div>
   <div class="cpane" id="fold-notify"><div class="card"><h3>작업이 끝났을 때</h3>
 <div class="row"><div class="rl"><b>소리로 알려주기</b><span>작업이 끝나면 짧은 알림음을 내요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="s-sound"><i></i></label></div></div>
@@ -1035,7 +1037,9 @@
 <div class="actions"><button type="button" class="ghost sm" id="s-test">알림 시험해 보기</button></div></div></div>
   <div class="cpane" id="fold-gen"><div class="card"><h3>메모리와 속도</h3>
 <div class="row"><div class="rl"><b>대화 모델을 메모리에 두는 시간</b><span>마지막 대화 뒤 이 시간이 지나면 모델을 내려서 그래픽 메모리를 비워요. 길수록 다음 대답이 빠르고, 짧을수록 이미지 생성에 메모리를 더 줘요.</span></div><div class="rc"><select id="pf-ka"><option value="0">바로 내리기</option><option value="5m">5분 (기본)</option><option value="30m">30분</option><option value="2h">2시간</option><option value="-1">계속 두기</option></select></div></div>
+<div class="row"><div class="rl"><b>이미지 모델을 메모리에 두는 시간</b><span>이미지 작업이 끝난 뒤 이 시간이 지나면 이미지 모델을 그래픽 메모리에서 내려요. 길수록 다음 그림이 빨리 시작하고, 짧을수록 게임 같은 다른 프로그램에 메모리를 더 줘요.</span></div><div class="rc"><select id="pf-ik"><option value="0">바로 내리기 (최대 30초 뒤)</option><option value="5m">5분</option><option value="30m">30분 (기본)</option><option value="2h">2시간</option><option value="-1">계속 두기</option></select></div></div>
 <div class="row"><div class="rl"><b>이미지 속도 옵션 (fp16 누적)</b><span>ComfyUI가 지원할 때만 쓰는 안전한 속도 옵션이에요. 문제가 생기면 끄세요. 프로그램을 다시 시작해야 적용돼요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="pf-speed"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>미리보기 캐시 최대 용량</b><span>갤러리에서 처음 볼 때 작은 미리보기를 만들어 둬서 다음부터 빨리 떠요. 이 용량을 넘으면 오래 안 본 미리보기부터 지우고, 사진을 지우면 그 미리보기도 같이 지워요. 원래 사진은 건드리지 않아요.</span></div><div class="rc"><select id="pf-thumb"><option value="200">200MB</option><option value="500">500MB (기본)</option><option value="1000">1GB</option><option value="2000">2GB</option></select></div></div>
 <p class="hint plain note" id="pf-msg"></p></div></div>
   <div class="cpane" id="fold-backup"><div class="card"><h3>설정 백업 · 복원</h3>
     <p class="hint plain">프롬프트 보관함, 와일드카드, 즐겨찾기, 내가 적은 LoRA 정보(트리거 단어·종류), 화면별 프리셋을 파일 하나로 저장하거나 되살려요. 다른 PC로 옮기거나 재설치 전에 쓰면 좋아요. 모델·결과 이미지는 용량이 커서 포함하지 않아요.</p>

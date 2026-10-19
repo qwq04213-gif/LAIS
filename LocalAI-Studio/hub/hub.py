@@ -327,11 +327,11 @@ BLOCK_MSG = "미성년자와 관련된 성적 내용은 지원하지 않습니�
 
 
 # ───────────────────────── 엔진 실행 / VRAM 관리 ─────────────────────────
-def tidy():
+def tidy(logs=True, tmp=True):
     """실행할 때마다 쌓이는 찌꺼기를 치워요: 커진 로그 파일 교체, 남은 임시 이미지·미리보기 삭제(결과물·모델은 건드리지 않아요)."""
     now = time.time()
     try:
-        for n in ("ollama.log", "comfyui.log", "hub.log"):
+        for n in (("ollama.log", "comfyui.log", "hub.log") if logs else ()):
             f = LOGS / n
             if f.is_file() and f.stat().st_size > 10 * 1024 * 1024:
                 old = LOGS / (n + ".old")
@@ -339,7 +339,7 @@ def tidy():
                 f.replace(old)
     except OSError:
         pass
-    for folder, pat, age in ((COMFY / "input", "hub_*.png", 3600), (COMFY / "temp", "*", 2 * 86400)):
+    for folder, pat, age in (((COMFY / "input", "hub_*.png", 3600), (COMFY / "temp", "*", 2 * 86400)) if tmp else ()):
         try:
             for f in folder.glob(pat):
                 if f.is_file() and now - f.stat().st_mtime > age:
@@ -397,7 +397,7 @@ def _boot_watch(t0):
 
 def start_engines():
     LOGS.mkdir(exist_ok=True)
-    tidy()
+    tidy(tmp=False)         # 커진 로그 파일 교체만 먼저(엔진이 파일을 잡기 전에)
     if OLLAMA_EXE.exists() and not alive(OLLAMA + "/api/version"):
         env = {**os.environ, "OLLAMA_MODELS": str(ROOT / "models" / "llm")}
         procs.append(subprocess.Popen([str(OLLAMA_EXE), "serve"], cwd=OLLAMA_EXE.parent, env=env,
@@ -409,6 +409,7 @@ def start_engines():
         procs.append(subprocess.Popen(cmd, cwd=HOME, stdout=open(LOGS / "comfyui.log", "ab"),
                                       stderr=subprocess.STDOUT))
         threading.Thread(target=_boot_watch, args=(t0,), daemon=True).start()
+    threading.Thread(target=lambda: tidy(logs=False), daemon=True).start()      # 오래된 임시 파일 정리는 엔진을 켠 뒤 뒤에서 해요
 
 
 def free_ollama():
@@ -417,6 +418,29 @@ def free_ollama():
             http(OLLAMA + "/api/generate", {"model": m["name"], "keep_alive": 0}, 30)
     except Exception:
         pass
+
+
+IMG_KEEP = {"0": 0, "5m": 300, "30m": 1800, "2h": 7200, "-1": None}   # 이미지 모델을 메모리에 두는 시간(초). None = 계속
+
+
+def idle_unload_loop():
+    """이미지 작업이 한동안 없으면 이미지 모델이 잡고 있는 그래픽 메모리를 비워요(게임·다른 프로그램을 쓸 수 있게). 다음 작업 때는 모델을 다시 불러와요."""
+    while True:
+        time.sleep(30)
+        try:
+            keep = IMG_KEEP.get(settings().get("image_keep_alive", "30m"), 1800)
+            ts = STATE.get("idle_since")
+            if keep is None or ts is None or time.time() - ts < max(keep, 30):
+                continue
+            if QUEUE or any(J.get("state") == "running" for J in list(JOBS.values())) or STATE.get("last") != "image":
+                continue
+            free_comfy()
+            STATE["last"] = None
+            STATE["idle_since"] = None
+            LAST_MODEL["key"] = None
+            log("[메모리 비우기] 이미지 작업이 없어서 이미지 모델을 메모리에서 내렸어요")
+        except Exception as e:  # noqa: BLE001
+            log("[메모리 비우기 오류]", repr(e))
 
 
 def free_comfy():
@@ -433,6 +457,19 @@ def claim(who):
         STATE["last"] = who
 
 
+def llm_needs_room(name):
+    """번역용 대화 모델을 올릴 만큼 그래픽 메모리가 남아 있나. 넉넉하면 이미지 모델을 내리지 않아서 다음 그림이 빨리 시작해요(모르겠으면 비워요)."""
+    try:
+        live = gpu_live()
+        size = next((m.get("size", 0) for m in http(OLLAMA + "/api/tags", timeout=3).get("models", []) if m.get("name") == name), 0)
+        if not live or not size:
+            return True
+        free_mb = live["total_mb"] - live["used_mb"]
+        return free_mb < size / 1048576 * 1.3 + 1500
+    except Exception:  # noqa: BLE001
+        return True
+
+
 _TR = {}
 
 
@@ -443,7 +480,8 @@ def translate(text, style):
     names = llms()
     if not names:
         return text
-    free_comfy()  # 번역용 LLM 이 쓸 VRAM 확보 (이미지 모델은 작업 때 다시 올라옵니다)
+    if llm_needs_room(names[0]):
+        free_comfy()  # 번역용 LLM 이 쓸 VRAM 확보 (이미지 모델은 작업 때 다시 올라옵니다)
     what = {"sentence": "an image editing instruction. Write one clear imperative sentence.",
             "caption": "an image generation prompt written as natural, descriptive English sentences."
             }.get(style, "an image generation prompt. Output comma-separated Danbooru-style tags.")
@@ -1123,7 +1161,7 @@ def do_edit(p, J):
     return [(res, info, None)]
 
 
-# ───────────────────────── 기능 모음 (초보자용 템플릿) ─────────────────────────
+# ───────────────────────── 기타 기능 (초보자용 템플릿) ─────────────────────────
 FEATURES = json.loads((HUB / "features.json").read_text(encoding="utf-8"))
 
 
@@ -2707,14 +2745,53 @@ def enqueue(J, p):
             _QW["t"].start()
 
 
+LAST_MODEL = {"key": None}      # 방금 돌린 작업이 쓴 모델(다음 작업이 같은 모델이면 다시 안 불러도 돼요)
+SAME_LOOK = 6                   # 앞에서부터 이만큼 안에서만 같은 모델 작업을 찾아요
+SAME_SKIP_MAX = 2               # 한 작업이 이 횟수보다 더 밀리지는 않아요
+
+
+def model_key(p):
+    """이 작업이 쓰는 모델을 나타내는 값. 모델을 알 수 없는 작업(음성·일괄 처리·워크플로 등)은 None."""
+    k = p.get("kind")
+    if k not in ("gen", "edit", "feat", "up", "vid"):
+        return None
+    vals = tuple(str(p.get(n)) for n in ("engine", "gengine", "rengine", "fengine", "ckpt", "model", "fx_model", "rmodel", "upm", "wan_ver") if p.get(n))
+    return (k, vals) if vals else None
+
+
+def pick_next():
+    """대기열에서 다음에 돌릴 위치. 기본은 맨 앞이에요. 방금 돌린 것과 같은 모델을 쓰는 작업이 바로 뒤쪽(앞 6개 안)에 있으면 그걸 먼저 해서
+    모델을 다시 불러오는 시간을 아껴요. 직접 순서를 바꾼 작업과 이미 두 번 밀린 작업은 건너뛰지 않아요. (대기열 잠금을 쥔 채로 불러요)"""
+    last = LAST_MODEL["key"]
+    if last is None or len(QUEUE) < 2:
+        return 0
+    front = QP.get(QUEUE[0])
+    if front is None or model_key(front) in (None, last):
+        return 0
+    for i in range(1, min(len(QUEUE), SAME_LOOK)):
+        pi = QP.get(QUEUE[i])
+        if pi is not None and model_key(pi) == last:
+            before = [JOBS.get(j) for j in QUEUE[:i]]
+            if any(J is None or J.get("pin") or J.get("skipped", 0) >= SAME_SKIP_MAX for J in before):
+                return 0
+            for J in before:
+                J["skipped"] = J.get("skipped", 0) + 1
+            return i
+    return 0
+
+
 def job_worker():
-    """대기열 맨 앞 작업부터 하나씩 실행해요(엔진은 어차피 한 번에 하나만 그리니까, 순서를 바꾸거나 빼기 쉽게 한 줄로 세워요)."""
+    """대기열 맨 앞 작업부터 하나씩 실행해요(엔진은 어차피 한 번에 하나만 그리니까, 순서를 바꾸거나 빼기 쉽게 한 줄로 세워요).
+    다만 같은 모델을 쓰는 작업이 곧 뒤에 있으면 먼저 해서 모델을 다시 불러오는 시간을 줄여요(pick_next)."""
     while True:
         with _QCV:
             while not QUEUE:
                 _QCV.wait()
-            jid = QUEUE.pop(0)
+            i = pick_next()
+            jid = QUEUE.pop(i)
             p = QP.pop(jid, None)
+            if i and jid in JOBS:
+                JOBS[jid]["msg"] = "같은 모델이라 먼저 해요"
         J = JOBS.get(jid)
         if not J or p is None or J.get("state") != "queued":
             continue
@@ -2723,11 +2800,15 @@ def job_worker():
             continue
         try:
             J["t_start"] = time.time()
+            mk = model_key(p)
             job_thread(J, p)
+            if mk is not None:
+                LAST_MODEL["key"] = mk
         except BaseException as e:  # noqa: BLE001
             J["state"], J["error"] = "error", repr(e)
             log("[대기열 오류]", repr(e))
         J["t_end"] = time.time()
+        STATE["idle_since"] = time.time()
 
 
 def queue_cancel(J):
@@ -2752,6 +2833,8 @@ def queue_move(p):
         if j is None:
             return {"error": "알 수 없는 동작"}
         QUEUE.insert(j, QUEUE.pop(i))
+        if JOBS.get(p["id"]):
+            JOBS[p["id"]]["pin"] = True       # 직접 옮긴 순서는 그대로 지켜요
     return {"ok": True}
 
 
@@ -3165,6 +3248,7 @@ def gal_delete(p):
             bad += 1
             continue
         try:
+            thumb_drop(fp)
             fp.unlink()
             side = fp.with_name(fp.name + ".json")
             if side.is_file():
@@ -3221,6 +3305,8 @@ def organize_outputs(p):
                     moved += 1
                 except OSError:
                     failed += 1
+    if moved:
+        thumb_sweep_bg()
     return {"ok": True, "moved": moved, "failed": failed}
 
 
@@ -3521,21 +3607,144 @@ def tags_search(q, limit=10):
     return {"items": out}
 
 
+THUMB_DIR = ROOT / "cache" / "thumbs"
+THUMB_RX = re.compile(r"^(?P<name>.+)\.(?P<w>\d+)\.(?P<mt>\d+)\.jpg$")
+_TH = {"writes": 0, "busy": False}
+
+
+def thumb_cap():
+    """미리보기 캐시 최대 용량(바이트). 설정의 thumb_cache_mb (기본 500MB)."""
+    try:
+        mb = int(settings().get("thumb_cache_mb", 500))
+    except (TypeError, ValueError):
+        mb = 500
+    return max(50, min(mb, 20000)) * 1024 * 1024
+
+
+def thumb_loc(path):
+    """원본 파일 위치를 그대로 따라가는 캐시 폴더·이름(결과 폴더 o/, 앱 폴더 r/, 그 밖 x/). 원본이 지워졌는지 알 수 있게 하려는 거예요."""
+    path = Path(path)
+    for tag, root in (("o", OUT), ("r", ROOT)):
+        try:
+            rel = path.relative_to(root)
+            return THUMB_DIR / tag / rel.parent, rel.name
+        except ValueError:
+            continue
+    return THUMB_DIR / "x", hashlib.sha1(str(path).encode()).hexdigest()[:20] + "_" + path.name
+
+
+def _thumb_files(d, name):
+    try:
+        for f in d.iterdir():
+            m = THUMB_RX.match(f.name)
+            if m and m.group("name") == name and f.is_file():
+                yield f
+    except OSError:
+        return
+
+
+def thumb_drop(path):
+    """원본을 지울 때(또는 옮길 때) 그 파일의 미리보기를 같이 지워요."""
+    d, name = thumb_loc(path)
+    n = 0
+    for f in list(_thumb_files(d, name)):
+        try:
+            f.unlink()
+            n += 1
+        except OSError:
+            pass
+    return n
+
+
+def thumb_sweep():
+    """원본이 없어졌거나 바뀐 미리보기와 옛 방식 파일을 치워요. 용량이 상한을 넘으면 가장 오래 안 본 것부터 지워요(원본은 건드리지 않아요)."""
+    if _TH["busy"]:
+        return
+    _TH["busy"] = True
+    removed = 0
+    try:
+        if not THUMB_DIR.is_dir():
+            return
+        for f in list(THUMB_DIR.iterdir()):          # 옛 방식(폴더 없이 이름이 해시인 파일)
+            if f.is_file() and f.suffix == ".jpg":
+                try:
+                    f.unlink(); removed += 1
+                except OSError:
+                    pass
+        roots = {"o": OUT, "r": ROOT}
+        keep = []
+        for tag, root in roots.items():
+            base = THUMB_DIR / tag
+            if not base.is_dir():
+                continue
+            for f in base.rglob("*.jpg"):
+                m = THUMB_RX.match(f.name)
+                try:
+                    if not m:
+                        f.unlink(); removed += 1; continue
+                    src = root / f.parent.relative_to(base) / m.group("name")
+                    if not src.is_file() or str(src.stat().st_mtime_ns) != m.group("mt"):
+                        f.unlink(); removed += 1; continue
+                    st = f.stat()
+                    keep.append((st.st_mtime, st.st_size, f))
+                except OSError:
+                    pass
+        xb = THUMB_DIR / "x"
+        for f in (xb.glob("*.jpg") if xb.is_dir() else []):
+            try:
+                st = f.stat(); keep.append((st.st_mtime, st.st_size, f))
+            except OSError:
+                pass
+        total, cap = sum(k[1] for k in keep), thumb_cap()
+        if total > cap:
+            for mt, sz, f in sorted(keep, key=lambda k: k[0]):
+                if total <= cap * 0.9:
+                    break
+                try:
+                    f.unlink(); total -= sz; removed += 1
+                except OSError:
+                    pass
+        for d in sorted((x for x in THUMB_DIR.rglob("*") if x.is_dir()), key=lambda x: len(x.parts), reverse=True):
+            try:
+                d.rmdir()            # 비어 버린 폴더는 치워요(안 비었으면 그대로 남아요)
+            except OSError:
+                pass
+        if removed:
+            log(f"[미리보기 정리] {removed}개를 지웠어요")
+    finally:
+        _TH["busy"] = False
+
+
+def thumb_sweep_bg():
+    threading.Thread(target=thumb_sweep, daemon=True).start()
+
+
 def thumb_bytes(path, w=320):
-    """갤러리 미리보기(작은 JPEG). 한 번 만들면 cache 폴더에 둬요."""
+    """갤러리 미리보기(작은 JPEG). 처음 볼 때 한 번 만들어 cache 폴더에 두고, 상한을 넘으면 오래 안 본 것부터 지워요."""
     st = path.stat()
-    key = hashlib.sha1(f"{path}|{st.st_mtime_ns}|{w}".encode()).hexdigest()[:20]
-    cp = ROOT / "cache" / "thumbs" / (key + ".jpg")
+    d, name = thumb_loc(path)
+    cp = d / f"{name}.{w}.{st.st_mtime_ns}.jpg"
     if cp.is_file():
-        return cp.read_bytes()
+        try:
+            if time.time() - cp.stat().st_mtime > 3600:      # '마지막으로 본 때'를 가끔 갱신해요(오래 안 본 것부터 지우려고)
+                os.utime(cp, None)
+            return cp.read_bytes()
+        except OSError:
+            pass
     with Image.open(path) as im:
         im = ImageOps.exif_transpose(im).convert("RGB")
         im.thumbnail((w, w))
         b = io.BytesIO()
         im.save(b, "JPEG", quality=80)
-    cp.parent.mkdir(parents=True, exist_ok=True)
     try:
+        d.mkdir(parents=True, exist_ok=True)
+        for old in list(_thumb_files(d, name)):            # 이 파일의 예전(원본이 바뀌기 전) 미리보기
+            if THUMB_RX.match(old.name).group("w") == str(w):
+                old.unlink(missing_ok=True)
         cp.write_bytes(b.getvalue())
+        _TH["writes"] += 1
+        if _TH["writes"] % 200 == 0:
+            thumb_sweep_bg()
     except OSError:
         pass
     return b.getvalue()
@@ -4759,7 +4968,8 @@ def save_settings(d):
         pass
 
 
-PREF_DEF = {"chat_keep_alive": "5m", "speed_boost": True, "ack": False}
+PREF_DEF = {"chat_keep_alive": "5m", "speed_boost": True, "ack": False, "thumb_cache_mb": 500, "image_keep_alive": "30m"}
+PREF_THUMB = (200, 500, 1000, 2000)
 PREF_KEEP = ("0", "5m", "30m", "2h", "-1")
 
 
@@ -4770,20 +4980,34 @@ def prefs():
         out["chat_keep_alive"] = d["chat_keep_alive"]
     out["speed_boost"] = bool(d.get("speed_boost", True))
     out["ack"] = bool(d.get("ack"))
+    out["thumb_cache_mb"] = d["thumb_cache_mb"] if d.get("thumb_cache_mb") in PREF_THUMB else 500
+    out["image_keep_alive"] = d["image_keep_alive"] if d.get("image_keep_alive") in IMG_KEEP else "30m"
     return out
 
 
 def set_prefs(p):
     d = settings()
+    sweep_after = False
     if "chat_keep_alive" in p:
         if p["chat_keep_alive"] not in PREF_KEEP:
             return {"error": "허용되지 않는 값이에요."}
         d["chat_keep_alive"] = p["chat_keep_alive"]
     if "speed_boost" in p:
         d["speed_boost"] = bool(p["speed_boost"])
+    if "image_keep_alive" in p:
+        if p["image_keep_alive"] not in IMG_KEEP:
+            return {"error": "허용되지 않는 값이에요."}
+        d["image_keep_alive"] = p["image_keep_alive"]
+    if "thumb_cache_mb" in p:
+        if p["thumb_cache_mb"] not in PREF_THUMB:
+            return {"error": "허용되지 않는 값이에요."}
+        d["thumb_cache_mb"] = p["thumb_cache_mb"]
+        sweep_after = True
     if p.get("ack") is True:
         d["ack"] = True
     save_settings(d)
+    if sweep_after:
+        thumb_sweep_bg()
     return {"ok": True, "prefs": prefs()}
 
 
@@ -5465,8 +5689,23 @@ def clean_item(what):
 BOOT = uuid.uuid4().hex[:8]
 
 
-def status():
-    return {"boot": BOOT, "ollama": alive(OLLAMA + "/api/version"), "comfy": alive(CUI + "/system_stats"), "gpu": GPU, "gpu_live": gpu_live(), "version": VERSION}
+_ALV = {}
+
+
+def alive_cached(url, ttl=2.0):
+    """화면이 몇 초마다 묻는 '엔진이 켜져 있나' 확인을 잠깐 기억해요(엔진이 꺼져 있으면 매번 기다리게 되니까요)."""
+    now = time.time()
+    c = _ALV.get(url)
+    if c and now - c[0] < ttl:
+        return c[1]
+    v = alive(url)
+    _ALV[url] = (now, v)
+    return v
+
+
+def status(fresh=False):
+    al = alive if fresh else alive_cached
+    return {"boot": BOOT, "ollama": al(OLLAMA + "/api/version"), "comfy": al(CUI + "/system_stats"), "gpu": GPU, "gpu_live": gpu_live(), "version": VERSION}
 
 
 FAMILY_CHOICES = ("sd15", "sdxl", "sd3", "flux", "krea2", "chroma", "qwen", "hidream", "lumina", "hidden")
@@ -5563,7 +5802,7 @@ def _row(label, ok, detail="", fix=None, fixlabel="", opt=False):
 
 
 def selfcheck():
-    st = status()
+    st = status(fresh=True)      # 점검 결과는 잠깐 기억해 둔 값이 아니라 지금 상태로
     c = caps()
     comfy_up, nodes = bool(st["comfy"]), c["nodes"]
     try:
@@ -5646,7 +5885,7 @@ def selfcheck():
                 dm = [d["pip"] for d in sw["deps_missing"]]
                 rows.append(_row("파이썬 부품", not dm, "" if not dm else "빠진 부품: " + ", ".join(dm), {"a": "pymods", "modules": [{"module": d["module"], "pip": d["pip"]} for d in sw["deps_missing"]]} if dm else None, "부품 설치"))
                 rows.append(_row("얼굴 교체 모델(inswapper_128)", sw["file"], "" if sw["file"] else "모델 파일이 없어요.", None if sw["file"] else {"a": "swap"}, "모델 받기"))
-        grp("feat-" + f["id"], re.sub(r"\s*\(미검증\)", "", f["title"]), "feat:" + f["id"], rows)
+        grp("feat-" + f["id"], f["title"], "feat:" + f["id"], rows)
     return {"groups": groups, "comfy": comfy_up, "version": VERSION}
 
 
@@ -5840,8 +6079,23 @@ def folder_map():
 
 
 MEDIA = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
-STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-          "/app.css": ("app.css", "text/css; charset=utf-8")}
+STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.css": ("app.css", "text/css; charset=utf-8")}
+_JSB = {"key": None, "data": b"", "gz": b"", "etag": ""}
+
+
+def js_bundle():
+    """화면 코드는 web/js/ 의 기능별 파일(00-core.js, 10-chat.js …)로 나눠 두고, 브라우저에는 하나로 이어 붙여 보내요(옛 설치의 app.js 하나도 그대로 지원).
+    파일이 바뀌지 않았으면 이어 붙인 결과를 다시 만들지 않아요."""
+    parts = sorted((WEB / "js").glob("*.js")) if (WEB / "js").is_dir() else []
+    if not parts and (WEB / "app.js").is_file():
+        parts = [WEB / "app.js"]
+    key = tuple((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in parts)
+    if key != _JSB["key"]:
+        import gzip
+        data = b"".join(f.read_bytes() for f in parts)
+        _JSB.update(key=key, data=data, gz=gzip.compress(data, 6) if len(data) > 1024 else b"",
+                    etag='"%x-%x"' % (hash(key) & 0xFFFFFFFF, len(data)))
+    return _JSB
 
 
 class Server(ThreadingHTTPServer):
@@ -5933,6 +6187,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         CLIENT_SEEN.set()
         u = urllib.parse.urlparse(self.path).path
+        if u == "/app.js":
+            j = js_bundle()
+            if not j["data"]:
+                return self.send_json({"error": "not found"}, 404)
+            hdr = {"Cache-Control": "no-cache", "ETag": j["etag"], "Vary": "Accept-Encoding"}
+            if self.headers.get("If-None-Match") == j["etag"]:
+                self.send_response(304)
+                for k, v in hdr.items():
+                    self.send_header(k, v)
+                return self.end_headers()
+            data = j["data"]
+            if j["gz"] and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+                data, hdr["Content-Encoding"] = j["gz"], "gzip"
+            return self.send_bytes(data, "text/javascript; charset=utf-8", extra=hdr)
         if u in STATIC:
             return self.send_file(WEB / STATIC[u][0], STATIC[u][1])
         if u.startswith("/out/"):
@@ -6281,12 +6549,14 @@ CLIENT_SEEN = threading.Event()      # 화면(브라우저)이 한 번이라도 
 
 
 def main():
+    thumb_sweep_bg()      # 지워진 사진의 미리보기·옛 방식 파일 정리, 용량 상한 확인
+    threading.Thread(target=idle_unload_loop, daemon=True).start()
     global GPU
     sys.stdout.reconfigure(errors="replace")
+    apply_cache_env()
+    start_engines()        # 엔진을 가장 먼저 켜요(켜지는 동안 아래 준비를 같이 해요)
     GPU = gpu()
     register_root()
-    apply_cache_env()
-    start_engines()
     ws_start()
     threading.Thread(target=worker, daemon=True).start()
     try:

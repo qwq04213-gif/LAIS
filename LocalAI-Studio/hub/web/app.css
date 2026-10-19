@@ -238,8 +238,6 @@ form .go{position:sticky;top:0;z-index:5;width:100%;box-shadow:0 6px 10px -6px r
 .seltool{padding:4px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.seltool:has(input:checked){border-color:var(--acc);background:var(--chrome)}
 .col .jobbar{position:sticky;top:0;z-index:4}
 
-.featpick{display:grid;gap:8px;margin:10px 0}.fcard{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--chrome);color:var(--tx);border-radius:8px;padding:10px 12px;cursor:pointer}
-.fcard.on{border-color:var(--acc)}.fcard span{font-size:calc(20px*var(--ui,1));width:26px;text-align:center}
 #feat-form .go{width:100%;margin:8px 0}.steps{margin:6px 0 10px;padding-left:20px;font-size:calc(12.5px*var(--ui,1));color:var(--mute)}.req{font-style:normal;font-size:calc(12px*var(--ui,1));color:var(--bad);margin-left:4px}
 #feat-form .f small{color:var(--mute);font-size:calc(12px*var(--ui,1))}
 .gloss{display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:8px 18px;margin:10px 0}.gloss dt{font-weight:600}.gloss dd{margin:0;color:var(--mute);line-height:1.6}.gloss dd b{color:var(--tx);font-weight:600}
@@ -310,6 +308,7 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 .galgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin:12px 0}
 .gt{margin:0;position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg2,transparent)}
 .gt{display:block}
+.galgrid .gt{content-visibility:auto;contain-intrinsic-size:auto calc(var(--galmin,190)*1px + 48px)}   /* 화면 밖 칸은 그리지 않아요(사진이 아주 많아도 가볍게) */
 .gt img,.gt video{width:100%;height:auto;max-width:none;max-height:none;aspect-ratio:1/1;object-fit:cover;object-position:50% 50%;display:block;cursor:zoom-in;background:#111}.gt video{cursor:default}
 .gt .gnoimg{display:grid;gap:4px;align-content:start;min-height:64px;padding:10px;cursor:zoom-in;font-size:calc(12px*var(--ui,1));color:var(--mute);overflow:hidden}.gt .gnoimg b{color:var(--fg,inherit);font-weight:600;overflow-wrap:anywhere}.gt .gnoimg span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.gt.noprev video{aspect-ratio:16/9;object-fit:contain}.gt video{cursor:default}
 .gt figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:2px 6px;padding:6px 8px;font-size:calc(11.5px*var(--ui,1));color:var(--mute)}
