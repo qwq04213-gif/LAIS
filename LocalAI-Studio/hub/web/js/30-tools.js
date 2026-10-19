@@ -258,7 +258,7 @@ function renderWF(){
     a.texts.length?'<h3>프롬프트와 텍스트</h3>'+a.texts.map(t=>`<label class="f">${esc(t.role||'텍스트')} (${esc(t.class)} #${esc(t.id)})<textarea data-k="${esc(t.key)}" rows="3">${esc(t.value)}</textarea></label>`).join(''):'',
     a.images.length?'<h3>입력 이미지</h3>'+a.images.map(i=>`<div class="f">${esc(i.class)} #${esc(i.id)} (기본값 ${esc(i.value)})<div class="mini" data-id="${esc(i.id)}"></div></div>`).join(''):'',
     a.seeds.length?'<h3>시드</h3><label class="chk"><input type="checkbox" id="wf-rand" checked> 실행할 때마다 시드를 무작위로 바꾸기</label>'+a.seeds.map(s=>`<label class="f">${esc(s.class)} #${esc(s.id)}<input type="number" data-seed="${esc(s.key)}" value="${s.value}"></label>`).join(''):'',
-    a.sizes.length?'<h3>이미지 크기</h3>'+a.sizes.map(z=>`<div class="row"><label class="f">가로 (#${esc(z.id)})<input type="number" data-w="${esc(z.id)}" value="${z.w}" step="8"></label><label class="f">세로<input type="number" data-h="${esc(z.id)}" value="${z.h}" step="8"></label></div>`).join(''):'',
+    a.sizes.length?'<h3>이미지 크기</h3>'+a.sizes.map(z=>`<div class="row"><label class="f">가로 (#${esc(z.id)})<input type="number" data-w="${esc(z.id)}" value="${z.w}" step="1"></label><label class="f">세로<input type="number" data-h="${esc(z.id)}" value="${z.h}" step="1"></label></div>`).join(''):'',
     `<p class="hint">출력 노드 ${a.outputs.length}개. 이미지 결과만 표시돼요(영상·GIF는 ComfyUI 화면에서 확인하세요).</p>`].join('');
   $$('#wf-fields .mini').forEach(m=>mini(m,'이미지 바꾸기 (선택)'));
   if(a.missing.length)nodeHelp(a.missing);

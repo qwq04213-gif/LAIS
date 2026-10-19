@@ -90,7 +90,7 @@
   <div class="bar">
     <select id="llm" title="대화 모델"></select>
     <select id="persona" title="역할"></select>
-    <label>창의성 <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.8"><b id="tv">0.8</b></label>
+    <label>창의성 <input type="range" id="temp" min="0" max="1.5" step="0.01" value="0.8"><b id="tv">0.8</b></label>
     <label>기억 길이 <select id="ctx"><option value="4096">짧게</option><option value="8192" selected>보통</option><option value="16384">길게</option><option value="32768">아주 길게</option></select></label>
     <button class="ghost sm" id="cl-toggle" type="button" title="왼쪽 대화 목록을 보이거나 숨겨요">대화 목록</button>
     <button class="ghost sm" id="cl-export" type="button" title="지금 대화를 마크다운(.md) 파일로 저장해요">내보내기</button>
@@ -98,7 +98,7 @@
   <details class="sysd"><summary>역할 지침과 고급 옵션</summary>
     <textarea id="sys" rows="3"></textarea>
     <div class="grid4">
-      <label class="f">Top-P<input type="number" id="o-top_p" step="0.05" min="0" max="1" placeholder="0.9"></label>
+      <label class="f">Top-P<input type="number" id="o-top_p" step="0.01" min="0" max="1" placeholder="0.9"></label>
       <label class="f">Top-K<input type="number" id="o-top_k" min="0" placeholder="40"></label>
       <label class="f">Min-P<input type="number" id="o-min_p" step="0.01" min="0" max="1" placeholder="0.05"></label>
       <label class="f">반복 억제<input type="number" id="o-repeat_penalty" step="0.01" min="0" placeholder="1.1"></label>
@@ -163,13 +163,13 @@
       <label class="f">모델 파일<select name="fx_model"></select></label>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
-        <label class="f fe-g">가이던스(FLUX)<input type="number" name="fx_guidance" value="3.5" step="0.5" min="0" max="20"></label>
-        <label class="f fe-c">CFG(Chroma·Krea 2)<input type="number" name="fx_cfg" value="1" step="0.5" min="0" max="20"></label>
+        <label class="f fe-g">가이던스(FLUX)<input type="number" name="fx_guidance" value="3.5" step="0.1" min="0" max="20"></label>
+        <label class="f fe-c">CFG(Chroma·Krea 2)<input type="number" name="fx_cfg" value="1" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
         <label class="f">스케줄러<select name="fx_scheduler" data-def="simple"></select></label>
-        <label class="f">변화 강도<input type="number" name="fx_edn" value="0.6" step="0.05" min="0.1" max="1"></label>
+        <label class="f">변화 강도<input type="number" name="fx_edn" value="0.6" step="0.01" min="0.1" max="1"></label>
       </div>
     </div>
     <div class="qwen">
@@ -181,7 +181,7 @@
       </div>
     </div>
     <div class="row">
-      <label class="f den">변화 강도<input type="number" name="denoise" value="0.9" step="0.05" min="0.1" max="1"></label>
+      <label class="f den">변화 강도<input type="number" name="denoise" value="0.9" step="0.01" min="0.1" max="1"></label>
       <label class="f">마스크 확장(px)<input type="number" name="grow" value="8" min="0" max="128"></label>
     </div>
     <details><summary>영역 처리 (고급)</summary>
@@ -200,11 +200,11 @@
       </details>
       <div class="row">
         <label class="f">처리 해상도(메가픽셀)<select name="q_mp"><option>0.6</option><option selected>1.0</option><option>1.5</option><option>2.0</option></select></label>
-        <label class="f">시프트<input type="number" name="q_shift" value="3" step="0.5" min="0.5" max="10"></label>
+        <label class="f">시프트<input type="number" name="q_shift" value="3" step="0.1" min="0.5" max="10"></label>
       </div>
       <div class="row">
         <label class="f">단계 수<input type="number" name="q_steps" value="20" min="1" max="100"></label>
-        <label class="f">CFG<input type="number" name="q_cfg" value="4" step="0.5" min="0" max="20"></label>
+        <label class="f">CFG<input type="number" name="q_cfg" value="4" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="q_sampler" data-def="euler"></select></label>
@@ -218,11 +218,11 @@
       <div class="mini" data-img="cn_image"></div>
       <div class="row">
         <label class="f">전처리<select name="cn_prep"><option value="none">없음 (이미 만든 지도)</option><option value="canny">캐니 윤곽선</option></select></label>
-        <label class="f">강도<input type="number" name="cn_strength" value="0.7" step="0.05" min="0" max="2"></label>
+        <label class="f">강도<input type="number" name="cn_strength" value="0.7" step="0.01" min="0" max="2"></label>
       </div>
       <div class="row">
-        <label class="f">적용 시작(0~1)<input type="number" name="cn_start" value="0" step="0.05" min="0" max="1"></label>
-        <label class="f">적용 끝(0~1)<input type="number" name="cn_end" value="1" step="0.05" min="0" max="1"></label>
+        <label class="f">적용 시작(0~1)<input type="number" name="cn_start" value="0" step="0.01" min="0" max="1"></label>
+        <label class="f">적용 끝(0~1)<input type="number" name="cn_end" value="1" step="0.01" min="0" max="1"></label>
       </div>
     </details>
     <details class="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
@@ -325,8 +325,8 @@
     <label class="f" data-for="sdxl chroma krea2 sd35 hidream lumina">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="row">
-      <label class="f">가로<input type="number" name="w" value="1024" step="8" min="256" max="2048"></label>
-      <label class="f">세로<input type="number" name="h" value="1024" step="8" min="256" max="2048"></label>
+      <label class="f">가로<input type="number" name="w" value="1024" step="1" min="256" max="2048"></label>
+      <label class="f">세로<input type="number" name="h" value="1024" step="1" min="256" max="2048"></label>
     </div>
     <div class="ratios" id="ratios"><span>비율</span>
       <button type="button" class="chip" data-r="1:1">1:1</button><button type="button" class="chip" data-r="4:3">4:3</button><button type="button" class="chip" data-r="3:4">3:4</button>
@@ -340,14 +340,14 @@
     <details data-for="sdxl"><summary>하이레스 픽스 (2단계 생성)</summary>
       <label class="chk"><input type="checkbox" name="hires"> 켜기</label>
       <div class="row">
-        <label class="f">확대 배율<input type="number" name="hires_scale" value="1.5" step="0.25" min="1" max="3"></label>
-        <label class="f">변화 강도<input type="number" name="hires_denoise" value="0.5" step="0.05" min="0.1" max="1"></label>
+        <label class="f">확대 배율<input type="number" name="hires_scale" value="1.5" step="0.05" min="1" max="3"></label>
+        <label class="f">변화 강도<input type="number" name="hires_denoise" value="0.5" step="0.01" min="0.1" max="1"></label>
       </div>
       <label class="f">2단계 단계 수<input type="number" name="hires_steps" value="15" min="1" max="100"></label>
     </details>
     <details><summary>이미지로 시작 (이미지→이미지)</summary>
       <div class="mini" data-img="init"></div>
-      <label class="f">변화 강도 (낮을수록 원본 유지)<input type="number" name="init_denoise" value="0.7" step="0.05" min="0.05" max="1"></label>
+      <label class="f">변화 강도 (낮을수록 원본 유지)<input type="number" name="init_denoise" value="0.7" step="0.01" min="0.05" max="1"></label>
     </details>
     <details data-for="sdxl flux krea2"><summary>ControlNet (구도·포즈 고정)</summary>
       <div data-blk="cn-easy"></div>
@@ -357,19 +357,19 @@
       <div class="mini" data-img="cn_image"></div>
       <div class="row">
         <label class="f">전처리<select name="cn_prep"><option value="none">없음 (이미 만든 지도)</option><option value="canny">캐니 윤곽선</option></select></label>
-        <label class="f">강도<input type="number" name="cn_strength" value="0.7" step="0.05" min="0" max="2"></label>
+        <label class="f">강도<input type="number" name="cn_strength" value="0.7" step="0.01" min="0" max="2"></label>
       </div>
       <div class="row" data-for="sdxl flux">
-        <label class="f">적용 시작(0~1)<input type="number" name="cn_start" value="0" step="0.05" min="0" max="1"></label>
-        <label class="f">적용 끝(0~1)<input type="number" name="cn_end" value="1" step="0.05" min="0" max="1"></label>
+        <label class="f">적용 시작(0~1)<input type="number" name="cn_start" value="0" step="0.01" min="0" max="1"></label>
+        <label class="f">적용 끝(0~1)<input type="number" name="cn_end" value="1" step="0.01" min="0" max="1"></label>
       </div>
     </details>
     <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
     <details data-for="flux chroma krea2 sd35 hidream lumina" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
-        <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.5" min="0" max="20"></label>
-        <label class="f" data-for="chroma krea2 sd35 hidream lumina">CFG<input type="number" name="fx_cfg" value="4" step="0.5" min="0" max="20"></label>
+        <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.1" min="0" max="20"></label>
+        <label class="f" data-for="chroma krea2 sd35 hidream lumina">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
@@ -401,7 +401,7 @@
       <select name="mode"><option value="esrgan">빠른 업스케일 (Real-ESRGAN)</option><option value="refine">디테일 재생성 (업스케일 + 타일 리파인)</option></select></label>
     <div class="row">
       <label class="f">업스케일 모델<select name="upm"></select></label>
-      <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.05" inputmode="decimal"></label>
+      <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.01" inputmode="decimal"></label>
     </div>
     <span class="scalechips" data-for="scale"><button type="button" class="ghost" data-sc="0.5">0.5배</button><button type="button" class="ghost" data-sc="1.5">1.5배</button><button type="button" class="ghost" data-sc="2">2배</button><button type="button" class="ghost" data-sc="3">3배</button><button type="button" class="ghost" data-sc="4">4배</button></span>
     <p class="hint plain">원하는 배율을 숫자로 적어요(예: 1.5, 2.5). <b>1보다 작으면 줄여요</b>(0.5 = 절반) — 줄이기는 업스케일 모델 없이 바로 끝나요. 결과 긴 변은 8192px까지예요.</p>
@@ -463,11 +463,11 @@
       <label class="f">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 Wan 기본 문구를 써요"></textarea></label>
       <div class="row">
         <label class="f">단계 수<input type="number" name="steps" value="20" min="1" max="60"></label>
-        <label class="f">CFG<input type="number" name="cfg" value="5" min="1" max="20" step="0.5"></label>
+        <label class="f">CFG<input type="number" name="cfg" value="5" min="1" max="20" step="0.1"></label>
       </div>
       <div class="row">
         <label class="f">초당 프레임<input type="number" name="fps" value="24" min="8" max="30"></label>
-        <label class="f">움직임 강도(shift)<input type="number" name="shift" value="8" min="1" max="20" step="0.5"></label>
+        <label class="f">움직임 강도(shift)<input type="number" name="shift" value="8" min="1" max="20" step="0.1"></label>
       </div>
       <p class="hint plain">길이·크기를 키울수록 VRAM과 시간이 크게 늘어요. 메모리 부족 오류가 나면 길이를 줄이거나 크기를 낮춰 보세요.</p>
     </details>
@@ -505,7 +505,7 @@
       </div>
       <div class="row">
         <label class="f">단계 수<input type="number" name="steps" value="8" min="1" max="100"></label>
-        <label class="f">CFG<input type="number" name="cfg" value="1" min="0" max="20" step="0.5"></label>
+        <label class="f">CFG<input type="number" name="cfg" value="1" min="0" max="20" step="0.1"></label>
       </div>
       <label class="chk"><input type="checkbox" name="no_codes"> 빠르게 만들기 (품질 보조 단계를 생략해요)</label>
     </details>
@@ -533,14 +533,14 @@
     </div>
     <div id="vm-aopts" hidden>
       <div class="row">
-        <label class="f">소리 크기 (%)<input type="number" name="vol" value="100" min="0" max="300" step="5"></label>
-        <label class="f">소리 시작 위치 (초)<input type="number" name="delay" value="0" min="0" max="600" step="0.5"></label>
+        <label class="f">소리 크기 (%)<input type="number" name="vol" value="100" min="0" max="300" step="1"></label>
+        <label class="f">소리 시작 위치 (초)<input type="number" name="delay" value="0" min="0" max="600" step="0.1"></label>
       </div>
       <label class="f">영상과 소리 길이가 다를 때<select name="fit"><option value="video">영상 길이에 맞춰요 (소리가 길면 자르고, 짧으면 뒤는 조용해요)</option><option value="audio">소리 길이에 맞춰요 (영상이 짧으면 마지막 장면에서 멈춰 있어요)</option></select></label>
       <label class="chk"><input type="checkbox" name="fade" checked> 소리가 잘릴 때 끝을 서서히 줄이기</label>
       <div class="row" id="vm-orig" hidden>
         <label class="f">영상의 원래 소리<select name="amode"><option value="replace">없애고 새 소리만</option><option value="mix">새 소리와 같이 들려요</option></select></label>
-        <label class="f">원래 소리 크기 (%)<input type="number" name="ovol" value="100" min="0" max="300" step="5"></label>
+        <label class="f">원래 소리 크기 (%)<input type="number" name="ovol" value="100" min="0" max="300" step="1"></label>
       </div>
     </div>
     <label class="f">자막 (선택)<textarea name="subs" rows="6" placeholder="예:&#10;안녕하세요, 오늘은 로컬 AI 스튜디오를 소개해 드릴게요.&#10;설치부터 첫 영상까지 차근차근 보여 드려요."></textarea></label>
@@ -587,7 +587,7 @@
         <label class="f" id="tt-spk-row">목소리<select name="speaker" id="tt-spk"></select></label>
         <label class="f" id="tt-emo-row">감정<select name="emotion"><option value="calm">차분하게</option><option value="normal" selected>보통</option><option value="rich">풍부하게</option></select></label>
         <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><input type="file" id="tt-ref-file" accept=".wav,audio/wav"><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
-          <label class="chk" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok"> <span>이 목소리의 주인은 본인이거나 사용을 허락했어요. 다른 사람을 속이거나 흉내 내는 데 쓰지 않아요.</span></label></div>
+          <p class="hint" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok" checked hidden>목소리 샘플은 본인 목소리이거나 허락받은 목소리만 쓰세요. 다른 사람을 속이거나 흉내 내는 데 쓰지 않아요.</p></div>
       </div>
     </div>
     <p class="warn" id="tt-edge-warn" hidden>Edge 읽어 주기 부품이 아직 없어요. <button type="button" class="ghost sm" id="tt-install">부품 설치</button> <span class="mute" id="tt-inst-st"></span></p>
@@ -793,7 +793,7 @@
     <tr><td>Stable Diffusion 3.5 · HiDream · Lumina 2</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류 (설치와 모델에서 받아요)</td></tr>
     <tr><td>음악 만들기 (ACE-Step 1.5)</td><td class="p">미검증</td><td>사이드바 [음악 만들기] — 스타일과 가사로 곡을 만들어요</td></tr>
     <tr><td>음성 만들기 (글 읽어 주기 — 윈도우 내장 음성 · Edge 읽어 주기)</td><td class="p">미검증</td><td>사이드바 [음성 만들기] — ComfyUI 없이 동작해요. Edge 방식은 글이 마이크로소프트 서버로 전송돼요</td></tr>
-    <tr><td>얼굴 교체 (ReActor)</td><td class="y">지원</td><td>기타 기능 → 얼굴 교체 — 동의 확인 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
+    <tr><td>얼굴 교체 (ReActor)</td><td class="y">지원</td><td>기타 기능 → 얼굴 교체 — 한 번만 안내 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
     <tr><td>영상 (Wan 2.2 5B: 글→영상, 이미지→영상)</td><td class="y">지원</td><td>영상 만들기</td></tr>
     <tr><td>영상에 소리·자막 넣기 (음성·음악 합치기, 자막 입히기·.srt 저장)</td><td class="p">미검증</td><td>도구 → 영상 소리·자막 — ComfyUI·그래픽카드 없이 ffmpeg 로 합쳐요</td></tr>
     <tr><td>영상 고화질 (Wan 2.2 14B, 4단계 가속)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델</td></tr>
@@ -854,7 +854,7 @@
       <div class="actions"><button type="button" class="ghost" id="bt-rm-install" hidden>배경 지우기 도구 설치</button></div>
     </div>
     <div data-op="upscale" class="bt-opts" hidden>
-      <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.05" inputmode="decimal"></label>
+      <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.01" inputmode="decimal"></label>
       <span class="scalechips" data-for="scale"><button type="button" class="ghost" data-sc="0.5">0.5배</button><button type="button" class="ghost" data-sc="1.5">1.5배</button><button type="button" class="ghost" data-sc="2">2배</button><button type="button" class="ghost" data-sc="3">3배</button><button type="button" class="ghost" data-sc="4">4배</button></span>
       <label class="f">업스케일 모델<select name="upm"></select></label>
       <p class="hint plain">1보다 작게 적으면 줄여요(0.5 = 절반, 모델 없이 처리). 결과가 8192px를 넘는 사진은 건너뛰고 이유를 알려 드려요.</p>
@@ -951,7 +951,7 @@
 </div></div>
 <div class="cpane" id="fold-minfo"><div class="card"><h3>LoRA · 모델 정보</h3>
     <p class="hint plain">설치된 LoRA와 모델이 어느 계열용인지, 파일 안에 적힌 트리거 단어·자주 쓰인 태그가 무엇인지 보여 줘요. LoRA 파일 옆에 같은 이름의 그림 파일(예: 이름.preview.png)이 있으면 미리보기로 써요. 이미지 생성·편집 화면에서 LoRA를 고르면 같은 정보가 칸 아래에 나오고, 단어를 누르면 프롬프트에 들어가요.</p>
-    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">👤 캐릭터</option><option value="style">🎨 스타일</option><option value="background">🏞 배경·풍경</option><option value="other">✦ 기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
+    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">캐릭터</option><option value="style">스타일</option><option value="background">배경·풍경</option><option value="other">기타</option><option value="unknown">미분류</option></select><select id="mi-group" title="보기 방식"><option value="list">목록 보기</option><option value="family">모델 계열별 보기</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
     <div id="mi-list"></div>
   
 </div></div>
@@ -1007,7 +1007,7 @@
 <div class="row"><div class="rl"><b>화면 색</b><span>어둡게·밝게, 또는 컴퓨터 설정을 따라가요.</span></div><div class="rc"><div class="theme-pick" id="theme-pick"><label><input type="radio" name="theme" value="auto"> 컴퓨터 설정에 맞춤</label><label><input type="radio" name="theme" value="dark"> 어둡게</label><label><input type="radio" name="theme" value="light"> 밝게</label></div></div></div>
 <div class="row"><div class="rl"><b>강조 색</b><span>버튼과 선택 표시에 쓰는 색이에요.</span></div><div class="rc"><div class="swatches" id="accent-pick"><label class="swatch" title="기본"><input type="radio" name="accent" value=""><i class="a-def"></i></label><label class="swatch" title="초록"><input type="radio" name="accent" value="green"><i class="a-green"></i></label><label class="swatch" title="주황"><input type="radio" name="accent" value="orange"><i class="a-orange"></i></label><label class="swatch" title="분홍"><input type="radio" name="accent" value="pink"><i class="a-pink"></i></label><label class="swatch" title="청록"><input type="radio" name="accent" value="teal"><i class="a-teal"></i></label></div></div></div>
 <div class="row"><div class="rl"><b>대화 글자 크기</b><span>대화 화면의 글자만 따로 키우거나 줄여요.</span></div><div class="rc"><select id="opt-chatfs"><option value="0.9">작게</option><option value="1">보통</option><option value="1.15">크게</option><option value="1.3">아주 크게</option></select></div></div>
-<div class="row"><div class="rl"><b>움직임 줄이기</b><span>화면 전환·버튼의 애니메이션을 꺼요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-motion"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>움직임 줄이기</b><span>버튼·메뉴·스위치·진행 막대의 전환 효과를 꺼요(원래 짧은 효과라 차이가 작아요). 로딩 표시는 느리게 돌아요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-motion"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>안내 문구 줄이기</b><span>각 화면의 회색 설명 글을 숨겨서 더 간결하게 보여 줘요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-hints"><i></i></label></div></div>
 </div>
 <div class="card"><h3>시작과 목록</h3>
@@ -1120,14 +1120,13 @@
 
 <dialog id="ack"><form method="dialog">
   <h3 style="margin-top:0">사용 전에 확인해 주세요</h3>
-  <p>이 도구는 성인이 자기 컴퓨터에서 쓰도록 만들어졌고, 성인 콘텐츠를 제한하는 필터를 두지 않아요. 아래 내용에 동의해야 시작할 수 있어요.</p>
+  <p>이 도구는 성인이 자기 컴퓨터에서 쓰도록 만들어졌고, 성인 콘텐츠를 제한하는 필터를 두지 않아요. 아래 내용을 한 번만 안내해요.</p>
   <ul>
     <li>저는 성인이며, 만들거나 편집하는 인물은 모두 성인이거나 성인으로 설정한 가상의 인물이에요.</li>
     <li>실존 인물의 사진은 본인의 동의가 있을 때만 편집해요. 동의 없는 노출·성적 합성물을 만들거나 퍼뜨리는 일은 불법이에요.</li>
     <li>미성년자와 관련된 성적 콘텐츠는 만들지 않아요. 이런 요청은 자동으로 차단돼요.</li>
   </ul>
-  <label class="chk"><input type="checkbox" id="ackc"> 위 내용에 동의합니다</label>
-  <p style="text-align:right;margin-bottom:0"><button class="go" id="ackb" disabled>시작하기</button></p>
+  <p style="text-align:right;margin-bottom:0"><button class="go" id="ackb">확인하고 시작하기</button></p>
 </form></dialog>
 
 <script src="/app.js"></script>

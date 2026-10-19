@@ -27,9 +27,9 @@ const T={
  sdMain:()=>`<div class="row"><label class="f">체크포인트<select name="ckpt"></select></label><label class="f">프로필<select name="profile"></select></label></div><p class="hint prof-note"></p>`,
  sdSampling:()=>`<div class="row"><label class="f">VAE<select name="vae"></select></label><label class="f">CLIP skip<input type="number" name="clip_skip" value="2" min="1" max="12"></label></div>
   <div class="row"><label class="f">샘플러<select name="sampler" data-def="euler_ancestral"></select></label><label class="f">스케줄러<select name="scheduler" data-def="normal"></select></label></div>
-  <div class="row"><label class="f">단계 수<input type="number" name="steps" value="28" min="1" max="150"></label><label class="f">CFG<input type="number" name="cfg" value="5.5" step="0.5" min="0" max="30"></label></div>
+  <div class="row"><label class="f">단계 수<input type="number" name="steps" value="28" min="1" max="150"></label><label class="f">CFG<input type="number" name="cfg" value="5.5" step="0.1" min="0" max="30"></label></div>
   <label class="chk"><input type="checkbox" name="vpred"> V-Prediction 모델 (NoobAI Vpred 등)</label>
-  <div class="row"><label class="f">CFG 재조정 (0=끔)<input type="number" name="rescale" value="0" step="0.05" min="0" max="1"></label><label class="f">PAG 강도 (0=끔)<input type="number" name="pag" value="0" step="0.5" min="0" max="10"></label></div>
+  <div class="row"><label class="f">CFG 재조정 (0=끔)<input type="number" name="rescale" value="0" step="0.01" min="0" max="1"></label><label class="f">PAG 강도 (0=끔)<input type="number" name="pag" value="0" step="0.1" min="0" max="10"></label></div>
 `,
  cnEasy:()=>`<div class="cn-easy"><b>쉬운 모드 — 사진에서 포즈·윤곽·깊이 뽑기</b>
   <p class="hint plain">① 따라 하고 싶은 사진을 고르고 ② 뽑을 종류를 정해 [추출]을 눌러요. ③ 아래에 나온 지도가 마음에 들면 프롬프트만 적고 생성하세요. <b>포즈</b>를 고르면 사진 속 사람과 같은 자세로 새 인물을 그려요. (모델·강도는 자동으로 맞춰 줘요)</p>
@@ -49,12 +49,12 @@ T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
  <div class="re-fx">
   <label class="f">모델 파일<select name="fx_model"></select></label>
   <div class="row"><label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
-   <label class="f re-g">가이던스(FLUX)<input type="number" name="fx_guidance" value="3.5" step="0.5" min="0" max="20"></label>
-   <label class="f re-c">CFG(Chroma·Krea 2)<input type="number" name="fx_cfg" value="1" step="0.5" min="0" max="20"></label></div>
+   <label class="f re-g">가이던스(FLUX)<input type="number" name="fx_guidance" value="3.5" step="0.1" min="0" max="20"></label>
+   <label class="f re-c">CFG(Chroma·Krea 2)<input type="number" name="fx_cfg" value="1" step="0.1" min="0" max="20"></label></div>
   <div class="row"><label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label><label class="f">스케줄러<select name="fx_scheduler" data-def="simple"></select></label></div>
   </div>
  <div class="re-sd">${T.sdMain()}</div>
- <div class="row"><label class="f">변화 강도<input type="number" name="rdenoise" value="0.3" step="0.05" min="0.05" max="0.8"></label><label class="f">타일 크기(px)<select name="tile"><option>768</option><option selected>1024</option><option>1280</option></select></label></div>
+ <div class="row"><label class="f">변화 강도<input type="number" name="rdenoise" value="0.3" step="0.01" min="0.05" max="0.8"></label><label class="f">타일 크기(px)<select name="tile"><option>768</option><option selected>1024</option><option>1280</option></select></label></div>
  <label class="f">타일 겹침(px)<input type="number" name="overlap" value="128" min="32" max="512"></label>
  <details class="re-sd"><summary>샘플링 (고급)</summary>${T.sdSampling()}</details>
  <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
@@ -65,8 +65,8 @@ T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
 $$('[data-blk]').forEach(e=>{e.innerHTML=T[e.dataset.blk.replace(/-(\w)/g,(_,c)=>c.toUpperCase())]()});
 
 /* ══════════ LoRA 줄 (개수 제한 없이 추가/삭제) ══════════ */
-const LKIND={character:['👤','캐릭터'],style:['🎨','스타일'],background:['🏞','배경·풍경'],other:['✦','기타'],unknown:['','미분류']};
-const lkIcon=n=>{const k=(LISTS.lora_kind||{})[n];return k&&LKIND[k]&&LKIND[k][0]?LKIND[k][0]+' ':''};
+const LKIND={character:['','캐릭터'],style:['','스타일'],background:['','배경·풍경'],other:['','기타'],unknown:['','미분류']};
+const lkIcon=n=>{const k=(LISTS.lora_kind||{})[n];return k&&k!=='unknown'&&LKIND[k]?'['+LKIND[k][1]+'] ':''};
 const LFAM={sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image-Edit',sd3:'SD3.5',hidream:'HiDream',lumina:'Lumina 2',unknown:'판별 불가'};
 /* 지금 이 폼이 쓰려는 모델의 계열 (LoRA 가 맞는지 비교하는 기준) */
 function formFam(f){
@@ -111,7 +111,7 @@ function refreshLoras(f){$$('.lora-row select',f).forEach(s=>loraOptions(s,s.val
 function addLora(box,name,w){
   const i=(+box.dataset.n||0)+1;box.dataset.n=i;
   const row=document.createElement('div');row.className='lora-row';
-  row.innerHTML=`<label class="f"><span class="lt">LoRA ${i}</span><select name="lora${i}"></select></label><label class="f"><span class="lt">강도</span><input type="number" name="lora${i}_w" value="${w??0.8}" step="0.05" min="-2" max="3"></label><button type="button" class="x" title="이 LoRA 줄 지우기" aria-label="LoRA ${i} 줄 지우기">×</button>`;
+  row.innerHTML=`<label class="f"><span class="lt">LoRA ${i}</span><select name="lora${i}"></select></label><label class="f"><span class="lt">강도</span><input type="number" name="lora${i}_w" value="${w??0.8}" step="0.01" min="-2" max="3"></label><button type="button" class="x" title="이 LoRA 줄 지우기" aria-label="LoRA ${i} 줄 지우기">×</button>`;
   box.append(row);loraOptions($('select',row),name);addTips(row);return row;
 }
 function setLoras(f,o){
@@ -445,7 +445,8 @@ function applyFields(f,o){
 /* ControlNet 모델 목록: FLUX 계열을 고르면 이름에 FLUX 가 든 모델만, 그 밖에는 FLUX 용을 뺀 것만 보여 줘요 */
 function cnFilter(f){const s=f.elements.cn_model;if(!s)return;
   if(f.elements.gengine&&f.elements.gengine.value==='krea2'){      // Krea 2 는 ControlNet 대신 컨트롤 LoRA(loras 폴더)를 써요
-    const arr=LISTS.k2control||[],cur=s.value;s.dataset.k2='1';
+    const arr=LISTS.k2control||[],cur=s.value;if(!s.dataset.k2){const st=f.elements.cn_strength;if(st&&+st.value===0.7)st.value='1'}   // Krea 2 컨트롤 LoRA 는 1.0 이 기본이에요
+    s.dataset.k2='1';
     s.innerHTML='<option value="">사용 안 함</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');if(arr.includes(cur))s.value=cur;
     const t=$('.cn-fam',f),box=$('.cn-easy',f);if(!t)return;t.hidden=false;
     t.innerHTML=(arr.length?'':`Krea 2 컨트롤 LoRA 가 아직 없어요. <button type="button" class="ghost" data-k2dl>Krea 2 깊이 컨트롤 LoRA 받기 (약 0.9GB)</button> <a href="#" data-go="setup">설치와 모델</a>에서도 받을 수 있어요.`)

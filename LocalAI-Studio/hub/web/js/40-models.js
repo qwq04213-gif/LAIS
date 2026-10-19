@@ -224,7 +224,7 @@ if(!localStorage.ack){
   (async()=>{let done=false;try{done=!!(await api('/api/prefs')).ack}catch{}
    if(done){try{localStorage.ack='1'}catch{}return}
    const d=$('#ack');d.showModal();d.oncancel=e=>e.preventDefault();
-   $('#ackc').onchange=e=>{$('#ackb').disabled=!e.target.checked};
+   
    $('#ackb').onclick=()=>{try{localStorage.ack='1'}catch{}api('/api/prefs',{ack:true}).catch(()=>{})}})();
 }
 

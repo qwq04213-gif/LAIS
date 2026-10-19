@@ -312,8 +312,8 @@ def open_folder(p, select=None):
 MINOR = re.compile(r"loli|shota|underage|under-age|pre-?teen|toddler|infant|\bminors?\b|\bchild(?:ren)?\b|\bkids?\b|"
                    r"\bteen(?:age[rd]?)?s?\b|little (?:girl|boy)|school ?(?:girl|boy)|"
                    r"미성년|어린이|초등학생|중학생|고등학생|여고생|남고생|초딩|중딩|로리|쇼타", re.I)
-SEX = re.compile(r"nsfw|nude|naked|nipple|topless|porn|\bsex|erotic|explicit|lewd|genital|bdsm|hentai|"
-                 r"누드|알몸|노출|야한|야동|섹스|성관계|성행위|젖꼭지|음란|에로|포르노", re.I)
+SEX = re.compile(r"nsfw|\bnude|naked|nipple|topless|porn|\bsex(?:ual|y)?\b|erotic|\blewd|genital|bdsm|hentai|"
+                 r"누드|알몸|야한|야동|섹스|성관계|성행위|젖꼭지|음란|에로|포르노|전라|가슴 ?노출|성기 ?노출", re.I)   # '노출'(사진 노출)·'explicit' 같은 평범한 말은 뺐어요
 AGE = re.compile(r"\b(\d{1,2})\s*[- ]?(?:years?|yrs?|yo|y/o)\b|(\d{1,2})\s*(?:살|세)", re.I)
 
 
@@ -1424,12 +1424,12 @@ def feat_detailer(p, J):
     fam, p2 = fx_sel(p)
     if fam:      # FLUX.1 · Krea · Krea 2 · Chroma 모델로 다시 그리기 (단계 수·CFG 는 그 모델에 맞는 값)
         fq = flux_q(p2, J, fam, passes[0][1], [], seed_of(p))
-        fq["denoise"] = clamp(num(p, "denoise", 0.4), 0.1, 0.8)
+        fq["denoise"] = clamp(num(p, "denoise", 0.5), 0.1, 0.8)
         J["msg"] = "얼굴·손 찾아서 다시 그리는 중"
         g = flows.wf_detailer_flux(fq, put_input(img, J), passes, fill_node)
         res = run_wf(g, J)[0]
         return [(res, flux_info(fq, res, "feat-detailer", Detailer=" + ".join(d for d, _ in passes), Denoise=fq["denoise"]), g)]
-    q = sd(dict(p, denoise=clamp(num(p, "denoise", 0.4), 0.1, 0.8)), passes[0][1], [], J)
+    q = sd(dict(p, denoise=clamp(num(p, "denoise", 0.5), 0.1, 0.8)), passes[0][1], [], J)
     q["seed"] = seed_of(p)
     J["msg"] = "얼굴·손 찾아서 다시 그리는 중"
     g = flows.wf_detailer(q, put_input(img, J), passes, fill_node)
@@ -1511,9 +1511,7 @@ def swap_download():
 
 
 def feat_faceswap(p, J):
-    """얼굴 교체(ReActor). 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요. 동의 확인 없이는 실행하지 않아요."""
-    if not p.get("consent"):
-        raise ValueError("얼굴 교체는 아래 [확인] 칸에 체크해야 쓸 수 있어요. 본인이거나 허락받은 사람, 또는 성인 가상 인물의 사진만 쓰세요.")
+    """얼굴 교체(ReActor). 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요. (본인·허락받은 성인·성인 가상 인물만: 처음 시작할 때 안내)"""
     if not p.get("image") or not p.get("source"):
         raise ValueError("얼굴을 바꿀 사진과, 가져올 얼굴 사진을 둘 다 올려 주세요.")
     if mods_missing(REACTOR_MODS):      # 설치 때 pip 가 조용히 실패한 부품(예: onnx)이 있으면 지금 채워 넣어요
@@ -1565,7 +1563,7 @@ def feat_reference_fx(p, p2, fam, ref, mode, J):
     w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
     rng = random.Random(num(p, "seed", -1, int))
     text, tags = prep(p2, J, "caption", rng)
-    weight = clamp(num(p, "weight", 0.7), 0.1, 1.5)
+    weight = clamp(num(p, "weight", 1.0), 0.1, 2.0)
     name = put_input(ref, J)
     if fam == "krea2":
         for n in ("TextEncodeQwenImageEditPlus", "FluxKontextMultiReferenceLatentMethod", "ModelSamplingFlux"):
@@ -1631,7 +1629,7 @@ def feat_ipadapter(p, J):
     preset = preset or (presets[0] if presets else ("PLUS FACE (portraits)" if mode == "face" else "PLUS (high strength)"))
     wts = combo_opts("IPAdapter", "weight_type")
     wtype = "style transfer" if mode == "style" and "style transfer" in wts else ("linear" if "linear" in wts or not wts else wts[0])
-    weight = clamp(num(p, "weight", 0.7), 0.1, 1.5)
+    weight = clamp(num(p, "weight", 1.0), 0.1, 2.0)
     w, h = (clamp(num(p, k, 1024, int) // 8 * 8, 256, 2048) for k in ("w", "h"))
     rng = random.Random(num(p, "seed", -1, int))
     q = sd(p, *prep(p, J, "tags", rng), J)
@@ -2424,8 +2422,6 @@ def do_tts_model(p, J, engine, text, speed):
     if p.get("ref"):
         if not meta["clone"]:
             raise ValueError("이 모델은 목소리 따라 하기를 지원하지 않아요.")
-        if not p.get("clone_ok"):
-            raise ValueError("목소리 샘플을 쓰려면 '이 목소리의 주인은 본인이거나 사용을 허락했어요' 칸에 체크해 주세요.")
         if not re.fullmatch(r"[0-9a-f]{12}", str(p["ref"])):
             raise ValueError("목소리 샘플 정보가 올바르지 않아요. 다시 올려 주세요.")
         ref = TTS_DIR / "ref" / (str(p["ref"]) + ".wav")
@@ -2700,6 +2696,13 @@ def job_thread(J, p):
                 J["images"].append("/out/" + urllib.parse.quote(sub) + "/" + name)
                 J.setdefault("used", []).append(info.get("prompt", ""))
                 continue
+            if p["kind"] == "gen" and not p.get("init"):      # 모델은 8·16 배수 크기로만 그려서, 입력한 정확한 크기와 조금 다르면 그 크기로 맞춰 저장해요
+                try:
+                    rw, rh = int(float(p.get("w"))), int(float(p.get("h")))
+                    if (rw, rh) != im.size and 64 <= rw <= 4096 and 64 <= rh <= 4096 and abs(rw - im.width) <= 32 and abs(rh - im.height) <= 32:
+                        im = im.resize((rw, rh), RS.LANCZOS)
+                except (TypeError, ValueError):
+                    pass
             name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"]}-{i}.png'
             im.save(OUT / sub / name, "PNG", pnginfo=meta.pnginfo(info, graph) if embed else None)
             J["images"].append("/out/" + urllib.parse.quote(sub) + "/" + name)

@@ -472,6 +472,7 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 :root[data-accent=green]{--acc:#7fd6a0;--acc-tx:#0f1f16}:root[data-accent=orange]{--acc:#f5a85a;--acc-tx:#241606}:root[data-accent=pink]{--acc:#f58ab8;--acc-tx:#2a0f1b}:root[data-accent=teal]{--acc:#5cd4d9;--acc-tx:#06201f}
 :root[data-theme=light][data-accent=green]{--acc:#1f8a4c;--acc-tx:#fff}:root[data-theme=light][data-accent=orange]{--acc:#c46a0c;--acc-tx:#fff}:root[data-theme=light][data-accent=pink]{--acc:#c92f78;--acc-tx:#fff}:root[data-theme=light][data-accent=teal]{--acc:#0f8a90;--acc-tx:#fff}
 :root[data-motion=off] *,:root[data-motion=off] *::before,:root[data-motion=off] *::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+:root[data-motion=off] .spin{animation:spin 2.4s linear infinite!important}
 :root[data-hints=off] .view .hint.plain:not(.note){display:none}
 .bub{font-size:calc(1em*var(--chatfs,1))}
 .galgrid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--galmin,190)*1px),1fr))}
@@ -554,3 +555,5 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 .trow{display:flex;justify-content:space-between;align-items:center;gap:10px}.trow b{min-width:0;overflow-wrap:anywhere}.trow.tall{padding:6px 0 10px;border-bottom:1px solid var(--line)}
 .task.cancelled span{color:var(--mute)}
 @media(max-width:760px){.cfgview .cs{grid-template-columns:1fr}.cfgview .cs-nav{flex-direction:row;overflow:auto;position:static}.cfgview .cs-nav button{white-space:nowrap}}
+
+.mfam{margin:14px 0 6px;padding:4px 0;border-bottom:1px solid var(--line);font-size:calc(14px*var(--ui,1));grid-column:1/-1}.mfam small{color:var(--mute);font-weight:400}

@@ -144,7 +144,7 @@ def wf_detailer(q, img, passes, fill):
         p2 = [w.add("CLIPTextEncode", text=text, clip=w.clip), 0]
         bd = w.add("UltralyticsDetectorProvider", model_name=det)
         ins = fill("FaceDetailer", dict(image=cur, model=model, clip=w.clip, vae=vae, positive=p2, negative=neg,
-                                        bbox_detector=[bd, 0], seed=q["seed"], steps=q["steps"], cfg=q["cfg"],
+                                        bbox_detector=[bd, 0], guide_size=768, max_size=1280, seed=q["seed"], steps=q["steps"], cfg=q["cfg"],
                                         sampler_name=q["sampler"], scheduler=q["scheduler"], denoise=q["denoise"],
                                         wildcard=""))
         cur = [w.add("FaceDetailer", **ins), 0]
@@ -254,7 +254,7 @@ def wf_detailer_flux(q, img, passes, fill):
         pos, neg = flux_cond(w, q, text)
         bd = w.add("UltralyticsDetectorProvider", model_name=det)
         ins = fill("FaceDetailer", dict(image=cur, model=model, clip=w.clip, vae=vae, positive=pos, negative=neg,
-                                        bbox_detector=[bd, 0], seed=q["seed"], steps=q["steps"], cfg=q["cfg"],
+                                        bbox_detector=[bd, 0], guide_size=768, max_size=1280, seed=q["seed"], steps=q["steps"], cfg=q["cfg"],
                                         sampler_name=q["sampler"], scheduler=q["scheduler"], denoise=q["denoise"], wildcard=""))
         cur = [w.add("FaceDetailer", **ins), 0]
     w.add("PreviewImage", images=cur)

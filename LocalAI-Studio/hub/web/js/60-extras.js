@@ -342,7 +342,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
 
 /* ══════════ 음성 만들기 ══════════ */
 (()=>{const f=$('#f-tts');if(!f)return;let V=null,M=[],poll=null;
- const save=()=>ls.set('form:f-tts',formVals(f,['ref','license_ok','clone_ok'])),vsel=$('#tt-voice'),eng=()=>f.elements.engine.value,isM=()=>['xtts','chatterbox','kokoro'].includes(eng());
+ const save=()=>ls.set('form:f-tts',formVals(f,['ref','clone_ok'])),vsel=$('#tt-voice'),eng=()=>f.elements.engine.value,isM=()=>['xtts','chatterbox','kokoro'].includes(eng());
  const mi=()=>M.find(x=>x.id===eng());
  const fillMain=()=>{if(!V)return;const e=eng()==='edge';
   vsel.innerHTML=(e?V.edge.map(x=>`<option value="${esc(x.name)}">${esc(x.label)}</option>`):V.sapi.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} (${esc(x.culture)})</option>`)).join('')||'<option value="">(없음)</option>';
@@ -380,8 +380,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
  $('#tt-ref-clear').onclick=()=>{$('#tt-ref').value='';$('#tt-ref-file').value='';$('#tt-ref-clear').hidden=true;$('#tt-clone-ok-row').hidden=true;f.elements.clone_ok.checked=false};
  f.onsubmit=e=>{e.preventDefault();if(!f.elements.text.value.trim())return setBar($('#v-tts'),'읽을 글을 적어 주세요.','bad');
   if(isM()){const m=mi();if(!m||!m.installed)return setBar($('#v-tts'),'먼저 위의 [이 모델 설치]를 눌러 주세요.','bad');
-   if(m.need_license&&!f.elements.license_ok.checked)return setBar($('#v-tts'),'모델 사용 조건 확인 칸에 체크해 주세요.','bad');
-   if($('#tt-ref').value&&!f.elements.clone_ok.checked)return setBar($('#v-tts'),'목소리 샘플 사용 확인 칸에 체크해 주세요.','bad')}
+   if(m.need_license&&!f.elements.license_ok.checked)return setBar($('#v-tts'),'모델 사용 조건 확인 칸에 체크해 주세요.','bad');}
   save();run('tts',f)};
  window.ttsLoad=load;{const io=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting))load()});io.observe($('#v-tts'))}})();      // 음성 화면을 열 때마다 목록을 불러와요(시작할 때는 안 불러요)
 
