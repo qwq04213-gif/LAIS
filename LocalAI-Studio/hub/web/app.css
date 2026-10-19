@@ -557,4 +557,3 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 @media(max-width:760px){.cfgview .cs{grid-template-columns:1fr}.cfgview .cs-nav{flex-direction:row;overflow:auto;position:static}.cfgview .cs-nav button{white-space:nowrap}}
 
 .mfam{margin:14px 0 6px;padding:4px 0;border-bottom:1px solid var(--line);font-size:calc(14px*var(--ui,1));grid-column:1/-1}.mfam small{color:var(--mute);font-weight:400}
-#mi-models{margin:8px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}#mi-models .on{border-color:var(--acc);color:var(--tx);font-weight:600}

@@ -951,8 +951,7 @@
 </div></div>
 <div class="cpane" id="fold-minfo"><div class="card"><h3>LoRA · 모델 정보</h3>
     <p class="hint plain">설치된 LoRA와 모델이 어느 계열용인지, 파일 안에 적힌 트리거 단어·자주 쓰인 태그가 무엇인지 보여 줘요. LoRA 파일 옆에 같은 이름의 그림 파일(예: 이름.preview.png)이 있으면 미리보기로 써요. 이미지 생성·편집 화면에서 LoRA를 고르면 같은 정보가 칸 아래에 나오고, 단어를 누르면 프롬프트에 들어가요.</p>
-    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">캐릭터</option><option value="style">스타일</option><option value="background">배경·풍경</option><option value="other">기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
-    <div id="mi-models" class="mchips" hidden></div>
+    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-fam" title="모델 종류별로 보기"><option value="">모든 모델 종류</option><option value="sd15,sdxl">SD1.5 · SDXL · Illustrious · Pony 계열</option><option value="flux">FLUX.1 · Krea 계열</option><option value="chroma">Chroma</option><option value="krea2">Krea 2</option><option value="sd3">Stable Diffusion 3.5</option><option value="hidream">HiDream</option><option value="lumina">Lumina 2</option><option value="qwen">Qwen-Image-Edit</option><option value="unknown">판별 불가</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">캐릭터</option><option value="style">스타일</option><option value="background">배경·풍경</option><option value="other">기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
     <div id="mi-list"></div>
   
 </div></div>

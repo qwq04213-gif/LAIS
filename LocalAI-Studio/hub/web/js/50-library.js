@@ -252,23 +252,18 @@ $('#app-go').onclick=async()=>{if(!APP_PLAN)return;
 /* ══════════ LoRA · 모델 정보 ══════════ */
 document.addEventListener('click',e=>{const c=e.target.closest('.lt-chip');if(!c)return;const f=c.closest('form'),t=f&&f.elements.prompt;if(!t)return;
   const cur=t.value.trim();t.value=cur?cur.replace(/[\s,]+$/,'')+', '+c.dataset.t:c.dataset.t;t.dispatchEvent(new Event('input',{bubbles:true}));toast(`'${c.dataset.t}' 을(를) 넣었어요.`)});
-let MI=[],MIM='';
-$('#mi-models').addEventListener('click',e=>{const b=e.target.closest('[data-mm]');if(!b)return;MIM=b.dataset.mm;miRender()});
+let MI=[];
 async function miLoad(force,silent){const kind=$('#mi-kind').value;if(!silent)$('#mi-list').innerHTML='<p class="mute">읽는 중…</p>';
   if(force)await loraCards(true);
   try{MI=(await api('/api/models/cards?kind='+kind)).items}catch{MI=[]}
-  if(kind==='loras'){LISTS.lora_kind=Object.fromEntries(MI.map(c=>[c.name,c.kind]));LCARD={t:Date.now(),m:Object.fromEntries(MI.map(c=>[c.name,c]))}}
+  if(kind==='loras'){LISTS.lora_kind=Object.fromEntries(MI.map(c=>[c.name,c.kind]));LISTS.lora_info=Object.fromEntries(MI.map(c=>[c.name,c.family]));LCARD={t:Date.now(),m:Object.fromEntries(MI.map(c=>[c.name,c]))}}
   miRender()}
 const kindBadge=c=>{const k=LKIND[c.kind]||LKIND.unknown;return c.kind==='unknown'?`<span class="badge kind k-unknown" title="종류를 아직 모르겠어요. 아래 ‘설정’에서 직접 골라 주세요.">미분류</span>`:`<span class="badge kind k-${c.kind}" title="${c.kind_set?'내가 고른 종류':'이름·태그로 추정한 종류 — 틀리면 ‘설정’에서 바꿔 주세요'}">${k[1]}${c.kind_set?'':' <i>추정</i>'}</span>`};
 function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('#mi-kind').value,kf=$('#mi-filter').value;
   $('#mi-filter').hidden=kind!=='loras';
-  {const box=$('#mi-models');box.hidden=kind!=='loras';
-   if(kind==='loras'){const ms=Object.entries(LISTS.families||{}).filter(([k,v])=>v&&v.family&&v.family!=='hidden'&&v.family!=='unknown').map(([k,v])=>[k,v.family]);
-    if(MIM&&!ms.some(m=>m[0]===MIM))MIM='';
-    box.innerHTML='<span class="mute">모델별로 보기</span> <button type="button" class="ghost sm'+(MIM?'':' on')+'" data-mm="">전체</button>'+ms.map(([k,f])=>`<button type="button" class="ghost sm${k===MIM?' on':''}" data-mm="${esc(k)}" title="${esc(LFAM[f]||f)}용 LoRA 만 보여요">${esc(k.replace(/^[^/]+\//,'').replace(/\.(safetensors|ckpt|gguf)$/i,''))}</button>`).join('')
-     +(MIM?`<span class="mute"> · ${esc(LFAM[MFAM]||MFAM)}용 LoRA 만 보고 있어요. 계열을 모르는 LoRA 는 '전체'에서 계열을 지정해 주세요.</span>`:'')}}
-  const MFAM=MIM?((LISTS.families||{})[MIM]||{}).family:'';
-  const list=MI.filter(c=>(kind!=='loras'||!MIM||c.family===MFAM)&&(!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.user_trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q))&&(kind!=='loras'||kf==='all'||c.kind===kf));
+  $('#mi-fam').hidden=kind!=='loras';
+  const mf=$('#mi-fam').value,MFS=mf?mf.split(','):null;
+  const list=MI.filter(c=>(kind!=='loras'||!MFS||MFS.includes(c.family))&&(!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.user_trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q))&&(kind!=='loras'||kf==='all'||c.kind===kf));
   const famOf=c=>LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),grp=false,
     lst=grp?[...list].sort((a,b)=>famOf(a).localeCompare(famOf(b),'ko')||a.name.localeCompare(b.name)):list,cnt={};lst.forEach(c=>cnt[famOf(c)]=(cnt[famOf(c)]||0)+1);let lastFam=null;
   $('#mi-list').innerHTML=lst.length?lst.map(c=>{const fam=LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),L=kind==='loras',
@@ -317,7 +312,7 @@ $('#mi-list').addEventListener('click',async e=>{
   const b=e.target.closest('[data-copy]');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.copy);toast(`'${b.dataset.copy}' 을(를) 복사했어요.`)}catch{toast('복사하지 못했어요.')}});
 $('#mi-list').addEventListener('change',async e=>{const s=e.target.closest('select[data-act=kind]');if(s)await miSaveUser(s.dataset.n,{kind:s.value});const f=e.target.closest('select[data-act=family]');if(f)await miSaveUser(f.dataset.n,{family:f.value})});
 $('#mi-list').addEventListener('keydown',e=>{const i=e.target.closest('input[data-addtr]');if(i&&e.key==='Enter'){e.preventDefault();i.parentElement.querySelector('[data-act=addtr]').click()}});
-$('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-filter').onchange=miRender;$('#mi-reload').onclick=()=>miLoad(true);
+$('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-filter').onchange=$('#mi-fam').onchange=miRender;$('#mi-reload').onclick=()=>miLoad(true);
 $('#fold-minfo').addEventListener('paneopen',()=>{if(!MI.length)miLoad()});
 /* ══════════ 설정 백업 · 복원 ══════════ */
 let BK=null;
