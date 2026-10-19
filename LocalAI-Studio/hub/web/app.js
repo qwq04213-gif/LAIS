@@ -188,7 +188,7 @@ const TIPS={
  fx_sampler:'그림을 그려 나가는 방식이에요. FLUX 계열은 euler가 가장 무난해요.',
  fx_scheduler:'노이즈를 줄이는 속도 배분이에요. FLUX·Krea·Krea 2는 simple, Chroma는 beta를 추천해요.',
  upm:'확대에 쓸 모델이에요. Real-ESRGAN은 실사·일반 이미지, UltraSharp 계열은 선명한 그림에 잘 맞아요.',
- scale:'가로세로를 몇 배로 키울지예요. 4배는 결과 파일이 매우 커질 수 있어요.',
+ scale:'가로세로를 몇 배로 키울지예요. 소수도 돼요(1.5, 2.5). 1보다 작으면 줄여요(0.5 = 절반). 4배 이상은 결과 파일이 매우 커질 수 있어요.',
  tileprompt:'큰 이미지를 조각(타일)으로 나눠 다시 그리는데, 조각마다 "얼굴, 눈" 같은 프롬프트를 넣으면 배경 조각에도 눈·얼굴을 그려 넣어요. 추천 설정은 일반 고화질 지시만 쓰고, 내 프롬프트의 LoRA 태그만 살려요.',
  rdenoise:'확대 뒤 다시 그릴 정도예요. 0.25~0.35가 무난하고(실사는 0.15~0.25), 높이면 디테일이 늘지만 모양이 바뀌고 배경에 눈·얼굴이 생길 수 있어요. Qwen-Image-Edit 은 0.3~0.5가 무난해요.',
  tile:'큰 이미지를 이 크기의 조각으로 나눠 한 장씩 다시 그려요. VRAM이 부족하면 줄이세요.',
@@ -959,6 +959,7 @@ async function vmixOpen(o={}){show('vmix');await VM.p;const f=$('#f-vmix');
   f.onsubmit=e=>{e.preventDefault();if(!f.video.value)return need(f,'영상을 골라 주세요.');if(!f.audio.value&&!f.subs.value.trim())return need(f,'넣을 소리나 자막을 하나 이상 골라 주세요.');
     run('vmix',f,{fade:f.fade.checked,sub_outline:f.sub_outline.checked,sub_bg:f.sub_bg.checked,save_srt:f.save_srt.checked})};
 })();
+document.addEventListener('click',e=>{const b=e.target.closest('.scalechips button[data-sc]');if(!b)return;const f=b.closest('form,.bt-opts');const i=f&&f.querySelector('input[name=scale]');if(!i)return;i.value=b.dataset.sc;i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}))});
 document.addEventListener('click',e=>{const b=e.target.closest('.seed-rand,.seed-pick');if(!b)return;const i=b.parentElement.querySelector('input');
   i.value=b.classList.contains('seed-rand')?-1:Math.floor(Math.random()*2147483647);i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}))});
 $('.exprs').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const f=$('#f-edit'),sd=f.engine.value==='sdxl'||(f.engine.value==='flux'&&!/kontext/i.test(f.fx_model.value));
@@ -1225,7 +1226,7 @@ const fieldHTML=f=>{
   if(f.type==='select')return `<label class="f">${esc(f.label)}<select name="${n}">${f.options.map(([v,t])=>`<option value="${esc(v)}"${v===f.default?' selected':''}>${esc(t)}</option>`).join('')}</select>${hint}</label>`;
   if(f.type==='list'&&f.list==='models'){
     const o=(arr,pre)=>arr.map(x=>`<option value="${esc(pre+x)}">${esc(fxLabel(x))}</option>`).join('');
-    const gs=[['SD·SDXL 체크포인트',LISTS.checkpoints||[],''],['FLUX·Krea(FLUX.1)',LISTS.fluxmodels||[],'fx:flux:'],['Krea 2',LISTS.krea2models||[],'fx:krea2:'],['Chroma',LISTS.chromamodels||[],'fx:chroma:']].filter(g=>g[1].length);
+    const gs=[['SD·SDXL 체크포인트',LISTS.checkpoints||[],''],['FLUX·Krea(FLUX.1)',LISTS.fluxmodels||[],'fx:flux:'],['Krea 2',LISTS.krea2models||[],'fx:krea2:'],['Chroma',LISTS.chromamodels||[],'fx:chroma:']].filter(g=>g[1].length&&!(f.exclude||[]).some(x=>g[2].startsWith('fx:'+x+':')));
     return `<label class="f">${esc(f.label)}<select name="${n}">${gs.length?gs.map(g=>`<optgroup label="${g[0]}">${o(g[1],g[2])}</optgroup>`).join(''):'<option value="">(없음)</option>'}</select>${hint}</label>`}
   if(f.type==='list'){const arr=LISTS[f.list]||[];return `<label class="f">${esc(f.label)}<select name="${n}">${arr.length?arr.map(x=>`<option>${esc(x)}</option>`).join(''):'<option value="">(없음)</option>'}</select></label>`}
   return '';
@@ -1239,7 +1240,7 @@ function featForm(id,keep){
   const main=f.fields.filter(x=>!x.advanced),adv=f.fields.filter(x=>x.advanced);
   $('#feat-form').innerHTML=`<h3>${esc(f.title)}</h3><p class="hint plain">${esc(f.summary)}</p>
     <ol class="steps">${f.steps.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>
-    ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?'아래 <b>[설치]</b> 버튼으로 확장을 설치하세요.':'<a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.'}</p>`:''}
+    ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?'아래 <b>[설치]</b> 버튼으로 확장을 설치하세요.':'<a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.'}${(f.missing_nodes||[]).length&&f.needs&&f.needs.alt?' '+esc(f.needs.alt):''}</p>`:''}
     ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?`<div class="warn feat-nodes"><b>필요한 확장:</b> ${esc(f.needs.pack)}<div class="fn-list mute">설치할 수 있는 곳을 찾는 중…</div></div>`:''}
     ${id==='faceswap'&&!(f.missing_nodes||[]).length?'<div class="swapm" id="swapm"></div>':''}
     <button class="go">만들기</button>
@@ -1303,7 +1304,7 @@ async function refreshModels(){
   b.forEach(x=>x.disabled=false)}
 document.addEventListener('click',e=>{if(e.target.closest('.refresh-models,#refresh-models,#refresh-models2'))refreshModels()});
 const fmtSize=b=>b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(0)+' MB';
-const DIRN={checkpoints:'체크포인트',loras:'LoRA',embeddings:'임베딩',controlnet:'ControlNet',vae:'VAE',upscale_models:'업스케일',diffusion_models:'디퓨전 모델',text_encoders:'텍스트 인코더',clip_vision:'CLIP Vision',unet:'UNet',clip:'CLIP'};
+const DIRN={checkpoints:'체크포인트',loras:'LoRA',embeddings:'임베딩',controlnet:'ControlNet',vae:'VAE',upscale_models:'업스케일',diffusion_models:'디퓨전 모델',text_encoders:'텍스트 인코더',clip_vision:'CLIP Vision',style_models:'스타일 모델',unet:'UNet',clip:'CLIP'};
 async function loadManage(){
   let m;try{m=await api('/api/manage')}catch{return}
   const FAMN={auto:'자동',sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen',sd3:'SD3.5',hidream:'HiDream',lumina:'Lumina 2',hidden:'목록에서 숨김'};
@@ -1943,7 +1944,7 @@ const GOALS=[
   steps:['이미지 생성 탭에서 모델을 고르세요(처음이면 프로필은 \'자동\').','프롬프트에 그리고 싶은 장면을 적어요. 모델 종류에 따라 태그형(쉼표로 구분)이나 문장형으로 써요.','[이미지 생성]을 누르면 아래에 결과가 나와요. 마음에 들면 시드를 고정해 조금씩 바꿔 보세요.']},
  {t:'사진 속 일부만 바꾸고 싶어요',d:'옷·머리색·표정처럼 바꿀 곳만 골라서 다시 그려요.',go:'edit',need:()=>LISTS.checkpoints.length||fxAny()||LISTS.qwen,why:'이미지 모델이 필요해요',
   steps:['이미지 편집 탭에 사진을 올려요.','[선택 도구]로 바꿀 곳(얼굴, 머리, 옷 등)을 클릭해 고르거나 직접 칠해요.','바뀔 모습을 적고 [편집 실행]을 눌러요. 크게 보며 고르려면 [크게 보며 선택]을 써요.']},
- {t:'사진을 크고 선명하게 만들고 싶어요',d:'해상도를 2~4배로 키워요.',go:'up',need:()=>LISTS.upscalers.length,why:'업스케일 모델(Real-ESRGAN)이 필요해요',
+ {t:'사진을 크고 선명하게 만들고 싶어요',d:'원하는 배율로 키우거나(1.5배, 2배 …) 줄일 수도 있어요.',go:'up',need:()=>LISTS.upscalers.length,why:'업스케일 모델(Real-ESRGAN)이 필요해요',
   steps:['업스케일 탭에 사진을 올려요.','빠르게는 [빠른 업스케일], 질감을 더 살리려면 [디테일 재생성]을 골라요.','배율을 정하고 [업스케일 실행]. 결과는 [겹쳐서 비교]로 원본과 견줘 볼 수 있어요.']},
  {t:'그림을 영상으로 움직이고 싶어요',d:'글이나 시작 이미지로 몇 초짜리 영상을 만들어요.',go:'vid',need:()=>LISTS.wan_ready&&(LISTS.wanmodels||[]).length,why:'Wan 2.2 영상 모델이 필요해요(설치와 모델 탭)',
   steps:['영상 만들기 탭에서 장면과 움직임을 문장으로 적어요.','움직이게 할 이미지가 있으면 [이미지 고르기]로 올려요.','크기와 길이를 고르고 [영상 만들기]. 처음엔 3초, 가로 480p로 시험해 보세요.']},

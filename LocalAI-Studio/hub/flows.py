@@ -199,9 +199,17 @@ def flux_stack(w, q):
     model = [unet, 0]
     for name, wt in q["loras"]:
         model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    w.clip = [clip, clip_idx]
     enc = w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, clip_idx])
     w.ref_lat = None
     cond = [enc, 0]
+    if q.get("redux"):      # FLUX.1 Redux: 참고 이미지의 분위기·구성을 조건으로 더해요 (CLIP Vision + 스타일 모델)
+        r = q["redux"]
+        cv = w.add("CLIPVisionLoader", clip_name=r["clip_vision"])
+        st = w.add("StyleModelLoader", style_model_name=r["style"])
+        li = w.add("LoadImage", image=r["image"])
+        ce = w.add("CLIPVisionEncode", clip_vision=[cv, 0], image=[li, 0], crop="center")
+        cond = [w.add("StyleModelApply", conditioning=cond, style_model=[st, 0], clip_vision_output=[ce, 0], **r.get("extra", {})), 0]
     if q.get("ref"):
         li = w.add("LoadImage", image=q["ref"])
         sc = w.add("FluxKontextImageScale", image=[li, 0])
@@ -221,6 +229,55 @@ def flux_stack(w, q):
 def flux_sample(w, q, model, pos, neg, lat, denoise=1.0):
     return w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
                  scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat, denoise=denoise)
+
+
+def flux_cond(w, q, text):
+    """flux_stack 을 만든 뒤, 다른 문장으로 (positive, negative) 를 하나 더 만들어요(부위마다 다른 문장이 필요할 때)."""
+    enc = w.add("CLIPTextEncode", text=text, clip=w.clip)
+    if q["family"] == "krea2":
+        neg = [w.add("CLIPTextEncode", text=q["negative"], clip=w.clip), 0] if q["cfg"] > 1.0 else [w.add("ConditioningZeroOut", conditioning=[enc, 0]), 0]
+        return [enc, 0], neg
+    if q["family"] == "chroma":
+        return [enc, 0], [w.add("CLIPTextEncode", text=q["negative"], clip=w.clip), 0]
+    return [w.add("FluxGuidance", conditioning=[enc, 0], guidance=q["guidance"]), 0], [w.add("ConditioningZeroOut", conditioning=[enc, 0]), 0]
+
+
+def wf_detailer_flux(q, img, passes, fill):
+    """얼굴·손 보정을 FLUX·Krea 2·Chroma 모델로. FaceDetailer 는 모델·조건만 받으면 되므로 SDXL 과 같은 방식으로 이어 붙여요."""
+    w = WF()
+    model, _, _, vae = flux_stack(w, q)
+    cur = [w.add("LoadImage", image=img), 0]
+    for det, text in passes:
+        pos, neg = flux_cond(w, q, text)
+        bd = w.add("UltralyticsDetectorProvider", model_name=det)
+        ins = fill("FaceDetailer", dict(image=cur, model=model, clip=w.clip, vae=vae, positive=pos, negative=neg,
+                                        bbox_detector=[bd, 0], seed=q["seed"], steps=q["steps"], cfg=q["cfg"],
+                                        sampler_name=q["sampler"], scheduler=q["scheduler"], denoise=q["denoise"], wildcard=""))
+        cur = [w.add("FaceDetailer", **ins), 0]
+    w.add("PreviewImage", images=cur)
+    return w.n
+
+
+def wf_krea2_ref(q, ref, lora, strength, method_key):
+    """Krea 2 스타일 참조: 공식 'Image Style Reference' 템플릿과 같은 구성이에요.
+    UNET → 스타일 참조 LoRA → ModelSamplingFlux, 참고 이미지는 TextEncodeQwenImageEditPlus 로 조건에 넣고 FluxKontextMultiReferenceLatentMethod 로 묶어요."""
+    f, w = q, WF()
+    unet = w.add("UNETLoader", unet_name=f["unet"], weight_dtype="default")
+    clip = w.add("CLIPLoader", clip_name=f["t5"], type="krea2", device="default")
+    vae = w.add("VAELoader", vae_name=f["vae"])
+    model = [unet, 0]
+    for name, wt in q["loras"]:
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    model = [w.add("LoraLoaderModelOnly", model=model, lora_name=lora, strength_model=strength), 0]
+    model = [w.add("ModelSamplingFlux", model=model, max_shift=1.15, base_shift=0.5, width=q["w"], height=q["h"]), 0]
+    li = w.add("LoadImage", image=ref)
+    enc = w.add("TextEncodeQwenImageEditPlus", clip=[clip, 0], prompt=q["prompt"], vae=[vae, 0], image1=[li, 0])
+    pos = [w.add("FluxKontextMultiReferenceLatentMethod", conditioning=[enc, 0], **{method_key: "index_timestep_zero"}), 0]
+    neg = [w.add("ConditioningZeroOut", conditioning=pos), 0]
+    lat = [w.add("EmptyLatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    k = flux_sample(w, q, model, pos, neg, lat, 1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=[vae, 0]), 0])
+    return w.n
 
 
 def wf_flux(q):
@@ -462,13 +519,12 @@ def wf_video14(q, start=None):
     return w.n
 
 
-def wf_upscale(model, img, half):
+def wf_upscale(model, img):
+    """업스케일 모델로 키워요(모델 고유 배율). 원하는 배율에 맞추는 건 허브가 받은 뒤에 해요."""
     w = WF()
     li = w.add("LoadImage", image=img)
     um = w.add("UpscaleModelLoader", model_name=model)
     out = [w.add("ImageUpscaleWithModel", upscale_model=[um, 0], image=[li, 0]), 0]
-    if half:
-        out = [w.add("ImageScaleBy", image=out, upscale_method="lanczos", scale_by=0.5), 0]
     w.add("PreviewImage", images=out)
     return w.n
 

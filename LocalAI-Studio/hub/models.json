@@ -350,6 +350,34 @@
    ]
   },
   {
+   "id": "krea2-style-reference",
+   "name": "Krea 2 스타일 참조 LoRA (참고 이미지 따라 그리기)",
+   "gb": 0.46,
+   "desc": "기능 모음의 '참고 이미지로 그리기'에서 Krea 2 모델을 고르면 쓰는 공식 스타일 참조 LoRA 예요(Comfy-Org). Turbo 기준이고 Krea 2 공용 파일과 Krea 2 모델이 먼저 있어야 해요. ※ 미검증",
+   "files": [
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_style_reference.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "flux-redux",
+   "name": "FLUX.1 Redux (참고 이미지 따라 그리기)",
+   "gb": 0.97,
+   "desc": "기능 모음의 '참고 이미지로 그리기'에서 FLUX.1 모델을 고르면 쓰는 Redux(분위기·구성 참고)와 CLIP 비전 모델이에요. Redux 파일은 HuggingFace 에서 'FLUX.1-Redux-dev' 사용 동의를 한 뒤, 다운로드 탭에 HuggingFace API 키를 넣어야 받을 수 있어요(비상업 라이선스). 설치 후 이미지 엔진을 다시 시작해 주세요. ※ 미검증",
+   "files": [
+    {
+     "dir": "clip_vision",
+     "url": "https://huggingface.co/Comfy-Org/sigclip_vision_384/resolve/main/sigclip_vision_patch14_384.safetensors"
+    },
+    {
+     "dir": "style_models",
+     "url": "https://huggingface.co/black-forest-labs/FLUX.1-Redux-dev/resolve/main/flux1-redux-dev.safetensors"
+    }
+   ]
+  },
+  {
    "id": "wan21-vae",
    "name": "Wan 2.1 VAE (14B 영상용)",
    "gb": 0.25,

@@ -575,7 +575,7 @@
   "id": "detailer",
   "title": "얼굴·손 자동 보정 (미검증)",
   "icon": "☺",
-  "summary": "그림 속 얼굴이나 손을 자동으로 찾아 그 부분만 다시 그려 또렷하게 만들어요(ADetailer 방식). ComfyUI 확장 'Impact Pack'과 감지 모델이 필요해요.",
+  "summary": "그림 속 얼굴이나 손을 자동으로 찾아 그 부분만 다시 그려 또렷하게 만들어요(ADetailer 방식). SDXL 체크포인트뿐 아니라 FLUX.1 · Krea · Krea 2 · Chroma 모델로도 다시 그릴 수 있어요. ComfyUI 확장 'Impact Pack'과 감지 모델이 필요해요.",
   "steps": [
    "보정할 이미지를 올려요",
    "얼굴 / 손 / 둘 다 중에서 골라요",
@@ -587,7 +587,7 @@
     "UltralyticsDetectorProvider"
    ],
    "lists": [
-    "checkpoints"
+    "anymodels"
    ],
    "pack": "ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack"
   },
@@ -627,9 +627,9 @@
    {
     "name": "ckpt",
     "type": "list",
-    "list": "checkpoints",
+    "list": "models",
     "label": "모델",
-    "hint": "그림을 만든 것과 같은 SDXL 계열 체크포인트가 좋아요."
+    "hint": "그림을 만든 것과 같은 모델이 좋아요. FLUX.1 · Krea 2 · Chroma 는 단계 수·CFG 를 그 모델에 맞게 자동으로 정해요(아래 단계 수·CFG 칸은 SDXL 체크포인트일 때만 적용돼요)."
    },
    {
     "name": "denoise",
@@ -648,7 +648,8 @@
     "default": 28,
     "min": 1,
     "max": 100,
-    "advanced": true
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
    },
    {
     "name": "cfg",
@@ -658,7 +659,8 @@
     "min": 0,
     "max": 30,
     "step": 0.5,
-    "advanced": true
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
    },
    {
     "name": "seed",
@@ -673,7 +675,7 @@
   "id": "ipadapter",
   "title": "참고 이미지로 그리기 — 스타일·얼굴 유지 (미검증)",
   "icon": "❖",
-  "summary": "참고 이미지의 분위기(스타일)나 인물 얼굴 느낌을 따라 새 그림을 만들어요(IP-Adapter). ComfyUI 확장 'IPAdapter plus'와 모델이 필요해요. ※ 이 기능은 만든 쪽에서 실제 PC로 검증하지 못했어요.",
+  "summary": "참고 이미지의 분위기(스타일)나 인물 얼굴 느낌을 따라 새 그림을 만들어요. SDXL 은 IP-Adapter, FLUX.1 은 Redux(분위기) 또는 FLUX Kontext 모델(사람·물건 그대로), Krea 2 는 공식 스타일 참조 LoRA 를 써요. ※ 이 기능은 만든 쪽에서 실제 PC로 검증하지 못했어요.",
   "steps": [
    "참고할 이미지를 올려요",
    "스타일을 따를지, 얼굴을 따를지 고르고 새 그림 내용을 적어요",
@@ -685,9 +687,10 @@
     "IPAdapter"
    ],
    "lists": [
-    "checkpoints"
+    "anymodels"
    ],
-   "pack": "ComfyUI_IPAdapter_plus"
+   "pack": "ComfyUI_IPAdapter_plus",
+   "alt": "FLUX.1 · Krea 2 모델을 고르면 이 확장 없이도 쓸 수 있어요."
   },
   "fields": [
    {
@@ -716,15 +719,18 @@
     "name": "prompt",
     "type": "textarea",
     "label": "그릴 내용",
-    "hint": "NoobAI·Pony 등은 영어 태그로 적어요. 예: 1girl, standing, city street",
+    "hint": "NoobAI·Pony 등은 영어 태그로, FLUX.1 · Krea 2 는 문장으로 적어요. 예: 1girl, standing, city street / A woman standing on a city street at dusk",
     "required": true
    },
    {
     "name": "ckpt",
     "type": "list",
-    "list": "checkpoints",
+    "list": "models",
     "label": "모델",
-    "hint": "SDXL 계열 체크포인트를 골라요."
+    "hint": "SDXL 체크포인트 · FLUX.1 · Krea 2 모델을 고를 수 있어요. 얼굴을 그대로 이어 가려면 FLUX Kontext 모델이 가장 잘 맞아요. Chroma 는 참고 이미지 방식이 없어 목록에서 뺐어요. FLUX.1 Redux · Krea 2 스타일 참조는 '설치와 모델' 탭에서 받아요.",
+    "exclude": [
+     "chroma"
+    ]
    },
    {
     "name": "weight",
@@ -734,7 +740,7 @@
     "min": 0.1,
     "max": 1.5,
     "step": 0.05,
-    "hint": "높을수록 참고 이미지를 더 닮고 프롬프트는 덜 따라요. 0.5~0.8이 무난해요."
+    "hint": "높을수록 참고 이미지를 더 닮고 프롬프트는 덜 따라요. 0.5~0.8이 무난해요. (SDXL IP-Adapter · FLUX.1 Redux에 적용돼요)"
    },
    {
     "name": "w",
@@ -763,7 +769,8 @@
     "default": 28,
     "min": 1,
     "max": 100,
-    "advanced": true
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
    },
    {
     "name": "cfg",
@@ -773,7 +780,19 @@
     "min": 0,
     "max": 30,
     "step": 0.5,
-    "advanced": true
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "kweight",
+    "type": "number",
+    "label": "Krea 2 스타일 참조 세기",
+    "default": 1.0,
+    "min": 0.1,
+    "max": 1.5,
+    "step": 0.05,
+    "advanced": true,
+    "hint": "Krea 2 모델일 때만 적용돼요. 공식 예시는 1.0이에요."
    },
    {
     "name": "seed",

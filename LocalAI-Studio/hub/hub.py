@@ -45,7 +45,7 @@ HFURL = os.environ.get("HF_URL", "https://huggingface.co")
 GHURL = os.environ.get("GITHUB_URL", "https://github.com")
 NODEMAP_URL = os.environ.get("NODEMAP_URL", "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json")
 PROFILES = json.loads((HUB / "profiles.json").read_text(encoding="utf-8"))
-FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg", "ultralytics/bbox", "ipadapter", "clip_vision"}
+FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg", "ultralytics/bbox", "ipadapter", "clip_vision", "style_models"}
 EXT = (".safetensors", ".ckpt", ".pth", ".pt", ".gguf", ".bin")
 DEFAULT_NEG = ("lowres, bad anatomy, bad hands, extra digits, missing fingers, worst quality, "
                "jpeg artifacts, watermark, text, signature")
@@ -927,15 +927,59 @@ def qwen_params(p, text, tags, J):
                 shift=clamp(num(p, "q_shift", 3.0), 0.1, 20.0))
 
 
+SCALE_MIN, SCALE_MAX, SIDE_MAX = 0.1, 8.0, 8192
+
+
+def scale_of(p, default=4.0):
+    """배율 칸의 값(예: 2, 1.5, 0.5, '3배')을 숫자로. 1보다 작으면 줄이기예요."""
+    raw = str(p.get("scale") if p.get("scale") not in (None, "") else default).strip().lower().replace("배", "").replace("x", "").replace("×", "").replace(",", ".").strip()
+    try:
+        v = float(raw)
+    except ValueError:
+        raise ValueError("배율은 숫자로 적어 주세요. (예: 2, 1.5, 0.5)") from None
+    if not (SCALE_MIN <= v <= SCALE_MAX):
+        raise ValueError(f"배율은 {SCALE_MIN:g} ~ {SCALE_MAX:g} 사이로 적어 주세요. (1보다 작으면 줄여요)")
+    return round(v, 3)
+
+
+def scale_check(size, scale):
+    """결과 크기를 (가로, 세로)로 돌려주고, 너무 크거나 작으면 안내해요."""
+    out = (max(1, round(size[0] * scale)), max(1, round(size[1] * scale)))
+    if max(out) > SIDE_MAX:
+        raise ValueError(f"결과가 {SIDE_MAX}px 를 넘어요({out[0]}×{out[1]}). 배율을 낮추거나 더 작은 이미지를 써 주세요.")
+    if min(out) < 16:
+        raise ValueError(f"결과가 너무 작아져요({out[0]}×{out[1]}). 배율을 키워 주세요.")
+    return out
+
+
 def upscale(img, J, model, scale):
+    """scale > 1: 업스케일 모델로 키운 뒤 원하는 배율에 맞춰요(모델이 4배라면 2배·1.5배·6배도 가능). scale <= 1: 모델 없이 줄이기(Lanczos)."""
+    scale = float(scale)
+    target = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+    if scale <= 1.0:
+        return img if target == img.size else img.resize(target, RS.LANCZOS)
     model = model or (files("upscale_models") or [None])[0]
     if not model:
         raise RuntimeError("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.")
-    return run_wf(flows.wf_upscale(model, put_input(img, J), scale == 2), J)[0]
+    res = run_wf(flows.wf_upscale(model, put_input(img, J)), J)[0]
+    return res if res.size == target else res.resize(target, RS.LANCZOS)
 
 
 FX_DEFAULTS = {"flux": (20, 3.5, 1, "simple"), "chroma": (26, 0, 4, "beta"), "krea2": (8, 0, 1, "simple")}   # 단계, 가이던스, CFG, 스케줄러
 FLUX_FAMS = ("flux", "krea2", "chroma")
+
+
+def fx_sel(p, key="ckpt"):
+    """모델 칸 값이 'fx:종류:파일' 이면 (종류, 그 모델에 맞는 단계 수·CFG 를 채운 설정)을, SDXL 체크포인트면 (None, p)를 돌려줘요."""
+    fx = re.match(r"fx:(flux|krea2|chroma):(.*)$", str(p.get(key) or ""), re.S)
+    if not fx:
+        return None, p
+    fam = fx.group(1)
+    d = FX_DEFAULTS[fam]
+    p2 = dict(p, fx_model=fx.group(2), fx_steps=d[0], fx_guidance=d[1], fx_cfg=d[2], fx_scheduler=d[3])
+    if fam == "krea2" and re.search("raw", fx.group(2), re.I):
+        p2.update(fx_steps=30, fx_cfg=4)
+    return fam, p2
 
 
 def flux_q(p, J, fam, text, tags, seed, w=1024, h=1024):
@@ -1076,14 +1120,8 @@ def feat_outpaint(p, J):
         warn(J, f"이미지가 커서 {s:.0%} 크기로 줄여 처리했어요.")
     rng = random.Random(num(p, "seed", -1, int))
     feather = int(clamp(num(p, "feather", 40, int), 0, 200))
-    sel = str(p.get("ckpt") or "")
-    fx = re.match(r"fx:(flux|krea2|chroma):(.*)$", sel, re.S)
-    if fx:      # FLUX·Krea·Krea 2·Chroma 모델로 확장 (단계 수·CFG 는 그 모델에 맞는 값을 써요)
-        fam = fx.group(1)
-        d = FX_DEFAULTS[fam]
-        p2 = dict(p, fx_model=fx.group(2), fx_steps=d[0], fx_guidance=d[1], fx_cfg=d[2], fx_scheduler=d[3])
-        if fam == "krea2" and re.search("raw", fx.group(2), re.I):
-            p2.update(fx_steps=30, fx_cfg=4)
+    fam, p2 = fx_sel(p)
+    if fam:      # FLUX·Krea·Krea 2·Chroma 모델로 확장 (단계 수·CFG 는 그 모델에 맞는 값을 써요)
         text, tags = prep(p2, J, "caption", rng)
         fq = flux_q(p2, J, fam, text, tags, seed_of(p))
         J["msg"] = "빈 공간을 그리는 중"
@@ -1309,6 +1347,14 @@ def feat_detailer(p, J):
     for _, t in passes:
         if blocked(t):
             raise ValueError(BLOCK_MSG)
+    fam, p2 = fx_sel(p)
+    if fam:      # FLUX.1 · Krea · Krea 2 · Chroma 모델로 다시 그리기 (단계 수·CFG 는 그 모델에 맞는 값)
+        fq = flux_q(p2, J, fam, passes[0][1], [], seed_of(p))
+        fq["denoise"] = clamp(num(p, "denoise", 0.4), 0.1, 0.8)
+        J["msg"] = "얼굴·손 찾아서 다시 그리는 중"
+        g = flows.wf_detailer_flux(fq, put_input(img, J), passes, fill_node)
+        res = run_wf(g, J)[0]
+        return [(res, flux_info(fq, res, "feat-detailer", Detailer=" + ".join(d for d, _ in passes), Denoise=fq["denoise"]), g)]
     q = sd(dict(p, denoise=clamp(num(p, "denoise", 0.4), 0.1, 0.8)), passes[0][1], [], J)
     q["seed"] = seed_of(p)
     J["msg"] = "얼굴·손 찾아서 다시 그리는 중"
@@ -1424,10 +1470,84 @@ def feat_faceswap(p, J):
     return [(res, dict(kind="feat-faceswap", extra={"FaceSwap": f"{swap} + {rest}"}), g)]
 
 
+REF_STYLE = "Keep the same art style, color palette, lighting and mood as the reference image. "
+REF_FACE = "Keep the exact same person from the reference image: the same face, hairstyle and identity. "
+
+
+def pick_file(names, *pats):
+    """파일 이름 목록에서 패턴(정규식)에 처음 맞는 것을 골라요."""
+    for pat in pats:
+        for n in names:
+            if re.search(pat, n, re.I):
+                return n
+    return None
+
+
+def feat_reference_fx(p, p2, fam, ref, mode, J):
+    """FLUX.1 · Krea 2 모델로 참고 이미지를 따라 그리기. 모델 종류마다 쓰는 방법이 달라요.
+    Krea 2 : 공식 '스타일 참조' LoRA / FLUX Kontext : 참고 이미지를 조건(ReferenceLatent)으로 / 그 밖의 FLUX.1 : Redux."""
+    if fam == "chroma":
+        raise ValueError("Chroma 모델은 참고 이미지로 그리는 방법이 아직 없어요. FLUX.1 · Krea 2 · SDXL 모델을 골라 주세요.")
+    w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
+    rng = random.Random(num(p, "seed", -1, int))
+    text, tags = prep(p2, J, "caption", rng)
+    weight = clamp(num(p, "weight", 0.7), 0.1, 1.5)
+    name = put_input(ref, J)
+    if fam == "krea2":
+        for n in ("TextEncodeQwenImageEditPlus", "FluxKontextMultiReferenceLatentMethod", "ModelSamplingFlux"):
+            if caps()["nodes"] and n not in caps()["nodes"]:
+                raise RuntimeError(f"이 ComfyUI 에는 노드 {n} 가 없어요. Krea 2 스타일 참조에는 최신 ComfyUI 가 필요해요 — ComfyUI 를 업데이트해 주세요.")
+        lora = pick_file(files("loras"), r"krea2.*style.?ref", r"style.?ref.*krea")
+        if not lora:
+            raise RuntimeError("Krea 2 스타일 참조 LoRA(krea2_style_reference)가 없어요. '설치와 모델' 탭에서 'Krea 2 스타일 참조'를 설치해 주세요.")
+        spec = ((caps()["info"].get("FluxKontextMultiReferenceLatentMethod") or {}).get("input", {}).get("required") or {})
+        mkey = next((k for k, v in spec.items() if isinstance(v, list) and v and (v[0] == "COMBO" and "index_timestep_zero" in ((v[1] or {}).get("options") or []) or isinstance(v[0], list) and "index_timestep_zero" in v[0])), "reference_latents_method")
+        q = flux_q(p2, J, "krea2", text, tags, seed_of(p), w, h)
+        if mode == "face":
+            warn(J, "Krea 2 에는 얼굴만 따로 따르는 방식이 없어요. 스타일 참조로 그리니, 글에 '같은 사람' 같은 설명을 같이 적어 주세요.")
+        strength = clamp(num(p, "kweight", 1.0), 0.1, 1.5)
+        J["msg"] = "참고 이미지를 보며 그리는 중"
+        g = flows.wf_krea2_ref(q, name, lora, strength, mkey)
+        res = run_wf(g, J)[0]
+        return [(res, flux_info(q, res, "feat-ipadapter", Reference=f"Krea 2 스타일 참조 / {lora} / {strength}"), g)]
+    kontext = "kontext" in (p2.get("fx_model") or "").lower()
+    q = flux_q(p2, J, "flux", (REF_FACE if mode == "face" else REF_STYLE) + text if kontext else text, tags, seed_of(p), w, h)
+    if kontext:      # 참고 이미지를 조건으로 걸고 빈 화면에서 새로 그려요 (사람·물건이 그대로 이어져요)
+        for n in ("ReferenceLatent", "FluxKontextImageScale"):
+            if caps()["nodes"] and n not in caps()["nodes"]:
+                raise RuntimeError(f"이 ComfyUI 에는 노드 {n} 가 없어요. ComfyUI 를 업데이트해 주세요.")
+        small = ref.resize(qsize(ref.size, 1.0), RS.LANCZOS)
+        q["ref"] = put_input(small, J)
+        how = "FLUX Kontext 참고"
+    else:      # Redux: 이미지의 분위기·구성을 조건으로 더해요
+        for n in ("CLIPVisionLoader", "CLIPVisionEncode", "StyleModelLoader", "StyleModelApply"):
+            if caps()["nodes"] and n not in caps()["nodes"]:
+                raise RuntimeError(f"이 ComfyUI 에는 노드 {n} 가 없어요. ComfyUI 를 업데이트해 주세요.")
+        cv = pick_file(combo_opts("CLIPVisionLoader", "clip_name"), r"sigclip", r"siglip")
+        st = pick_file(combo_opts("StyleModelLoader", "style_model_name"), r"redux")
+        if not cv or not st:
+            raise RuntimeError("FLUX.1 Redux 파일이 없어요 — " + " / ".join(x for x, ok in (("sigclip 비전 모델", cv), ("flux1-redux-dev", st)) if not ok) +
+                               ". '설치와 모델' 탭에서 'FLUX.1 Redux'를 설치한 뒤 [이미지 엔진 다시 시작]을 눌러 주세요. (얼굴은 FLUX Kontext 모델이 더 잘 따라요.)")
+        node = (caps()["info"].get("StyleModelApply") or {}).get("input", {})
+        have = {**(node.get("required") or {}), **(node.get("optional") or {})}
+        extra = {**({"strength": weight} if "strength" in have else {}), **({"strength_type": "multiply"} if "strength_type" in have else {})}
+        q["redux"] = dict(clip_vision=cv, style=st, image=put_input(ref, J), extra=extra)
+        how = f"Redux / {st} / {weight}"
+        if mode == "face":
+            warn(J, "일반 FLUX.1 의 Redux 는 얼굴을 똑같이 따르지는 못해요(분위기만 닮아요). 얼굴은 FLUX Kontext 모델을 고르면 더 잘 따라요.")
+    J["msg"] = "참고 이미지를 보며 그리는 중"
+    g = flows.wf_flux(q)
+    res = run_wf(g, J)[0]
+    return [(res, flux_info(q, res, "feat-ipadapter", Reference=how), g)]
+
+
 def feat_ipadapter(p, J):
-    """참고 이미지로 그리기(IPAdapter plus). 스타일/얼굴 중 무엇을 따를지에 따라 프리셋을 골라요."""
+    """참고 이미지로 그리기. SDXL 은 IPAdapter plus, FLUX.1 · Krea 2 는 각자의 방식(feat_reference_fx)을 써요."""
     ref = load_img(p["image"]).convert("RGB")
     mode = "face" if p.get("mode") == "face" else "style"
+    fam, p2 = fx_sel(p)
+    if fam:
+        return feat_reference_fx(p, p2, fam, ref, mode, J)
     presets = combo_opts("IPAdapterUnifiedLoader", "preset")
     up = [(x, x.upper()) for x in presets]
     if mode == "face":
@@ -1453,7 +1573,8 @@ def do_feat(p, J):
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
-    miss = [n for n in spec.get("needs", {}).get("nodes", []) if caps()["nodes"] and n not in caps()["nodes"]]
+    need_nodes = [] if p["feature"] == "ipadapter" and fx_sel(p)[0] else spec.get("needs", {}).get("nodes", [])      # FLUX·Krea 2 는 IPAdapter 확장이 필요 없어요
+    miss = [n for n in need_nodes if caps()["nodes"] and n not in caps()["nodes"]]
     if miss:
         pack = spec.get("needs", {}).get("pack")
         raise RuntimeError("이 ComfyUI 에는 필요한 노드가 없어요: " + ", ".join(miss) + ". " +
@@ -1925,13 +2046,12 @@ def refine_tiles(img, q, tile, overlap, J, build=None, mult=8):
 
 def do_up(p, J):
     img = load_img(p["image"])
-    scale = 2 if str(p.get("scale")) == "2" else 4
-    if max(img.size) * scale > 8192:
-        raise ValueError("결과가 8192px 를 넘습니다. 더 작은 이미지나 2배를 선택해 주세요.")
-    J["msg"] = "업스케일 중"
+    scale = scale_of(p)
+    scale_check(img.size, scale)
+    J["msg"] = "업스케일 중" if scale > 1 else "줄이는 중"
     big = upscale(img, J, p.get("upm"), scale)
     if p.get("mode") != "refine":
-        return [(big, dict(kind="upscale", extra={"Upscaler": p.get("upm") or "auto", "Scale": scale}), None)]
+        return [(big, dict(kind="upscale", extra={**({"Upscaler": p.get("upm") or "auto"} if scale > 1 else {"Downscale": "Lanczos"}), "Scale": scale}), None)]
     rng = random.Random(num(p, "seed", -1, int))
     fam = p.get("rengine") if p.get("rengine") in ("flux", "chroma", "krea2", "qwen") else "sdxl"
     if fam == "qwen":      # 이미지 편집에 쓰는 Qwen-Image-Edit 으로 타일을 다시 그려요
@@ -2470,7 +2590,9 @@ def job_thread(J, p):
         J["state"], J["msg"] = "running", "엔진 준비 중"
         if p["kind"] in ("tts", "vmix"):
             pass                                          # 음성 만들기·영상 소리/자막 넣기는 ComfyUI 를 쓰지 않아요
-        elif p["kind"] != "batch" or p.get("op") == "upscale":      # 일괄 처리의 배경 지우기·크기 변경은 ComfyUI 가 필요 없어요
+        elif (p["kind"] == "batch" and (p.get("op") != "upscale" or scale_of(p) <= 1.0)) or (p["kind"] == "up" and p.get("mode") != "refine" and scale_of(p) <= 1.0):
+            pass                                          # 일괄 처리의 배경 지우기·크기 변경, 줄이기(1배 이하)는 ComfyUI 가 필요 없어요
+        else:
             wait_comfy()
             claim("image")
         items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "music": do_music, "tts": do_tts, "batch": do_batch}[p["kind"]](p, J)
@@ -2759,11 +2881,11 @@ def do_batch(p, J):
     jpg = p.get("fmt") == "jpg"
     scale, model, rm_key, rm_bg = 4, None, None, None
     if op == "upscale":
-        scale = 2 if str(p.get("scale")) == "2" else 4
+        scale = scale_of(p)
         model = p.get("upm") or (files("upscale_models") or [None])[0]
-        if not model:
+        if not model and scale > 1:
             raise RuntimeError("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.")
-        suffix = f"_업스케일x{scale}"
+        suffix = f"_업스케일x{scale:g}" if scale > 1 else f"_축소x{scale:g}"
     elif op == "rmbg":
         rm_key = p.get("rmodel") if p.get("rmodel") in bgremove.MODELS else "normal"
         if not bgremove.have_ort() or not bgremove.installed(MODELS / "rmbg", rm_key):
@@ -2787,8 +2909,7 @@ def do_batch(p, J):
             with Image.open(f) as im0:
                 img = ImageOps.exif_transpose(im0).convert("RGB")
             if op == "upscale":
-                if max(img.size) * scale > 8192:
-                    raise ValueError("결과가 8192px 를 넘어요(더 작은 배율을 골라 보세요)")
+                scale_check(img.size, scale)
                 res = upscale(img, J, model, scale)
             elif op == "rmbg":
                 res = rmbg_engine(rm_key).cut(img, rm_bg)

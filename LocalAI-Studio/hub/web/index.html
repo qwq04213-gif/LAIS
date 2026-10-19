@@ -391,8 +391,10 @@
       <select name="mode"><option value="esrgan">빠른 업스케일 (Real-ESRGAN)</option><option value="refine">디테일 재생성 (업스케일 + 타일 리파인)</option></select></label>
     <div class="row">
       <label class="f">업스케일 모델<select name="upm"></select></label>
-      <label class="f">배율<select name="scale"><option value="2">2배</option><option value="4" selected>4배</option></select></label>
+      <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.05" inputmode="decimal"></label>
     </div>
+    <span class="scalechips" data-for="scale"><button type="button" class="ghost" data-sc="0.5">0.5배</button><button type="button" class="ghost" data-sc="1.5">1.5배</button><button type="button" class="ghost" data-sc="2">2배</button><button type="button" class="ghost" data-sc="3">3배</button><button type="button" class="ghost" data-sc="4">4배</button></span>
+    <p class="hint plain">원하는 배율을 숫자로 적어요(예: 1.5, 2.5). <b>1보다 작으면 줄여요</b>(0.5 = 절반) — 줄이기는 업스케일 모델 없이 바로 끝나요. 결과 긴 변은 8192px까지예요.</p>
     <p class="hint plain"><button type="button" class="link" data-open="upscale_models">업스케일 모델 폴더 열기</button></p>
     <div class="refine" data-blk="up-refine"></div>
     <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
@@ -819,7 +821,7 @@
     <div class="bt-ops">
       <label class="bt-op"><input type="radio" name="op" value="resize" checked><b>크기 · 자르기 · 회전</b><span>긴 변 길이 맞추기, 비율대로 자르기, 돌리기·뒤집기. 바로 끝나요.</span></label>
       <label class="bt-op"><input type="radio" name="op" value="rmbg"><b>배경 지우기</b><span>사람·물건만 남기고 배경을 투명하게(또는 흰색·검정으로) 바꿔요.</span></label>
-      <label class="bt-op"><input type="radio" name="op" value="upscale"><b>업스케일</b><span>2배·4배로 키워요. 이미지 엔진을 쓰므로 한 장씩 시간이 걸려요.</span></label>
+      <label class="bt-op"><input type="radio" name="op" value="upscale"><b>업스케일 · 줄이기</b><span>원하는 배율로 키우거나(2, 1.5 …) 줄여요(0.5 …). 키울 때는 이미지 엔진을 써서 한 장씩 시간이 걸려요.</span></label>
     </div>
     <div data-op="resize" class="bt-opts">
       <label class="f">긴 변 길이(px, 0이면 그대로)<input type="number" name="long_side" value="1024" min="0" max="8192" step="1"></label>
@@ -834,9 +836,10 @@
       <div class="actions"><button type="button" class="ghost" id="bt-rm-install" hidden>배경 지우기 도구 설치</button></div>
     </div>
     <div data-op="upscale" class="bt-opts" hidden>
-      <label class="f">배율<select name="scale"><option value="2">2배</option><option value="4" selected>4배</option></select></label>
+      <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.05" inputmode="decimal"></label>
+      <span class="scalechips" data-for="scale"><button type="button" class="ghost" data-sc="0.5">0.5배</button><button type="button" class="ghost" data-sc="1.5">1.5배</button><button type="button" class="ghost" data-sc="2">2배</button><button type="button" class="ghost" data-sc="3">3배</button><button type="button" class="ghost" data-sc="4">4배</button></span>
       <label class="f">업스케일 모델<select name="upm"></select></label>
-      <p class="hint plain">결과가 8192px를 넘는 사진은 건너뛰고 이유를 알려 드려요.</p>
+      <p class="hint plain">1보다 작게 적으면 줄여요(0.5 = 절반, 모델 없이 처리). 결과가 8192px를 넘는 사진은 건너뛰고 이유를 알려 드려요.</p>
     </div>
     <label class="f bt-fmt">저장 형식<select name="fmt"><option value="png">PNG (화질 그대로, 용량 큼)</option><option value="jpg">JPEG (용량 작음, 투명 배경은 불가)</option></select></label>
     <div class="actions"><button class="go" type="submit">처리 시작</button></div>
