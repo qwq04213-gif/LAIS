@@ -3715,6 +3715,13 @@ def thumb_sweep():
         _TH["busy"] = False
 
 
+def _safe_warm():
+    try:
+        lists()
+    except Exception as e:  # noqa: BLE001
+        log("[목록 미리 읽기 실패]", repr(e))
+
+
 def thumb_sweep_bg():
     threading.Thread(target=thumb_sweep, daemon=True).start()
 
@@ -4961,6 +4968,8 @@ def settings():
 
 
 def save_settings(d):
+    try: _LC["key"] = None   # 설정이 바뀌면 목록 캐시도 다시 만들어요
+    except NameError: pass
     SETTINGS_FILE.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
     try:
         os.chmod(SETTINGS_FILE, 0o600)
@@ -5762,7 +5771,36 @@ def sorted_models():
     return sdxl, flux, chroma, krea2, info
 
 
+_LC = {"key": None, "v": None}
+
+
+def lists_key():
+    """모델 폴더들이 바뀌었는지 알아보는 값(폴더 안 파일을 넣거나 빼면 폴더 수정 시각이 바뀌어요). 파일 하나하나는 열어 보지 않아요."""
+    parts = [_CAPS["t"]]
+    try:
+        parts.append(MODELS.stat().st_mtime_ns)
+        for e in os.scandir(MODELS):
+            if e.is_dir():
+                parts.append((e.name, e.stat().st_mtime_ns))
+        wc = ROOT / "wildcards"
+        parts.append(wc.stat().st_mtime_ns if wc.is_dir() else 0)
+    except OSError:
+        return None
+    return tuple(parts)
+
+
 def lists():
+    """화면의 모델·LoRA 목록. 모델 폴더가 그대로면 지난번 결과를 다시 써요(탭을 누를 때마다 폴더를 훑지 않게). 대화 모델 목록만 매번 새로 물어요."""
+    key = lists_key()
+    if key is None or key != _LC["key"] or _LC["v"] is None:
+        _LC["v"] = _lists_build()
+        _LC["key"] = lists_key()      # 만드는 중에 엔진 기능 조회(caps)가 갱신될 수 있어서 끝난 뒤의 값으로 기억해요
+    out = dict(_LC["v"])
+    out["llm"] = llms()
+    return out
+
+
+def _lists_build():
     wc = ROOT / "wildcards"
     sdxl, flux, chroma, krea2, info = sorted_models()
     fp, kp = flux_parts(), krea2_parts()      # 폴더를 한 번씩만 훑어요
@@ -6551,6 +6589,7 @@ CLIENT_SEEN = threading.Event()      # 화면(브라우저)이 한 번이라도 
 def main():
     thumb_sweep_bg()      # 지워진 사진의 미리보기·옛 방식 파일 정리, 용량 상한 확인
     threading.Thread(target=idle_unload_loop, daemon=True).start()
+    threading.Thread(target=lambda: _safe_warm(), daemon=True).start()      # 목록을 미리 한 번 읽어 둬요(첫 탭부터 빠르게)
     global GPU
     sys.stdout.reconfigure(errors="replace")
     apply_cache_env()
