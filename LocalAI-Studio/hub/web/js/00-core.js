@@ -446,9 +446,9 @@ function cnFilter(f){const s=f.elements.cn_model;if(!s)return;
     const arr=LISTS.k2control||[],cur=s.value;s.dataset.k2='1';
     s.innerHTML='<option value="">사용 안 함</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');if(arr.includes(cur))s.value=cur;
     const t=$('.cn-fam',f),box=$('.cn-easy',f);if(!t)return;t.hidden=false;
-    t.innerHTML=!arr.length?`Krea 2 컨트롤 LoRA 가 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Krea 2 깊이 컨트롤 LoRA'를 설치해 주세요. (약 0.9GB)`
-      :LISTS.k2c_nodes?'':'Krea 2 컨트롤에는 확장 노드가 필요해요. 아래 설치 버튼을 눌러 주세요.';
-    if(arr.length&&!LISTS.k2c_nodes&&box)cnPack(box,'Krea2ControlLoRALoader');return}
+    t.innerHTML=(arr.length?'':`Krea 2 컨트롤 LoRA 가 아직 없어요. <button type="button" class="ghost" data-k2dl>Krea 2 깊이 컨트롤 LoRA 받기 (약 0.9GB)</button> <a href="#" data-go="setup">설치와 모델</a>에서도 받을 수 있어요.`)
+      +(LISTS.k2c_nodes?'':(arr.length?'':'<br>')+'Krea 2 컨트롤에는 확장 노드도 필요해요. 아래 설치 버튼을 눌러 주세요.');
+    if(!LISTS.k2c_nodes&&box)cnPack(box,'Krea2ControlLoRALoader');return}
   if(s.dataset.k2==='1'){delete s.dataset.k2;const cur=s.value,arr=LISTS.controlnets||[];s.innerHTML='<option value="">사용 안 함</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');if(arr.includes(cur))s.value=cur}
   const fx=f.elements.gengine&&f.elements.gengine.value==='flux';let n=0;
   [...s.options].forEach(o=>{if(!o.value)return;const is=/flux/i.test(o.value),ok=fx?is:!is;o.hidden=o.disabled=!ok;if(ok)n++});
@@ -504,6 +504,7 @@ function lbLoad(){
   $('#lb-cmp').hidden=!it.before;$('#lb-cmp').textContent='겹쳐서 비교';
   $('#lb-prev').disabled=$('#lb-next').disabled=LB.list.length<2;
   {const c=$('#lb-cont'),okc=/^\/out\//.test(it.url||'');c.hidden=!okc;c.open=false;$$('button',c).forEach(b=>b.dataset.u=it.url)}
+  {const b=$('#lb-star');b.hidden=!it.gal;b.textContent=(it.fav?'★':'☆')+' 즐겨찾기';b.classList.toggle('on',!!it.fav)}
   $('#lb-dl').href=it.url;$('#lb-dl').download=it.name||'image.png';
   im.onload=()=>{LB.nw=im.naturalWidth;LB.nh=im.naturalHeight;im.style.width=LB.nw+'px';im.style.height=LB.nh+'px';lbFit();if(LB.wantCmp){LB.wantCmp=false;lbCmp()}};
   im.src=it.url;
@@ -555,3 +556,12 @@ function openFrom(img,cmp){
   lbOpen(imgs.map(m=>({url:m.getAttribute('src'),before:COMPARE[m.dataset.u]||null,name:(m.dataset.u||'').split('/').pop()||'image.png'})),imgs.indexOf(img),cmp);
 }
 
+
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-k2dl]');if(!b)return;b.disabled=true;
+  const r=await api('/api/install',{ids:['krea2-depth-control']});if(r.error){toast(r.error);b.disabled=false;return}
+  toast('받기를 시작했어요. 진행 상황은 작업 대기열·설치와 모델에서 볼 수 있어요.')});
+
+$('#lb-star').onclick=async()=>{const it=LB.list[LB.i];if(!it)return;const on=!it.fav,r=await api('/api/gallery/fav',{file:it.url,on});
+  if(r.error)return toast(r.error);it.fav=on;const b=$('#lb-star');b.textContent=(on?'★':'☆')+' 즐겨찾기';b.classList.toggle('on',on);
+  const g=(typeof GAL!=='undefined'&&GAL.items||[]).find(x=>x.url===it.url);if(g)g.fav=on;
+  $$('[data-star]').forEach(e=>{if(e.dataset.star===it.url){e.classList.toggle('on',on);e.textContent=on?'★':'☆'}})};

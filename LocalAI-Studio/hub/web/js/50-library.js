@@ -109,9 +109,9 @@ $('#gal-grid').addEventListener('click',async e=>{
     if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
   const nv=e.target.closest('.gt .gnoimg');if(nv){const t=nv.closest('.gt'),u=t.dataset.u,it=GAL.items.find(x=>x.url===u);
     if(it&&it.video){nv.outerHTML=`<video src="${u}" controls autoplay playsinline></video>`;return}
-    const imgs=GAL.items.filter(x=>!x.video);lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name})),Math.max(0,imgs.findIndex(x=>x.url===u)));return}
+    const imgs=GAL.items.filter(x=>!x.video);lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1})),Math.max(0,imgs.findIndex(x=>x.url===u)));return}
   const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>!x.video),u=im.closest('.gt').dataset.u;
-    lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name})),Math.max(0,imgs.findIndex(x=>x.url===u)))}
+    lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1})),Math.max(0,imgs.findIndex(x=>x.url===u)))}
 });
 
 /* ══════════ 프로그램 다시 시작 · 위치 옮기기 ══════════ */
