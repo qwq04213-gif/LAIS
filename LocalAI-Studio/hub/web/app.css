@@ -558,3 +558,4 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 
 .mfam{margin:14px 0 6px;padding:4px 0;border-bottom:1px solid var(--line);font-size:calc(14px*var(--ui,1));grid-column:1/-1}.mfam small{color:var(--mute);font-weight:400}
 #rec-dlg{width:min(960px,94vw)}#rec-wave{width:100%;height:110px;background:var(--raised);border:1px solid var(--line);border-radius:8px;cursor:crosshair;margin:8px 0;display:block}#rec-wave[hidden]{display:none}
+.item.noch{grid-template-columns:1fr auto;cursor:default}.item.noch:active{transform:none;filter:none}

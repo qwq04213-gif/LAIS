@@ -238,7 +238,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.cat-del')
   toast(r.error||(`지웠어요.`+((r.kept||[]).length?` 공용 파일 ${r.kept.length}개는 다른 모델이 써서 남겨 뒀어요.`:'')),6000);loadSetup();loadLists(true)});
 /* 음성 모델(XTTS·Chatterbox·Kokoro): 음성 만들기와 같은 설치·삭제 */
 async function catVoice(){const box=$('#cat-voice');if(!box)return;let M=[];try{M=await api('/api/tts/models')}catch{box.innerHTML='<p class="mute">읽지 못했어요.</p>';return}
-  box.innerHTML=M.map(m=>`<div class="item"><span><b>${esc(m.title)}</b><small>${esc(m.desc||'')} · ${esc(m.license||'')}</small></span><em>${m.state==='running'?esc(m.msg||'설치 중…'):m.installed?`설치됨 <button type="button" class="ghost sm" data-vdel="${m.id}">삭제</button>`:`${esc(m.size||'')} <button type="button" class="ghost sm" data-vins="${m.id}">설치</button>`}</em></div>`).join('')||'<p class="mute">항목이 없어요.</p>';
+  box.innerHTML=M.map(m=>`<div class="item noch"><span><b>${esc(m.title)}</b><small>${esc(m.desc||'')} · ${esc(m.license||'')}</small></span><em>${m.state==='running'?esc(m.msg||'설치 중…'):m.installed?`설치됨 <button type="button" class="ghost sm" data-vdel="${m.id}">삭제</button>`:`${esc(m.size||'')} <button type="button" class="ghost sm" data-vins="${m.id}">설치</button>`}</em></div>`).join('')||'<p class="mute">항목이 없어요.</p>';
   if(M.some(m=>m.state==='running'))setTimeout(catVoice,3000)}
 document.addEventListener('click',async e=>{const i=e.target.closest('[data-vins]'),d=e.target.closest('[data-vdel]');if(!i&&!d)return;
   if(i){if(!confirm('이 음성 모델을 설치할까요?\n10~30분 걸릴 수 있어요. 음성 만들기 전용 공간(engine\\tts)에만 설치돼요.'))return;i.disabled=true;const r=await api('/api/tts/model/install',{id:i.dataset.vins});if(r.error)toast(r.error,6000);catVoice()}
