@@ -48,6 +48,7 @@
       <button data-v="feat" data-f="detailer" title="얼굴·손 보정"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg><span>얼굴·손 보정</span></button>
       <button data-v="feat" data-f="ipadapter" title="참고 이미지로 그리기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5"/><rect x="11" y="11" width="10" height="10" rx="1.5"/></svg><span>참고 이미지로 그리기</span></button>
       <button data-v="feat" data-f="faceswap" title="얼굴 교체"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4"/><circle cx="16" cy="15" r="4"/><path d="M11 5h6l-2-2M13 19H7l2 2"/></svg><span>얼굴 교체</span></button>
+      <button data-v="feat" data-f="img3d" title="사진 → 3D 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>사진 → 3D</span></button>
     </div></div>
     <div class="ng"><span class="ngt">관리</span>
       <button data-v="dl" title="다운로드"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></svg><span>다운로드</span></button>
@@ -301,12 +302,13 @@
         <option value="sd35">Stable Diffusion 3.5</option>
         <option value="hidream">HiDream (I1 Full·Dev·Fast)</option>
         <option value="lumina">Lumina 2</option>
+        <option value="qwenimg">Qwen-Image (글자 잘 그리는 모델)</option>
       </select></label>
     <div data-for="sdxl" data-blk="sd-main"></div>
-    <div data-for="flux chroma krea2 sd35 hidream lumina">
+    <div data-for="flux chroma krea2 sd35 hidream lumina qwenimg">
       <label class="f">모델 파일<select name="fx_model"></select></label>
       <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button> <span data-for="sd35"><button type="button" class="link" data-open="checkpoints">체크포인트 폴더 열기</button></span></p>
-      <p class="hint plain" data-for="sd35 hidream lumina">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 안 되면 '설치와 모델'에서 해당 공용 파일을 설치해 주세요. 문장형 프롬프트가 잘 맞아요.</p>
+      <p class="hint plain" data-for="sd35 hidream lumina qwenimg">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 안 되면 '설치와 모델'에서 해당 공용 파일을 설치해 주세요. 문장형 프롬프트가 잘 맞아요.</p>
       <details data-for="flux chroma krea2"><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
         <label class="f" data-for="flux chroma">VAE<select name="fx_vae"></select></label>
         <label class="f" data-for="flux chroma">T5 텍스트 인코더<select name="fx_t5"></select></label>
@@ -322,7 +324,7 @@
       <p class="hint" id="wcs"></p>
     </details>
     <p class="hint" data-for="flux chroma krea2">FLUX·Krea 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
-    <label class="f" data-for="sdxl chroma krea2 sd35 hidream lumina">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <label class="f" data-for="sdxl chroma krea2 sd35 hidream lumina qwenimg">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="row">
       <label class="f">가로<input type="number" name="w" value="1024" step="1" min="256" max="2048"></label>
@@ -365,11 +367,11 @@
       </div>
     </details>
     <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
-    <details data-for="flux chroma krea2 sd35 hidream lumina" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
+    <details data-for="flux chroma krea2 sd35 hidream lumina qwenimg" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
         <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.1" min="0" max="20"></label>
-        <label class="f" data-for="chroma krea2 sd35 hidream lumina">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
+        <label class="f" data-for="chroma krea2 sd35 hidream lumina qwenimg">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
@@ -453,7 +455,9 @@
       <label class="f">크기<select name="size"><option value="832x480">가로 480p (기본)</option><option value="480x832">세로 480p</option><option value="640x640">정사각</option><option value="1280x704">가로 720p (VRAM 많이 필요)</option></select></label>
       <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option></select></label>
     </div>
-    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option></select></label>
+    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx">LTX-Video — 아주 빠름</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
+    <p class="hint plain" id="vid-more-note" hidden></p>
+    <div class="f" id="vid-audio-row" hidden><span>목소리 (소리 파일, 앞 5초까지 써요)</span><span class="seedrow"><input type="file" id="vid-audio" accept="audio/*"><button type="button" class="ghost sm" id="vid-audio-clear" hidden>빼기</button></span><audio id="vid-audio-pv" controls hidden></audio></div>
     <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. 안 되면 5B 를 쓰세요.</p>
     <p class="warn" id="w-vid14" hidden></p>
     <label class="chk" id="vid-fast-row" hidden><input type="checkbox" name="fast"> 4단계 가속 (LoRA — 몇 배 빨라요) <span class="mute" id="vid-fast-hint"></span></label>
@@ -484,17 +488,20 @@
   <form id="f-music" autocomplete="off" novalidate>
     <button class="go">음악 만들기</button>
     <p class="warn" id="w-music" hidden></p>
+    <label class="f">만들 것<select name="mengine"><option value="music">음악·노래 (ACE-Step)</option><option value="sfx">효과음 (Stable Audio)</option></select></label>
     <p class="hint plain">어떤 분위기인지 적고(가사는 선택), [음악 만들기]를 누르면 곡이 나와요. 처음 한 번은 모델을 불러오느라 오래 걸려요.</p>
     <label class="f">스타일<textarea name="tags" rows="3" placeholder="예: lo-fi, chill, piano, relaxing, rainy night"></textarea></label>
-    <p class="hint plain">장르·악기·분위기를 <b>영어 단어</b>로 쉼표로 이어 쓰면 잘 맞아요. 예: k-pop, upbeat, female vocal, synth</p>
-    <label class="chk"><input type="checkbox" name="instrumental"> 가사 없이 연주곡으로</label>
-    <label class="f" id="mu-lyr">가사 (선택)<textarea name="lyrics" rows="6" placeholder="[verse]&#10;첫 줄 가사&#10;&#10;[chorus]&#10;후렴 가사"></textarea></label>
+    <p class="hint plain mu-sfx" hidden>효과음은 소리를 <b>영어</b>로 구체적으로 적으면 잘 나와요. 예: heavy rain on a tin roof, distant thunder / footsteps on gravel</p>
+    <p class="hint plain mu-ace">장르·악기·분위기를 <b>영어 단어</b>로 쉼표로 이어 쓰면 잘 맞아요. 예: k-pop, upbeat, female vocal, synth</p>
+    <label class="chk mu-ace"><input type="checkbox" name="instrumental"> 가사 없이 연주곡으로</label>
+    <label class="f mu-ace" id="mu-lyr">가사 (선택)<textarea name="lyrics" rows="6" placeholder="[verse]&#10;첫 줄 가사&#10;&#10;[chorus]&#10;후렴 가사"></textarea></label>
     <div class="row">
-      <label class="f">길이<select name="seconds"><option value="30">30초</option><option value="60" selected>1분</option><option value="120">2분</option><option value="180">3분</option><option value="240">4분</option></select></label>
+      <label class="f mu-sfx" hidden>길이(초, 최대 47)<input type="number" name="sfx_seconds" value="10" min="1" max="47" step="0.1"></label>
+      <label class="f mu-ace">길이<select name="seconds"><option value="30">30초</option><option value="60" selected>1분</option><option value="120">2분</option><option value="180">3분</option><option value="240">4분</option></select></label>
       <label class="f">파일 형식<select name="format"><option value="mp3">MP3 (작아요)</option><option value="flac">FLAC (무손실)</option></select></label>
     </div>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"></span></label>
-    <details><summary>고급 설정</summary>
+    <details class="mu-ace"><summary>고급 설정</summary>
       <div class="row">
         <label class="f">빠르기(BPM)<input type="number" name="bpm" value="120" min="40" max="240"></label>
         <label class="f">박자<select name="timesignature"><option value="4" selected>4/4</option><option value="3">3/4</option><option value="2">2/4</option><option value="6">6/8</option></select></label>
@@ -941,6 +948,10 @@
 <div id="sel-sum" class="selsum" aria-live="polite"></div>
     <h4>대화 모델</h4><div id="cat-llm"></div>
     <h4>이미지 모델</h4><div id="cat-img"></div>
+    <h4>영상 모델</h4><div id="cat-vid"></div>
+    <h4>음악·효과음 모델</h4><div id="cat-aud"></div>
+    <h4>음성 모델 <small class="mute">(음성 만들기 전용 공간에 따로 설치돼요)</small></h4><div id="cat-voice"></div>
+    <h4>3D 모델</h4><div id="cat-3d"></div>
   
 <h4>진행 상황</h4><div id="tasks"></div>
 </div></div>
@@ -1037,6 +1048,10 @@
 <div class="actions"><button type="button" class="ghost sm" id="s-test">알림 시험해 보기</button></div></div></div>
   <div class="cpane" id="fold-gen"><div class="card"><h3>메모리와 속도</h3>
 <div class="row"><div class="rl"><b>대화 모델을 메모리에 두는 시간</b><span>마지막 대화 뒤 이 시간이 지나면 모델을 내려서 그래픽 메모리를 비워요. 길수록 다음 대답이 빠르고, 짧을수록 이미지 생성에 메모리를 더 줘요.</span></div><div class="rc"><select id="pf-ka"><option value="0">바로 내리기</option><option value="5m">5분 (기본)</option><option value="30m">30분</option><option value="2h">2시간</option><option value="-1">계속 두기</option></select></div></div>
+<div class="row"><div class="rl"><b>그래픽 메모리(VRAM) 사용 방식</b><span>메모리 부족 오류가 자주 나면 '아끼기'로 바꿔요. 느려지지만 큰 모델도 돌아가요. 프로그램을 다시 시작하면 적용돼요.</span></div><div class="rc"><select id="pf-vram"><option value="auto">자동 (기본)</option><option value="low">아끼기 (--lowvram)</option><option value="none">최대한 아끼기 (--novram, 아주 느림)</option><option value="high">넉넉하게 (--highvram, VRAM 많은 PC)</option></select></div></div>
+<div class="row"><div class="rl"><b>다른 프로그램용으로 남겨 둘 VRAM</b><span>게임·방송 프로그램 등을 같이 쓸 때 이만큼은 이미지 엔진이 쓰지 않아요. 프로그램을 다시 시작하면 적용돼요.</span></div><div class="rc"><select id="pf-reserve"><option value="0">안 남김 (기본)</option><option value="0.5">0.5GB</option><option value="1">1GB</option><option value="2">2GB</option><option value="4">4GB</option></select></div></div>
+<div class="row"><div class="rl"><b>모델을 메모리에 붙잡아 두기</b><span>끄면 작업이 끝날 때마다 모델을 RAM·VRAM 에서 내려서 메모리를 덜 써요(다음 작업 시작은 느려져요). 프로그램을 다시 시작하면 적용돼요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="pf-smart"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>대화 모델이 쓸 장치</b><span>'CPU만'으로 하면 대화가 그래픽 메모리를 쓰지 않아 이미지 작업과 같이 쓸 때 메모리 부족이 줄어요(대화는 느려져요).</span></div><div class="rc"><select id="pf-chatgpu"><option value="auto">자동 — GPU 우선 (기본)</option><option value="cpu">CPU만</option></select></div></div>
 <div class="row"><div class="rl"><b>이미지 모델을 메모리에 두는 시간</b><span>이미지 작업이 끝난 뒤 이 시간이 지나면 이미지 모델을 그래픽 메모리에서 내려요. 길수록 다음 그림이 빨리 시작하고, 짧을수록 게임 같은 다른 프로그램에 메모리를 더 줘요.</span></div><div class="rc"><select id="pf-ik"><option value="0">바로 내리기 (최대 30초 뒤)</option><option value="5m">5분</option><option value="30m">30분 (기본)</option><option value="2h">2시간</option><option value="-1">계속 두기</option></select></div></div>
 <div class="row"><div class="rl"><b>이미지 속도 옵션 (fp16 누적)</b><span>ComfyUI가 지원할 때만 쓰는 안전한 속도 옵션이에요. 문제가 생기면 끄세요. 프로그램을 다시 시작해야 적용돼요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="pf-speed"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>미리보기 캐시 최대 용량</b><span>갤러리에서 처음 볼 때 작은 미리보기를 만들어 둬서 다음부터 빨리 떠요. 이 용량을 넘으면 오래 안 본 미리보기부터 지우고, 사진을 지우면 그 미리보기도 같이 지워요. 원래 사진은 건드리지 않아요.</span></div><div class="rc"><select id="pf-thumb"><option value="200">200MB</option><option value="500">500MB (기본)</option><option value="1000">1GB</option><option value="2000">2GB</option></select></div></div>

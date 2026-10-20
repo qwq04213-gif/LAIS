@@ -19,6 +19,7 @@ const FX_DEF={sdxl:{rdenoise:0.3,cn_strength:0.7},flux:{rdenoise:0.3,cn_strength
               krea2:{rdenoise:0.3,cn_strength:1,fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
               sd35:{fx_steps:28,fx_cfg:4.5,fx_sampler:'euler',fx_scheduler:'sgm_uniform'},hidream:{fx_steps:50,fx_cfg:5,fx_sampler:'uni_pc',fx_scheduler:'simple'},
               lumina:{fx_steps:25,fx_cfg:4,fx_sampler:'res_multistep',fx_scheduler:'simple'},
+              qwenimg:{fx_steps:20,fx_cfg:2.5,fx_sampler:'euler',fx_scheduler:'simple'},
               qwen:{rdenoise:0.45}};   // Krea 2 Turbo 기준(8단계, CFG 1)
 const LORA_NOTE='프롬프트에 &lt;lora:이름:0.8&gt; 태그를 쓰면 설치된 LoRA 중 이름이 맞는 파일을 자동으로 찾아 적용해요. 개수 제한은 없어요.';
 
@@ -75,6 +76,7 @@ function formFam(f){
   const eng=(e.gengine&&e.gengine.value)||(e.rengine&&e.rengine.value)||(e.engine&&e.engine.value);
   if(['flux','chroma','krea2','qwen','hidream','lumina'].includes(eng))return eng;
   if(eng==='sd35')return 'sd3';
+  if(eng==='qwenimg')return 'qwen';
   const ck=e.ckpt&&e.ckpt.value;
   const fam=ck&&LISTS.families&&LISTS.families['checkpoints/'+ck];
   return fam&&fam.family==='sd15'?'sd15':'sdxl'}
@@ -378,7 +380,7 @@ function fillCaps(){
 }
 async function loadCaps(){try{CAPS=await api('/api/caps');fillCaps()}catch{}}
 /* FLUX 종류에 맞는 모델만 목록에 보여 줘요 (이름에 chroma 가 있으면 Chroma) */
-const OXF=['sd35','hidream','lumina'],OXN={sd35:'Stable Diffusion 3.5',hidream:'HiDream',lumina:'Lumina 2'};
+const OXF=['sd35','hidream','lumina','qwenimg'],OXN={sd35:'Stable Diffusion 3.5',hidream:'HiDream',lumina:'Lumina 2',qwenimg:'Qwen-Image'};
 const fxModels=g=>(OXF.includes(g)?(LISTS.oxmodels||{})[g]:g==='chroma'?LISTS.chromamodels:g==='krea2'?LISTS.krea2models:LISTS.fluxmodels)||[];
 const fxLabel=x=>x.startsWith('ckpt::')?x.slice(6)+' (올인원 체크포인트)':x;
 function fillFx(){

@@ -405,6 +405,8 @@ def wf_other(q):
         model = [un, 0]
         if fam == "hidream":
             clip = w.add("QuadrupleCLIPLoader", clip_name1=te["clip_l"], clip_name2=te["clip_g"], clip_name3=te["t5"], clip_name4=te["llama"])
+        elif fam == "qwenimg":
+            clip = w.add("CLIPLoader", clip_name=te["qwen"], type="qwen_image", device="default")
         else:
             clip = w.add("CLIPLoader", clip_name=te["gemma"], type="lumina2", device="default")
         clip_ref = [clip, 0]
@@ -413,7 +415,7 @@ def wf_other(q):
         model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
     if fam == "hidream":
         model = [w.add("ModelSamplingSD3", model=model, shift=q["shift"]), 0]
-    elif fam == "lumina":
+    elif fam in ("lumina", "qwenimg"):
         model = [w.add("ModelSamplingAuraFlow", model=model, shift=q["shift"]), 0]
     pt, nt = q["prompt"], q["negative"]
     if fam == "lumina":
@@ -445,6 +447,23 @@ def wf_music(q):
     return w.n
 
 
+def wf_sfx(q):
+    """Stable Audio Open 1.0: 체크포인트(모델·VAE) + T5-base 인코더 → 효과음. q: ckpt, te, prompt, negative, seed, seconds, steps, cfg, sampler, scheduler, fmt"""
+    w = WF()
+    ck = w.add("CheckpointLoaderSimple", ckpt_name=q["ckpt"])
+    clip = w.add("CLIPLoader", clip_name=q["te"], type="stable_audio", device="default")
+    pos = w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, 0])
+    neg = w.add("CLIPTextEncode", text=q["negative"], clip=[clip, 0])
+    cond = w.add("ConditioningStableAudio", positive=[pos, 0], negative=[neg, 0], seconds_start=0.0, seconds_total=q["seconds"])
+    lat = w.add("EmptyLatentAudio", seconds=q["seconds"], batch_size=1)
+    k = w.add("KSampler", model=[ck, 0], seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+              positive=[cond, 0], negative=[cond, 1], latent_image=[lat, 0], denoise=1.0)
+    dec = w.add("VAEDecodeAudio", samples=[k, 0], vae=[ck, 2])
+    fmt = {"format": "flac"} if q.get("fmt") == "flac" else {"format": "mp3", "format.quality": "V0"}
+    w.add("SaveAudioAdvanced", audio=[dec, 0], filename_prefix="audio/hub", **fmt)
+    return w.n
+
+
 def wf_video(q, start=None):
     """Wan 2.2 5B: 글→영상, start(입력 이미지 파일명)가 있으면 그 이미지에서 시작하는 이미지→영상. 결과는 SaveVideo(mp4)."""
     w = WF()
@@ -466,6 +485,94 @@ def wf_video(q, start=None):
     img = w.add("VAEDecode", samples=[k, 0], vae=[vae, 0])
     vid = w.add("CreateVideo", images=[img, 0], fps=q["fps"])
     w.add("SaveVideo", video=[vid, 0], filename_prefix="video/hub", format="auto", codec="auto")
+    return w.n
+
+
+def _save_video(w, img, fps, audio=None):
+    vin = dict(images=img, fps=fps)
+    if audio:
+        vin["audio"] = audio
+    vid = w.add("CreateVideo", **vin)
+    w.add("SaveVideo", video=[vid, 0], filename_prefix="video/hub", format="auto", codec="auto")
+
+
+def wf_ltx(q, start=None):
+    """LTX-Video(빠른 영상): 체크포인트 + T5(ltxv) → 글→영상 또는 이미지→영상. q: ckpt, te, prompt, negative, seed, w, h, frames, fps, steps, cfg"""
+    w = WF()
+    ck = w.add("CheckpointLoaderSimple", ckpt_name=q["ckpt"])
+    clip = w.add("CLIPLoader", clip_name=q["te"], type="ltxv", device="default")
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, 0]), 0]
+    neg = [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, 0]), 0]
+    if start:
+        im = w.add("LoadImage", image=start)
+        i2v = w.add("LTXVImgToVideo", positive=pos, negative=neg, vae=[ck, 2], image=[im, 0], width=q["w"], height=q["h"],
+                    length=q["frames"], batch_size=1, strength=1.0)
+        pos, neg, lat = [i2v, 0], [i2v, 1], [i2v, 2]
+    else:
+        lat = [w.add("EmptyLTXVLatentVideo", width=q["w"], height=q["h"], length=q["frames"], batch_size=1), 0]
+    cond = w.add("LTXVConditioning", positive=pos, negative=neg, frame_rate=float(q["fps"]))
+    sig = w.add("LTXVScheduler", steps=q["steps"], max_shift=2.05, base_shift=0.95, stretch=True, terminal=0.1, latent=lat)
+    smp = w.add("KSamplerSelect", sampler_name="euler")
+    k = w.add("SamplerCustom", model=[ck, 0], add_noise=True, noise_seed=q["seed"], cfg=q["cfg"], positive=[cond, 0], negative=[cond, 1],
+              sampler=[smp, 0], sigmas=[sig, 0], latent_image=lat)
+    _save_video(w, [w.add("VAEDecode", samples=[k, 0], vae=[ck, 2]), 0], q["fps"])
+    return w.n
+
+
+def _wan21_base(w, q):
+    unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
+    clip = w.add("CLIPLoader", clip_name=q["te"], type="wan", device="default")
+    vae = w.add("VAELoader", vae_name=q["vae"])
+    model = [w.add("ModelSamplingSD3", model=[unet, 0], shift=q.get("shift", 8.0)), 0]
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=[clip, 0]), 0]
+    neg = [w.add("CLIPTextEncode", text=q["negative"], clip=[clip, 0]), 0]
+    return model, [vae, 0], pos, neg
+
+
+def wf_vace(q, ref):
+    """Wan VACE: 참고 이미지(사람·사물·스타일)를 유지하며 글대로 영상. ref = 입력 이미지 파일명."""
+    w = WF()
+    model, vae, pos, neg = _wan21_base(w, q)
+    li = w.add("LoadImage", image=ref)
+    v = w.add("WanVaceToVideo", positive=pos, negative=neg, vae=vae, width=q["w"], height=q["h"], length=q["frames"], batch_size=1,
+              strength=q.get("strength", 1.0), reference_image=[li, 0])
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+              positive=[v, 0], negative=[v, 1], latent_image=[v, 2], denoise=1.0)
+    tr = w.add("TrimVideoLatent", samples=[k, 0], trim_amount=[v, 3])      # 참고 이미지 몫으로 붙은 앞 프레임을 잘라요
+    _save_video(w, [w.add("VAEDecode", samples=[tr, 0], vae=vae), 0], q["fps"])
+    return w.n
+
+
+def wf_s2v(q, ref, audio):
+    """Wan 2.2 S2V: 사진 한 장 + 목소리(소리 파일) → 말하는 영상(입 모양 맞춤). audio = 입력 폴더의 소리 파일 이름."""
+    w = WF()
+    model, vae, pos, neg = _wan21_base(w, q)
+    au = w.add("LoadAudio", audio=audio)
+    enc = w.add("AudioEncoderLoader", audio_encoder_name=q["audio_encoder"])
+    ao = w.add("AudioEncoderEncode", audio_encoder=[enc, 0], audio=[au, 0])
+    li = w.add("LoadImage", image=ref)
+    v = w.add("WanSoundImageToVideo", positive=pos, negative=neg, vae=vae, width=q["w"], height=q["h"], length=q["frames"], batch_size=1,
+              audio_encoder_output=[ao, 0], ref_image=[li, 0])
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+              positive=[v, 0], negative=[v, 1], latent_image=[v, 2], denoise=1.0)
+    _save_video(w, [w.add("VAEDecode", samples=[k, 0], vae=vae), 0], q["fps"], audio=[au, 0])
+    return w.n
+
+
+def wf_3d(q, img):
+    """Hunyuan3D 2: 사진 한 장 → 3D 모델(GLB). q: ckpt, seed, steps, cfg, octree, threshold"""
+    w = WF()
+    ck = w.add("ImageOnlyCheckpointLoader", ckpt_name=q["ckpt"])
+    li = w.add("LoadImage", image=img)
+    cv = w.add("CLIPVisionEncode", clip_vision=[ck, 1], image=[li, 0], crop="none")
+    cond = w.add("Hunyuan3Dv2Conditioning", clip_vision_output=[cv, 0])
+    lat = w.add("EmptyLatentHunyuan3Dv2", resolution=3072, batch_size=1)
+    model = [w.add("ModelSamplingAuraFlow", model=[ck, 0], shift=1.0), 0]
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name="euler", scheduler="normal",
+              positive=[cond, 0], negative=[cond, 1], latent_image=[lat, 0], denoise=1.0)
+    vox = w.add("VAEDecodeHunyuan3D", samples=[k, 0], vae=[ck, 2], num_chunks=8000, octree_resolution=q.get("octree", 256))
+    mesh = w.add("VoxelToMesh", voxel=[vox, 0], algorithm="surface net", threshold=q.get("threshold", 0.6))
+    w.add("SaveGLB", mesh=[mesh, 0], filename_prefix="3d/hub")
     return w.n
 
 

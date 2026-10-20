@@ -323,10 +323,13 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
  $('#s-test').onclick=()=>qNotify({state:'done',label:'알림 시험',error:''});
  /* 서버에 저장하는 값 */
  let PF=null;
- async function prefLoad(){try{PF=await api('/api/prefs')}catch{return}$('#pf-ka').value=PF.chat_keep_alive;$('#pf-ik').value=PF.image_keep_alive||'30m';$('#pf-thumb').value=String(PF.thumb_cache_mb||500);$('#pf-speed').checked=!!PF.speed_boost}
+ async function prefLoad(){try{PF=await api('/api/prefs')}catch{return}$('#pf-ka').value=PF.chat_keep_alive;$('#pf-ik').value=PF.image_keep_alive||'30m';$('#pf-thumb').value=String(PF.thumb_cache_mb||500);$('#pf-speed').checked=!!PF.speed_boost;$('#pf-vram').value=PF.vram_mode||'auto';$('#pf-reserve').value=String(PF.reserve_vram||0);$('#pf-smart').checked=PF.smart_memory!==false;$('#pf-chatgpu').value=PF.chat_gpu||'auto'}
  const pfSave=async body=>{try{const r=await api('/api/prefs',body);if(r.error)return toast(r.error);PF=r.prefs;$('#pf-msg').textContent='저장했어요.'}catch{toast('저장하지 못했어요.')}};
  $('#pf-ka').onchange=e=>pfSave({chat_keep_alive:e.target.value});
  $('#pf-ik').onchange=e=>pfSave({image_keep_alive:e.target.value});
+ const rs=()=>{$('#pf-msg').textContent='저장했어요. 프로그램을 다시 시작하면 적용돼요.'};
+ $('#pf-vram').onchange=e=>pfSave({vram_mode:e.target.value}).then(rs);$('#pf-reserve').onchange=e=>pfSave({reserve_vram:+e.target.value}).then(rs);
+ $('#pf-smart').onchange=e=>pfSave({smart_memory:e.target.checked}).then(rs);$('#pf-chatgpu').onchange=e=>pfSave({chat_gpu:e.target.value});
  $('#pf-thumb').onchange=e=>pfSave({thumb_cache_mb:+e.target.value});
  $('#pf-speed').onchange=e=>{pfSave({speed_boost:e.target.checked});$('#pf-msg').textContent='프로그램을 다시 시작하면 적용돼요.'};
  /* 단축키 끄기 (기존 핸들러보다 먼저 막아요) */

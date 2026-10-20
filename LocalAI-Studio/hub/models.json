@@ -77,6 +77,44 @@
    ]
   },
   {
+   "id": "qwen-image",
+   "name": "Qwen-Image (fp8) — 글자 잘 그리는 생성 모델",
+   "gb": 28,
+   "desc": "이미지 생성 > 모델 종류 'Qwen-Image'. 그림 속 글자(한글·영어)와 포스터·간판을 잘 그려요. 편집 모델(Qwen-Image-Edit)과 텍스트 인코더·VAE를 같이 써요. VRAM 12GB 이상, RAM 32GB 이상 권장. Apache-2.0.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "stable-audio-open",
+   "name": "Stable Audio Open 1.0 — 효과음 만들기",
+   "gb": 5.3,
+   "desc": "음악 만들기 화면에서 '효과음 (Stable Audio)'를 고르면 써요. 빗소리·발소리·폭발음 같은 최대 47초 소리를 글로 만들어요. 모델 파일은 HuggingFace 에서 'stable-audio-open-1.0' 사용 동의를 한 뒤 다운로드 탭에 HuggingFace API 키를 넣어야 받을 수 있어요(Stability AI Community 라이선스).",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/stabilityai/stable-audio-open-1.0/resolve/main/model.safetensors",
+     "name": "stable_audio_open_1.0.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/google-t5/t5-base/resolve/main/model.safetensors",
+     "name": "t5_base.safetensors"
+    }
+   ]
+  },
+  {
    "id": "noobai",
    "name": "NoobAI-XL 1.1 (SDXL)",
    "gb": 7,
@@ -450,6 +488,70 @@
     {
      "dir": "loras",
      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "ltx-video",
+   "name": "LTX-Video 2B 0.9.8 (빠른 영상)",
+   "gb": 6.3,
+   "requires": [
+    "flux-common"
+   ],
+   "desc": "영상 만들기 > 영상 모델 'LTX-Video'. 글이나 사진으로 몇십 초 만에 짧은 영상을 만들어요(8단계). 화질은 Wan 보다 낮지만 훨씬 빨라요. T5 텍스트 인코더는 FLUX 공용 파일을 같이 써요. VRAM 8GB 이상.",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltxv-2b-0.9.8-distilled.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan-vace",
+   "name": "Wan 2.1 VACE 1.3B (사진 속 인물·사물 유지 영상)",
+   "gb": 4.3,
+   "requires": [
+    "wan-common",
+    "wan21-vae"
+   ],
+   "desc": "영상 만들기 > 영상 모델 'Wan VACE'. 올린 사진의 인물·사물·스타일을 유지하면서 프롬프트대로 영상을 만들어요. VRAM 8GB 이상.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_vace_1.3B_fp16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "wan-s2v",
+   "name": "Wan 2.2 S2V 14B (사진 + 목소리 → 말하는 영상)",
+   "gb": 17.0,
+   "requires": [
+    "wan-common",
+    "wan21-vae"
+   ],
+   "desc": "영상 만들기 > 영상 모델 'Wan 2.2 S2V'. 인물 사진과 목소리 파일로 입 모양이 맞는 영상을 만들어요(한 번에 약 5초). 음성 인코더(wav2vec2)도 같이 받아요. VRAM 16GB 이상 권장, 오래 걸려요.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors"
+    },
+    {
+     "dir": "audio_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "hunyuan3d-2",
+   "name": "Hunyuan3D 2 (사진 → 3D 모델)",
+   "gb": 4.9,
+   "desc": "기타 기능 > 사진 → 3D. 사진 한 장으로 3D 모양(GLB)을 만들어요. 색(텍스처)은 없어요. VRAM 8GB 이상. Tencent Hunyuan Community 라이선스(일부 지역 제외)를 모델 페이지에서 확인하세요.",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/tencent/Hunyuan3D-2/resolve/main/hunyuan3d-dit-v2-0/model.fp16.safetensors",
+     "name": "hunyuan3d-dit-v2_fp16.safetensors"
     }
    ]
   },

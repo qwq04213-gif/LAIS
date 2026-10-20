@@ -45,7 +45,7 @@ HFURL = os.environ.get("HF_URL", "https://huggingface.co")
 GHURL = os.environ.get("GITHUB_URL", "https://github.com")
 NODEMAP_URL = os.environ.get("NODEMAP_URL", "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json")
 PROFILES = json.loads((HUB / "profiles.json").read_text(encoding="utf-8"))
-FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg", "ultralytics/bbox", "ipadapter", "clip_vision", "style_models"}
+FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg", "ultralytics/bbox", "ipadapter", "clip_vision", "style_models", "audio_encoders"}
 EXT = (".safetensors", ".ckpt", ".pth", ".pt", ".gguf", ".bin")
 DEFAULT_NEG = ("lowres, bad anatomy, bad hands, extra digits, missing fingers, worst quality, "
                "jpeg artifacts, watermark, text, signature")
@@ -405,7 +405,7 @@ def start_engines():
     if PY.exists() and not alive(CUI + "/system_stats"):
         t0 = time.time(); sa = speed_args(); ENG_T["args"] = round(time.time() - t0, 1)
         cmd = [str(PY), "-s", str(COMFY / "main.py"), "--windows-standalone-build",
-               "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"] + sa
+               "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"] + sa + mem_args()
         procs.append(subprocess.Popen(cmd, cwd=HOME, stdout=open(LOGS / "comfyui.log", "ab"),
                                       stderr=subprocess.STDOUT))
         threading.Thread(target=_boot_watch, args=(t0,), daemon=True).start()
@@ -960,7 +960,7 @@ def run_wf(wf, J, raw=False):
                     raise RuntimeError(msg)
             imgs = []
             for o in h.get("outputs", {}).values():
-                for im in (o.get("images", []) + (o.get("audio", []) if raw else [])):
+                for im in (o.get("images", []) + (o.get("audio", []) + o.get("3d", []) if raw else [])):
                     with urllib.request.urlopen(CUI + "/view?" + urllib.parse.urlencode(im), timeout=300 if raw else 60) as f:
                         data = f.read()
                     imgs.append((Path(im["filename"]).name, data) if raw else Image.open(io.BytesIO(data)).convert("RGB"))
@@ -1641,7 +1641,7 @@ def feat_ipadapter(p, J):
 
 def do_feat(p, J):
     fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color,
-          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap}.get(p.get("feature"))
+          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "img3d": feat_3d}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
@@ -1954,10 +1954,11 @@ def do_gen_flux(p, J):
     return out
 
 
-OX_FAMS = ("sd35", "hidream", "lumina")
-OX_NAMES = {"sd35": "SD3.5", "hidream": "HiDream", "lumina": "Lumina 2"}
+OX_FAMS = ("sd35", "hidream", "lumina", "qwenimg")
+OX_NAMES = {"sd35": "SD3.5", "hidream": "HiDream", "lumina": "Lumina 2", "qwenimg": "Qwen-Image"}
 # 계열별 기본값: (단계, CFG, 샘플러, 스케줄러, shift). HiDream 은 파일 이름(full/dev/fast)에 따라 달라요.
-OX_DEFAULTS = {"sd35": (28, 4.5, "euler", "sgm_uniform", None), "lumina": (25, 4.0, "res_multistep", "simple", 6.0)}
+OX_DEFAULTS = {"sd35": (28, 4.5, "euler", "sgm_uniform", None), "lumina": (25, 4.0, "res_multistep", "simple", 6.0),
+               "qwenimg": (20, 2.5, "euler", "simple", 3.1)}
 HIDREAM_DEFAULTS = {"full": (50, 5.0, "uni_pc", "simple", 3.0), "dev": (28, 1.0, "lcm", "normal", 3.0), "fast": (16, 1.0, "lcm", "normal", 3.0)}
 
 
@@ -1988,6 +1989,9 @@ def ox_parts(fam):
                    "t5": _pick(te, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl"), "llama": _pick(te, ("llama", "3.1"), "llama")}
     elif fam == "lumina":
         r["te"] = {"gemma": _pick(te, "gemma")}
+    elif fam == "qwenimg":      # Qwen-Image 생성: 편집 모델과 같은 Qwen2.5-VL 인코더·Qwen Image VAE 를 같이 써요
+        r["te"] = {"qwen": _pick(te, ("qwen_2.5_vl",), ("qwen2.5", "vl"), ("qwen", "2.5"))}
+        r["vae"] = _pick(va, "qwen_image_vae", ("qwen", "vae"))
     else:
         r["te"] = {"clip_l": _pick(nohd, "clip_l"), "clip_g": _pick(nohd, "clip_g"), "t5": _pick(nohd, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl")}
     return r
@@ -2003,6 +2007,8 @@ def other_models():
         fam = model_family("diffusion_models", n)[0]
         if fam in ("hidream", "lumina"):
             out[fam].append(n)
+        elif fam == "qwen" and "edit" not in n.lower():
+            out["qwenimg"].append(n)
     return out
 
 
@@ -2023,15 +2029,19 @@ def ox_setup(p, J, fam):
         elif not all(te.values()):
             raise RuntimeError("SD3.5 텍스트 인코더가 없어요(" + ", ".join(k for k, v in te.items() if not v) + "). '설치와 모델' 탭의 'SD3.5 공용 파일'을 설치해 주세요.")
     else:
-        names = {"clip_l": "CLIP-L", "clip_g": "CLIP-G", "t5": "T5", "llama": "Llama 3.1", "gemma": "Gemma 2"}
-        miss = [names[k] for k, v in te.items() if not v] + (["VAE(ae.safetensors)"] if not vae else [])
+        names = {"clip_l": "CLIP-L", "clip_g": "CLIP-G", "t5": "T5", "llama": "Llama 3.1", "gemma": "Gemma 2", "qwen": "Qwen2.5-VL 텍스트 인코더"}
+        miss = [names[k] for k, v in te.items() if not v] + ([("Qwen Image VAE" if fam == "qwenimg" else "VAE(ae.safetensors)")] if not vae else [])
         if miss:
             raise RuntimeError("없는 파일: " + ", ".join(miss) + f". '설치와 모델' 탭에서 {OX_NAMES[fam]} 공용 파일을 설치해 주세요.")
     if fam == "lumina":
         ct = caps().get("clip_types") or []
         if ct and "lumina2" not in ct:
             raise RuntimeError("이 ComfyUI 는 Lumina 2 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
-    need = {"sd35": [], "hidream": ["QuadrupleCLIPLoader", "ModelSamplingSD3"], "lumina": ["ModelSamplingAuraFlow"]}[fam]
+    if fam == "qwenimg":
+        ct = caps().get("clip_types") or []
+        if ct and "qwen_image" not in ct:
+            raise RuntimeError("이 ComfyUI 는 Qwen-Image 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    need = {"sd35": [], "hidream": ["QuadrupleCLIPLoader", "ModelSamplingSD3"], "lumina": ["ModelSamplingAuraFlow"], "qwenimg": ["ModelSamplingAuraFlow"]}[fam]
     if fam == "sd35" and te:
         need = ["TripleCLIPLoader"]
     gone = [n for n in need if not has_node(n)]
@@ -2224,7 +2234,7 @@ WAN_SIZES = {"832x480": "가로 480p", "480x832": "세로 480p", "640x640": "정
 
 
 def wan_models():
-    return [n for n in files("diffusion_models") if "wan" in n.lower() and "14b" not in n.lower()]
+    return [n for n in files("diffusion_models") if "wan" in n.lower() and "14b" not in n.lower() and "vace" not in n.lower() and "s2v" not in n.lower()]
 
 
 def wan14_parts(i2v):
@@ -2325,8 +2335,46 @@ def music_models():
     return [n for n in files("checkpoints") if "ace_step" in n.lower() or "acestep" in n.lower()]
 
 
+def sfx_models():
+    """checkpoints 폴더의 Stable Audio Open 파일."""
+    return [n for n in files("checkpoints") if re.search(r"stable[_-]?audio", n.lower())]
+
+
+SFX_NODES = ("EmptyLatentAudio", "ConditioningStableAudio", "VAEDecodeAudio")
+
+
+def do_sfx(p, J):
+    """Stable Audio Open 1.0 으로 효과음 만들기(최대 47초). 결과: [(바이트, 정보, 확장자)]"""
+    gone = [n for n in SFX_NODES if not has_node(n)]
+    if gone:
+        raise RuntimeError(f"이 ComfyUI 에는 효과음에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 를 업데이트해 주세요.")
+    models = sfx_models()
+    if not models:
+        raise RuntimeError("Stable Audio 모델이 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 설치해 주세요.")
+    te = _pick(files("text_encoders"), "t5_base", "t5-base", ("t5", "base"))
+    if not te:
+        raise RuntimeError("T5-base 텍스트 인코더가 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 다시 설치해 주세요.")
+    text = (p.get("tags") or "").strip()
+    if not text:
+        raise ValueError("어떤 소리인지 적어 주세요. 예: heavy rain on a tin roof")
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    sec = clamp(num(p, "sfx_seconds", 10.0), 1.0, 47.0)
+    q = dict(ckpt=models[0], te=te, prompt=text, negative="low quality, distorted, noise", seed=seed_of(p), seconds=sec,
+             steps=clamp(num(p, "sfx_steps", 50, int), 10, 150), cfg=7.0,
+             sampler="dpmpp_3m_sde_gpu" if "dpmpp_3m_sde_gpu" in (caps()["samplers"] or []) else "euler",
+             scheduler="exponential" if "exponential" in (caps()["schedulers"] or []) else "simple",
+             fmt=p.get("format") if p.get("format") in ("mp3", "flac") else "mp3")
+    J["msg"] = f"효과음 만드는 중 ({sec:.0f}초)"
+    res = run_wf(flows.wf_sfx(q), J, raw=True)
+    info = dict(kind="sfx", prompt=text, seed=q["seed"], seconds=sec, steps=q["steps"], model=q["ckpt"])
+    return [(data, info, Path(name).suffix.lower() or ".mp3") for name, data in res[:1]]
+
+
 def do_music(p, J):
     """ACE-Step 1.5 로 음악 만들기. 결과: [(바이트, 정보, 확장자)]"""
+    if p.get("mengine") == "sfx":
+        return do_sfx(p, J)
     gone = [n for n in MUSIC_NODES if not has_node(n)]
     if gone:
         raise RuntimeError(f"이 ComfyUI 에는 음악 만들기에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
@@ -2449,6 +2497,8 @@ def do_tts_model(p, J, engine, text, speed):
 def do_vid(p, J):
     if p.get("wan_ver") == "14b":
         return do_vid14(p, J)
+    if p.get("wan_ver") in ("ltx", "vace", "s2v"):
+        return do_vid_more(p, J)
     """Wan 2.2 5B 로 영상 만들기(글→영상, 이미지를 올리면 그 이미지에서 시작). 결과: [(바이트, 확장자, 정보)]"""
     for node, why in (("Wan22ImageToVideoLatent", "Wan 2.2 영상 노드"), ("CreateVideo", "영상 만들기 노드"), ("SaveVideo", "영상 저장 노드")):
         if not has_node(node):
@@ -2493,6 +2543,122 @@ def do_vid(p, J):
     info = dict(kind="vid", prompt=text, negative=q["negative"], seed=seed, w=w, h=h, steps=q["steps"], cfg=q["cfg"], model=f["unet"],
                 frames=frames, fps=fps, start_image=bool(start))
     return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
+
+
+def ltx_models():
+    return [n for n in files("checkpoints") if "ltx" in n.lower()]
+
+
+def put_audio(data_url, J):
+    """올린 소리(data URL)를 ComfyUI 입력 폴더에 저장하고 파일 이름을 돌려줘요."""
+    head, _, b64 = str(data_url or "").partition(",")
+    ext = next((e for k, e in (("wav", ".wav"), ("mpeg", ".mp3"), ("mp3", ".mp3"), ("ogg", ".ogg"), ("flac", ".flac"), ("mp4", ".m4a"), ("aac", ".m4a"), ("webm", ".webm")) if k in head), ".wav")
+    try:
+        raw = base64.b64decode(b64)
+    except Exception:  # noqa: BLE001
+        raise ValueError("소리 파일을 읽지 못했어요.")
+    if len(raw) < 1000:
+        raise ValueError("소리 파일이 비어 있어요.")
+    name = f"hub_{uuid.uuid4().hex[:10]}{ext}"
+    (COMFY / "input").mkdir(parents=True, exist_ok=True)
+    (COMFY / "input" / name).write_bytes(raw)
+    J["tmp"].append(COMFY / "input" / name)
+    return name
+
+
+VID_MORE = {"ltx": ("LTX-Video", ("LTXVConditioning", "LTXVScheduler", "EmptyLTXVLatentVideo", "SamplerCustom")),
+            "vace": ("Wan VACE", ("WanVaceToVideo", "TrimVideoLatent")),
+            "s2v": ("Wan 2.2 S2V", ("WanSoundImageToVideo", "AudioEncoderLoader", "AudioEncoderEncode", "LoadAudio"))}
+
+
+def do_vid_more(p, J):
+    """LTX-Video(빠른 글·이미지→영상) / Wan VACE(참고 이미지 유지 영상) / Wan 2.2 S2V(사진+목소리 → 말하는 영상)."""
+    ver = p["wan_ver"]
+    title, nodes = VID_MORE[ver]
+    gone = [n for n in nodes + ("CreateVideo", "SaveVideo") if not has_node(n)]
+    if gone:
+        raise RuntimeError(f"이 ComfyUI 에는 {title} 에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    rng = random.Random(seed_of(p))
+    text, _ = prep(p, J, "caption", rng)
+    if not text.strip():
+        raise ValueError("어떤 영상을 만들지 프롬프트를 적어 주세요.")
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    try:
+        w, h = (int(x) for x in (p.get("size") or "832x480").split("x"))
+    except ValueError:
+        w, h = 832, 480
+    img = load_img(p["image"]) if p.get("image") else None
+    if img is not None and p.get("keep_ratio"):
+        k = (w * h / (img.width * img.height)) ** 0.5
+        w, h = img.width * k, img.height * k
+    w, h = (clamp(int(round(x / 32)) * 32, 256, 1280) for x in (w, h))
+    seed, te, va = seed_of(p), files("text_encoders"), files("vae")
+    neg = (p.get("negative") or "").strip()
+    if ver == "ltx":
+        ms = ltx_models()
+        t5 = _pick(te, "t5xxl_fp16", "t5xxl")
+        miss = [n for n, v in (("LTX-Video 모델", ms), ("T5-XXL 텍스트 인코더", t5)) if not v]
+        if miss:
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭의 영상 분류에서 'LTX-Video'를 설치해 주세요.")
+        fps = clamp(num(p, "fps", 24, int), 8, 30)
+        frames = clamp(int(round(clamp(num(p, "sec", 4.0), 1.0, 10.0) * fps / 8)) * 8 + 1, 9, 257)
+        dist = "distill" in ms[0].lower()
+        q = dict(ckpt=ms[0], te=t5, prompt=text, negative=neg or "worst quality, inconsistent motion, blurry, jittery, distorted", seed=seed,
+                 w=w, h=h, frames=frames, fps=fps, steps=clamp(num(p, "steps", 8 if dist else 30, int), 1, 60), cfg=1.0 if dist else clamp(num(p, "cfg", 3.0), 1.0, 10.0))
+        start = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J) if img is not None else None
+        J["msg"] = f"LTX-Video 로 영상 만드는 중 ({w}×{h}, {frames}프레임)"
+        g, model = flows.wf_ltx(q, start), ms[0]
+    else:
+        unet = next((n for n in files("diffusion_models") if ver in n.lower()), None)
+        umt5 = _pick(te, "umt5")
+        vae21 = _pick(va, "wan_2.1_vae", "wan2.1", ("wan", "2.1"))
+        need = [("Wan VACE 모델" if ver == "vace" else "Wan 2.2 S2V 모델", unet), ("UMT5 텍스트 인코더", umt5), ("Wan 2.1 VAE", vae21)]
+        enc = None
+        if ver == "s2v":
+            enc = _pick(files("audio_encoders"), "wav2vec2", "wav2vec")
+            need.append(("음성 인코더(wav2vec2)", enc))
+        miss = [n for n, v in need if not v]
+        if miss:
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + f". '설치와 모델' 탭의 영상 분류에서 '{title}'을 설치해 주세요.")
+        if img is None:
+            raise ValueError("참고할 사진을 올려 주세요." if ver == "vace" else "말하게 할 인물 사진을 올려 주세요.")
+        fps = 16
+        if ver == "s2v":
+            if not p.get("audio"):
+                raise ValueError("목소리(소리 파일)를 올려 주세요. 음성 만들기 결과나 녹음 파일을 쓸 수 있어요.")
+            frames = clamp(int(round(clamp(num(p, "sec", 4.8), 1.0, 4.8) * fps / 4)) * 4 + 1, 17, 77)     # 한 번에 약 5초까지
+        else:
+            frames = clamp(int(round(clamp(num(p, "sec", 5.0), 1.0, 6.0) * fps / 4)) * 4 + 1, 17, 97)
+        q = dict(unet=unet, te=umt5, vae=vae21, prompt=text, negative=neg or flows.WAN_NEG, seed=seed, w=w, h=h, frames=frames, fps=fps,
+                 steps=clamp(num(p, "steps", 20, int), 1, 60), cfg=clamp(num(p, "cfg", 5.0 if ver == "vace" else 4.5), 1.0, 20.0),
+                 sampler="uni_pc" if "uni_pc" in (caps()["samplers"] or ["uni_pc"]) else "euler", scheduler="simple", shift=8.0, audio_encoder=enc)
+        ref = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J)
+        J["msg"] = f"{title} 로 영상 만드는 중 ({w}×{h}, {frames}프레임) — 몇 분 걸릴 수 있어요"
+        g = flows.wf_vace(q, ref) if ver == "vace" else flows.wf_s2v(q, ref, put_audio(p["audio"], J))
+        model = unet
+    res = run_wf(g, J, raw=True)
+    info = dict(kind="vid", prompt=text, negative=q["negative"], seed=seed, w=w, h=h, steps=q["steps"], cfg=q["cfg"], model=model,
+                frames=q["frames"], fps=q["fps"], start_image=img is not None, video_model=title)
+    return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
+
+
+def feat_3d(p, J):
+    """사진 한 장 → 3D 모델(GLB, Hunyuan3D 2). 결과: [(바이트, 정보, '.glb')]"""
+    ck = next((n for n in files("checkpoints") if "hunyuan3d" in n.lower() or "hy3d" in n.lower()), None)
+    if not ck:
+        raise RuntimeError("Hunyuan3D 모델이 없어요. '설치와 모델' 탭의 3D 분류에서 'Hunyuan3D 2'를 설치해 주세요.")
+    img = load_img(p["image"])
+    if max(img.size) > 1024:
+        k = 1024 / max(img.size)
+        img = img.resize((round(img.width * k), round(img.height * k)), RS.LANCZOS)
+    q = dict(ckpt=ck, seed=seed_of(p), steps=clamp(num(p, "steps", 30, int), 5, 100), cfg=clamp(num(p, "cfg", 5.0), 1.0, 15.0),
+             octree=int(p.get("octree") or 256) if str(p.get("octree") or "256") in ("128", "256", "384", "512") else 256)
+    J["msg"] = "3D 모델 만드는 중 — 1~3분 걸릴 수 있어요"
+    res = run_wf(flows.wf_3d(q, put_input(img, J)), J, raw=True)
+    glb = [(n, d) for n, d in res if n.lower().endswith(".glb")] or res
+    info = dict(kind="3d", seed=q["seed"], steps=q["steps"], cfg=q["cfg"], model=ck, octree=q["octree"])
+    return [(glb[0][1], info, ".glb")]
 
 
 VPOST = {"interp": ("RIFE VFI", "ComfyUI-Frame-Interpolation", "프레임 늘리기"), "upscale": ("ImageUpscaleWithModel", "", "업스케일"),
@@ -2687,7 +2853,7 @@ def job_thread(J, p):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
         for i, (im, info, graph) in enumerate(items):
-            if p["kind"] in ("vid", "vpost", "vmix", "music", "tts"):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
+            if p["kind"] in ("vid", "vpost", "vmix", "music", "tts") or isinstance(im, (bytes, bytearray)):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
                 name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts") else "vid"}-{i}{graph}'
                 (OUT / sub / name).write_bytes(im)
                 (OUT / sub / (name + ".json")).write_text(json.dumps({k: v for k, v in info.items() if k != "_extra"}, ensure_ascii=False), encoding="utf-8")
@@ -5007,7 +5173,11 @@ def save_settings(d):
         pass
 
 
-PREF_DEF = {"chat_keep_alive": "5m", "speed_boost": True, "ack": False, "thumb_cache_mb": 500, "image_keep_alive": "30m"}
+PREF_DEF = {"chat_keep_alive": "5m", "speed_boost": True, "ack": False, "thumb_cache_mb": 500, "image_keep_alive": "30m",
+            "vram_mode": "auto", "reserve_vram": 0, "smart_memory": True, "chat_gpu": "auto"}
+VRAM_MODES = {"auto": [], "low": ["--lowvram"], "none": ["--novram"], "high": ["--highvram"]}
+RESERVE_VRAM = (0, 0.5, 1, 2, 4)
+CHAT_GPU = ("auto", "cpu")
 PREF_THUMB = (200, 500, 1000, 2000)
 PREF_KEEP = ("0", "5m", "30m", "2h", "-1")
 
@@ -5021,7 +5191,22 @@ def prefs():
     out["ack"] = bool(d.get("ack"))
     out["thumb_cache_mb"] = d["thumb_cache_mb"] if d.get("thumb_cache_mb") in PREF_THUMB else 500
     out["image_keep_alive"] = d["image_keep_alive"] if d.get("image_keep_alive") in IMG_KEEP else "30m"
+    out["vram_mode"] = d["vram_mode"] if d.get("vram_mode") in VRAM_MODES else "auto"
+    out["reserve_vram"] = d["reserve_vram"] if d.get("reserve_vram") in RESERVE_VRAM else 0
+    out["smart_memory"] = bool(d.get("smart_memory", True))
+    out["chat_gpu"] = d["chat_gpu"] if d.get("chat_gpu") in CHAT_GPU else "auto"
     return out
+
+
+def mem_args():
+    """설정의 메모리·GPU 제한 → ComfyUI 시작 옵션(프로그램을 다시 시작하면 적용)."""
+    pf = prefs()
+    a = list(VRAM_MODES[pf["vram_mode"]])
+    if pf["reserve_vram"]:
+        a += ["--reserve-vram", str(pf["reserve_vram"])]
+    if not pf["smart_memory"]:
+        a.append("--disable-smart-memory")
+    return a
 
 
 def set_prefs(p):
@@ -5037,6 +5222,20 @@ def set_prefs(p):
         if p["image_keep_alive"] not in IMG_KEEP:
             return {"error": "허용되지 않는 값이에요."}
         d["image_keep_alive"] = p["image_keep_alive"]
+    if "vram_mode" in p:
+        if p["vram_mode"] not in VRAM_MODES:
+            return {"error": "허용되지 않는 값이에요."}
+        d["vram_mode"] = p["vram_mode"]
+    if "reserve_vram" in p:
+        if p["reserve_vram"] not in RESERVE_VRAM:
+            return {"error": "허용되지 않는 값이에요."}
+        d["reserve_vram"] = p["reserve_vram"]
+    if "smart_memory" in p:
+        d["smart_memory"] = bool(p["smart_memory"])
+    if "chat_gpu" in p:
+        if p["chat_gpu"] not in CHAT_GPU:
+            return {"error": "허용되지 않는 값이에요."}
+        d["chat_gpu"] = p["chat_gpu"]
     if "thumb_cache_mb" in p:
         if p["thumb_cache_mb"] not in PREF_THUMB:
             return {"error": "허용되지 않는 값이에요."}
@@ -5781,7 +5980,7 @@ def sorted_models():
     for n in files("checkpoints"):
         fam, allin, how = model_family("checkpoints", n)
         info["checkpoints/" + n] = dict(family=fam, all_in_one=allin, how=how)
-        if fam == "hidden" or n in music_models():      # 음악 모델은 그림 모델 목록에 섞지 않아요
+        if fam == "hidden" or n in music_models() or n in sfx_models() or n in ltx_models() or "hunyuan3d" in n.lower():      # 소리·영상·3D 모델은 그림 모델 목록에 섞지 않아요      # 음악 모델은 그림 모델 목록에 섞지 않아요
             continue
         if fam == "flux":
             flux.append("ckpt::" + n)
@@ -5860,7 +6059,52 @@ def catalog():
 
     ok = img_installed
     return {"llm": [{**m, "installed": m["ollama"] in have or m["ollama"] + ":latest" in have} for m in CATALOG["llm"]],
-            "image": [{**m, "installed": ok(m)} for m in CATALOG["image"]]}
+            "image": [{**m, "installed": ok(m), "cat": cat_of(m)} for m in CATALOG["image"]]}
+
+
+def cat_of(m):
+    """추천 모델 분류: image(이미지) / video(영상) / audio(음악·효과음) / d3(3D)."""
+    i = m["id"].lower()
+    if re.search(r"wan|ltx|vace|s2v|rife", i):
+        return "video"
+    if re.search(r"ace-step|stable-audio|audio", i):
+        return "audio"
+    if "3d" in i:
+        return "d3"
+    return "image"
+
+
+def catalog_remove(p):
+    """추천 모델에서 설치한 항목을 지워요. 다른 설치된 항목이 같이 쓰는 파일(공용 인코더·VAE 등)은 남겨요."""
+    mid = str(p.get("id") or "")
+    llm = next((m for m in CATALOG["llm"] if m["id"] == mid), None)
+    if llm:
+        return delete_item({"kind": "ollama", "name": llm["ollama"]})
+    m = next((x for x in CATALOG["image"] if x["id"] == mid), None)
+    if not m:
+        return {"error": "그런 항목이 없어요."}
+    mine = {(f["dir"], cat_name(f)) for f in m["files"]}
+    shared = set()
+    for o in CATALOG["image"]:
+        if o["id"] != mid and img_installed(o):
+            shared |= mine & {(f["dir"], cat_name(f)) for f in o["files"]}
+    gone, kept, errs = [], [], []
+    for d, n in sorted(mine):
+        f = MODELS / d / n
+        if not f.is_file():
+            continue
+        if (d, n) in shared:
+            kept.append(n)
+            continue
+        try:
+            f.unlink()
+            gone.append(n)
+        except OSError as e:
+            errs.append(f"{n}: {e.strerror or e}")
+    _LC["key"] = None
+    if errs:
+        return {"error": "일부를 지우지 못했어요(ComfyUI 가 쓰는 중일 수 있어요): " + "; ".join(errs), "removed": gone, "kept": kept}
+    return {"ok": True, "removed": gone, "kept": kept}
 
 
 # ───────────────────────── 내 PC 점검 (기능별로 빠진 부품 찾기) ─────────────────────────
@@ -6519,6 +6763,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(clean_item(str(p.get("what", ""))))
         if u == "/api/delete":
             return self.send_json(delete_item(p))
+        if u == "/api/catalog/remove":
+            return self.send_json(catalog_remove(p))
         if u == "/api/meta":
             try:
                 return self.send_json(meta.read(base64.b64decode(p["image"].split(",", 1)[-1])))
@@ -6594,6 +6840,8 @@ class Handler(BaseHTTPRequestHandler):
             p = dict(p)
             ka = prefs()["chat_keep_alive"]
             p["keep_alive"] = -1 if ka == "-1" else (0 if ka == "0" else ka)
+            if prefs()["chat_gpu"] == "cpu":       # 설정: 대화 모델은 CPU 로만(그래픽 메모리를 이미지 작업에 양보)
+                p["options"] = {**(p.get("options") or {}), "num_gpu": 0}
             req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(p).encode(),
                                          headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=900) as r:
