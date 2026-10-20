@@ -1802,7 +1802,7 @@ def flux_parts(p=None):
             v = p.get(field)
             if v and v in files(sub):
                 # 엉뚱한 종류를 골랐으면(예: T5 칸에 Qwen) 무시하고 자동으로 찾아요 — 그대로 쓰면 'meta tensor' 오류가 나요
-                if key == "t5" and not is_t5(v):
+                if key == "t5" and re.search(r"qwen|umt5|clip|llama|gemma|mistral|vl[_-]?\d|_vl|-vl", low(v)):
                     continue
                 if key == "clip_l" and (is_t5(v) or re.search(r"qwen|umt5", low(v))):
                     continue

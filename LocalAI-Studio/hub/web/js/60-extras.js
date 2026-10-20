@@ -507,3 +507,45 @@ function qPlace(){const D=document.documentElement,pill=$('#qfloat'),pan=$('#qpa
  const end=()=>{if(st&&st.on){dragged=true;setTimeout(()=>dragged=false,50)}pill.classList.remove('drag');st=null};
  pill.addEventListener('pointerup',end);pill.addEventListener('pointercancel',end);
  pill.addEventListener('click',e=>{if(dragged){e.stopImmediatePropagation();e.preventDefault()}},true)}
+
+/* ══════════ PC 소리 녹음 → 목소리 샘플 (브라우저 화면 공유의 오디오, 설치 필요 없음) ══════════ */
+(()=>{const d=$('#rec-dlg');if(!d)return;let stream=null,rec=null,chunks=[],buf=null,t0=0,tk=0,drag=null,src=null;
+ const st=t=>$('#rec-st').textContent=t,cv=$('#rec-wave'),S=$('#rec-s'),E=$('#rec-e');
+ const sel=()=>{const dur=buf?buf.duration:0;let s=Math.max(0,Math.min(+S.value||0,dur)),e=Math.max(0,Math.min(+E.value||0,dur));if(e<s)[s,e]=[e,s];return[s,e]};
+ function draw(){if(!buf)return;const W=cv.width,H=cv.height,c=cv.getContext('2d'),ch=buf.getChannelData(0),step=Math.max(1,Math.floor(ch.length/W)),cs=getComputedStyle(document.documentElement);
+  c.clearRect(0,0,W,H);const[s,e]=sel(),x1=s/buf.duration*W,x2=e/buf.duration*W;c.fillStyle='rgba(120,140,255,.22)';c.fillRect(x1,0,x2-x1,H);
+  c.fillStyle=cs.getPropertyValue('--acc')||'#57f';for(let x=0;x<W;x++){let mn=1,mx=-1;for(let i=x*step,j=Math.min(ch.length,i+step);i<j;i++){const v=ch[i];if(v<mn)mn=v;if(v>mx)mx=v}
+   c.fillRect(x,(1-mx)*H/2,1,Math.max(1,(mx-mn)*H/2))}
+  $('#rec-len').textContent=`고른 길이 ${(e-s).toFixed(1)}초 / 전체 ${buf.duration.toFixed(1)}초`+((e-s)<5||(e-s)>15?' · 5~15초를 권해요':'')}
+ const tsec=ev=>{const r=cv.getBoundingClientRect();return Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width))*(buf?buf.duration:0)};
+ cv.onpointerdown=ev=>{if(!buf)return;drag=tsec(ev);S.value=E.value=drag.toFixed(1);cv.setPointerCapture(ev.pointerId);draw()};
+ cv.onpointermove=ev=>{if(drag==null)return;const t=tsec(ev);S.value=Math.min(drag,t).toFixed(1);E.value=Math.max(drag,t).toFixed(1);draw()};
+ cv.onpointerup=()=>{drag=null};S.oninput=E.oninput=draw;
+ const ui=on=>{$('#rec-start').disabled=on;$('#rec-stop').disabled=!on};
+ const stopAll=()=>{clearInterval(tk);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null};
+ $('#tt-rec').onclick=()=>{d.showModal()};
+ d.onclose=()=>{if(rec&&rec.state==='recording')rec.stop();stopAll();if(src)try{src.stop()}catch{}};
+ $('#rec-start').onclick=async()=>{if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia)return st('이 브라우저는 PC 소리 녹음을 지원하지 않아요. Chrome 이나 Edge 에서 열어 주세요.');
+  try{stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},systemAudio:'include'})}
+  catch{return st('녹음을 시작하지 않았어요(공유 창에서 취소).')}
+  const at=stream.getAudioTracks();if(!at.length){stopAll();return st("소리가 잡히지 않았어요. 공유 창에서 '탭'이나 '전체 화면'을 고르고 오디오 공유를 켜 주세요.")}
+  stream.getVideoTracks().forEach(t=>t.stop());chunks=[];rec=new MediaRecorder(new MediaStream(at));
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onstop=load;at[0].onended=()=>{if(rec&&rec.state==='recording')rec.stop()};
+  rec.start(500);t0=Date.now();ui(true);tk=setInterval(()=>st(`녹음 중… ${((Date.now()-t0)/1000).toFixed(0)}초`),500)};
+ $('#rec-stop').onclick=()=>{if(rec&&rec.state==='recording')rec.stop();stopAll()};
+ async function load(){stopAll();ui(false);if(!chunks.length)return st('녹음된 소리가 없어요.');st('불러오는 중…');
+  try{const ac=new AudioContext();buf=await ac.decodeAudioData(await new Blob(chunks,{type:rec.mimeType}).arrayBuffer());ac.close()}catch{return st('녹음을 읽지 못했어요.')}
+  S.value='0';E.value=Math.min(buf.duration,12).toFixed(1);cv.hidden=false;$('#rec-cut').hidden=false;st('녹음 완료. 파형을 끌어서 쓸 부분을 고르세요.');draw()}
+ $('#rec-play').onclick=()=>{if(!buf)return;const[s,e]=sel();if(e-s<0.1)return;if(src)try{src.stop()}catch{}
+  const ac=new AudioContext();src=ac.createBufferSource();src.buffer=buf;src.connect(ac.destination);src.onended=()=>ac.close();src.start(0,s,e-s)};
+ async function wav(){const[s,e]=sel(),R=24000,n=Math.max(1,Math.round((e-s)*R)),oc=new OfflineAudioContext(1,n,R),b=oc.createBufferSource();b.buffer=buf;b.connect(oc.destination);b.start(0,s,e-s);
+  const out=(await oc.startRendering()).getChannelData(0);let pk=0;for(const v of out)pk=Math.max(pk,Math.abs(v));const g=pk>0&&pk<0.5?0.9/pk:1;   // 너무 작게 녹음되면 크기를 맞춰요
+  const dv=new DataView(new ArrayBuffer(44+n*2)),w=(o,t)=>{for(let i=0;i<t.length;i++)dv.setUint8(o+i,t.charCodeAt(i))};
+  w(0,'RIFF');dv.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);dv.setUint32(24,R,true);dv.setUint32(28,R*2,true);dv.setUint16(32,2,true);dv.setUint16(34,16,true);w(36,'data');dv.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++)dv.setInt16(44+i*2,Math.max(-1,Math.min(1,out[i]*g))*32767,true);return new Blob([dv],{type:'audio/wav'})}
+ $('#rec-save').onclick=async()=>{if(!buf)return;const a=document.createElement('a');a.href=URL.createObjectURL(await wav());a.download='pc-sound-'+Date.now()+'.wav';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)};
+ $('#rec-use').onclick=async()=>{if(!buf)return;const[s,e]=sel();if(e-s<3)return st('3초 이상 골라 주세요(5~15초 권장).');
+  const blob=await wav(),url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(blob)});
+  const r=await api('/api/tts/ref',{data:url});if(r.error)return st(r.error);
+  $('#tt-ref').value=r.id;$('#tt-ref-clear').hidden=false;$('#tt-clone-ok-row').hidden=false;toast('녹음한 부분을 목소리 샘플로 넣었어요.');d.close()};
+})();

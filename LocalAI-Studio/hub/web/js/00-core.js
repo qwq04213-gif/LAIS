@@ -408,7 +408,7 @@ async function loadLists(force){
   $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');$$('select[name=cn_model]').forEach(s=>s.form&&cnFilter(s.form));
   fill('select[name=fx_vae],select[name=q_vae],select[name=k2_vae]',LISTS.vaes,'자동');fill('select[name=q_te],select[name=k2_te]',LISTS.text_encoders||[],'자동');
   {const te=LISTS.text_encoders||[],t5=n=>/(t5|xxl)/i.test(n)&&!/umt5/i.test(n);   // T5 칸엔 T5 만, CLIP-L 칸엔 T5·Qwen 이 아닌 것만
-  fill('select[name=fx_t5]',te.filter(t5),'자동');fill('select[name=fx_clip]',te.filter(n=>!t5(n)&&!/qwen|umt5/i.test(n)),'자동')}fill('select[name=q_unet]',LISTS.diffusion||[],'자동');
+  fill('select[name=fx_t5]',te.filter(n=>!/qwen|umt5|clip|llama|gemma|mistral|vl[_-]?\d|_vl|-vl/i.test(n)),'자동');fill('select[name=fx_clip]',te.filter(n=>!t5(n)&&!/qwen|umt5/i.test(n)),'자동')}fill('select[name=q_unet]',LISTS.diffusion||[],'자동');
   fillFx();
   if(LISTS.llm.includes(localStorage.llm))$('#llm').value=localStorage.llm;
   $('#wcs').textContent=LISTS.wildcards.length?'사용 가능한 와일드카드: '+LISTS.wildcards.map(n=>`__${n}__`).join(' '):'wildcards 폴더에 이름.txt 파일을 넣으면 __이름__ 으로 쓸 수 있어요(한 줄에 하나).';

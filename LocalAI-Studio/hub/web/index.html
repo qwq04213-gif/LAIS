@@ -586,7 +586,7 @@
         <label class="f">언어<select name="language" id="tt-lang"></select></label>
         <label class="f" id="tt-spk-row">목소리<select name="speaker" id="tt-spk"></select></label>
         <label class="f" id="tt-emo-row">감정<select name="emotion"><option value="calm">차분하게</option><option value="normal" selected>보통</option><option value="rich">풍부하게</option></select></label>
-        <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><input type="file" id="tt-ref-file" accept=".wav,audio/wav"><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
+        <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><input type="file" id="tt-ref-file" accept=".wav,audio/wav"><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button> <button type="button" class="ghost sm" id="tt-rec" title="웹사이트·프로그램에서 나오는 소리를 녹음하고 필요한 부분만 잘라 목소리 샘플로 써요">PC 소리 녹음해서 만들기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
           <p class="hint" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok" checked hidden>목소리 샘플은 본인 목소리이거나 허락받은 목소리만 쓰세요. 다른 사람을 속이거나 흉내 내는 데 쓰지 않아요.</p></div>
       </div>
     </div>
@@ -1118,6 +1118,16 @@
 
 <div id="tipbox" role="tooltip" hidden></div>
 
+<dialog id="rec-dlg" aria-label="PC 소리 녹음"><form method="dialog" class="recbox">
+  <h3 style="margin-top:0">PC 소리 녹음 → 목소리 샘플</h3>
+  <p class="hint plain">[녹음 시작] → 공유 창에서 소리가 나는 <b>탭</b>(또는 전체 화면)을 고르고 <b>오디오 공유</b>를 켜요 → 소리를 재생 → [녹음 멈추기]. 파형에서 끌어서 쓸 부분(5~15초, 한 사람 목소리만)을 고르세요.</p>
+  <div class="row"><button type="button" class="go" id="rec-start">녹음 시작</button><button type="button" class="ghost" id="rec-stop" disabled>녹음 멈추기</button><span class="mute" id="rec-st"></span></div>
+  <canvas id="rec-wave" width="900" height="110" hidden></canvas>
+  <div class="row" id="rec-cut" hidden><label class="f">시작(초)<input type="number" id="rec-s" step="0.1" min="0" value="0"></label><label class="f">끝(초)<input type="number" id="rec-e" step="0.1" min="0" value="0"></label><span class="mute" id="rec-len"></span>
+    <button type="button" class="ghost" id="rec-play">고른 부분 듣기</button><button type="button" class="ghost" id="rec-save">wav 로 저장</button><button type="button" class="go" id="rec-use">목소리 샘플로 쓰기</button></div>
+  <p class="hint">본인 목소리이거나 허락받은 목소리만 쓰세요.</p>
+  <p style="text-align:right;margin-bottom:0"><button class="ghost" id="rec-x">닫기</button></p>
+</form></dialog>
 <dialog id="ack"><form method="dialog">
   <h3 style="margin-top:0">사용 전에 확인해 주세요</h3>
   <p>이 도구는 성인이 자기 컴퓨터에서 쓰도록 만들어졌고, 성인 콘텐츠를 제한하는 필터를 두지 않아요. 아래 내용을 한 번만 안내해요.</p>
