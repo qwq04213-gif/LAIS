@@ -399,7 +399,7 @@ function warn(){
   const parts=OXF.includes(g)?(LISTS.ox_ready||{})[g]:g==='flux'?LISTS.flux_ready:g==='krea2'?LISTS.krea2_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
   w.hidden=ok;
   if(!ok)w.innerHTML=(OXF.includes(g)?OXN[g]+' 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':g==='sdxl'?'체크포인트가 아직 없어요. ':g==='krea2'?'Krea 2 모델이나 공용 파일(Qwen3-VL 텍스트 인코더, Qwen Image VAE)이 아직 없어요. ':g==='flux'?'FLUX·Krea 모델이나 공용 파일(텍스트 인코더, VAE)이 아직 없어요. ':'Chroma 모델이나 공용 파일(T5 텍스트 인코더, VAE)이 아직 없어요. ')+'<a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.';
-  (()=>{const w=$('#w-music'),has=(LISTS.musicmodels||[]).length>0,nodes=LISTS.music_nodes!==false;if(w){w.hidden=has&&nodes;w.innerHTML=!has?'음악 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 \'ACE-Step 1.5 Turbo\'를 설치해 주세요. (약 10GB)':'이 ComfyUI 에는 음악 만들기 노드가 없어요. ComfyUI 를 업데이트해 주세요.'}})();
+  musicWarn();
   $('#w-vid').hidden=!!LISTS.wan_ready&&(LISTS.wanmodels||[]).length>0;if(window.vidSync)vidSync();$('#w-up').hidden=LISTS.upscalers.length>0;$('#w-chat').hidden=LISTS.llm.length>0;
 }
 let listsAt=0;
@@ -574,3 +574,9 @@ $('#lb-star').onclick=async()=>{const it=LB.list[LB.i];if(!it)return;const on=!i
 document.addEventListener('change',e=>{const s=e.target;if(!s||s.name!=='fx_model'||!e.isTrusted)return;const f=s.form;if(!f)return;
   for(const k of ['fx_t5','fx_clip','fx_vae','k2_te','k2_vae'])if(f.elements[k])f.elements[k].value='';
   try{saveForm(f)}catch{}});
+
+/* 음악 화면 안내: 고른 것(음악/효과음)에 맞는 모델이 없을 때만 */
+function musicWarn(){const w=$('#w-music'),f=$('#f-music');if(!w||!f)return;const sx=f.elements.mengine&&f.elements.mengine.value==='sfx';
+  if(sx){w.hidden=!!LISTS.sfx_ready;w.innerHTML='효과음 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a> > 음악·효과음에서 \'Stable Audio Open 1.0\'을 설치해 주세요. (약 5GB, HuggingFace 사용 동의 필요)';return}
+  const has=(LISTS.musicmodels||[]).length>0,nodes=LISTS.music_nodes!==false;w.hidden=has&&nodes;
+  w.innerHTML=!has?'음악 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 \'ACE-Step 1.5 Turbo\'를 설치해 주세요. (약 10GB)':'이 ComfyUI 에는 음악 만들기 노드가 없어요. ComfyUI 를 업데이트해 주세요.'}

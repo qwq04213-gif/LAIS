@@ -9,8 +9,6 @@ import re
 import struct
 from pathlib import Path
 
-FAMILIES = {"sd15": "SD 1.5 계열", "sdxl": "SDXL · Illustrious · Pony · NoobAI", "sd3": "SD3 / SD3.5",
-            "flux": "FLUX · Krea(FLUX.1)", "krea2": "Krea 2", "hidream": "HiDream", "lumina": "Lumina 2", "chroma": "Chroma", "qwen": "Qwen-Image", "unknown": "알 수 없음"}
 _CACHE = {}
 
 

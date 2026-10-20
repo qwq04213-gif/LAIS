@@ -444,6 +444,12 @@
 <section class="view split" id="v-vid">
   <form id="f-vid" autocomplete="off" novalidate>
     <button class="go">영상 만들기</button>
+    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx">LTX-Video — 아주 빠름</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
+    <p class="hint plain" id="vid-more-note" hidden></p>
+    <div class="f" id="vid-audio-row" hidden><span>목소리 (소리 파일 — 고른 길이만큼, 최대 30초)</span><span class="seedrow"><label class="ghost vpick">소리 파일 고르기<input type="file" id="vid-audio" accept="audio/*" hidden></label><button type="button" class="ghost sm" id="vid-audio-clear" hidden>빼기</button></span><audio id="vid-audio-pv" controls hidden></audio></div>
+    <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. 안 되면 5B 를 쓰세요.</p>
+    <p class="warn" id="w-vid14" hidden></p>
+    <label class="chk" id="vid-fast-row" hidden><input type="checkbox" name="fast"> 4단계 가속 (LoRA — 몇 배 빨라요) <span class="mute" id="vid-fast-hint"></span></label>
     <p class="warn" id="w-vid" hidden>Wan 2.2 영상 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Wan 2.2 영상 5B'를 설치해 주세요. (약 18GB, 영상 한 편에 몇 분 걸려요)</p>
     <p class="hint plain">글만 쓰면 새 영상을, 시작 이미지를 올리면 그 이미지가 움직이는 영상을 만들어요. 처음 한 번은 모델을 불러오느라 오래 걸려요.</p>
     <label class="f">장면 설명<textarea name="prompt" rows="5" placeholder="예: 비 오는 밤 네온 거리를 걸어가는 여자, 카메라가 천천히 따라간다, 영화 같은 조명"></textarea></label>
@@ -456,12 +462,6 @@
       <label class="f">크기<select name="size"><option value="832x480">가로 480p (기본)</option><option value="480x832">세로 480p</option><option value="640x640">정사각</option><option value="1280x704">가로 720p (VRAM 많이 필요)</option></select></label>
       <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option><option value="15" class="s2v-only" hidden disabled>15초 (말하는 영상)</option><option value="30" class="s2v-only" hidden disabled>30초 (말하는 영상)</option></select></label>
     </div>
-    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx">LTX-Video — 아주 빠름</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
-    <p class="hint plain" id="vid-more-note" hidden></p>
-    <div class="f" id="vid-audio-row" hidden><span>목소리 (소리 파일, 앞 5초까지 써요)</span><span class="seedrow"><input type="file" id="vid-audio" accept="audio/*"><button type="button" class="ghost sm" id="vid-audio-clear" hidden>빼기</button></span><audio id="vid-audio-pv" controls hidden></audio></div>
-    <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. 안 되면 5B 를 쓰세요.</p>
-    <p class="warn" id="w-vid14" hidden></p>
-    <label class="chk" id="vid-fast-row" hidden><input type="checkbox" name="fast"> 4단계 가속 (LoRA — 몇 배 빨라요) <span class="mute" id="vid-fast-hint"></span></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
     <details><summary>고급 설정</summary>
@@ -594,7 +594,7 @@
         <label class="f">언어<select name="language" id="tt-lang"></select></label>
         <label class="f" id="tt-spk-row">목소리<select name="speaker" id="tt-spk"></select></label>
         <label class="f" id="tt-emo-row">감정<select name="emotion"><option value="calm">차분하게</option><option value="normal" selected>보통</option><option value="rich">풍부하게</option></select></label>
-        <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><input type="file" id="tt-ref-file" accept=".wav,audio/wav"><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button> <button type="button" class="ghost sm" id="tt-rec" title="웹사이트·프로그램에서 나오는 소리를 녹음하고 필요한 부분만 잘라 목소리 샘플로 써요">PC 소리 녹음해서 만들기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
+        <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><label class="ghost vpick">wav 파일 고르기<input type="file" id="tt-ref-file" accept=".wav,audio/wav" hidden></label><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button> <button type="button" class="ghost sm" id="tt-rec" title="웹사이트·프로그램에서 나오는 소리를 녹음하고 필요한 부분만 잘라 목소리 샘플로 써요">PC 소리 녹음해서 만들기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
           <p class="hint" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok" checked hidden>목소리 샘플은 본인 목소리이거나 허락받은 목소리만 쓰세요. 다른 사람을 속이거나 흉내 내는 데 쓰지 않아요.</p></div>
       </div>
     </div>
@@ -795,7 +795,7 @@
     <tr><td>설정 비교표 (XY 플롯)</td><td class="y">지원</td><td>기타 기능</td></tr>
     <tr><td>내가 만든·받은 ComfyUI 워크플로 실행 (Save / Save (API Format) JSON, ComfyUI 로 만든 PNG)</td><td class="y">지원</td><td>워크플로</td></tr>
     <tr><td>FLUX · Krea · Krea 2 · Chroma 로 칠해서 편집 / FLUX Kontext 말로 편집</td><td class="y">지원</td><td>이미지 편집</td></tr>
-    <tr><td>배경 제거 (투명 PNG)</td><td class="y">지원</td><td>이미지 편집 → [배경] → [선택 반전] → [선택만 남겨 투명 PNG 저장]</td></tr>
+    <tr><td>배경 지우기 (투명 PNG · 흰색 등 색 배경 · 테두리 자르기)</td><td class="y">지원</td><td>기타 기능 → 배경 지우기 (결과·큰 화면의 [배경 지우기]로 바로 보내기, 여러 장은 일괄 처리)</td></tr>
     <tr><td>크기 바꾸기 · 비율 자르기 · 회전 · 밝기/색 보정</td><td class="y">지원</td><td>기타 기능</td></tr>
     <tr><td>LoRA 가 어느 모델용인지 확인</td><td class="y">지원</td><td>이미지 생성·편집·업스케일의 LoRA 칸</td></tr>
     <tr><td>Stable Diffusion 3.5 · HiDream · Lumina 2</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류 (설치와 모델에서 받아요)</td></tr>
@@ -822,7 +822,14 @@
     <tr><td>워크플로의 없는 커스텀 노드 설치</td><td class="y">지원</td><td>워크플로 (노드 도우미)</td></tr>
     <tr><td>얼굴·손 자동 보정 · 참고 이미지(IP-Adapter)로 스타일·얼굴 유지</td><td class="p">미검증</td><td>기타 기능 (확장 설치 도우미 포함, FLUX·Krea 2 모델 선택 가능)</td></tr>
     <tr><td>ComfyUI에서 저장한 워크플로의 서브그래프(묶음 노드)</td><td class="y">지원</td><td>워크플로 탭에서 그대로 열어요(안쪽 노드를 펼쳐서 실행해요)</td></tr>
-    <tr><td>오디오 · 3D 생성</td><td class="n">미지원</td><td>ComfyUI 고급 화면</td></tr>
+    <tr><td>Qwen-Image (그림 속 글자에 강한 생성 모델)</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류</td></tr>
+    <tr><td>효과음 만들기 (Stable Audio, 최대 47초)</td><td class="p">미검증</td><td>음악 만들기 → 만들 것 → 효과음</td></tr>
+    <tr><td>빠른 영상 (LTX-Video) · 사진 속 인물 유지 영상 (Wan VACE)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델</td></tr>
+    <tr><td>사진 + 목소리 → 말하는 영상 (Wan 2.2 S2V, 최대 30초)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 → Wan 2.2 S2V</td></tr>
+    <tr><td>사진 → 3D 모델 (Hunyuan3D 2, GLB)</td><td class="p">미검증</td><td>기타 기능 → 사진 → 3D</td></tr>
+    <tr><td>영상 → GIF 저장</td><td class="y">지원</td><td>영상 결과 카드 → 더 보기</td></tr>
+    <tr><td>PC 소리 녹음 → 목소리 샘플</td><td class="y">지원</td><td>음성 만들기 → 목소리 샘플 → PC 소리 녹음해서 만들기 (Chrome·Edge)</td></tr>
+    <tr><td>추천 모델 분류 · 설치된 모델 삭제 · 메모리/GPU 제한</td><td class="y">지원</td><td>설치와 모델 → 추천 모델, 설정 → 생성</td></tr>
   </tbody></table>
   <p class="hint plain">빠진 기능은 왼쪽 아래 <b>ComfyUI 고급 화면 열기</b>에서 노드를 직접 연결해 쓸 수 있어요. 만든 워크플로는 <b>Save (API Format)</b>으로 저장해 워크플로 탭에서 실행하세요.</p>
 </section>

@@ -614,10 +614,12 @@
       },
       {
         "name": "bgcolor",
-        "type": "text",
-        "label": "직접 고른 색 (예: #00ff00)",
+        "type": "color",
+        "label": "배경 색",
         "default": "#00ff00",
-        "hint": "배경을 '직접 고른 색'으로 했을 때만 써요."
+        "show_if": {
+          "bg": "custom"
+        }
       },
       {
         "name": "rmodel",

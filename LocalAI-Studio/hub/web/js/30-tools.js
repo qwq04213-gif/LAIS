@@ -290,12 +290,13 @@ async function loadFeat(){
   if(featId&&FEATS.some(x=>x.id===featId))featForm(featId,true);else if(FEATS[0])featForm(FEATS[0].id);
 }
 const fieldHTML=f=>{
-  const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'';
+  const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'',si=f.show_if?` data-show-if='${esc(JSON.stringify(f.show_if))}'`:'';
   if(f.type==='image')return `<div class="f"><span>${esc(f.label)}${req}</span><div class="mini" data-img="${n}"></div>${hint}</div>`;
   if(f.type==='textarea')return `<label class="f"><span>${esc(f.label)}${req}</span><textarea name="${n}" rows="${f.rows||3}"></textarea>${hint}</label>`;
   if(f.type==='lora')return `<div class="f"><span>${esc(f.label)}</span>${T.lora()}${hint}</div>`;
   if(f.type==='check')return `<label class="chk${f.required?' consent':''}"><input type="checkbox" name="${n}"> <span>${esc(f.label)}</span></label>`;
-  if(f.type==='text')return `<label class="f">${esc(f.label)}<input name="${n}" value="${esc(f.default??'')}">${hint}</label>`;
+  if(f.type==='color')return `<label class="f"${si}>${esc(f.label)}<input type="color" name="${n}" value="${esc(f.default??'#ffffff')}">${hint}</label>`;
+  if(f.type==='text')return `<label class="f"${si}>${esc(f.label)}<input name="${n}" value="${esc(f.default??'')}">${hint}</label>`;
   if(f.type==='number')return `<label class="f">${esc(f.label)}<input type="number" name="${n}" value="${esc(f.default??'')}" min="${f.min??''}" max="${f.max??''}" step="${f.step??1}">${hint}</label>`;
   if(f.type==='seed')return `<label class="f">${esc(f.label)}<span class="seedrow"><input type="number" name="${n}" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>`;
   if(f.type==='select')return `<label class="f">${esc(f.label)}<select name="${n}">${f.options.map(([v,t])=>`<option value="${esc(v)}"${v===f.default?' selected':''}>${esc(t)}</option>`).join('')}</select>${hint}</label>`;
@@ -335,7 +336,12 @@ function featForm(id,keep){
   if(mem){for(const [k,v] of Object.entries(keepVals)){const el=$('#f-feat').elements[k];if(!el||el instanceof RadioNodeList||el.type==='file'||el.type==='hidden'||el.type==='checkbox'||v==='')continue;
       if(el.tagName==='SELECT'&&![...el.options].some(o=>o.value===v))continue;el.value=v}
     for(const [n,c] of mem.checks){const el=$('#f-feat').elements[n];if(el&&el.type==='checkbox')el.checked=c}}
+  featShowIf();
 }
+/* 다른 칸 값에 따라 보이는 칸(예: 배경을 '직접 고른 색'으로 했을 때만 색 고르기) */
+function featShowIf(){const F=$('#f-feat');$$('[data-show-if]',F).forEach(el=>{let c={};try{c=JSON.parse(el.dataset.showIf)}catch{}
+  el.hidden=!Object.entries(c).every(([k,v])=>F.elements[k]&&String(F.elements[k].value)===String(v))})}
+$('#f-feat').addEventListener('change',featShowIf);
 $('#f-feat').onsubmit=e=>{e.preventDefault();const f=e.target,spec=FEATS.find(x=>x.id===featId);if(!spec)return;
   for(const fd of spec.fields.filter(x=>x.type==='image'&&x.required))if(!$(`.mini[data-img=${fd.name}]`,f).value)return need(f,'먼저 이미지를 올려 주세요.');
   for(const fd of spec.fields.filter(x=>x.required&&x.type==='check'))if(!f.elements[fd.name]?.checked)return need(f,'동의 확인 칸에 체크해 주세요.');

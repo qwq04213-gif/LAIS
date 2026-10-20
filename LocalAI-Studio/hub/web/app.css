@@ -556,7 +556,7 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 .task.cancelled span{color:var(--mute)}
 @media(max-width:760px){.cfgview .cs{grid-template-columns:1fr}.cfgview .cs-nav{flex-direction:row;overflow:auto;position:static}.cfgview .cs-nav button{white-space:nowrap}}
 
-.mfam{margin:14px 0 6px;padding:4px 0;border-bottom:1px solid var(--line);font-size:calc(14px*var(--ui,1));grid-column:1/-1}.mfam small{color:var(--mute);font-weight:400}
 #rec-dlg{width:min(960px,94vw)}#rec-wave{width:100%;height:110px;background:var(--raised);border:1px solid var(--line);border-radius:8px;cursor:crosshair;margin:8px 0;display:block}#rec-wave[hidden]{display:none}
 .item.noch{grid-template-columns:1fr auto;cursor:default}.item.noch:active{transform:none;filter:none}
 :root[data-nostart] nav button[data-v=start]{display:none}
+#feat-form>.f,#feat-form details>.f,#feat-form>.chk{margin-top:12px}#feat-form input[type=color]{width:64px;height:34px;padding:2px;cursor:pointer}

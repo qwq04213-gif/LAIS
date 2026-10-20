@@ -264,9 +264,10 @@ async function run(kind,form,extra={}){
 }
 /* ── 영상 만들기 ── */
 let VID_IMG=null;
+const W5MSG=($('#w-vid')||{}).innerHTML||'';
 (()=>{const f=$('#f-music');if(!f)return;
   const key=$('#mu-key');key.innerHTML=['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B'].flatMap(r=>['major','minor'].map(q=>`${r} ${q}`)).sort((a,b)=>a.endsWith('major')===b.endsWith('major')?0:a.endsWith('major')?-1:1).map(k=>`<option>${k}</option>`).join('');
-  const save=()=>ls.set('form:f-music',formVals(f)),sync=()=>{const sx=f.elements.mengine&&f.elements.mengine.value==='sfx';$$('.mu-ace',f).forEach(e=>e.hidden=sx);$$('.mu-sfx',f).forEach(e=>e.hidden=!sx);if(!sx)$('#mu-lyr').hidden=f.elements.instrumental.checked;$('.go',f).textContent=sx?'효과음 만들기':'음악 만들기'};
+  const save=()=>ls.set('form:f-music',formVals(f)),sync=()=>{const sx=f.elements.mengine&&f.elements.mengine.value==='sfx';$$('.mu-ace',f).forEach(e=>e.hidden=sx);$$('.mu-sfx',f).forEach(e=>e.hidden=!sx);if(!sx)$('#mu-lyr').hidden=f.elements.instrumental.checked;$('.go',f).textContent=sx?'효과음 만들기':'음악 만들기';musicWarn()};
   const o=ls.get('form:f-music',null);if(o)for(const[k,v]of Object.entries(o)){const e=f.elements[k];if(!e)continue;if(e.type==='checkbox')e.checked=!!v;else e.value=v}
   key.value=key.value||'C major';sync();f.addEventListener('change',()=>{sync();save()});f.addEventListener('input',debounce(save,400));
   f.onsubmit=e=>{e.preventDefault();if(!f.elements.tags.value.trim())return setBar($('#v-music'),'어떤 음악인지 스타일을 적어 주세요. 예: lo-fi, chill, piano','bad');save();run('music',f)};
@@ -284,7 +285,8 @@ let VID_IMG=null;
     const fs=f.elements.fast;fs.disabled=big&&!st['fast_'+k];$('#vid-fast-hint').textContent=fs.disabled?'(4단계 가속 LoRA 가 없어요 — 설치와 모델에서 받을 수 있어요)':'';if(fs.disabled)fs.checked=false;
     for(const n of ['steps','cfg'])f.elements[n].disabled=big&&fs.checked;
     const ver=f.elements.wan_ver.value,more={ltx:'LTX-Video 는 몇십 초 안에 영상이 나와요. 사진을 올리면 그 사진에서 시작해요. 모델은 설치와 모델 > 영상에서 받아요.',vace:'올린 사진 속 인물·사물·스타일을 유지하면서 프롬프트대로 영상을 만들어요(사진 필수). 약 5초까지.',s2v:'올린 인물 사진이 목소리에 맞춰 말하는 영상을 만들어요(사진·소리 필수). 길이는 아래 "길이"로 정해요(최대 30초, 5초씩 이어 그려서 길수록 오래 걸려요).'}[ver];
-    $('#vid-more-note').hidden=!more;$('#vid-more-note').textContent=more||'';$('#vid-audio-row').hidden=ver!=='s2v';$$('#f-vid .s2v-only').forEach(o=>{o.hidden=o.disabled=ver!=='s2v'});if(ver!=='s2v'&&+f.elements.sec.value>8)f.elements.sec.value='5';if(more)$('#w-vid').hidden=true};
+    $('#vid-more-note').hidden=!more;$('#vid-more-note').textContent=more||'';$('#vid-audio-row').hidden=ver!=='s2v';$$('#f-vid .s2v-only').forEach(o=>{o.hidden=o.disabled=ver!=='s2v'});if(ver!=='s2v'&&+f.elements.sec.value>8)f.elements.sec.value='5';if(more){const st=(LISTS.vidmore||{})[ver],nm={ltx:'LTX-Video',vace:'Wan VACE',s2v:'Wan 2.2 S2V'}[ver],w=$('#w-vid');w.hidden=!!st;if(!st)w.innerHTML=`${nm} 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a> > 영상에서 '${nm}'을 설치해 주세요.`}
+    else $('#w-vid').innerHTML=W5MSG};
   window.vidSync=vidSync;
   f.elements.wan_ver.addEventListener('change',()=>{const v=f.elements.wan_ver.value,d=v==='14b'||v==='vace'||v==='s2v'?W14:W5;for(const[k,v]of Object.entries(d))f.elements[k].value=v;vidSync()});
   f.elements.fast.addEventListener('change',vidSync);
