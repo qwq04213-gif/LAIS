@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
-<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};D.dataset.galprev=g('opt:galprev','on');var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','side');D.style.setProperty('--sbw',g('opt:sbw',208));D.style.setProperty('--bubw',g('opt:bubw',72));if(!g('opt:gosticky',true))D.dataset.gosticky='off'}catch(e){}</script>
+<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};D.dataset.galprev=g('opt:galprev','on');var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','side');D.style.setProperty('--sbw',g('opt:sbw',208));D.style.setProperty('--bubw',g('opt:bubw',72));if(!g('opt:gosticky',true))D.dataset.gosticky='off';if(!g('opt:start',true))D.dataset.nostart='1'}catch(e){}</script>
 <script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}try{var z=parseFloat(localStorage.getItem('ui:scale'));document.documentElement.style.setProperty('--ui',z>=0.8&&z<=2?z:1.25)}catch(e){document.documentElement.style.setProperty('--ui',1.25)}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
@@ -454,7 +454,7 @@
     <label class="chk" id="vid-ratio-row" hidden><input type="checkbox" name="keep_ratio" checked> 이미지 비율 따라가기</label>
     <div class="row">
       <label class="f">크기<select name="size"><option value="832x480">가로 480p (기본)</option><option value="480x832">세로 480p</option><option value="640x640">정사각</option><option value="1280x704">가로 720p (VRAM 많이 필요)</option></select></label>
-      <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option></select></label>
+      <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option><option value="15" class="s2v-only" hidden disabled>15초 (말하는 영상)</option><option value="30" class="s2v-only" hidden disabled>30초 (말하는 영상)</option></select></label>
     </div>
     <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx">LTX-Video — 아주 빠름</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
     <p class="hint plain" id="vid-more-note" hidden></p>
@@ -1023,6 +1023,7 @@
 <div class="row"><div class="rl"><b>안내 문구 줄이기</b><span>각 화면의 회색 설명 글을 숨겨서 더 간결하게 보여 줘요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-hints"><i></i></label></div></div>
 </div>
 <div class="card"><h3>시작과 목록</h3>
+<div class="row"><div class="rl"><b>시작하기 탭 보이기</b><span>왼쪽 메뉴 맨 위의 [시작하기](준비 상태·처음 쓰는 사람용 안내)를 보이거나 숨겨요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-start"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>시작할 때 열 화면</b><span>스튜디오를 열 때 맨 처음 보이는 화면이에요.</span></div><div class="rc"><select id="opt-home"><option value="">대화 (기본)</option><option value="start">시작하기</option><option value="gen">이미지 생성</option><option value="edit">이미지 편집</option><option value="vid">영상 만들기</option><option value="music">음악 만들기</option><option value="gal">기록 갤러리</option><option value="feat">이미지 확장 (기타 기능)</option></select></div></div>
 <div class="row"><div class="rl"><b>생성 결과 그림 크기</b><span>이미지 생성·편집 화면에서 결과 그림이 보이는 크기예요. 누르면 크게 볼 수 있어요.</span></div><div class="rc"><select id="opt-ressz"><option value="300">작게</option><option value="420">보통</option><option value="640">크게</option><option value="900">아주 크게</option></select></div></div>
 <div class="row"><div class="rl"><b>작업 대기열 위치</b><span>작업 대기열 메뉴의 위치를 바꿀 수 있어요.</span></div><div class="rc"><select id="opt-qpos" title="직접 선택: 화면에 떠 있는 작업 대기열 버튼을 끌어서 옮겨요."><option value="side">사이드바에 고정</option><option value="left">왼쪽</option><option value="right">오른쪽</option><option value="free">직접 선택</option></select> <button type="button" class="ghost sm" id="opt-qreset">자리 되돌리기</button></div></div>
@@ -1123,6 +1124,7 @@
       <button type="button" data-to="gvar" title="이 그림을 바탕으로 구도는 비슷하게 4장 변형해요">비슷하게 변형 4장</button>
       <button type="button" data-to="edit">이미지 편집으로 보내기</button>
       <button type="button" data-to="up">업스케일로 보내기</button>
+      <button type="button" data-to="rmbg">배경 지우기</button>
       <button type="button" data-to="vid">영상으로 만들기</button>
       <button type="button" data-to="chsave" title="이 그림의 프롬프트·LoRA·시드와 사진을 캐릭터·스타일 보관함에 묶어서 저장해요">캐릭터·스타일로 저장</button></div></details>
     <button type="button" id="lb-star" hidden title="즐겨찾기 (갤러리 목록과 같은 상태)" aria-label="즐겨찾기">☆ 즐겨찾기</button>

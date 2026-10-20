@@ -555,7 +555,14 @@ def wf_s2v(q, ref, audio):
               audio_encoder_output=[ao, 0], ref_image=[li, 0])
     k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
               positive=[v, 0], negative=[v, 1], latent_image=[v, 2], denoise=1.0)
-    _save_video(w, [w.add("VAEDecode", samples=[k, 0], vae=vae), 0], q["fps"], audio=[au, 0])
+    acc = [k, 0]
+    for i in range(1, q.get("chunks", 1)):      # 긴 목소리: 앞부분 영상에 이어서 약 5초씩 더 그리고 시간축으로 붙여요
+        e = w.add("WanSoundImageToVideoExtend", positive=pos, negative=neg, vae=vae, length=q["frames"], video_latent=acc,
+                  audio_encoder_output=[ao, 0], ref_image=[li, 0])
+        ke = w.add("KSampler", model=model, seed=q["seed"] + i, steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+                   positive=[e, 0], negative=[e, 1], latent_image=[e, 2], denoise=1.0)
+        acc = [w.add("LatentConcat", samples1=acc, samples2=[ke, 0], dim="t"), 0]
+    _save_video(w, [w.add("VAEDecode", samples=acc, vae=vae), 0], q["fps"], audio=[au, 0])
     return w.n
 
 

@@ -177,8 +177,8 @@ addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])][0],on=$('
 /* ══════════ 이미지 작업 실행 / 결과 ══════════ */
 function addVideoResults(sec,j){
   const used=(j.used||[]).filter(Boolean),mi=(u,to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${tip}"`:''}>${t}</button>`;
-  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>{const an=/\.webp$/i.test(u);return `<figure class="vfig">${an?`<img src="${u}" alt="움직이는 WebP">`:`<video src="${u}" controls loop muted playsinline preload="metadata"></video>`}<figcaption><a href="${u}" download>저장</a>${an?'':mi(u,'vmix','소리·자막 넣기','이 영상에 음성·음악을 입히고 자막을 넣어 새 영상으로 저장해요')}${an?'':mi(u,'vcont','이어서 만들기','이 영상의 마지막 장면을 시작 이미지로 넣어서, 그다음 장면을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
-    an?'':mi(u,'vp:interp','프레임 늘리기 (부드럽게)','중간 장면을 만들어 넣어 움직임을 2배로 부드럽게 해요 · RIFE 확장 필요')+mi(u,'vp:upscale','해상도 키우기','업스케일 모델로 모든 장면을 키워요 (설치와 모델에서 받은 모델 사용)')+mi(u,'vp:webp','움직이는 WebP로 저장','용량이 작은 움직이는 그림 파일로 바꿔요')}${mi(u,'folder','출력 폴더 열기','이 파일이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`}).join('')}${
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${j.images.map(u=>{const an=/\.(webp|gif)$/i.test(u);return `<figure class="vfig">${an?`<img src="${u}" alt="움직이는 WebP">`:`<video src="${u}" controls loop muted playsinline preload="metadata"></video>`}<figcaption><a href="${u}" download>저장</a>${an?'':mi(u,'vmix','소리·자막 넣기','이 영상에 음성·음악을 입히고 자막을 넣어 새 영상으로 저장해요')}${an?'':mi(u,'vcont','이어서 만들기','이 영상의 마지막 장면을 시작 이미지로 넣어서, 그다음 장면을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
+    an?'':mi(u,'vp:interp','프레임 늘리기 (부드럽게)','중간 장면을 만들어 넣어 움직임을 2배로 부드럽게 해요 · RIFE 확장 필요')+mi(u,'vp:upscale','해상도 키우기','업스케일 모델로 모든 장면을 키워요 (설치와 모델에서 받은 모델 사용)')+mi(u,'vp:webp','움직이는 WebP로 저장','용량이 작은 움직이는 그림 파일로 바꿔요')+mi(u,'vp:gif','GIF로 저장','메신저·게시판에 올리기 쉬운 GIF 로 바꿔요 (가로 480px, 초당 12장)')}${mi(u,'folder','출력 폴더 열기','이 파일이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`}).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const v=$('.res .batch video',sec);if(v){v.scrollIntoView({block:'nearest'});v.play().catch(()=>{})}
 }
@@ -212,7 +212,7 @@ function addResults(sec,j,kind){
   $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${
     j.images.map(u=>`<figure><img src="${u}" data-u="${u}" alt="결과 이미지 (클릭하면 크게 보기)"><figcaption><a href="${u}" download>저장</a>${mi(u,'edit',first)}${
     kind==='up'?'':mi(u,'up','업스케일')}${kind==='gen'?mi(u,'regen','같은 설정으로','이 이미지를 만든 설정(프롬프트·모델·LoRA·시드 등)을 생성 탭에 그대로 채워 줘요'):''}${mi(u,'vid','영상으로','이 이미지를 시작 장면으로 영상을 만들어요')}<details class="more"><summary>더 보기</summary><div class="menu">${
-    kind==='gen'?mi(u,'var','여러 장 변형','구도는 유지하고 디테일만 조금씩 다른 이미지를 여러 장 만들어요'):''}${COMPARE[u]?mi(u,'cmp','비교','원본과 겹쳐서 비교해요'):''}${kind==='gen'?mi(u,'chsave','캐릭터·스타일로 저장','이 그림의 프롬프트·LoRA·시드와 사진을 보관함에 묶어서 저장해요'):''}${mi(u,'info','정보')}${mi(u,'folder','폴더 열기','이 사진이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`).join('')}${
+    kind==='gen'?mi(u,'var','여러 장 변형','구도는 유지하고 디테일만 조금씩 다른 이미지를 여러 장 만들어요'):''}${COMPARE[u]?mi(u,'cmp','비교','원본과 겹쳐서 비교해요'):''}${kind==='gen'?mi(u,'chsave','캐릭터·스타일로 저장','이 그림의 프롬프트·LoRA·시드와 사진을 보관함에 묶어서 저장해요'):''}${mi(u,'rmbg','배경 지우기','사람·물체만 남기고 배경을 투명하게 지워요')}${mi(u,'info','정보')}${mi(u,'folder','폴더 열기','이 사진이 저장된 폴더를 열어요')}</div></details></figcaption></figure>`).join('')}${
     used.length?`<details><summary>사용된 프롬프트</summary><pre>${esc(used[0])}</pre></details>`:''}</div>`);
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
   bt.querySelectorAll('img').forEach(i=>{if(!i.complete)i.addEventListener('load',goto,{once:true})}); // 사진이 다 불러와진 뒤 높이가 커져도 다시 맞춰요
@@ -283,8 +283,8 @@ let VID_IMG=null;
     w.textContent=`Wan 2.2 14B ${VID_IMG?'이미지→영상':'글→영상'} 모델이 아직 없어요. '설치와 모델'에서 'Wan 2.2 14B ${VID_IMG?'이미지→영상':'글→영상'}'를 설치해 주세요. (약 29GB)`;
     const fs=f.elements.fast;fs.disabled=big&&!st['fast_'+k];$('#vid-fast-hint').textContent=fs.disabled?'(4단계 가속 LoRA 가 없어요 — 설치와 모델에서 받을 수 있어요)':'';if(fs.disabled)fs.checked=false;
     for(const n of ['steps','cfg'])f.elements[n].disabled=big&&fs.checked;
-    const ver=f.elements.wan_ver.value,more={ltx:'LTX-Video 는 몇십 초 안에 영상이 나와요. 사진을 올리면 그 사진에서 시작해요. 모델은 설치와 모델 > 영상에서 받아요.',vace:'올린 사진 속 인물·사물·스타일을 유지하면서 프롬프트대로 영상을 만들어요(사진 필수). 약 5초까지.',s2v:'올린 인물 사진이 목소리에 맞춰 말하는 영상을 만들어요(사진·소리 필수). 한 번에 약 5초까지, 오래 걸려요.'}[ver];
-    $('#vid-more-note').hidden=!more;$('#vid-more-note').textContent=more||'';$('#vid-audio-row').hidden=ver!=='s2v';if(more)$('#w-vid').hidden=true};
+    const ver=f.elements.wan_ver.value,more={ltx:'LTX-Video 는 몇십 초 안에 영상이 나와요. 사진을 올리면 그 사진에서 시작해요. 모델은 설치와 모델 > 영상에서 받아요.',vace:'올린 사진 속 인물·사물·스타일을 유지하면서 프롬프트대로 영상을 만들어요(사진 필수). 약 5초까지.',s2v:'올린 인물 사진이 목소리에 맞춰 말하는 영상을 만들어요(사진·소리 필수). 길이는 아래 "길이"로 정해요(최대 30초, 5초씩 이어 그려서 길수록 오래 걸려요).'}[ver];
+    $('#vid-more-note').hidden=!more;$('#vid-more-note').textContent=more||'';$('#vid-audio-row').hidden=ver!=='s2v';$$('#f-vid .s2v-only').forEach(o=>{o.hidden=o.disabled=ver!=='s2v'});if(ver!=='s2v'&&+f.elements.sec.value>8)f.elements.sec.value='5';if(more)$('#w-vid').hidden=true};
   window.vidSync=vidSync;
   f.elements.wan_ver.addEventListener('change',()=>{const v=f.elements.wan_ver.value,d=v==='14b'||v==='vace'||v==='s2v'?W14:W5;for(const[k,v]of Object.entries(d))f.elements[k].value=v;vidSync()});
   f.elements.fast.addEventListener('change',vidSync);

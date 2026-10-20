@@ -295,6 +295,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
   if(b.dataset.pane==='notify'){$('#s-sound').checked=qSound();$('#s-desk').checked=qDesk()}if(b.dataset.pane==='gen')prefLoad()});
  /* 켜고 끄는 값 (이 브라우저에만 기억) */
  const tog=(id,key,def,fn)=>{const el=$('#'+id);el.checked=ls.get(key,def);el.onchange=()=>{ls.set(key,el.checked);fn&&fn(el.checked)}};
+ tog('opt-start','opt:start',true,v=>{const b=$('nav button[data-v=start]');if(b)b.hidden=!v;if(v)delete D.dataset.nostart;else D.dataset.nostart='1';if(!v&&$('#v-start')&&$('#v-start').classList.contains('on'))show('chat')});
  tog('opt-motion','opt:motion',false,v=>{if(v)D.dataset.motion='off';else delete D.dataset.motion});
  tog('opt-hints','opt:hints',false,v=>{if(v)D.dataset.hints='off';else delete D.dataset.hints});
  tog('opt-ctrl','opt:ctrl',true);tog('opt-mouseback','opt:mouseback',true);tog('opt-navkeys','opt:navkeys',true);tog('opt-slash','opt:slash',true);tog('opt-leave','opt:leave',true);
@@ -340,7 +341,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
  addEventListener('beforeunload',e=>{if(!ls.get('opt:leave',true))return;
   if(QLAST&&QLAST.items&&QLAST.items.some(r=>r.state==='running'||r.state==='queued')){e.preventDefault();e.returnValue=''}});
  /* 시작 화면 */
- {const hv=ls.get('opt:home','');if(hv&&$('#v-'+hv)&&!/[#?]/.test(location.hash))show(hv)}
+ {let hv=ls.get('opt:home','');if(hv==='start'&&!ls.get('opt:start',true))hv='';if(hv&&$('#v-'+hv)&&!/[#?]/.test(location.hash))show(hv)}
 }
 
 /* ══════════ 음성 만들기 ══════════ */

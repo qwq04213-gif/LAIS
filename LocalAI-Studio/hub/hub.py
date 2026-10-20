@@ -5,7 +5,7 @@
 역할: Ollama / ComfyUI 실행, 웹 UI 제공, 모델 설치, 이미지 작업(마스크 크롭·합성·타일 리파인) 조율,
       이미지 메타데이터 읽기/제거(meta.py), ComfyUI 그래프 생성·사용자 워크플로 실행(flows.py).
 """
-import base64, csv, hashlib, importlib, io, json, os, random, re, shutil, subprocess, sys, tempfile, threading, time, uuid, webbrowser, zipfile
+import base64, csv, hashlib, importlib, io, json, math, os, random, re, shutil, subprocess, sys, tempfile, threading, time, uuid, webbrowser, zipfile
 import urllib.error, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -2592,7 +2592,7 @@ def put_audio(data_url, J):
 
 VID_MORE = {"ltx": ("LTX-Video", ("LTXVConditioning", "LTXVScheduler", "EmptyLTXVLatentVideo", "SamplerCustom")),
             "vace": ("Wan VACE", ("WanVaceToVideo", "TrimVideoLatent")),
-            "s2v": ("Wan 2.2 S2V", ("WanSoundImageToVideo", "AudioEncoderLoader", "AudioEncoderEncode", "LoadAudio"))}
+            "s2v": ("Wan 2.2 S2V", ("WanSoundImageToVideo", "WanSoundImageToVideoExtend", "LatentConcat", "AudioEncoderLoader", "AudioEncoderEncode", "LoadAudio"))}
 
 
 def do_vid_more(p, J):
@@ -2651,19 +2651,23 @@ def do_vid_more(p, J):
         if ver == "s2v":
             if not p.get("audio"):
                 raise ValueError("목소리(소리 파일)를 올려 주세요. 음성 만들기 결과나 녹음 파일을 쓸 수 있어요.")
-            frames = clamp(int(round(clamp(num(p, "sec", 4.8), 1.0, 4.8) * fps / 4)) * 4 + 1, 17, 77)     # 한 번에 약 5초까지
+            sec = clamp(num(p, "sec", 4.8), 1.0, 30.0)
+            chunks = max(1, math.ceil(sec / 4.8 - 0.05))                    # 약 5초(77프레임)씩 이어 그려요, 최대 30초
+            frames = 77 if chunks > 1 else clamp(int(round(sec * fps / 4)) * 4 + 1, 17, 77)
         else:
+            chunks = 1
             frames = clamp(int(round(clamp(num(p, "sec", 5.0), 1.0, 6.0) * fps / 4)) * 4 + 1, 17, 97)
         q = dict(unet=unet, te=umt5, vae=vae21, prompt=text, negative=neg or flows.WAN_NEG, seed=seed, w=w, h=h, frames=frames, fps=fps,
                  steps=clamp(num(p, "steps", 20, int), 1, 60), cfg=clamp(num(p, "cfg", 5.0 if ver == "vace" else 4.5), 1.0, 20.0),
-                 sampler="uni_pc" if "uni_pc" in (caps()["samplers"] or ["uni_pc"]) else "euler", scheduler="simple", shift=8.0, audio_encoder=enc)
+                 sampler="uni_pc" if "uni_pc" in (caps()["samplers"] or ["uni_pc"]) else "euler", scheduler="simple", shift=8.0, audio_encoder=enc,
+                 chunks=chunks if ver == "s2v" else 1)
         ref = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J)
-        J["msg"] = f"{title} 로 영상 만드는 중 ({w}×{h}, {frames}프레임) — 몇 분 걸릴 수 있어요"
+        J["msg"] = f"{title} 로 영상 만드는 중 ({w}×{h}, {frames * q['chunks'] if ver == 's2v' else frames}프레임) — 몇 분 걸릴 수 있어요"
         g = flows.wf_vace(q, ref) if ver == "vace" else flows.wf_s2v(q, ref, put_audio(p["audio"], J))
         model = unet
     res = run_wf(g, J, raw=True)
     info = dict(kind="vid", prompt=text, negative=q["negative"], seed=seed, w=w, h=h, steps=q["steps"], cfg=q["cfg"], model=model,
-                frames=q["frames"], fps=q["fps"], start_image=img is not None, video_model=title)
+                frames=q["frames"] * q.get("chunks", 1), fps=q["fps"], start_image=img is not None, video_model=title)
     return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
 
 
@@ -2686,7 +2690,28 @@ def feat_3d(p, J):
 
 
 VPOST = {"interp": ("RIFE VFI", "ComfyUI-Frame-Interpolation", "프레임 늘리기"), "upscale": ("ImageUpscaleWithModel", "", "업스케일"),
-         "webp": ("SaveAnimatedWEBP", "", "WebP 변환")}
+         "webp": ("SaveAnimatedWEBP", "", "WebP 변환"), "gif": ("", "", "GIF 변환")}
+
+
+def vpost_gif(src, p, J):
+    """영상 → GIF (ffmpeg 로 색표를 만들어 화질을 살려요, ComfyUI 없이)."""
+    ff = vmix.find_ffmpeg(PY, ROOT)
+    if not ff:
+        raise RuntimeError("GIF 로 바꾸려면 ffmpeg 가 필요해요. 설치와 모델 > 내 PC 점검의 [빠진 부품 설치]로 imageio-ffmpeg 를 설치해 주세요.")
+    fps, width = clamp(num(p, "gif_fps", 12, int), 5, 30), clamp(num(p, "gif_w", 480, int), 160, 1280)
+    out = ROOT / "cache" / f"gif_{uuid.uuid4().hex[:8]}.gif"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    J["msg"] = "GIF 로 바꾸는 중"
+    vf = f"fps={fps},scale='min(iw,{width})':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=192[p];[b][p]paletteuse=dither=sierra2_4a"
+    try:
+        r = subprocess.run([str(ff), "-y", "-v", "error", "-i", str(src), "-vf", vf, "-loop", "0", str(out)], capture_output=True, text=True, timeout=600,
+                           **({"creationflags": 0x08000000} if os.name == "nt" else {}))
+        if r.returncode != 0 or not out.is_file():
+            raise RuntimeError("GIF 로 바꾸지 못했어요: " + (r.stderr or "").strip()[-300:])
+        data = out.read_bytes()
+    finally:
+        out.unlink(missing_ok=True)
+    return [(data, dict(kind="vpost", op="gif", fps=fps, width=width, source=src.name), ".gif")]
 
 
 def do_vpost(p, J):
@@ -2697,6 +2722,8 @@ def do_vpost(p, J):
     src = out_path(str(p.get("video") or "")[5:] if str(p.get("video") or "").startswith("/out/") else "")
     if src.suffix.lower() not in (".mp4", ".webm") or not src.is_file():
         raise ValueError("다듬을 영상을 찾을 수 없어요. (이 앱으로 만든 영상만 다듬을 수 있어요)")
+    if op == "gif":
+        return vpost_gif(src, p, J)
     node, pack, title = VPOST[op]
     need = ["LoadVideo", "GetVideoComponents", node] + (["CreateVideo", "SaveVideo"] if op != "webp" else []) + (["UpscaleModelLoader"] if op == "upscale" else [])
     miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
@@ -2867,7 +2894,7 @@ def job_thread(J, p):
         J["state"], J["msg"] = "running", "엔진 준비 중"
         if p["kind"] in ("tts", "vmix"):
             pass                                          # 음성 만들기·영상 소리/자막 넣기는 ComfyUI 를 쓰지 않아요
-        elif p["kind"] == "feat" and p.get("feature") in ("resize", "color", "rmbg"):
+        elif (p["kind"] == "feat" and p.get("feature") in ("resize", "color", "rmbg")) or (p["kind"] == "vpost" and p.get("op") == "gif"):
             pass                                          # 크기·색 보정·배경 지우기는 ComfyUI 없이 바로 처리해요
         elif (p["kind"] == "batch" and (p.get("op") != "upscale" or scale_of(p) <= 1.0)) or (p["kind"] == "up" and p.get("mode") != "refine" and scale_of(p) <= 1.0):
             pass                                          # 일괄 처리의 배경 지우기·크기 변경, 줄이기(1배 이하)는 ComfyUI 가 필요 없어요
