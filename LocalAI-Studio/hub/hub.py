@@ -1342,6 +1342,30 @@ def resize_steps(img, p):
     return img, steps
 
 
+def feat_rmbg(p, J):
+    """배경 지우기: 사람·물체만 남기고 배경을 투명(또는 고른 색)으로. ComfyUI 없이 바로 처리해요."""
+    key = p.get("rmodel") if p.get("rmodel") in bgremove.MODELS else "normal"
+    if not bgremove.have_ort() or not bgremove.installed(MODELS / "rmbg", key):
+        r = rmbg_install({"key": key})
+        label = bgremove.MODELS[key]["label"]
+        if r.get("error") and "이미" not in r["error"]:
+            raise RuntimeError(r["error"])
+        raise RuntimeError(f"배경 지우기 모델({label}, 약 {bgremove.MODELS[key]['mb']}MB)을 받기 시작했어요. 설치와 모델의 진행 목록에서 끝난 걸 확인한 뒤 다시 눌러 주세요.")
+    img = load_img(p["image"])
+    bg = str(p.get("bg") or "transparent")
+    color = {"white": (255, 255, 255), "black": (0, 0, 0)}.get(bg)
+    if bg == "custom":
+        m = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(p.get("bgcolor") or "").strip())
+        color = tuple(int(m.group(1)[i:i + 2], 16) for i in (0, 2, 4)) if m else (255, 255, 255)
+    J["msg"] = "배경 지우는 중"
+    res = rmbg_engine(key).cut(img, color)
+    if p.get("crop") and res.mode == "RGBA":      # 남은 부분에 맞춰 빈 테두리 잘라내기
+        box = res.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+        if box:
+            res = res.crop(box)
+    return [(res, dict(kind="feat-rmbg", model=key, background=bg, w=res.width, h=res.height), None)]
+
+
 def feat_resize(p, J):
     """크기 바꾸기 · 비율대로 자르기 · 회전/뒤집기 (ComfyUI 없이 바로 처리해요)."""
     img, steps = resize_steps(load_img(p["image"]).convert("RGB"), p)
@@ -1641,7 +1665,7 @@ def feat_ipadapter(p, J):
 
 def do_feat(p, J):
     fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color,
-          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "img3d": feat_3d}.get(p.get("feature"))
+          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "img3d": feat_3d, "rmbg": feat_rmbg}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
@@ -2843,6 +2867,8 @@ def job_thread(J, p):
         J["state"], J["msg"] = "running", "엔진 준비 중"
         if p["kind"] in ("tts", "vmix"):
             pass                                          # 음성 만들기·영상 소리/자막 넣기는 ComfyUI 를 쓰지 않아요
+        elif p["kind"] == "feat" and p.get("feature") in ("resize", "color", "rmbg"):
+            pass                                          # 크기·색 보정·배경 지우기는 ComfyUI 없이 바로 처리해요
         elif (p["kind"] == "batch" and (p.get("op") != "upscale" or scale_of(p) <= 1.0)) or (p["kind"] == "up" and p.get("mode") != "refine" and scale_of(p) <= 1.0):
             pass                                          # 일괄 처리의 배경 지우기·크기 변경, 줄이기(1배 이하)는 ComfyUI 가 필요 없어요
         else:

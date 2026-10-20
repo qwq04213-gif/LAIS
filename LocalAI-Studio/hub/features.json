@@ -572,6 +572,81 @@
     ]
   },
   {
+    "id": "rmbg",
+    "title": "배경 지우기",
+    "icon": "✂",
+    "summary": "사람·물체만 남기고 배경을 지워요. 기본은 투명 배경 PNG 이고, 흰색·검정·원하는 색으로 채울 수도 있어요. 이미지 엔진 없이 바로 처리돼요. 처음 한 번은 모델(5~179MB)을 받아요.",
+    "steps": [
+      "사진을 올려요",
+      "배경(투명/흰색 등)과 품질을 골라요",
+      "[만들기] — 결과는 PNG 로 저장돼요"
+    ],
+    "fields": [
+      {
+        "name": "image",
+        "type": "image",
+        "label": "사진",
+        "required": true
+      },
+      {
+        "name": "bg",
+        "type": "select",
+        "label": "배경",
+        "options": [
+          [
+            "transparent",
+            "투명 (PNG)"
+          ],
+          [
+            "white",
+            "흰색"
+          ],
+          [
+            "black",
+            "검정"
+          ],
+          [
+            "custom",
+            "직접 고른 색"
+          ]
+        ],
+        "default": "transparent"
+      },
+      {
+        "name": "bgcolor",
+        "type": "text",
+        "label": "직접 고른 색 (예: #00ff00)",
+        "default": "#00ff00",
+        "hint": "배경을 '직접 고른 색'으로 했을 때만 써요."
+      },
+      {
+        "name": "rmodel",
+        "type": "select",
+        "label": "품질",
+        "options": [
+          [
+            "fast",
+            "빠름 (5MB)"
+          ],
+          [
+            "normal",
+            "보통 (44MB)"
+          ],
+          [
+            "precise",
+            "정밀 (179MB, 머리카락 등 가장자리가 깔끔)"
+          ]
+        ],
+        "default": "normal"
+      },
+      {
+        "name": "crop",
+        "type": "check",
+        "label": "남은 부분에 맞춰 빈 테두리 잘라내기"
+      }
+    ]
+  },
+  {
     "id": "detailer",
     "title": "얼굴·손 자동 보정",
     "icon": "☺",
