@@ -366,12 +366,19 @@ VID_MORE = {"ltx": ("LTX-Video", ("LTXVConditioning", "LTXVScheduler", "EmptyLTX
             "s2v": ("Wan 2.2 S2V", ("WanSoundImageToVideo", "WanSoundImageToVideoExtend", "LatentConcat", "AudioEncoderLoader", "AudioEncoderEncode", "LoadAudio"))}
 
 
+def s2v_fast_lora():
+    """S2V 빠른 모드에 쓸 4단계 가속 LoRA(ComfyUI 공식 S2V 예시와 같은 Wan 2.2 T2V lightx2v 고노이즈 LoRA)."""
+    lo = files("loras")
+    pick = lambda *keys: next((n for n in lo if all(k in n.lower() for k in keys)), None)
+    return pick("lightx2v", "t2v", "high") or pick("lightning", "t2v", "high") or pick("lightx2v", "high") or pick("lightx2v")
+
+
 def vid_more_state():
     """LTX-Video · Wan VACE · Wan S2V 모델이 있는지(화면 안내용)."""
     dm, te, va = files("diffusion_models"), files("text_encoders"), files("vae")
     wan = bool(_pick(te, "umt5")) and bool(_pick(va, "wan_2.1_vae", "wan2.1", ("wan", "2.1")))
     return {"ltx": bool(ltx_models()) and bool(_pick(te, "t5xxl")), "vace": wan and any("vace" in n.lower() for n in dm),
-            "s2v": wan and any("s2v" in n.lower() for n in dm) and bool(_pick(files("audio_encoders"), "wav2vec"))}
+            "s2v": wan and any("s2v" in n.lower() for n in dm) and bool(_pick(files("audio_encoders"), "wav2vec")), "s2v_fast": bool(s2v_fast_lora())}
 
 
 def do_vid_more(p, J):
@@ -440,8 +447,13 @@ def do_vid_more(p, J):
                  steps=clamp(num(p, "steps", 20, int), 1, 60), cfg=clamp(num(p, "cfg", 5.0 if ver == "vace" else 4.5), 1.0, 20.0),
                  sampler="uni_pc" if "uni_pc" in (caps()["samplers"] or ["uni_pc"]) else "euler", scheduler="simple", shift=8.0, audio_encoder=enc,
                  chunks=chunks if ver == "s2v" else 1)
+        if ver == "s2v" and p.get("fast"):      # 빠른 모드: 4단계 가속 LoRA + CFG 1 (한 단계에 모델을 한 번만 돌려요). 움직임·품질이 조금 줄어요
+            lora = s2v_fast_lora()
+            if not lora:
+                raise RuntimeError("빠른 모드에 쓸 4단계 가속 LoRA 가 없어요. '설치와 모델' > 영상에서 'Wan 2.2 4단계 가속 LoRA'를 설치하거나 빠른 모드를 꺼 주세요.")
+            q.update(lora=lora, steps=clamp(num(p, "fast_steps", 4, int), 2, 8), cfg=1.0)
         ref = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J)
-        J["msg"] = f"{title} 로 영상 만드는 중 ({w}×{h}, {frames * q['chunks'] if ver == 's2v' else frames}프레임) — 몇 분 걸릴 수 있어요"
+        J["msg"] = f"{title}{' 빠른 모드' if q.get('lora') else ''} 로 영상 만드는 중 ({w}×{h}, {frames * q['chunks'] if ver == 's2v' else frames}프레임)"
         g = flows.wf_vace(q, ref) if ver == "vace" else flows.wf_s2v(q, ref, put_audio(p["audio"], J))
         model = unet
     res = run_wf(g, J, raw=True)

@@ -478,6 +478,7 @@
       <label class="f">크기<select name="size"><option value="832x480">가로 480p (기본)</option><option value="480x832">세로 480p</option><option value="640x640">정사각</option><option value="1280x704">가로 720p (VRAM 많이 필요)</option></select></label>
       <label class="f">길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초</option><option value="8">8초 (오래 걸려요)</option><option value="15" class="s2v-only" hidden disabled>15초 (말하는 영상)</option><option value="30" class="s2v-only" hidden disabled>30초 (말하는 영상)</option></select></label>
     </div>
+    <p class="warn" id="vid-long-warn" hidden></p>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
     <details><summary>고급 설정</summary>

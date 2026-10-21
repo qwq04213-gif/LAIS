@@ -573,6 +573,8 @@ def wf_s2v(q, ref, audio):
     """Wan 2.2 S2V: 사진 한 장 + 목소리(소리 파일) → 말하는 영상(입 모양 맞춤). audio = 입력 폴더의 소리 파일 이름."""
     w = WF()
     model, vae, pos, neg = _wan21_base(w, q)
+    if q.get("lora"):      # 빠른 모드: 4단계 가속 LoRA
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=q["lora"], strength_model=1.0), 0]
     au = w.add("LoadAudio", audio=audio)
     enc = w.add("AudioEncoderLoader", audio_encoder_name=q["audio_encoder"])
     ao = w.add("AudioEncoderEncode", audio_encoder=[enc, 0], audio=[au, 0])
