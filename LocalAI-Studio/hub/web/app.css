@@ -569,7 +569,7 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 #v-photo .pe-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 10px}.pe-sep{width:1px;height:24px;background:var(--line);margin:0 2px}.pe-grow{flex:1}
 .pe-zoom{display:flex;align-items:center;gap:6px;color:var(--mute)}.pe-zoom input{width:120px}
 .pe-main{display:grid;grid-template-columns:auto minmax(0,1fr) 300px;gap:10px;align-items:start}
-.pe-tools{display:flex;flex-direction:column;gap:4px}.pe-tools button{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--raised);text-align:left;min-width:72px}
+.pe-tools{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start;max-height:calc(100vh - 190px);overflow:auto}.pe-tools button{min-width:0;padding:7px 8px;font-size:calc(13px*var(--ui,1));white-space:nowrap;border:1px solid var(--line);border-radius:8px;background:var(--raised);text-align:left;min-width:72px}
 .pe-tools button.on{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);font-weight:600}
 .pe-stage{position:relative;height:calc(100vh - 190px);min-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--raised);outline:none}
 .pe-stage.drop{border-color:var(--acc)}.pe-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:var(--mute);padding:20px;line-height:1.8}

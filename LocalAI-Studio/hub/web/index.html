@@ -555,8 +555,15 @@
   <div class="pe-main">
     <div class="pe-tools" role="radiogroup" aria-label="도구">
       <button type="button" data-tool="move" title="이동 (V) — 고른 레이어를 끌어서 옮겨요">이동</button>
+      <button type="button" data-tool="msel" title="사각 선택 (M) — Shift 더하기 · Alt 빼기">사각 선택</button>
+      <button type="button" data-tool="lasso" title="올가미 (Q) — 손으로 둘러서 골라요">올가미</button>
+      <button type="button" data-tool="wand" title="자동 선택 (W) — 비슷한 색을 한 번에 골라요">자동 선택</button>
       <button type="button" data-tool="brush" title="브러시 (B)">브러시</button>
       <button type="button" data-tool="eraser" title="지우개 (E) — 고른 레이어를 투명하게 지워요">지우개</button>
+      <button type="button" data-tool="dodge" title="밝게 문지르기 — 문지른 곳만 밝아져요">밝게</button>
+      <button type="button" data-tool="burn" title="어둡게 문지르기 — 문지른 곳만 어두워져요">어둡게</button>
+      <button type="button" data-tool="blurb" title="흐리게 문지르기 — 잡티·피부 결을 부드럽게">흐리게</button>
+      <button type="button" data-tool="clone" title="복제 도장 (S) — Alt+클릭으로 원본을 정하고 문질러 옮겨 그려요">복제 도장</button>
       <button type="button" data-tool="text" title="글자 (T) — 누른 곳에 글자를 넣어요">글자</button>
       <button type="button" data-tool="rect" title="사각형 (R)">사각형</button>
       <button type="button" data-tool="ellipse" title="원 (O)">원</button>
@@ -572,12 +579,21 @@
       <div class="card pe-card"><h4>도구 설정</h4>
         <div class="row"><label class="f">색<input type="color" id="pe-color" value="#e8433a"></label><label class="f">굵기 <span id="pe-sizev" class="mute">24</span><input type="range" id="pe-size" min="1" max="300" value="24"></label></div>
         <label class="f">불투명도 <span id="pe-alphav" class="mute">100%</span><input type="range" id="pe-alpha" min="5" max="100" value="100"></label>
+        <div data-for-tool="msel lasso wand"><label class="f">선택 방법<select id="pe-smode"><option value="new">새로 고르기</option><option value="add">더하기 (Shift)</option><option value="sub">빼기 (Alt)</option></select></label></div>
+        <div data-for-tool="wand"><label class="f">비슷한 정도 <span id="pe-tolv" class="mute">32</span><input type="range" id="pe-tol" min="0" max="100" value="32"></label>
+          <div class="row"><label class="chk"><input type="checkbox" id="pe-wcont" checked> 이어진 곳만</label><label class="chk"><input type="checkbox" id="pe-wsample"> 모든 레이어 기준</label></div></div>
+        <div data-for-tool="dodge burn blurb clone"><p class="hint plain">불투명도가 효과의 세기예요. 선택 영역이 있으면 그 안에만 칠해져요.</p></div>
+        <div data-for-tool="clone"><p class="hint plain">Alt 를 누른 채 원본 위치를 누른 뒤, 옮겨 그릴 곳을 문질러요.</p></div>
         <div data-for-tool="rect ellipse" class="row"><label class="chk"><input type="checkbox" id="pe-fill"> 안을 채우기</label></div>
         <div data-for-tool="text"><label class="f">글자<input type="text" id="pe-text" value="안녕하세요" maxlength="200"></label>
           <div class="row"><label class="chk"><input type="checkbox" id="pe-bold" checked> 굵게</label><label class="chk"><input type="checkbox" id="pe-stroke"> 테두리</label></div></div>
         <div data-for-tool="crop"><p class="hint plain" id="pe-cropinfo">남길 부분을 끌어서 골라요.</p><div class="row"><button type="button" class="go" id="pe-cropok" disabled>자르기 적용</button><button type="button" class="ghost" id="pe-cropno">취소</button></div></div>
       </div>
-      <div class="card pe-card"><h4>색·밝기 조정 <small class="mute">고른 레이어</small></h4>
+      <div class="card pe-card"><h4>선택 영역</h4>
+        <div class="pe-lbtns"><button type="button" class="ghost sm" id="pe-sall" title="Ctrl+A">전체 선택</button><button type="button" class="ghost sm" id="pe-snone" title="Ctrl+D">선택 해제</button><button type="button" class="ghost sm" id="pe-sinv" title="Ctrl+Shift+I">반전</button>
+          <button type="button" class="ghost sm" id="pe-sdel" title="Delete">지우기</button><button type="button" class="ghost sm" id="pe-sfill">지금 색으로 채우기</button><button type="button" class="ghost sm" id="pe-scopy" title="Ctrl+J">새 레이어로 복사</button><button type="button" class="ghost sm" id="pe-scrop">선택 부분만 남기고 자르기</button></div>
+      </div>
+      <div class="card pe-card"><h4>색·밝기 조정 <small class="mute">고른 레이어 · 선택 영역 안</small></h4>
         <label class="f">밝기 <span class="mute" data-v="b">100</span><input type="range" data-adj="b" min="0" max="200" value="100"></label>
         <label class="f">대비 <span class="mute" data-v="c">100</span><input type="range" data-adj="c" min="0" max="200" value="100"></label>
         <label class="f">채도 <span class="mute" data-v="s">100</span><input type="range" data-adj="s" min="0" max="300" value="100"></label>
@@ -590,6 +606,7 @@
       </div>
       <div class="card pe-card"><h4>레이어</h4>
         <div id="pe-layers" role="listbox" aria-label="레이어"></div>
+        <label class="f">혼합 모드<select id="pe-lblend"></select></label>
         <label class="f">불투명도 <span id="pe-lopv" class="mute">100%</span><input type="range" id="pe-lop" min="0" max="100" value="100"></label>
         <div class="pe-lbtns"><button type="button" class="ghost sm" id="pe-ladd">새 레이어</button><button type="button" class="ghost sm" id="pe-ldup">복제</button><button type="button" class="ghost sm" id="pe-lup" title="위로">▲</button><button type="button" class="ghost sm" id="pe-ldown" title="아래로">▼</button><button type="button" class="ghost sm" id="pe-lmerge" title="아래 레이어와 합치기">아래로 합치기</button><button type="button" class="ghost sm" id="pe-ldel">삭제</button></div>
       </div>
