@@ -560,3 +560,7 @@ function qPlace(){const D=document.documentElement,pill=$('#qfloat'),pan=$('#qpa
   const r=await api('/api/tts/ref',{data:url});if(r.error)return st(r.error);
   $('#tt-ref').value=r.id;$('#tt-ref-clear').hidden=false;$('#tt-clone-ok-row').hidden=false;toast('녹음한 부분을 목소리 샘플로 넣었어요.');d.close()};
 })();
+/* 작업 모두 강제 종료 */
+$('#q-killall').onclick=async()=>{if(!confirm('대기 중인 작업과 실행 중인 작업을 모두 멈출까요?\n(이미 저장된 결과는 그대로 남아요)'))return;
+  try{const r=await api('/api/job/cancel_all',{});toast(r.n?`작업 ${r.n}개를 멈췄어요.`:'멈출 작업이 없어서 이미지 엔진만 정리했어요.')}catch{toast('멈추지 못했어요. 서버와 연결을 확인해 주세요.')}
+  try{qPoll()}catch{}};

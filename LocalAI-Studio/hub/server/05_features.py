@@ -399,9 +399,22 @@ def feat_faceswap(p, J):
         if max(im.size) > 4096:
             raise ValueError("사진이 너무 커요(긴 변 4096px 이하). 줄여서 올려 주세요.")
     J["msg"] = "얼굴 찾아서 바꾸는 중"
-    g = flows.wf_faceswap(put_input(tgt, J), put_input(src, J), swap, rest, clamp(num(p, "vis", 1.0), 0.1, 1.0), clamp(num(p, "cf", 0.5), 0.0, 1.0),
-                          idx("target_face"), idx("source_face"), fill_node)
-    res = run_wf(g, J)[0]
+    ti, si = put_input(tgt, J), put_input(src, J)
+    build = lambda r: flows.wf_faceswap(ti, si, swap, r, clamp(num(p, "vis", 1.0), 0.1, 1.0), clamp(num(p, "cf", 0.5), 0.0, 1.0), idx("target_face"), idx("source_face"), fill_node)
+    g = build(rest)
+    try:
+        res = run_wf(g, J)[0]
+    except Cancelled:
+        raise
+    except Exception as e:  # noqa: BLE001
+        alt = next((x for x in rests if x.lower().startswith("gfpgan")), None)
+        if "codeformer" not in rest.lower() or not alt:
+            raise
+        # CodeFormer 는 ReActor·PyTorch 버전에 따라 불러오다 실패하는 경우가 있어요. 그럴 때는 GFPGAN 으로 바로 다시 해요
+        warn(J, f"CodeFormer 보정이 실패해서 GFPGAN 으로 다시 했어요. (원인: {str(e)[:200]})")
+        J["msg"] = "CodeFormer 가 실패해 GFPGAN 으로 다시 하는 중"
+        rest, g = alt, build(alt)
+        res = run_wf(g, J)[0]
     if res.getbbox() is None or not res.convert("L").getextrema()[1]:
         raise RuntimeError("결과가 비어 있어요. 안전 검사에서 걸러졌거나, 사진에서 얼굴을 찾지 못한 거예요. 다른 사진으로 해 보세요.")
     return [(res, dict(kind="feat-faceswap", extra={"FaceSwap": f"{swap} + {rest}"}), g)]

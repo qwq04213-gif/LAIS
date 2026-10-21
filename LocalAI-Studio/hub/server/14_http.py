@@ -429,6 +429,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "작업을 찾을 수 없습니다."})
             queue_cancel(J)
             return self.send_json({"ok": True})
+        if u == "/api/job/cancel_all":
+            return self.send_json(queue_cancel_all())
         if u == "/api/queue/move":
             return self.send_json(queue_move(p))
         if u == "/api/batch/scan":

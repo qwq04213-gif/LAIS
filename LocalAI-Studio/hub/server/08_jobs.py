@@ -309,6 +309,24 @@ def queue_cancel(J):
         threading.Thread(target=comfy_cancel, args=(J["pid"],), daemon=True).start()
 
 
+def queue_cancel_all():
+    """대기 중·실행 중인 작업을 모두 멈춰요. ComfyUI 대기열도 비우고 지금 그리는 것도 중단시켜요."""
+    n = 0
+    for J in list(JOBS.values()):
+        if J.get("state") in ("queued", "running"):
+            queue_cancel(J)
+            n += 1
+
+    def comfy_all():
+        for path, body in (("/queue", {"clear": True}), ("/interrupt", {})):
+            try:
+                http(CUI + path, body, 5)
+            except Exception:  # noqa: BLE001
+                pass
+    threading.Thread(target=comfy_all, daemon=True).start()
+    return {"ok": True, "n": n}
+
+
 def queue_move(p):
     to = p.get("to")
     with _QCV:
