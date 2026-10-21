@@ -76,12 +76,12 @@ async function galLoad(more){
     else if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
     const noprev=D.dataset.galprev==='off',ty=galType(x),ic={video:'▶ ',audio:'♪ ','3d':'🧊 '}[ty]||'';
     const media=ty==='audio'?`<div class="gnoimg gaud" title="${esc(x.prompt||x.name)}"><b>♪ ${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span><audio src="${x.url}" controls preload="none"></audio></div>`
-      :ty==='3d'?`<div class="gnoimg g3d" title="${esc(x.prompt||x.name)}"><b>🧊 3D 모델</b><span>${esc(x.name)}</span><a class="ghost sm" href="${x.url}" download>내려받기 (.glb)</a></div>`
+      :ty==='3d'?`<div class="gnoimg g3d" title="${esc(x.prompt||x.name)}"><b>🧊 3D 모델</b><span>${esc(x.name)}</span><span class="row"><button type="button" class="ghost sm" data-g3d="${x.url}">미리보기</button><a class="ghost sm" href="${x.url}" download>내려받기</a></span></div>`
       :noprev?`<div class="gnoimg" title="${esc(x.prompt||x.name)}"><b>${ic}${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span></div>`
       :ty==='video'?`<video data-src="${x.url}" controls muted loop playsinline preload="none"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`;
-    return head+`<figure class="gt${noprev||ty==='audio'||ty==='3d'?' noprev':''}" data-u="${x.url}" data-type="${ty}">${media}
+    return head+`<figure class="gt${noprev||ty==='audio'||ty==='3d'?' noprev':''}${GPICK.has(x.url)?' picked':''}" data-u="${x.url}" data-type="${ty}"><label class="gpick" title="선택 (여러 개 고를 수 있어요)"><input type="checkbox" data-pick="${x.url}"${GPICK.has(x.url)?' checked':''} aria-label="선택"></label>${media}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
-    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${ty==='audio'||ty==='3d'?'':ty==='video'?`<button type="button" data-u="${x.url}" data-to="vmix" title="이 영상에 소리·자막 넣기">♪</button>`:`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
+    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${ty!=='image'?`<button type="button" data-gview="${x.url}" title="크게 보기 (전체 화면·보내기 메뉴)">⤢</button>`:''}${ty==='audio'||ty==='3d'?'':ty==='video'?`<button type="button" data-u="${x.url}" data-to="vmix" title="이 영상에 소리·자막 넣기">♪</button>`:`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button><details class="more gmore"><summary title="보내기·편집 전체 메뉴" aria-label="보내기·편집 전체 메뉴">⋯</summary><div class="menu">${sendMenu(ty,x.url)}</div></details></span></figcaption></figure>`}).join(''));
   galLazyVideos();
   $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value||$('#gal-type').value||$('#gal-date').value);
 }
@@ -90,15 +90,15 @@ $('#gal-sort').value=ls.get('gal:sort','new');if(!$('#gal-sort').value)$('#gal-s
 $('#gal-sort').onchange=()=>{ls.set('gal:sort',$('#gal-sort').value);galLoad()};$('#gal-same').onchange=()=>{ls.set('gal:same',$('#gal-same').checked);$('#gal-group').disabled=$('#gal-same').checked;galLoad()};$('#gal-group').disabled=$('#gal-same').checked;
 $('#gal-group').checked=!!ls.get('gal:group',false);$('#gal-group').onchange=()=>{ls.set('gal:group',$('#gal-group').checked);galLoad()};$('#gal-more').onclick=()=>galLoad(true);
 let GSEL=false,GPICK=new Set();
-const galSelUi=()=>{$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?'선택 끝내기':'선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
+const galSelUi=()=>{GSEL=GPICK.size>0;$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?`선택 해제 (${GPICK.size})`:'모두 선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
   {const two=[...GPICK].filter(u=>/\.(png|jpe?g)$/i.test(u));$('#gal-cmp').hidden=!(GSEL&&GPICK.size===2&&two.length===2)}
-  $$('#gal-grid .gt').forEach(t=>t.classList.toggle('picked',GPICK.has(t.dataset.u)))};
+  $$('#gal-grid .gt').forEach(t=>{const on=GPICK.has(t.dataset.u);t.classList.toggle('picked',on);const c=$('[data-pick]',t);if(c)c.checked=on})};
 async function galDelete(urls){if(!urls.length)return;
   if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;
   const r=await api('/api/gallery/delete',{files:urls});if(r.error)return toast(r.error);
   const set=new Set(urls);$$('#gal-grid .gt').forEach(t=>{if(set.has(t.dataset.u))t.remove()});GAL.items=GAL.items.filter(x=>!set.has(x.url));urls.forEach(u=>GPICK.delete(u));
   $$('#gal-grid .gday').forEach(h=>{if(!(h.nextElementSibling&&h.nextElementSibling.classList.contains('gt')))h.remove()});$('#gal-n').textContent=$$('#gal-grid .gt').length+'개 표시 중';galSelUi();toast(`${r.deleted}개를 지웠어요.`+(r.failed?` (${r.failed}개는 지우지 못했어요)`:''))}
-$('#gal-sel').onclick=()=>{GSEL=!GSEL;GPICK.clear();galSelUi()};
+$('#gal-sel').onclick=()=>{if(GPICK.size)GPICK.clear();else $$('#gal-grid .gt').forEach(g=>GPICK.add(g.dataset.u));galSelUi()};
 $('#gal-delsel').onclick=()=>galDelete([...GPICK]);
 $('#gal-cmp').onclick=()=>{const [a,b]=[...GPICK];if(a&&b)lbOpen([{url:b,before:a,name:b.split('/').pop()}],0,true)};
 $('#org-prev').onclick=async()=>{const r=await api('/api/gallery/organize',{mode:'preview',keep_today:$('#org-today').checked}),I=$('#org-info');
@@ -107,20 +107,24 @@ $('#org-prev').onclick=async()=>{const r=await api('/api/gallery/organize',{mode
 $('#org-run').onclick=async()=>{if(!confirm('날짜별 폴더로 옮길까요? (파일은 지워지지 않아요)'))return;
   const r=await api('/api/gallery/organize',{mode:'run',keep_today:$('#org-today').checked});if(r.error)return toast(r.error);
   $('#org-info').textContent=`${r.moved}개를 옮겼어요.`+(r.failed?` (${r.failed}개는 다른 프로그램이 쓰고 있어서 못 옮겼어요)`:'');$('#org-run').hidden=true;galLoad()};
+/* 큰 화면으로 보기: 이미지·영상·소리·3D 를 같은 화면에서 넘겨 보고, [이어서 작업 · 보내기]로 모든 메뉴를 써요 */
+window.galView=(u,fs)=>{const L=GAL.items.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1,type:galType(x)}));const i=Math.max(0,L.findIndex(x=>x.url===u));
+  lbOpen(L,i);if(fs){const el=$('#lb-media').firstElementChild;if(el&&el.requestFullscreen)el.requestFullscreen().catch(()=>{})}};
+$('#gal-grid').addEventListener('change',e=>{const c=e.target.closest('[data-pick]');if(!c)return;c.checked?GPICK.add(c.dataset.pick):GPICK.delete(c.dataset.pick);galSelUi()});
 $('#gal-grid').addEventListener('click',async e=>{
+  if(e.target.closest('.gpick'))return;
   const dl=e.target.closest('[data-del]');if(dl)return void await galDelete([dl.dataset.del]);
-  if(GSEL){const t=e.target.closest('.gt');if(t&&!e.target.closest('button')){e.preventDefault();const u=t.dataset.u;GPICK.has(u)?GPICK.delete(u):GPICK.add(u);galSelUi();return}}
+  if(e.target.closest('.gmore'))return;
+  const gv=e.target.closest('[data-gview]');if(gv){window.galView(gv.dataset.gview);return}
+  if(GSEL){const t=e.target.closest('.gt');if(t&&!e.target.closest('button,a,audio,video,model-viewer,summary')){e.preventDefault();const u=t.dataset.u;GPICK.has(u)?GPICK.delete(u):GPICK.add(u);galSelUi();return}}
   const st=e.target.closest('[data-star]');if(st){const on=!st.classList.contains('on'),r=await api('/api/gallery/fav',{file:st.dataset.star,on});
     if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
-  const nv=e.target.closest('.gt .gnoimg');if(nv){const t=nv.closest('.gt'),u=t.dataset.u,it=GAL.items.find(x=>x.url===u);
-    if(e.target.closest('audio,a'))return;
-    const ty=it?galType(it):'image';
-    if(ty==='video'){nv.outerHTML=`<video src="${u}" controls autoplay playsinline></video>`;return}
-    if(ty==='audio'){const a=$('audio',nv);if(a)a.paused?a.play():a.pause();return}
-    if(ty==='3d')return;
-    const imgs=GAL.items.filter(x=>galType(x)==='image');lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1})),Math.max(0,imgs.findIndex(x=>x.url===u)));return}
-  const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>galType(x)==='image'),u=im.closest('.gt').dataset.u;
-    lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1})),Math.max(0,imgs.findIndex(x=>x.url===u)))}
+  const g3=e.target.closest('[data-g3d]');if(g3){const box=g3.closest('.g3d');loadMV();box.outerHTML=`<model-viewer class="gmv" src="${g3.dataset.g3d}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer>`;return}
+  if(e.target.closest('audio,a,model-viewer,video'))return;
+  const t=e.target.closest('.gt');if(!t||e.target.closest('figcaption'))return;
+  const it=GAL.items.find(x=>x.url===t.dataset.u);if(!it)return;
+  if(galType(it)==='audio'){const a=$('audio',t);if(a)a.paused?a.play():a.pause();return}
+  window.galView(it.url);
 });
 
 /* ══════════ 프로그램 다시 시작 · 위치 옮기기 ══════════ */

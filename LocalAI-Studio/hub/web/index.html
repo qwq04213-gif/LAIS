@@ -13,51 +13,63 @@
   <div class="brand">로컬 AI 스튜디오<small id="ver" role="button" tabindex="0" title="버전별 변경 사항 보기"></small></div>
   <div id="gbars" hidden></div>
   <nav>
-    <div class="ng"><span class="ngt">처음</span>
+    <div class="ng" data-g="start"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">처음<i aria-hidden="true"></i></span>
+    <div class="ngb">
       <button data-v="start" title="시작하기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6L12 16.7 6.7 19.6l1.1-6L3.4 9.4l6-.8z"/></svg><span>시작하기</span></button>
       <button data-v="guide" title="ComfyUI 길잡이"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 8h6"/></svg><span>ComfyUI 길잡이</span></button>
-    </div>
-    <div class="ng"><span class="ngt">대화</span>
+    </div></div>
+    <div class="ng" data-g="chat"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">대화<i aria-hidden="true"></i></span>
+    <div class="ngb">
       <button data-v="chat" class="on" title="대화"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.5-4.6A8 8 0 1 1 21 12z"/></svg><span>대화</span></button>
-    </div>
-    <div class="ng"><span class="ngt">만들기</span>
+    </div></div>
+    <div class="ng" data-g="img"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">이미지<i aria-hidden="true"></i></span>
+    <div class="ngb">
       <button data-v="gen" title="이미지 생성"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg><span>이미지 생성</span></button>
       <button data-v="edit" title="이미지 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span>이미지 편집</span></button>
       <button data-v="photo" title="사진 편집기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.6"/></svg><span>사진 편집기</span></button>
       <button data-v="up" title="업스케일"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg><span>업스케일</span></button>
-      <button data-v="vid" title="영상 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>영상 만들기</span></button>
-      <button data-v="music" title="음악 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="16" r="2.5"/></svg><span>음악 만들기</span></button>
-      <button data-v="tts" title="음성 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>음성 만들기</span></button>
-    </div>
-    <div class="ng"><span class="ngt">내 작업</span>
-      <button data-v="gal" title="기록 갤러리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>기록 갤러리</span></button>
-      <button data-v="lib" title="프롬프트"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>프롬프트</span></button>
       <button data-v="info" title="이미지 정보"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span>이미지 정보</span></button>
-    </div>
-    <div class="ng"><span class="ngt">도구</span>
-      <button data-v="batch" title="일괄 처리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>일괄 처리</span></button>
-      <button data-v="wf" title="워크플로"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="9" y="15" width="6" height="5" rx="1"/><path d="M6 9v2.5h12V9M12 11.5V15"/></svg><span>워크플로</span></button>
-      <button data-v="vmix" title="영상 소리·자막"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 14.5h3.5M13 14.5h4M7 10.5h2.5M12 10.5h5"/></svg><span>영상 소리·자막</span></button>
-      <button data-v="vedit" title="영상 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 7.5l12 9M8 16.5l12-9"/><rect x="13" y="3" width="8" height="5" rx="1"/></svg><span>영상 편집</span></button>
-    </div>
-    <div class="ng ngmore"><span class="ngt tog" id="ng-more" role="button" tabindex="0" aria-expanded="false" aria-controls="ng-more-body" title="눌러서 펼치거나 접어요">기타 기능<i aria-hidden="true"></i></span>
-    <div id="ng-more-body" hidden>
+    </div></div>
+    <div class="ng" data-g="more"><span class="ngt tog" id="ng-more" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="0">이미지 기능<i aria-hidden="true"></i></span>
+    <div class="ngb" id="ng-more-body">
       <button data-v="feat" data-f="outpaint" title="이미지 확장"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M3 12h2M19 12h2M12 3v2M12 19v2"/></svg><span>이미지 확장</span></button>
       <button data-v="feat" data-f="regional" title="영역별 프롬프트"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16M3 12h9"/></svg><span>영역별 프롬프트</span></button>
-      <button data-v="feat" data-f="compare" title="설정 비교표"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg><span>설정 비교표</span></button>
-      <button data-v="feat" data-f="resize" title="크기·자르기·회전"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v13a2 2 0 0 0 2 2h13M3 6h13a2 2 0 0 1 2 2v13"/></svg><span>크기·자르기·회전</span></button>
-      <button data-v="feat" data-f="color" title="밝기·색 보정"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z"/></svg><span>밝기·색 보정</span></button>
       <button data-v="feat" data-f="detailer" title="얼굴·손 보정"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg><span>얼굴·손 보정</span></button>
       <button data-v="feat" data-f="ipadapter" title="참고 이미지로 그리기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5"/><rect x="11" y="11" width="10" height="10" rx="1.5"/></svg><span>참고 이미지로 그리기</span></button>
       <button data-v="feat" data-f="faceswap" title="얼굴 교체"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4"/><circle cx="16" cy="15" r="4"/><path d="M11 5h6l-2-2M13 19H7l2 2"/></svg><span>얼굴 교체</span></button>
-      <button data-v="feat" data-f="img3d" title="사진 → 3D 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>사진 → 3D</span></button>
       <button data-v="feat" data-f="rmbg" title="배경 지우기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg><span>배경 지우기</span></button>
+      <button data-v="feat" data-f="resize" title="크기·자르기·회전"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v13a2 2 0 0 0 2 2h13M3 6h13a2 2 0 0 1 2 2v13"/></svg><span>크기·자르기·회전</span></button>
+      <button data-v="feat" data-f="color" title="밝기·색 보정"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z"/></svg><span>밝기·색 보정</span></button>
+      <button data-v="feat" data-f="img3d" title="사진 → 3D 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>사진 → 3D</span></button>
+      <button data-v="feat" data-f="compare" title="설정 비교표"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg><span>설정 비교표</span></button>
     </div></div>
-    <div class="ng"><span class="ngt">관리</span>
+    <div class="ng" data-g="vid"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">영상<i aria-hidden="true"></i></span>
+    <div class="ngb">
+      <button data-v="vid" title="영상 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>영상 만들기</span></button>
+      <button data-v="vedit" title="영상 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 7.5l12 9M8 16.5l12-9"/><rect x="13" y="3" width="8" height="5" rx="1"/></svg><span>영상 편집</span></button>
+      <button data-v="vmix" title="영상 소리·자막"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 14.5h3.5M13 14.5h4M7 10.5h2.5M12 10.5h5"/></svg><span>영상 소리·자막</span></button>
+    </div></div>
+    <div class="ng" data-g="snd"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">소리<i aria-hidden="true"></i></span>
+    <div class="ngb">
+      <button data-v="music" title="음악 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="16" r="2.5"/></svg><span>음악 만들기</span></button>
+      <button data-v="tts" title="음성 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>음성 만들기</span></button>
+    </div></div>
+    <div class="ng" data-g="mine"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">내 작업<i aria-hidden="true"></i></span>
+    <div class="ngb">
+      <button data-v="gal" title="기록 갤러리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>기록 갤러리</span></button>
+      <button data-v="lib" title="프롬프트"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>프롬프트</span></button>
+    </div></div>
+    <div class="ng" data-g="auto"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">자동화<i aria-hidden="true"></i></span>
+    <div class="ngb">
+      <button data-v="batch" title="일괄 처리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>일괄 처리</span></button>
+      <button data-v="wf" title="워크플로"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="9" y="15" width="6" height="5" rx="1"/><path d="M6 9v2.5h12V9M12 11.5V15"/></svg><span>워크플로</span></button>
+    </div></div>
+    <div class="ng" data-g="mng"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">관리<i aria-hidden="true"></i></span>
+    <div class="ngb">
       <button data-v="dl" title="다운로드"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></svg><span>다운로드</span></button>
       <button data-v="setup" title="설치와 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span>설치와 모델</span></button>
       <button data-v="conf" title="설정"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 14a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>설정</span></button>
-    </div>
+    </div></div>
   </nav>
   <div class="qwrap"><button id="qbtn" type="button" class="qbtn" aria-haspopup="dialog" title="진행 중이거나 기다리는 작업을 보고, 순서를 바꾸거나 취소해요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span id="qstext">작업 대기열</span><i id="qcount" hidden>0</i><i class="qbar" id="qsbar" hidden></i></button></div>
   <div class="grow"></div>
@@ -555,6 +567,7 @@
   <div class="pe-main">
     <div class="pe-tools" role="radiogroup" aria-label="도구">
       <button type="button" data-tool="move" title="이동 (V) — 고른 레이어를 끌어서 옮겨요">이동</button>
+      <button type="button" data-tool="xf" title="자유 변형 (X, Ctrl+T) — 고른 레이어를 옮기고 키우고 늘리고 돌려요">자유 변형</button>
       <button type="button" data-tool="msel" title="사각 선택 (M) — Shift 더하기 · Alt 빼기">사각 선택</button>
       <button type="button" data-tool="lasso" title="올가미 (Q) — 손으로 둘러서 골라요">올가미</button>
       <button type="button" data-tool="wand" title="자동 선택 (W) — 비슷한 색을 한 번에 골라요">자동 선택</button>
@@ -587,6 +600,8 @@
         <div data-for-tool="rect ellipse" class="row"><label class="chk"><input type="checkbox" id="pe-fill"> 안을 채우기</label></div>
         <div data-for-tool="text"><label class="f">글자<input type="text" id="pe-text" value="안녕하세요" maxlength="200"></label>
           <div class="row"><label class="chk"><input type="checkbox" id="pe-bold" checked> 굵게</label><label class="chk"><input type="checkbox" id="pe-stroke"> 테두리</label></div></div>
+        <div data-for-tool="xf"><p class="hint plain">모서리: 크기(비율 유지, Shift 를 누르면 자유롭게) · 변: 한쪽으로 늘리기 · 위 동그라미: 회전(Shift 15°씩) · 안쪽: 옮기기</p><p class="mute" id="pe-xfinfo"></p>
+          <div class="row"><button type="button" class="go" id="pe-xfok" disabled>적용 (Enter)</button><button type="button" class="ghost" id="pe-xfno" disabled>취소 (Esc)</button><button type="button" class="ghost" id="pe-xf90" disabled>90° 돌리기</button></div></div>
         <div data-for-tool="crop"><p class="hint plain" id="pe-cropinfo">남길 부분을 끌어서 골라요.</p><div class="row"><button type="button" class="go" id="pe-cropok" disabled>자르기 적용</button><button type="button" class="ghost" id="pe-cropno">취소</button></div></div>
       </div>
       <div class="card pe-card"><h4>선택 영역</h4>
@@ -753,7 +768,7 @@
     <label class="chk"><input type="checkbox" id="gal-fav"> ★ 즐겨찾기만</label>
     <span class="mute" id="gal-n"></span>
     <button type="button" class="ghost sm" data-open="outputs" title="결과 파일이 저장된 outputs 폴더를 탐색기로 열어요">outputs 폴더 열기</button>
-    <button type="button" class="ghost sm" id="gal-sel">선택</button>
+    <button type="button" class="ghost sm" id="gal-sel" title="보이는 칸을 모두 고르거나, 고른 것을 모두 풀어요">모두 선택</button>
     <button type="button" class="ghost sm" id="gal-cmp" hidden title="선택한 이미지 두 장을 겹쳐서 슬라이더로 비교해요">두 장 비교</button>
     <button type="button" class="ghost sm" id="gal-delsel" hidden>선택한 파일 삭제 (0)</button>
   </div>
@@ -1040,9 +1055,9 @@
     <label class="f">종류<select name="dir"><option value="checkpoints">체크포인트</option><option value="loras" selected>LoRA</option><option value="embeddings">임베딩</option><option value="controlnet">ControlNet</option><option value="vae">VAE</option><option value="upscale_models">업스케일 모델</option></select></label>
     <label class="f grow2">검색어<input name="query" placeholder="예: illustrious, detail, 캐릭터 이름"></label>
     <label class="f civ">정렬<select name="sort"><option value="popular">다운로드 많은 순</option><option value="rated">평점 높은 순</option><option value="new">최신 순</option></select></label>
-    <label class="f civ">기반 모델<select name="base"><option value="">전체</option><option>SDXL 1.0</option><option>Illustrious</option><option>Pony</option><option>NoobAI</option><option>SD 1.5</option><option>Flux.1 D</option><option>Flux.1 S</option></select></label>
-    <label class="chk civ"><input type="checkbox" name="nsfw"> 성인(NSFW) 포함</label>
-    <label class="chk civ"><input type="checkbox" id="dl-blur" checked> 민감한 미리보기 흐리게</label>
+    <label class="f civ">기반 모델<select name="base"><option value="">전체</option><optgroup label="SD 계열"><option>SDXL 1.0</option><option>Illustrious</option><option>Pony</option><option>NoobAI</option><option>SD 1.5</option><option>SD 3.5</option><option>SD 3.5 Large</option><option>SD 3.5 Medium</option></optgroup><optgroup label="FLUX 계열"><option>Flux.1 D</option><option>Flux.1 S</option><option>Flux.1 Krea</option><option>Flux.1 Kontext</option><option>Chroma</option></optgroup><optgroup label="그 밖의 그림 모델"><option>Qwen</option><option>HiDream</option></optgroup><optgroup label="영상"><option>Wan Video 2.2 TI2V-5B</option><option>Wan Video 2.2 T2V-A14B</option><option>Wan Video 2.2 I2V-A14B</option><option>Wan Video 14B t2v</option><option>Wan Video 14B i2v 480p</option><option>Wan Video 14B i2v 720p</option><option>Wan Video 1.3B t2v</option><option>LTXV</option><option>Hunyuan Video</option></optgroup></select></label>
+    <label class="chk civ"><input type="checkbox" name="nsfw" checked> 성인(NSFW) 포함</label>
+    <label class="chk civ"><input type="checkbox" id="dl-blur"> 민감한 미리보기 흐리게</label>
     <button class="go" id="dl-go">검색</button>
   </form>
   <p class="st" id="dl-st" role="status"></p>
@@ -1162,6 +1177,7 @@
 <div class="row"><div class="rl"><b>대화 말풍선 너비</b><span>대화 답변이 한 줄에 놓이는 최대 폭이에요.</span></div><div class="rc"><select id="opt-bubw"><option value="56">좁게</option><option value="72">보통</option><option value="96">넓게</option><option value="130">아주 넓게</option></select></div></div>
 <div class="row"><div class="rl"><b>알림 메시지 표시 시간</b><span>화면 아래에 잠깐 뜨는 안내 문구가 머무는 시간이에요.</span></div><div class="rc"><select id="opt-toast"><option value="2">짧게(2초)</option><option value="3.5">보통(3.5초)</option><option value="7">길게(7초)</option><option value="12">아주 길게(12초)</option></select></div></div>
 <div class="row"><div class="rl"><b>만들기 버튼 고정</b><span>입력 칸을 내려도 [만들기] 버튼이 위에 따라와요. 끄면 제자리에 있어요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-gosticky"><i></i></label></div></div>
+<div class="row"><div class="rl"><b>한 줄 화면 너비</b><span>설정·다운로드·설치와 모델·프롬프트·일괄 처리처럼 오른쪽 칸이 없는 화면의 최대 너비예요. 넓은 모니터에서 오른쪽이 많이 비면 넓혀 보세요.</span></div><div class="rc"><select id="opt-pagew"><option value="0">기본</option><option value="1400">넓게</option><option value="1800">아주 넓게</option><option value="9999">화면 꽉 채우기</option></select></div></div>
 <div class="row"><div class="rl"><b>갤러리 미리보기 크기</b><span>기록 갤러리의 그림 크기예요.</span></div><div class="rc"><select id="opt-galsz"><option value="150">작게</option><option value="190">보통</option><option value="250">크게</option><option value="340">아주 크게</option></select></div></div>
 <div class="row"><div class="rl"><b>갤러리 미리보기</b><span>[끄기]로 두면 그림을 불러오지 않고 파일 이름·프롬프트만 보여 줘요. 그림이 아주 많아 느릴 때 쓰세요. 칸을 누르면 큰 그림으로 열려요.</span></div><div class="rc"><select id="opt-galprev"><option value="on">켜기</option><option value="off">끄기</option></select></div></div>
 </div></div>
@@ -1240,7 +1256,7 @@
 
 <!-- 확대 보기 -->
 <div id="lb" hidden role="dialog" aria-modal="true" aria-label="이미지 확대 보기">
-  <div id="lb-view"><img id="lb-img" alt=""><img id="lb-before" alt="" hidden><div id="lb-line" hidden></div></div>
+  <div id="lb-view"><img id="lb-img" alt=""><div id="lb-media" hidden></div><img id="lb-before" alt="" hidden><div id="lb-line" hidden></div></div>
   <div id="lb-bar">
     <span id="lb-info"></span>
     <input type="range" id="lb-split" min="0" max="100" value="50" hidden aria-label="전후 비교 위치">
@@ -1249,16 +1265,7 @@
     <button type="button" id="lb-fit">화면에 맞춤</button>
     <button type="button" id="lb-one">원본 크기</button>
     <button type="button" id="lb-cmp" hidden title="원본과 결과를 겹쳐 놓고 가운데 선을 움직여 비교해요 (C 키)">겹쳐서 비교</button>
-    <details class="more up" id="lb-cont" hidden><summary>이어서 작업</summary><div class="menu">
-      <button type="button" data-to="regen" title="이 그림의 프롬프트·모델·LoRA·시드를 이미지 생성 화면에 채워서 보내요">이미지 생성으로 보내기</button>
-      <button type="button" data-to="again" title="같은 설정에 시드만 바꿔 4장을 바로 만들어요">같은 설정으로 새 시드 4장</button>
-      <button type="button" data-to="gvar" title="이 그림을 바탕으로 구도는 비슷하게 4장 변형해요">비슷하게 변형 4장</button>
-      <button type="button" data-to="edit">이미지 편집으로 보내기</button>
-      <button type="button" data-to="up">업스케일로 보내기</button>
-      <button type="button" data-to="photo">사진 편집기로</button>
-      <button type="button" data-to="rmbg">배경 지우기</button>
-      <button type="button" data-to="vid">영상으로 만들기</button>
-      <button type="button" data-to="chsave" title="이 그림의 프롬프트·LoRA·시드와 사진을 캐릭터·스타일 보관함에 묶어서 저장해요">캐릭터·스타일로 저장</button></div></details>
+    <details class="more up" id="lb-cont" hidden><summary>이어서 작업 · 보내기</summary><div class="menu"></div></details>
     <button type="button" id="lb-star" hidden title="즐겨찾기 (갤러리 목록과 같은 상태)" aria-label="즐겨찾기">☆ 즐겨찾기</button>
     <a id="lb-dl" download>저장</a>
     <button type="button" id="lb-meta">이미지 정보</button>

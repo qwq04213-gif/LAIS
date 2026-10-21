@@ -87,14 +87,21 @@ document.addEventListener('click',async e=>{
     return}
   if(to==='up'&&b.closest('.gt,#lb')){IV.up.set(await urlToDataURL(u));show('up');return}
   if(to==='vcont'){try{b.disabled=true;window.vidSetImage(await lastFrame(u));show('vid');toast('마지막 장면을 시작 이미지로 넣었어요. 장면 설명을 이어지게 바꿔서 [영상 만들기]를 눌러 보세요.',6000)}catch(er){toast(er.message)}b.disabled=false;return}
-  if(to.startsWith('vp:')){b.closest('.more').open=false;run('vpost',$('#f-vid'),{op:to.slice(3),video:u,upm:($('#f-up')&&$('#f-up').elements.upm.value)||''});return}
+  if(to.startsWith('vp:')){const mm=b.closest('.more');if(mm)mm.open=false;if(b.closest('.gt,#lb'))show('vid');run('vpost',$('#f-vid'),{op:to.slice(3),video:u,upm:($('#f-up')&&$('#f-up').elements.upm.value)||''});return}
   if(to==='photo'){const m=b.closest('.more');if(m)m.open=false;window.photoOpen(u);return}
-  if(to==='rmbg'){const m=b.closest('.more');if(m)m.open=false;const d=await urlToDataURL(u);show('feat','rmbg');await sleep(300);await featForm('rmbg',true);const mm=$('.mini[data-img=image]',$('#feat-form'));if(mm)mm.set(d);toast('배경 지우기에 넣었어요. 배경을 고르고 [만들기]를 눌러 주세요.');return}
+  if(to==='rmbg'||to.startsWith('feat:')){const m=b.closest('.more');if(m)m.open=false;const id=to==='rmbg'?'rmbg':to.slice(5),d=await urlToDataURL(u);show('feat',id);await sleep(300);await featForm(id,true);
+    const mm=$('.mini[data-img=image]',$('#feat-form'));if(mm)mm.set(d);const ft=(FEATS.find(x=>x.id===id)||{}).title||'기능';toast(`${ft}에 넣었어요. 설정을 고르고 [만들기]를 눌러 주세요.`);return}
+  if(to==='photol'){const m=b.closest('.more');if(m)m.open=false;window.photoAddLayer(u);return}
+  if(to==='fs'){const m=b.closest('.more');if(m)m.open=false;
+    if(!$('#lb').hidden){const el=$('#lb-media').firstElementChild;if(el&&el.requestFullscreen)el.requestFullscreen().catch(()=>{});return}
+    if(window.galView)window.galView(u,true);return}
   if(to.startsWith('ve:')){const m=b.closest('.more');if(m)m.open=false;window.veditOpen(u,to.slice(3));return}
   if(to==='vmix'||to==='vmixa'){vmixOpen(to==='vmix'?{video:u}:{audio:u});return}
   if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
-  if(to==='cmpi'){const w=b.closest('figure').querySelector('.cmpw');if(!w)return;const on=$('.cbf',w).hidden;$$('.cbf,.cbl,.cbr',w).forEach(x=>x.hidden=!on);
+  if(to==='cmpi'){const w=b.closest('figure').querySelector('.cmpw');if(!w)return;
+    if(!$('.cbf',w)){const bf=document.createElement('img');bf.className='cbf';bf.alt='';bf.hidden=true;bf.src=COMPARE[u];$('img',w).after(bf)}   /* 원본은 처음 비교할 때만 불러와요 */
+    const on=$('.cbf',w).hidden;$$('.cbf,.cbl,.cbr',w).forEach(x=>x.hidden=!on);
     w.classList.toggle('on',on);b.textContent=on?'비교 끄기':'전후 비교';cmpInline($('.cbr',w));return}
   IV[to].set(await urlToDataURL(u));show(to);
 });
@@ -295,7 +302,7 @@ async function loadFeat(){
 }
 const fieldHTML=f=>{
   const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'',si=f.show_if?` data-show-if='${esc(JSON.stringify(f.show_if))}'`:'';
-  if(f.type==='image')return `<div class="f"><span>${esc(f.label)}${req}</span><div class="mini" data-img="${n}"></div>${hint}</div>`;
+  if(f.type==='image')return `<div class="f"><span>${esc(f.label)}${req}</span><div class="mini${n==='image'&&!['ipadapter'].includes(featId)?' big':''}" data-img="${n}"></div>${hint}</div>`;
   if(f.type==='textarea')return `<label class="f"><span>${esc(f.label)}${req}</span><textarea name="${n}" rows="${f.rows||3}"></textarea>${hint}</label>`;
   if(f.type==='lora')return `<div class="f"><span>${esc(f.label)}</span>${T.lora()}${hint}</div>`;
   if(f.type==='check')return `<label class="chk${f.required?' consent':''}"><input type="checkbox" name="${n}"> <span>${esc(f.label)}</span></label>`;

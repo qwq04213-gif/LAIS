@@ -46,7 +46,7 @@ def vedit_extend(p, J, ff, work):
     gone = [n for n in VEDIT_NODES if not has_node(n)]
     if gone:
         raise RuntimeError(f"이 ComfyUI 에는 영상 이어 그리기에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 를 업데이트해 주세요.")
-    unet = next((n for n in files("diffusion_models") if "vace" in n.lower()), None)
+    unet = vace_model()
     te, vae = _pick(files("text_encoders"), "umt5"), _pick(files("vae"), "wan_2.1_vae", "wan2.1", ("wan", "2.1"))
     miss = [n for n, v in (("Wan VACE 모델", unet), ("UMT5 텍스트 인코더", te), ("Wan 2.1 VAE", vae)) if not v]
     if miss:

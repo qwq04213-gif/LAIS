@@ -68,13 +68,20 @@ def dl_search(p):
             params.append(("cursor", str(p["cursor"])))
     elif page > 1:
         params.append(("page", page))
-    if p.get("base"):
-        params.append(("baseModels", str(p["base"])))
-    data = api_get(CIVITAI + "/api/v1/models?" + urllib.parse.urlencode(params), settings().get("tokens", {}).get("civitai"))
+    base = str(p.get("base") or "")
+    tok = settings().get("tokens", {}).get("civitai")
+    try:
+        data = api_get(CIVITAI + "/api/v1/models?" + urllib.parse.urlencode(params + ([("baseModels", base)] if base else [])), tok)
+    except Exception:  # noqa: BLE001
+        if not base:
+            raise
+        data = api_get(CIVITAI + "/api/v1/models?" + urllib.parse.urlencode(params), tok)      # Civitai 가 모르는 기반 모델 이름이면 거르지 않고 받아서 아래에서 걸러요
     items = []
     for m in data.get("items") or []:
         vers = []
         for v in (m.get("modelVersions") or [])[:6]:
+            if base and (v.get("baseModel") or "") != base:
+                continue
             fl = []
             for f in v.get("files") or []:
                 nm = f.get("name") or ""

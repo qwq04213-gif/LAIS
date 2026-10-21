@@ -18,6 +18,15 @@ def out_path(rel):
 
 
 
+
+def vace_model():
+    """Wan VACE 모델 고르기: 그것만으로 돌아가는 Wan 2.1 VACE 를 먼저 써요.
+    VACE '모듈'(본 모델에 덧붙이는 조각)·Wan 2.2 Fun VACE(고·저 노이즈 두 모델을 번갈아 써야 함)는 혼자 쓰면 하얗거나 뭉개진 영상이 나와 뒤로 미뤄요."""
+    vs = [n for n in files("diffusion_models") if "vace" in n.lower()]
+    bad = lambda n: any(k in n.lower() for k in ("module", "fun", "high_noise", "low_noise", "2.2", "2_2"))
+    vs.sort(key=lambda n: (bad(n), n.lower()))
+    return vs[0] if vs else None
+
 def wan_models():
     return [n for n in files("diffusion_models") if "wan" in n.lower() and "14b" not in n.lower() and "vace" not in n.lower() and "s2v" not in n.lower()]
 
@@ -403,7 +412,7 @@ def do_vid_more(p, J):
         J["msg"] = f"LTX-Video 로 영상 만드는 중 ({w}×{h}, {frames}프레임)"
         g, model = flows.wf_ltx(q, start), ms[0]
     else:
-        unet = next((n for n in files("diffusion_models") if ver in n.lower()), None)
+        unet = vace_model() if ver == "vace" else next((n for n in files("diffusion_models") if ver in n.lower()), None)
         umt5 = _pick(te, "umt5")
         vae21 = _pick(va, "wan_2.1_vae", "wan2.1", ("wan", "2.1"))
         need = [("Wan VACE 모델" if ver == "vace" else "Wan 2.2 S2V 모델", unet), ("UMT5 텍스트 인코더", umt5), ("Wan 2.1 VAE", vae21)]

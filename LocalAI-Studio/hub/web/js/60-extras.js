@@ -310,6 +310,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
   el.onchange=()=>{const v=isNaN(+el.value)||el.value===''?el.value:+el.value;ls.set(key,v);fn&&fn(v)}};
  pick('opt-chatfs','opt:chatfs',1,v=>D.style.setProperty('--chatfs',v));
  pick('opt-galsz','opt:galsz',190,v=>D.style.setProperty('--galmin',v));
+ pick('opt-pagew','opt:pagew','0',v=>{if(+v)D.style.setProperty('--pagew',(+v>=9999?'100%':v+'px'));else D.style.removeProperty('--pagew')});
  pick('opt-galprev','opt:galprev','on',v=>{D.dataset.galprev=v;if(GAL&&GAL.items&&GAL.items.length)galLoad()});
  pick('opt-ressz','opt:ressz',420,v=>D.style.setProperty('--resh',v));
  pick('opt-sbw','opt:sbw',208,v=>D.style.setProperty('--sbw',v));

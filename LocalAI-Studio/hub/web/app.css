@@ -353,7 +353,7 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 .filebtn{display:inline-flex;align-items:center}#fold-backup .actions{flex-wrap:wrap;align-items:center}
 
 /* 일괄 처리 */
-#v-batch{max-width:880px}.bt-src{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 10px}
+#v-batch{max-width:var(--pagew,880px)}.bt-src{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 10px}
 .bt-drop{border:2px dashed var(--line);border-radius:12px;padding:26px 16px;text-align:center;color:var(--mute);cursor:pointer}.bt-drop:hover,.bt-drop.drop,.bt-drop:focus-visible{border-color:var(--acc);color:var(--tx)}
 .bt-ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:8px 0 14px}
 .bt-op{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;position:relative}.bt-op input{position:absolute;opacity:0}.bt-op span{font-size:calc(12.5px*var(--ui,1));color:var(--mute)}
@@ -435,7 +435,7 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 
 /* ── 설정 화면: 왼쪽 분류 + 오른쪽 카드 (접고 펼치는 칸 없이) ── */
 #v-conf,.cfgview{overflow:auto;padding-bottom:40px}
-.cs{display:grid;grid-template-columns:calc(170px*var(--ui,1)) minmax(0,1fr);gap:24px;max-width:1000px;align-items:start;margin-top:14px}
+.cs{display:grid;grid-template-columns:calc(170px*var(--ui,1)) minmax(0,1fr);gap:24px;max-width:var(--pagew,1000px);align-items:start;margin-top:14px}
 .cs-nav{position:sticky;top:0;display:flex;flex-direction:column;gap:2px}
 .cs-nav button{text-align:left;background:none;border:0;border-radius:9px;padding:9px 12px;cursor:pointer;color:var(--mute);font-weight:600}
 .cs-nav button:hover{background:var(--raised);color:var(--tx)}
@@ -544,11 +544,11 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 /* 사이드바 '기타 기능' 접이식 그룹 */
 .ngt.tog{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;opacity:.95}.ngt.tog:hover{color:var(--tx)}.ngt.tog:focus-visible{outline:2px solid var(--acc);outline-offset:-2px;border-radius:6px}
 .ngt.tog i{width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;margin-right:4px}.ngt.tog.open i{transform:rotate(45deg)}
-#ng-more-body{display:flex;flex-direction:column;gap:1px}#ng-more-body[hidden]{display:none}
-@media(max-width:860px){#ng-more-body,#ng-more-body[hidden]{display:flex;flex-direction:row;flex-wrap:wrap}.ngt.tog{display:none}}
+nav .ngb{display:flex;flex-direction:column;gap:1px}nav .ngb[hidden]{display:none}
+@media(max-width:860px){nav .ngb,nav .ngb[hidden]{display:flex;flex-direction:row;flex-wrap:wrap}.ngt.tog{display:none}}
 
 /* 설정 스타일 화면(설치와 모델·프롬프트·다운로드·변경 사항) 공통 */
-.cfgview .cs{max-width:1100px}.cfgview .card{overflow:hidden}.cfgview .card>.hint:first-of-type{margin-top:10px}
+.cfgview .cs{max-width:var(--pagew,1100px)}.cfgview .card{overflow:hidden}.cfgview .card>.hint:first-of-type{margin-top:10px}
 .cfgview .card h4{font-size:calc(13px*var(--ui,1));color:var(--tx);margin:18px 0 6px}
 .cfgview .card>.actions{margin:8px 0}
 .selsum{margin:10px 0 4px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;font-size:calc(13px*var(--ui,1))}.selsum small{color:var(--mute)}
@@ -589,3 +589,21 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 .cmpw .cbf{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;border-color:transparent}
 .cmpw .cbl{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.45);pointer-events:none}
 .cmpw .cbr{position:absolute;left:8px;right:8px;bottom:8px;width:calc(100% - 16px);margin:0}
+.galgrid .gt:has(video,model-viewer){content-visibility:visible}
+.gt .gpick{position:absolute;top:6px;left:6px;z-index:2;display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:rgba(0,0,0,.5);cursor:pointer;opacity:0;transition:opacity .12s}
+.gt:hover .gpick,.gt:focus-within .gpick,.galgrid.sel .gpick,.gt.picked .gpick{opacity:1}.gt .gpick input{width:17px;height:17px;margin:0;cursor:pointer;accent-color:var(--acc)}
+@media (hover:none){.gt .gpick{opacity:1}}
+.gt .gmore{position:static;display:inline-block}.gt .gmore>summary{list-style:none;padding:2px 6px;cursor:pointer;font-size:calc(15px*var(--ui,1));line-height:1}.gt .gmore>summary::-webkit-details-marker{display:none}
+.gt .gmore[open]{position:static}.gt .gmore .menu{right:6px;left:auto;bottom:34px;top:auto;max-height:min(70vh,520px);overflow:auto;z-index:20;min-width:210px}
+.gt:has(.gmore[open]){overflow:visible;z-index:5;content-visibility:visible}
+.menu .mh{display:block;padding:6px 10px 2px;font-size:calc(11px*var(--ui,1));font-weight:600;color:var(--mute);letter-spacing:.02em}.menu .mh:first-child{padding-top:2px}
+#lb-media{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}#lb-media[hidden]{display:none}
+#lb-media video{max-width:100%;max-height:100%;background:#000}#lb-media model-viewer{width:100%;height:100%;background:#1a1a1f}
+#lb-media .lbaud{display:grid;gap:12px;justify-items:center;color:#f1f1f4;width:min(560px,100%)}#lb-media .lbaud audio{width:100%}
+#lb .menu{max-height:min(70vh,560px);overflow:auto}
+.gt .gmv{display:block;width:100%;aspect-ratio:1/1;height:auto;background:#1a1a1f}
+.gt .gmore>summary::after{content:none}
+.mini img{cursor:zoom-in}.mini.drop{outline:2px dashed var(--acc);outline-offset:3px;border-radius:6px}
+.mini.big{display:block;position:relative}.mini.big img{display:block;width:auto;height:auto;max-width:100%;max-height:min(46vh,420px);object-fit:contain;border-radius:8px;background:var(--table)}
+.mini.big .ghost{width:100%;min-height:120px;border-style:dashed}.mini.big .x{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:28px;height:28px}
+.mini [hidden]{display:none!important}
