@@ -310,7 +310,7 @@ def queue_cancel(J):
 
 
 def queue_cancel_all():
-    """대기 중·실행 중인 작업을 모두 멈춰요. ComfyUI 대기열도 비우고 지금 그리는 것도 중단시켜요."""
+    """대기 중·실행 중인 작업을 모두 멈춰요. ComfyUI 대기열도 비우고 지금 그리는 것도 중단시킨 뒤, 불러 둔 모델을 내려 VRAM 을 비워요."""
     n = 0
     for J in list(JOBS.values()):
         if J.get("state") in ("queued", "running"):
@@ -323,6 +323,17 @@ def queue_cancel_all():
                 http(CUI + path, body, 5)
             except Exception:  # noqa: BLE001
                 pass
+        for _ in range(40):      # 그리던 게 실제로 멈출 때까지 잠깐 기다렸다가(최대 20초) 메모리를 비워요 — 실행 중에는 ComfyUI 가 모델을 못 내려요
+            try:
+                if not http(CUI + "/queue", timeout=5).get("queue_running"):
+                    break
+            except Exception:  # noqa: BLE001
+                break
+            time.sleep(0.5)
+        try:
+            memory_free()      # ComfyUI 모델·캐시와 Ollama 대화 모델을 내려 VRAM 을 비워요
+        except Exception:  # noqa: BLE001
+            pass
     threading.Thread(target=comfy_all, daemon=True).start()
     return {"ok": True, "n": n}
 
