@@ -721,7 +721,7 @@
     <p class="hint plain note"><span id="tt-count">0</span> / 5000자</p>
     <label class="f">만드는 방법<select name="engine" id="tt-engine">
       <optgroup label="간단하게 (모델 설치 없이)"><option value="sapi">윈도우 내장 음성 (내 PC 안에서만, 인터넷 불필요)</option><option value="edge">Edge 읽어 주기 (더 자연스러움, 글이 마이크로소프트 서버로 전송돼요)</option></optgroup>
-      <optgroup label="AI 음성 모델 (설치 필요, 내 PC 안에서만 동작)"><option value="xtts">XTTS-v2 — 한국어 포함 17개 언어, 목소리 따라 하기</option><option value="chatterbox">Chatterbox 다국어 — 한국어 포함 23개 언어</option><option value="kokoro">Kokoro — 영어, 가볍고 빠름</option></optgroup>
+      <optgroup label="AI 음성 모델 (설치 필요, 내 PC 안에서만 동작)"><option value="qwen3">Qwen3-TTS — 한국어 자연스러움, 목소리 따라 하기 (추천)</option><option value="xtts">XTTS-v2 — 한국어 포함 17개 언어, 목소리 따라 하기</option><option value="chatterbox">Chatterbox 다국어 — 한국어 포함 23개 언어</option><option value="kokoro">Kokoro — 영어, 가볍고 빠름</option></optgroup>
     </select></label>
     <div id="tt-model" class="ttmodel" hidden>
       <p class="hint plain" id="tt-mdesc"></p>
@@ -734,6 +734,7 @@
         <label class="f" id="tt-spk-row">목소리<select name="speaker" id="tt-spk"></select></label>
         <label class="f" id="tt-emo-row">감정<select name="emotion"><option value="calm">차분하게</option><option value="normal" selected>보통</option><option value="rich">풍부하게</option></select></label>
         <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><label class="ghost vpick">wav 파일 고르기<input type="file" id="tt-ref-file" accept=".wav,audio/wav" hidden></label><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button> <button type="button" class="ghost sm" id="tt-rec" title="웹사이트·프로그램에서 나오는 소리를 녹음하고 필요한 부분만 잘라 목소리 샘플로 써요">PC 소리 녹음해서 만들기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
+          <label class="f" id="tt-reftext-row" hidden>샘플에서 말한 내용 (선택, 적으면 목소리가 더 비슷해져요)<input name="ref_text" maxlength="500" placeholder="예: 안녕하세요, 오늘 날씨가 정말 좋네요."></label>
           <p class="hint" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok" checked hidden>목소리 샘플은 본인 목소리이거나 허락받은 목소리만 쓰세요. 다른 사람을 속이거나 흉내 내는 데 쓰지 않아요.</p></div>
       </div>
     </div>

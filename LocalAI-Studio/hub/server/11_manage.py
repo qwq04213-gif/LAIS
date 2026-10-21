@@ -139,14 +139,18 @@ def lora_user_api(p):
             if f and f not in FAMILY_CHOICES:
                 return {"error": "알 수 없는 계열이에요."}
             cur["family"] = f
-        if cur.get("trigger") or cur.get("kind") or cur.get("family"):
+        for k, n in (("alias", 60), ("memo", 300)):      # 내가 붙인 이름 · 메모
+            if k in p:
+                cur[k] = re.sub(r"\s+", " ", str(p.get(k) or "")).strip()[:n]
+        cur = {k: v for k, v in cur.items() if v}
+        if cur:
             d[name] = cur
         else:
             d.pop(name, None)
         LORA_USER.parent.mkdir(parents=True, exist_ok=True)
         LORA_USER.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
         _LC["key"] = None      # 목록 캐시에 들어 있는 종류·계열도 다시 만들어요
-    return {"ok": True, **lora_user().get(name, {"trigger": [], "kind": "", "family": ""})}
+    return {"ok": True, **{"trigger": [], "kind": "", "family": "", "alias": "", "memo": "", **lora_user().get(name, {})}}
 
 
 def lora_preview_api(p):
@@ -198,6 +202,7 @@ def model_cards(kind):
             c["family_auto"], c["family_set"] = c.get("family", "unknown"), bool(uf)
             if uf:
                 c["family"] = uf
+            c["alias"], c["memo"] = (user.get(n) or {}).get("alias", ""), (user.get(n) or {}).get("memo", "")
             c["preview"] = bool(model_preview("loras", n))
             out.append(c)
     else:
@@ -302,12 +307,12 @@ def backup_import(p):
                 continue
             tr = [str(w).strip()[:60] for w in (u.get("trigger") or []) if str(w).strip()][:30]
             kd = u.get("kind") if u.get("kind") in modelinfo.KINDS else ""
-            cur = lu.get(name) or {}
-            if over:
-                cur = {"trigger": tr, "kind": kd}
-            else:
-                cur = {"trigger": cur.get("trigger") or tr, "kind": cur.get("kind") or kd}
-            if (cur.get("trigger") or cur.get("kind")) and cur != lu.get(name):
+            new = {"trigger": tr, "kind": kd, "family": u.get("family") if u.get("family") in FAMILY_CHOICES else "",
+                   "alias": str(u.get("alias") or "").strip()[:60], "memo": str(u.get("memo") or "").strip()[:300]}
+            old = lu.get(name) or {}
+            cur = new if over else {k: old.get(k) or new[k] for k in new}
+            cur = {k: v for k, v in cur.items() if v}
+            if cur and cur != lu.get(name):
                 lu[name] = cur
                 n["lora_user"] += 1
         if n["lora_user"]:

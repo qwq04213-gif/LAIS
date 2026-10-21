@@ -121,6 +121,7 @@ def _lists_build():
     loras, lu = files("loras"), lora_user()
     return {"llm": [], "checkpoints": sdxl, "loras": loras, "families": info,
             "lora_info": {n: (lu.get(n) or {}).get("family") or modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras}, "lora_kind": lora_kinds(),
+            "lora_alias": {n: (lu.get(n) or {}).get("alias") for n in loras if (lu.get(n) or {}).get("alias")},
             "upscalers": files("upscale_models"), "controlnets": files("controlnet"),
             "vaes": files("vae"), "text_encoders": files("text_encoders"), "diffusion": files("diffusion_models"),
             "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2, "anymodels": sdxl + flux + chroma + krea2,

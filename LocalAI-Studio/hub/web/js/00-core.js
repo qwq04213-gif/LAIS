@@ -81,9 +81,11 @@ function formFam(f){
   const fam=ck&&LISTS.families&&LISTS.families['checkpoints/'+ck];
   return fam&&fam.family==='sd15'?'sd15':'sdxl'}
 const loraOk=(lf,ff)=>!lf||lf==='unknown'||lf===ff||(ff==='chroma'&&lf==='flux');
+/* LoRA 표시 이름: 내가 붙인 이름이 있으면 '이름 — 파일 이름' */
+const loraName=x=>{const a=(LISTS.lora_alias||{})[x];return a?`${a} — ${x.replace(/\.safetensors$/i,'')}`:x};
 function loraOptions(sel,val){
   const f=sel.form,ff=f?formFam(f):null,inf=LISTS.lora_info||{};
-  const opt=x=>`<option value="${esc(x)}">${lkIcon(x)}${esc(x)}</option>`;
+  const opt=x=>`<option value="${esc(x)}" title="${esc(x)}">${lkIcon(x)}${esc(loraName(x))}</option>`;
   const good=LISTS.loras.filter(x=>loraOk(inf[x],ff)),bad=LISTS.loras.filter(x=>!loraOk(inf[x],ff));
   let h='<option value="">사용 안 함</option>';
   if(bad.length){

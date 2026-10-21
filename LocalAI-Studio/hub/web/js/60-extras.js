@@ -353,7 +353,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
 
 /* ══════════ 음성 만들기 ══════════ */
 (()=>{const f=$('#f-tts');if(!f)return;let V=null,M=[],poll=null;
- const save=()=>ls.set('form:f-tts',formVals(f,['ref','clone_ok'])),vsel=$('#tt-voice'),eng=()=>f.elements.engine.value,isM=()=>['xtts','chatterbox','kokoro'].includes(eng());
+ const save=()=>ls.set('form:f-tts',formVals(f,['ref','clone_ok','ref_text'])),vsel=$('#tt-voice'),eng=()=>f.elements.engine.value,isM=()=>['qwen3','xtts','chatterbox','kokoro'].includes(eng());
  const mi=()=>M.find(x=>x.id===eng());
  const fillMain=()=>{if(!V)return;const e=eng()==='edge';
   vsel.innerHTML=(e?V.edge.map(x=>`<option value="${esc(x.name)}">${esc(x.label)}</option>`):V.sapi.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} (${esc(x.culture)})</option>`)).join('')||'<option value="">(없음)</option>';
@@ -368,7 +368,7 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
   $('#tt-mopts').hidden=!m.installed;
   $('#tt-lang').innerHTML=m.langs.map(l=>`<option value="${esc(l.code)}">${esc(l.name)}</option>`).join('');const lv=ls.get('tts:lang:'+m.id,'');if(lv&&[...$('#tt-lang').options].some(o=>o.value===lv))$('#tt-lang').value=lv;
   $('#tt-spk-row').hidden=!m.has_speakers;$('#tt-spk').innerHTML=(m.speakers.length?m.speakers:['Claribel Dervla']).map(s=>`<option>${esc(s)}</option>`).join('');const sv=ls.get('tts:spk:'+m.id,'');if(sv&&[...$('#tt-spk').options].some(o=>o.value===sv))$('#tt-spk').value=sv;
-  $('#tt-emo-row').hidden=m.id!=='chatterbox';$('#tt-clone-row').hidden=!m.clone;
+  $('#tt-emo-row').hidden=!['chatterbox','qwen3'].includes(m.id);$('#tt-clone-row').hidden=!m.clone;{const r=$('#tt-reftext-row');if(r)r.hidden=m.id!=='qwen3'}
   if(run_&&!poll)poll=setInterval(loadModels,2500);if(!run_&&poll){clearInterval(poll);poll=null}};
  const sync=()=>{const m=isM();$('#tt-model').hidden=!m;$('#tt-voice-row').hidden=m;$('#tt-pitch-row').hidden=eng()!=='edge';$('#tt-edge-warn').hidden=eng()!=='edge'||!V||V.edge_ok;if(!m)$('#tt-sapi-warn').hidden=eng()!=='sapi'||!V||V.sapi_ok;else{$('#tt-sapi-warn').hidden=true;$('#tt-edge-warn').hidden=true;fillModel()}};
  const loadModels=async()=>{try{M=await api('/api/tts/models')}catch{return}fillModel()};

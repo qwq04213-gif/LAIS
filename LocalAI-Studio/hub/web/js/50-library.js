@@ -158,10 +158,10 @@ function chRender(){const box=$('#ch-list');if(!box)return;const q=($('#ch-q').v
   box.innerHTML=list.length?list.map(x=>`<div class="chcard" data-id="${esc(x.id)}">${x.refs.length?`<img loading="lazy" src="${chImg(x.refs[0],1)}" alt="${esc(x.name)}">`:'<div class="chnoimg">대표 이미지 없음</div>'}
     <div class="chbody"><div class="plh"><b>${esc(x.name)}</b><span class="badge">${esc(x.kind)}</span></div>
     <p class="plt">${esc((x.prompt||'').slice(0,110))}${(x.prompt||'').length>110?'…':''}</p>
-    <small class="mute">${x.loras.length?'LoRA '+x.loras.map(l=>esc(l[0].replace(/\.safetensors$/i,''))+' ('+l[1]+')').join(', ')+' · ':''}${x.seed!=null?'시드 '+x.seed+' · ':''}${x.refs.length?'참고 이미지 '+x.refs.length+'장':''}${esc(x.note?' · '+x.note:'')}</small>
+    <small class="mute">${x.loras.length?'LoRA '+x.loras.map(l=>esc((LISTS.lora_alias||{})[l[0]]||l[0].replace(/\.safetensors$/i,''))+' ('+l[1]+')').join(', ')+' · ':''}${x.seed!=null?'시드 '+x.seed+' · ':''}${x.refs.length?'참고 이미지 '+x.refs.length+'장':''}${esc(x.note?' · '+x.note:'')}</small>
     <div class="plb"><button type="button" class="ghost sm" data-ch="gen" title="프롬프트·LoRA·시드·모델을 이미지 생성 화면에 넣어요(프롬프트는 뒤에 이어 붙여요)">이미지 생성에 넣기</button><button type="button" class="ghost sm" data-ch="edit" title="참고 이미지를 이미지 편집의 참조 이미지 칸에 넣어요">편집에 참고로</button><button type="button" class="ghost sm" data-ch="ipa" title="참고 이미지와 프롬프트를 '참고 이미지로 그리기' 기능에 넣어요">참고 이미지로 그리기</button><button type="button" class="ghost sm" data-ch="edit-item">수정</button><button type="button" class="ghost sm" data-ch="dup" title="설정과 참고 이미지를 그대로 복사해 새 항목을 만들어요">복제</button><button type="button" class="ghost sm" data-ch="del">삭제</button></div></div></div>`).join(''):`<p class="mute">${CH.length?'조건에 맞는 항목이 없어요.':'아직 저장한 캐릭터·스타일이 없어요. [+ 새로 만들기]를 누르거나, 마음에 드는 그림의 [이어서 작업]에서 저장해 보세요.'}</p>`}
 function chLoraRow(name,w){const i=document.createElement('div');i.className='ch-lrow';const all=[...(LISTS.loras||[])];if(name&&!all.includes(name))all.unshift(name);
-  i.innerHTML=`<select class="ch-lora"><option value="">사용 안 함</option>${all.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select><input type="number" class="ch-w" step="0.01" min="-2" max="2" value="${w??0.8}" title="강도"><button type="button" class="x" title="이 줄 지우기">×</button>`;
+  i.innerHTML=`<select class="ch-lora"><option value="">사용 안 함</option>${all.map(x=>`<option value="${esc(x)}">${esc(loraName(x))}</option>`).join('')}</select><input type="number" class="ch-w" step="0.01" min="-2" max="2" value="${w??0.8}" title="강도"><button type="button" class="x" title="이 줄 지우기">×</button>`;
   $('select',i).value=name||'';$('.x',i).onclick=()=>i.remove();$('#ch-loras').append(i)}
 function chOpen(it){const f=$('#ch-form');f.reset();it=it||{};f.elements.id.value=it.id||'';f.elements.name.value=it.name||'';f.elements.kind.value=it.kind||'캐릭터';
   f.elements.prompt.value=it.prompt||'';f.elements.negative.value=it.negative||'';f.elements.seed.value=it.seed??'';f.elements.model.value=it.model||'';f.elements.note.value=it.note||'';
@@ -269,14 +269,14 @@ let MI=[];
 async function miLoad(force,silent){const kind=$('#mi-kind').value;if(!silent)$('#mi-list').innerHTML='<p class="mute">읽는 중…</p>';
   if(force)await loraCards(true);
   try{MI=(await api('/api/models/cards?kind='+kind)).items}catch{MI=[]}
-  if(kind==='loras'){LISTS.lora_kind=Object.fromEntries(MI.map(c=>[c.name,c.kind]));LISTS.lora_info=Object.fromEntries(MI.map(c=>[c.name,c.family]));LCARD={t:Date.now(),m:Object.fromEntries(MI.map(c=>[c.name,c]))}}
+  if(kind==='loras'){LISTS.lora_kind=Object.fromEntries(MI.map(c=>[c.name,c.kind]));LISTS.lora_info=Object.fromEntries(MI.map(c=>[c.name,c.family]));LISTS.lora_alias=Object.fromEntries(MI.filter(c=>c.alias).map(c=>[c.name,c.alias]));LCARD={t:Date.now(),m:Object.fromEntries(MI.map(c=>[c.name,c]))}}
   miRender()}
 const kindBadge=c=>{const k=LKIND[c.kind]||LKIND.unknown;return c.kind==='unknown'?`<span class="badge kind k-unknown" title="종류를 아직 모르겠어요. 아래 ‘설정’에서 직접 골라 주세요.">미분류</span>`:`<span class="badge kind k-${c.kind}" title="${c.kind_set?'내가 고른 종류':'이름·태그로 추정한 종류 — 틀리면 ‘설정’에서 바꿔 주세요'}">${k[1]}${c.kind_set?'':' <i>추정</i>'}</span>`};
 function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('#mi-kind').value,kf=$('#mi-filter').value;
   $('#mi-filter').hidden=kind!=='loras';
   $('#mi-fam').hidden=kind!=='loras';
   const mf=$('#mi-fam').value,MFS=mf?mf.split(','):null;
-  const list=MI.filter(c=>(kind!=='loras'||!MFS||MFS.includes(c.family))&&(!q||(c.name+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.user_trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q))&&(kind!=='loras'||kf==='all'||c.kind===kf));
+  const list=MI.filter(c=>(kind!=='loras'||!MFS||MFS.includes(c.family))&&(!q||(c.name+' '+(c.alias||'')+' '+(c.memo||'')+' '+(c.title||'')+' '+(c.trigger||[]).join(' ')+' '+(c.user_trigger||[]).join(' ')+' '+(c.tags||[]).join(' ')).toLowerCase().includes(q))&&(kind!=='loras'||kf==='all'||c.kind===kf));
   $('#mi-list').innerHTML=list.length?list.map(c=>{const fam=LFAM[c.family]||(c.family&&c.family!=='unknown'?c.family:'계열 모름'),L=kind==='loras',
     dir=L?'loras':c.dir,pic=c.preview?`<img class="mimg" loading="lazy" src="/mprev/${dir}/${encodeURIComponent(c.name)}?t=${MIT}" alt="">`:'<div class="mimg none">사진 없음</div>',
     img=`<div class="mpv" data-act="pick" data-n="${esc(c.name)}" data-d="${dir}" role="button" tabindex="0" title="클릭하거나 사진을 끌어다 놓으면 미리보기가 바뀌어요">${pic}<span class="mpv-hint">📷 ${c.preview?'사진 바꾸기':'사진 넣기'}</span>${c.preview?`<button type="button" class="mpv-x" data-act="rmprev" data-n="${esc(c.name)}" data-d="${dir}" title="미리보기 지우기" aria-label="미리보기 지우기">×</button>`:''}</div>`;
@@ -286,11 +286,13 @@ function miRender(){const q=($('#mi-q').value||'').trim().toLowerCase(),kind=$('
     const mine=(c.user_trigger||[]).length?`<div class="mchips"><span class="mute">내가 적은 단어</span> ${c.user_trigger.map(t=>`<span class="badge mine" title="클릭하면 복사해요" data-copy="${esc(t)}">${esc(t)}</span><button type="button" class="chipx" data-act="deltr" data-n="${esc(c.name)}" data-t="${esc(t)}" title="이 단어 지우기" aria-label="${esc(t)} 지우기">×</button>`).join('')}</div>`:'';
     const acts=L?`<div class="macts"><button type="button" class="ghost sm" data-act="use" data-f="gen" data-n="${esc(c.name)}">✎ 생성에 쓰기</button><button type="button" class="ghost sm" data-act="use" data-f="edit" data-n="${esc(c.name)}">✎ 편집에 쓰기</button></div>`:'';
     const cfg=L?`<details class="mcfg"><summary>설정</summary><div class="mcfg-in">
+      <label class="f"><span class="lt">내가 붙인 이름</span><input type="text" data-alias="${esc(c.name)}" value="${esc(c.alias||'')}" maxlength="60" placeholder="예: 은발 마법사 캐릭터, 수채화 그림체" title="LoRA 고르는 목록·보관함에 이 이름이 먼저 보여요. Enter 또는 칸을 벗어나면 저장해요."></label>
+      <label class="f"><span class="lt">메모</span><input type="text" data-memo="${esc(c.name)}" value="${esc(c.memo||'')}" maxlength="300" placeholder="예: 강도 0.6 추천, 얼굴만 바뀜"></label>
       <label class="f"><span class="lt">종류</span><select data-act="kind" data-n="${esc(c.name)}"><option value=""${c.kind_set?'':' selected'}>자동${c.kind_set?'':' ('+LKIND[c.kind][1]+')'}</option>${['character','style','background','other'].map(k=>`<option value="${k}"${c.kind_set&&c.kind===k?' selected':''}>${LKIND[k][1]}</option>`).join('')}</select></label>
       <label class="f"><span class="lt">계열</span><select data-act="family" data-n="${esc(c.name)}" title="어느 모델용 LoRA 인지 직접 정해요. 판별 불가일 때 골라 주세요."><option value=""${c.family_set?'':' selected'}>자동${c.family_set?'':' ('+(LFAM[c.family]||'판별 불가')+')'}</option>${Object.entries(LFAM).filter(([k])=>k!=='unknown').map(([k,v])=>`<option value="${k}"${c.family_set&&c.family===k?' selected':''}>${esc(v)}</option>`).join('')}</select></label>
       <div class="mrow"><input type="text" data-addtr="${esc(c.name)}" placeholder="트리거 단어 직접 추가 (쉼표로 여러 개)" maxlength="200"><button type="button" class="ghost sm" data-act="addtr" data-n="${esc(c.name)}">추가</button></div>
 </div></details>`:'';
-    return `<div class="mcard2">${img}<div class="mbody"><b>${esc(c.title||c.name)}</b> ${L?kindBadge(c):''}${c.title?`<div class="mute">${esc(c.name)}</div>`:''}<div><span class="badge acc">${esc(fam)}</span> <span class="mute">${c.size_mb} MB${c.dim?` · 차원 ${esc(c.dim)}`:''}${c.images?` · 학습 이미지 ${esc(c.images)}장`:''}${c.base?` · 기반 ${esc(c.base)}`:''}</span></div>${c.description?`<p class="mute">${esc(c.description)}</p>`:''}${mine}${chips(c.trigger,'트리거 단어')}${copyAll}${chips(c.tags,'자주 쓰인 태그')}${acts}${cfg}</div></div>`}).join(''):'<p class="mute">표시할 항목이 없어요.</p>'}
+    return `<div class="mcard2">${img}<div class="mbody"><b>${esc((L&&c.alias)||c.title||c.name)}</b> ${L?kindBadge(c):''}${L?`<button type="button" class="ghost sm mname" data-act="alias" data-n="${esc(c.name)}" title="이 LoRA 에 알아보기 쉬운 이름을 붙여요">✎ ${c.alias?'이름 바꾸기':'이름 붙이기'}</button>`:''}${(L&&c.alias)||c.title?`<div class="mute">${esc((L&&c.alias&&c.title)?c.title+' · '+c.name:c.name)}</div>`:''}${L&&c.memo?`<div class="mmemo">📝 ${esc(c.memo)}</div>`:''}<div><span class="badge acc">${esc(fam)}</span> <span class="mute">${c.size_mb} MB${c.dim?` · 차원 ${esc(c.dim)}`:''}${c.images?` · 학습 이미지 ${esc(c.images)}장`:''}${c.base?` · 기반 ${esc(c.base)}`:''}</span></div>${c.description?`<p class="mute">${esc(c.description)}</p>`:''}${mine}${chips(c.trigger,'트리거 단어')}${copyAll}${chips(c.tags,'자주 쓰인 태그')}${acts}${cfg}</div></div>`}).join(''):'<p class="mute">표시할 항목이 없어요.</p>'}
 let MIT=Date.now();
 async function miPrev(name,dir,f){if(!f)return;if(!/^image\//.test(f.type))return toast('사진 파일을 넣어 주세요.');
   try{const r=await api('/api/lora/preview',{name,dir:dir||'loras',image:await toDataURL(f)});if(r.error)return toast(r.error);toast('미리보기를 바꿨어요.');MIT=Date.now();await miLoad(false,true)}catch{toast('저장하지 못했어요.')}}
@@ -313,6 +315,7 @@ $('#mi-list').addEventListener('click',async e=>{
   const a=e.target.closest('[data-act]');
   if(a){const n=a.dataset.n,c=MI.find(x=>x.name===n)||{},act=a.dataset.act;
     if(act==='use')return useLora(a.dataset.f,n);
+    if(act==='alias'){const card=a.closest('.mcard2'),d=$('.mcfg',card);if(d)d.open=true;const i=$('[data-alias]',card);if(i){i.focus();i.select()}return}
     if(act==='deltr')return void await miSaveUser(n,{trigger:(c.user_trigger||[]).filter(t=>t!==a.dataset.t)});
     if(act==='addtr'){const inp=a.parentElement.querySelector('input'),w=inp.value.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);if(!w.length)return toast('추가할 단어를 적어 주세요.');
       if(await miSaveUser(n,{trigger:[...(c.user_trigger||[]),...w]}))toast(`${w.length}개를 저장했어요.`);return}
@@ -320,8 +323,9 @@ $('#mi-list').addEventListener('click',async e=>{
       const r=await api('/api/lora/preview',{name:n,dir:a.dataset.d||'loras',remove:true});if(r.error)return toast(r.error);MIT=Date.now();return void await miLoad(false,true)}
     if(act==='pick'){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=()=>miPrev(n,a.dataset.d,i.files[0]);i.click();return}}
   const b=e.target.closest('[data-copy]');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.copy);toast(`'${b.dataset.copy}' 을(를) 복사했어요.`)}catch{toast('복사하지 못했어요.')}});
-$('#mi-list').addEventListener('change',async e=>{const s=e.target.closest('select[data-act=kind]');if(s)await miSaveUser(s.dataset.n,{kind:s.value});const f=e.target.closest('select[data-act=family]');if(f)await miSaveUser(f.dataset.n,{family:f.value})});
-$('#mi-list').addEventListener('keydown',e=>{const i=e.target.closest('input[data-addtr]');if(i&&e.key==='Enter'){e.preventDefault();i.parentElement.querySelector('[data-act=addtr]').click()}});
+$('#mi-list').addEventListener('change',async e=>{const al=e.target.closest('input[data-alias],input[data-memo]');
+  if(al){const n=al.dataset.alias||al.dataset.memo,k=al.dataset.alias?'alias':'memo';if(await miSaveUser(n,{[k]:al.value}))toast(k==='alias'?(al.value.trim()?`'${al.value.trim()}' 이름을 붙였어요.`:'붙인 이름을 지웠어요.'):'메모를 저장했어요.');return}const s=e.target.closest('select[data-act=kind]');if(s)await miSaveUser(s.dataset.n,{kind:s.value});const f=e.target.closest('select[data-act=family]');if(f)await miSaveUser(f.dataset.n,{family:f.value})});
+$('#mi-list').addEventListener('keydown',e=>{const al=e.target.closest('input[data-alias],input[data-memo]');if(al&&e.key==='Enter'){e.preventDefault();al.blur();return}const i=e.target.closest('input[data-addtr]');if(i&&e.key==='Enter'){e.preventDefault();i.parentElement.querySelector('[data-act=addtr]').click()}});
 $('#mi-kind').onchange=()=>miLoad();$('#mi-q').oninput=miRender;$('#mi-filter').onchange=$('#mi-fam').onchange=miRender;$('#mi-reload').onclick=()=>miLoad(true);
 $('#fold-minfo').addEventListener('paneopen',()=>{if(!MI.length)miLoad()});
 /* ══════════ 설정 백업 · 복원 ══════════ */

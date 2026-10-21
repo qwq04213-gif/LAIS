@@ -215,7 +215,7 @@ def do_tts(p, J):
     if blocked(text):
         raise ValueError(BLOCK_MSG)
     TTS_DIR.mkdir(parents=True, exist_ok=True)
-    engine = p.get("engine") if p.get("engine") in ("edge", "xtts", "chatterbox", "kokoro") else "sapi"
+    engine = p.get("engine") if p.get("engine") in ("edge", *tts_models.ENGINES) else "sapi"
     speed, vol = clamp(num(p, "speed", 0, int), -10, 10), clamp(num(p, "volume", 100, int), 0, 100)
     J["msg"] = "목소리 만드는 중"
     if engine in tts_models.ENGINES:
@@ -255,7 +255,7 @@ def tts_ref_upload(p):
 
 
 def do_tts_model(p, J, engine, text, speed):
-    """XTTS-v2 · Chatterbox · Kokoro (전용 파이썬 환경에서 실행)."""
+    """Qwen3-TTS · XTTS-v2 · Chatterbox · Kokoro (전용 파이썬 환경에서 실행)."""
     meta = tts_models.ENGINES[engine]
     if meta["need_license"] and not p.get("license_ok"):
         raise ValueError(f"{meta['title'].split(' — ')[0]} 는 {meta['license']} 모델이에요. 사용 조건 확인 칸에 체크해 주세요.")
@@ -274,7 +274,8 @@ def do_tts_model(p, J, engine, text, speed):
         speaker = ""
     (TTS_DIR / "gen").mkdir(parents=True, exist_ok=True)
     out = TTS_DIR / "gen" / (uuid.uuid4().hex[:12] + ".wav")
-    job = dict(text=text, language=lang, speaker=speaker, ref=str(ref) if ref else "", speed=round(1 + speed * 0.075, 3),
+    job = dict(text=text, language=lang, speaker=speaker, ref=str(ref) if ref else "", speed=round(1 + speed * 0.075, 3), emotion=str(p.get("emotion") or ""),
+               ref_text=str(p.get("ref_text") or "").strip()[:500],
                exaggeration={"calm": 0.3, "normal": 0.5, "rich": 0.8}.get(p.get("emotion"), 0.5))
     def say(m):
         J["msg"] = m

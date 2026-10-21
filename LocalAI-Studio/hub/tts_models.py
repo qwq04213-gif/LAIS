@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""음성 모델 엔진(XTTS-v2 · Chatterbox · Kokoro) 설치·실행·삭제.
+"""음성 모델 엔진(Qwen3-TTS · XTTS-v2 · Chatterbox · Kokoro) 설치·실행·삭제.
 ComfyUI 와 섞이지 않도록 모델마다 따로 만든 전용 파이썬 환경(engine/tts/<이름>/venv)에 설치해요.
 파이썬·캐시·모델도 모두 engine/tts 안에만 받아서, 그 폴더를 지우면 깨끗이 사라져요."""
 import io
@@ -25,7 +25,13 @@ CBX_LANGS = [("ko", "한국어"), ("en", "영어"), ("ja", "일본어"), ("zh", 
              ("ru", "러시아어"), ("ar", "아랍어"), ("hi", "힌디어"), ("tr", "터키어"), ("nl", "네덜란드어"), ("pl", "폴란드어"), ("sv", "스웨덴어"), ("da", "덴마크어"), ("fi", "핀란드어"),
              ("el", "그리스어"), ("he", "히브리어"), ("ms", "말레이어"), ("no", "노르웨이어"), ("sw", "스와힐리어")]
 
+QWEN_LANGS = [("ko", "한국어"), ("en", "영어"), ("ja", "일본어"), ("zh", "중국어"), ("de", "독일어"), ("fr", "프랑스어"), ("ru", "러시아어"), ("pt", "포르투갈어"), ("es", "스페인어"), ("it", "이탈리아어")]
+QWEN_SPEAKERS = ["Sohee", "Ryan", "Aiden", "Ono_Anna", "Vivian", "Serena", "Uncle_Fu", "Dylan", "Eric"]      # Sohee 가 한국어 목소리
+
 ENGINES = {
+    "qwen3": dict(title="Qwen3-TTS — 한국어 자연스러움, 목소리 따라 하기", size="엔진 약 6GB + 모델 약 4~8GB", license="Apache-2.0(상업 이용 가능)", license_url="", need_license=False,
+                  langs=QWEN_LANGS, clone=True, speakers=True,
+                  desc="알리바바 Qwen 팀의 음성 모델(1.7B)이에요. 한국어 목소리(Sohee) 등 내장 목소리 9개를 고르거나, 3초 이상 목소리 샘플을 올리면 따라 읽어요. 샘플에서 말한 내용을 함께 적으면 더 비슷해져요. 속도 조절은 지원하지 않아요. VRAM 8GB 이상 권장."),
     "xtts": dict(title="XTTS-v2 — 한국어 포함 17개 언어, 목소리 따라 하기", size="엔진 약 6GB + 모델 약 2GB", license="비상업 용도만 허용(CPML)", license_url="https://tts-hub.github.io/cpml",
                  need_license=True, langs=XTTS_LANGS, clone=True, speakers=True, desc="내장 목소리 여러 개를 고르거나, 짧은 목소리 샘플(wav)을 올리면 그 목소리를 따라 읽어요."),
     "chatterbox": dict(title="Chatterbox 다국어 — 한국어 포함 23개 언어, 감정 조절", size="엔진 약 7GB + 모델 약 3GB", license="MIT(상업 이용 가능)", license_url="", need_license=False,
@@ -84,6 +90,8 @@ def status(root):
                 sp = []
         if eid == "kokoro":
             sp = KOKORO_VOICES
+        if eid == "qwen3":
+            sp = QWEN_SPEAKERS
         out.append(dict(id=eid, title=e["title"], size=e["size"], license=e["license"], license_url=e["license_url"], need_license=e["need_license"], desc=e["desc"],
                         langs=[dict(code=c, name=n) for c, n in e["langs"]], clone=e["clone"], speakers=sp, has_speakers=e["speakers"],
                         installed=installed(root, eid), partial=d.exists() and not installed(root, eid) and j.get("state") != "running",
@@ -147,6 +155,8 @@ def pkgs_for(eid):
         return [["coqui-tts", "soundfile"]]
     if eid == "kokoro":
         return [["kokoro>=0.9.4", "soundfile"]]
+    if eid == "qwen3":
+        return [["qwen-tts", "soundfile", "numpy"]]
     if eid == "chatterbox":
         return [[PERTH_ZIP], ["--no-deps", CBX_ZIP],
                 ["numpy<2", "librosa==0.11.0", "s3tokenizer", "transformers==5.2.0", "diffusers==0.29.0", "conformer==0.3.2", "safetensors==0.5.3", "spacy-pkuseg",
