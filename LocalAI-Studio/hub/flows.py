@@ -543,6 +543,22 @@ def wf_vace(q, ref):
     return w.n
 
 
+def wf_vace_extend(q, control, mask):
+    """Wan VACE 로 영상 뒤 이어 그리기: control = 앞은 원본 마지막 장면·뒤는 회색인 영상, mask = 그대로 둘 곳 검정·새로 그릴 곳 흰색."""
+    w = WF()
+    model, vae, pos, neg = _wan21_base(w, q)
+    cv = w.add("GetVideoComponents", video=[w.add("LoadVideo", file=control), 0])
+    mv = w.add("GetVideoComponents", video=[w.add("LoadVideo", file=mask), 0])
+    mk = w.add("ThresholdMask", mask=[w.add("ImageToMask", image=[mv, 0], channel="red"), 0], value=0.5)
+    v = w.add("WanVaceToVideo", positive=pos, negative=neg, vae=vae, width=q["w"], height=q["h"], length=q["frames"], batch_size=1,
+              strength=1.0, control_video=[cv, 0], control_masks=[mk, 0])
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+              positive=[v, 0], negative=[v, 1], latent_image=[v, 2], denoise=1.0)
+    tr = w.add("TrimVideoLatent", samples=[k, 0], trim_amount=[v, 3])
+    _save_video(w, [w.add("VAEDecode", samples=[tr, 0], vae=vae), 0], q["fps"])
+    return w.n
+
+
 def wf_s2v(q, ref, audio):
     """Wan 2.2 S2V: 사진 한 장 + 목소리(소리 파일) → 말하는 영상(입 모양 맞춤). audio = 입력 폴더의 소리 파일 이름."""
     w = WF()

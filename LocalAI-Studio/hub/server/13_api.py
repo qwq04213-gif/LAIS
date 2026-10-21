@@ -135,11 +135,20 @@ def _lists_build():
 
 
 def catalog():
-    have = set(llms())
-
-    ok = img_installed
-    return {"llm": [{**m, "installed": m["ollama"] in have or m["ollama"] + ":latest" in have} for m in CATALOG["llm"]],
-            "image": [{**m, "installed": ok(m), "cat": cat_of(m)} for m in CATALOG["image"]]}
+    try:
+        tags = {t["name"]: t.get("size", 0) for t in http(OLLAMA + "/api/tags", timeout=3).get("models", [])}
+    except Exception:  # noqa: BLE001
+        tags = {}
+    llm = []
+    for m in CATALOG["llm"]:
+        sz = tags.get(m["ollama"], tags.get(m["ollama"] + ":latest"))
+        llm.append({**m, "installed": sz is not None, "disk_gb": round(sz / 1e9, 1) if sz else None})
+    img = []
+    for m in CATALOG["image"]:
+        inst = img_installed(m)
+        sz = sum(fsize(MODELS / f["dir"] / cat_name(f)) for f in m["files"]) if inst else 0
+        img.append({**m, "installed": inst, "cat": cat_of(m), "disk_gb": round(sz / 1e9, 1) if inst else None})
+    return {"llm": llm, "image": img}
 
 
 def cat_of(m):

@@ -88,7 +88,9 @@ document.addEventListener('click',async e=>{
   if(to==='up'&&b.closest('.gt,#lb')){IV.up.set(await urlToDataURL(u));show('up');return}
   if(to==='vcont'){try{b.disabled=true;window.vidSetImage(await lastFrame(u));show('vid');toast('마지막 장면을 시작 이미지로 넣었어요. 장면 설명을 이어지게 바꿔서 [영상 만들기]를 눌러 보세요.',6000)}catch(er){toast(er.message)}b.disabled=false;return}
   if(to.startsWith('vp:')){b.closest('.more').open=false;run('vpost',$('#f-vid'),{op:to.slice(3),video:u,upm:($('#f-up')&&$('#f-up').elements.upm.value)||''});return}
+  if(to==='photo'){const m=b.closest('.more');if(m)m.open=false;window.photoOpen(u);return}
   if(to==='rmbg'){const m=b.closest('.more');if(m)m.open=false;const d=await urlToDataURL(u);show('feat','rmbg');await sleep(300);await featForm('rmbg',true);const mm=$('.mini[data-img=image]',$('#feat-form'));if(mm)mm.set(d);toast('배경 지우기에 넣었어요. 배경을 고르고 [만들기]를 눌러 주세요.');return}
+  if(to.startsWith('ve:')){const m=b.closest('.more');if(m)m.open=false;window.veditOpen(u,to.slice(3));return}
   if(to==='vmix'||to==='vmixa'){vmixOpen(to==='vmix'?{video:u}:{audio:u});return}
   if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}

@@ -290,7 +290,7 @@ function show(v,f,how){
   if(v==='log')logInit();
   if(v==='setup'||v==='conf'){appInit()}
   paneShown(v);
-  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat(f);else if(v==='vmix')vmixLoad();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
+  if(v==='setup')loadSetup();else if(v==='dl')loadDl();else if(v==='feat')loadFeat(f);else if(v==='vmix')vmixLoad();else if(v==='vedit'&&window.veditLoad)veditLoad();else if(v!=='info'&&v!=='wf'&&v!=='guide'&&v!=='log'&&v!=='conf')loadLists();
 }
 $$('#rail nav button').forEach(b=>b.onclick=()=>show(b.dataset.v,b.dataset.f));
 /* 뒤로·앞으로 가기: 마우스 4·5번 버튼, Alt+←/→. 열린 창(확대 보기·대기열)이 있으면 그것부터 닫아요. */

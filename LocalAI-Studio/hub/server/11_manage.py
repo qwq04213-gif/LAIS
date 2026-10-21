@@ -645,11 +645,12 @@ def install(p):
         return {"error": f"디스크 여유 공간이 부족해요. 필요 약 {need:.0f}GB / 여유 {free:.0f}GB"}
     for m in items:
         if "ollama" in m:
-            add_task(m["name"], kind="ollama", model=m["ollama"])
+            add_task(m["name"], kind="ollama", model=m["ollama"], mid=m["id"])
         else:
             for x in m["files"]:
-                add_task(f'{m["name"]} ({cat_name(x)})',
-                         kind="file", url=x["url"], dir=x["dir"], name=x.get("name"))
+                if not (MODELS / x["dir"] / cat_name(x)).exists():      # 이미 있는 공용 파일은 다시 받지 않아요
+                    add_task(f'{m["name"]} ({cat_name(x)})',
+                             kind="file", url=x["url"], dir=x["dir"], name=x.get("name"), mid=m["id"])
     c = p.get("custom") or {}
     if str(c.get("url", "")).startswith("http") and c.get("dir") in FOLDERS:
         add_task("직접 추가: " + c["url"][:60], kind="file", url=c["url"], dir=c["dir"],

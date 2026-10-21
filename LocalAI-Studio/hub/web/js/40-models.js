@@ -12,6 +12,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.tcancel')
 async function loadTasks(){
   const t=await api('/api/install');
   $('#tasks').innerHTML=t.length?taskHead(t)+t.map(taskRow).join(''):'<p class="empty">진행 중인 설치가 없어요.</p>';
+  {const w=$('#tasks-wrap');if(w)w.hidden=!t.some(x=>x.state==='queued'||x.state==='running'||x.state==='error')}   // 받는 중일 때만 맨 위에 보여요
   clearTimeout(tPoll);
   if(t.some(x=>x.state==='queued'||x.state==='running')){busy=true;tPoll=setTimeout(loadTasks,1000)}
   else if(busy){busy=false;loadSetup();loadLists(true)}
@@ -19,7 +20,7 @@ async function loadTasks(){
 async function loadSetup(){
   const[s,c]=await Promise.all([api('/api/status'),api('/api/catalog')]);
   $('#gpuinfo').textContent=s.gpu?`내 GPU: ${s.gpu.name}, VRAM ${s.gpu.vram_gb}GB`:'NVIDIA GPU를 찾지 못했어요. 이미지 기능은 매우 느리거나 동작하지 않을 수 있어요.';
-  const row=m=>`<label class="item"><input type="checkbox" value="${m.id}" ${m.installed?'disabled':''}><span><b>${esc(m.name)}</b><small>${esc(m.desc)}</small></span><em>${m.installed?`설치됨 <button type="button" class="ghost sm cat-del" data-id="${m.id}" data-n="${esc(m.name)}" data-gb="${m.gb||''}">삭제</button>`:m.gb+'GB'}</em></label>`;
+  const row=m=>`<label class="item"><input type="checkbox" value="${m.id}" ${m.installed?'disabled':''}><span><b>${esc(m.name)}</b><small>${esc(m.desc)}</small></span><em>${m.installed?`설치됨${m.disk_gb?` · ${m.disk_gb}GB`:''} <button type="button" class="ghost sm cat-del" data-id="${m.id}" data-n="${esc(m.name)}" data-gb="${m.gb||''}">삭제</button>`:m.gb+'GB'}</em></label>`;
   const keep=new Set($$('#v-setup .item input:checked').map(i=>i.value));
   loadManage();
   $('#cat-llm').innerHTML=c.llm.map(row).join('');
@@ -33,6 +34,7 @@ let CATALOG_NOW={llm:[],image:[]};
 function selSummary(){const box=$('#sel-sum');if(!box)return;
   const all=[...CATALOG_NOW.llm,...CATALOG_NOW.image],by=Object.fromEntries(all.map(m=>[m.id,m])),ids=$$('#v-setup .item input:checked').map(i=>i.value),seen=[],q=[...ids];
   while(q.length){const i=q.shift();if(by[i]&&!seen.includes(i)){seen.push(i);q.push(...(by[i].requires||[]))}}
+  for(const i of ids.filter(v=>v.startsWith('tts:'))){const v=VOICE_NOW.find(m=>'tts:'+m.id===i);if(v&&!v.installed)seen.push(i),by[i]={name:v.title+' (음성)',gb:(parseFloat(String(v.size||'').replace(/[^0-9.]/g,''))||0)/(/MB/i.test(v.size||'')?1000:1)}}
   const todo=seen.map(i=>by[i]).filter(m=>!m.installed),gb=todo.reduce((a,m)=>a+(m.gb||0),0);
   box.innerHTML=ids.length?(todo.length?`<b>선택한 항목 ${ids.length}개</b> — ${todo.map(m=>esc(m.name)).join(' · ')}<br><small>함께 필요한 파일까지 합쳐 약 ${gb.toFixed(1)}GB를 받아요.</small>`:'<b>선택한 항목은 이미 모두 설치돼 있어요.</b>'):'<span class="mute">받을 모델을 체크하면 여기에 무엇을 얼마나 받는지 보여 줘요.</span>'}
 document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))selSummary()});
@@ -44,11 +46,13 @@ $('#rec').onclick=()=>{
   $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.includes(i.value)});selSummary();
 };
 $('#inst').onclick=async()=>{
-  const ids=$$('#v-setup .item input:checked').map(i=>i.value);
-  if(!ids.length)return;
-  const r=await api('/api/install',{ids});
-  if(r.error){alert(r.error);return}
-  $$('#v-setup .item input').forEach(i=>i.checked=false);selSummary();loadTasks();
+  const all=$$('#v-setup .item input:checked').map(i=>i.value);
+  if(!all.length)return;
+  const ids=all.filter(v=>!v.startsWith('tts:')),tts=all.filter(v=>v.startsWith('tts:')).map(v=>v.slice(4));
+  if(ids.length){const r=await api('/api/install',{ids});if(r.error){toast(r.error,6000);return}}
+  for(const id of tts){const r=await api('/api/tts/model/install',{id});if(r.error)toast(r.error,6000)}   // 음성 모델은 음성 만들기 전용 공간에 따로 설치돼요
+  $$('#v-setup .item input').forEach(i=>i.checked=false);selSummary();loadTasks();if(tts.length)catVoice();
+  $('#tasks-wrap')&&$('#tasks-wrap').scrollIntoView({block:'nearest',behavior:'smooth'});
 };
 async function refreshModels(){
   const b=$$('.refresh-models,#refresh-models,#refresh-models2');b.forEach(x=>x.disabled=true);
@@ -238,8 +242,10 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.cat-del')
   toast(r.error||(`지웠어요.`+((r.kept||[]).length?` 공용 파일 ${r.kept.length}개는 다른 모델이 써서 남겨 뒀어요.`:'')),6000);loadSetup();loadLists(true)});
 /* 음성 모델(XTTS·Chatterbox·Kokoro): 음성 만들기와 같은 설치·삭제 */
 async function catVoice(){const box=$('#cat-voice');if(!box)return;let M=[];try{M=await api('/api/tts/models')}catch{box.innerHTML='<p class="mute">읽지 못했어요.</p>';return}
-  box.innerHTML=M.map(m=>`<div class="item noch"><span><b>${esc(m.title)}</b><small>${esc(m.desc||'')} · ${esc(m.license||'')}</small></span><em>${m.state==='running'?esc(m.msg||'설치 중…'):m.installed?`설치됨 <button type="button" class="ghost sm" data-vdel="${m.id}">삭제</button>`:`${esc(m.size||'')} <button type="button" class="ghost sm" data-vins="${m.id}">설치</button>`}</em></div>`).join('')||'<p class="mute">항목이 없어요.</p>';
+  VOICE_NOW=M;const keep=new Set($$('#cat-voice .item input:checked').map(i=>i.value));
+  /* 다른 추천 모델과 같은 모양: 체크해서 [선택한 항목 설치]로 받고, 설치된 건 용량과 [삭제] */
+  box.innerHTML=M.map(m=>`<label class="item"><input type="checkbox" value="tts:${m.id}" ${m.installed||m.state==='running'?'disabled':''}${keep.has('tts:'+m.id)?' checked':''}><span><b>${esc(m.title)}</b><small>${esc(m.desc||'')} · ${esc(m.license||'')}</small></span><em>${m.state==='running'?esc(m.msg||'설치 중…'):m.installed?`설치됨${m.disk?` · ${(m.disk/1e9).toFixed(1)}GB`:''} <button type="button" class="ghost sm" data-vdel="${m.id}">삭제</button>`:esc(m.size||'')}</em></label>`).join('')||'<p class="mute">항목이 없어요.</p>';
   if(M.some(m=>m.state==='running'))setTimeout(catVoice,3000)}
-document.addEventListener('click',async e=>{const i=e.target.closest('[data-vins]'),d=e.target.closest('[data-vdel]');if(!i&&!d)return;
-  if(i){if(!confirm('이 음성 모델을 설치할까요?\n10~30분 걸릴 수 있어요. 음성 만들기 전용 공간(engine\\tts)에만 설치돼요.'))return;i.disabled=true;const r=await api('/api/tts/model/install',{id:i.dataset.vins});if(r.error)toast(r.error,6000);catVoice()}
-  else{if(!confirm('이 음성 모델과 전용 환경을 컴퓨터에서 지울까요?'))return;d.disabled=true;const r=await api('/api/tts/model/remove',{id:d.dataset.vdel});toast(r.error||'지웠어요.');catVoice()}});
+let VOICE_NOW=[];
+document.addEventListener('click',async e=>{const d=e.target.closest('[data-vdel]');if(!d)return;e.preventDefault();e.stopPropagation();
+  if(!confirm('이 음성 모델과 전용 환경을 컴퓨터에서 지울까요?'))return;d.disabled=true;const r=await api('/api/tts/model/remove',{id:d.dataset.vdel});toast(r.error||'지웠어요.');catVoice()});

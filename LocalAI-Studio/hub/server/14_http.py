@@ -255,7 +255,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/chat":
             return self.chat(p)
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "music", "tts", "batch"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if len(JOBS) > 50:
                 for k, v in list(JOBS.items()):
@@ -383,6 +383,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(clean_item(str(p.get("what", ""))))
         if u == "/api/delete":
             return self.send_json(delete_item(p))
+        if u == "/api/photo/save":
+            return self.send_json(photo_save(p))
         if u == "/api/catalog/remove":
             return self.send_json(catalog_remove(p))
         if u == "/api/meta":

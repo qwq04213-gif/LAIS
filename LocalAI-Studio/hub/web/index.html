@@ -23,6 +23,7 @@
     <div class="ng"><span class="ngt">만들기</span>
       <button data-v="gen" title="이미지 생성"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg><span>이미지 생성</span></button>
       <button data-v="edit" title="이미지 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span>이미지 편집</span></button>
+      <button data-v="photo" title="사진 편집기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.6"/></svg><span>사진 편집기</span></button>
       <button data-v="up" title="업스케일"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg><span>업스케일</span></button>
       <button data-v="vid" title="영상 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>영상 만들기</span></button>
       <button data-v="music" title="음악 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="16" r="2.5"/></svg><span>음악 만들기</span></button>
@@ -37,6 +38,7 @@
       <button data-v="batch" title="일괄 처리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>일괄 처리</span></button>
       <button data-v="wf" title="워크플로"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="9" y="15" width="6" height="5" rx="1"/><path d="M6 9v2.5h12V9M12 11.5V15"/></svg><span>워크플로</span></button>
       <button data-v="vmix" title="영상 소리·자막"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 14.5h3.5M13 14.5h4M7 10.5h2.5M12 10.5h5"/></svg><span>영상 소리·자막</span></button>
+      <button data-v="vedit" title="영상 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 7.5l12 9M8 16.5l12-9"/><rect x="13" y="3" width="8" height="5" rx="1"/></svg><span>영상 편집</span></button>
     </div>
     <div class="ng ngmore"><span class="ngt tog" id="ng-more" role="button" tabindex="0" aria-expanded="false" aria-controls="ng-more-body" title="눌러서 펼치거나 접어요">기타 기능<i aria-hidden="true"></i></span>
     <div id="ng-more-body" hidden>
@@ -526,6 +528,110 @@
 </section>
 
 <!-- 영상 소리·자막 -->
+<section class="view" id="v-photo">
+  <h2>사진 편집기</h2>
+  <div class="pe-top" role="toolbar" aria-label="사진 편집기 메뉴">
+    <label class="ghost vpick">사진 열기<input type="file" accept="image/*" hidden id="pe-file"></label>
+    <button type="button" class="ghost" id="pe-new">새 캔버스</button>
+    <span class="pe-sep"></span>
+    <button type="button" class="ghost" id="pe-undo" title="되돌리기 (Ctrl+Z)">되돌리기</button>
+    <button type="button" class="ghost" id="pe-redo" title="다시 하기 (Ctrl+Y)">다시 하기</button>
+    <span class="pe-sep"></span>
+    <button type="button" class="ghost" id="pe-rotl" title="왼쪽으로 90° 돌리기">↺ 90°</button>
+    <button type="button" class="ghost" id="pe-rotr" title="오른쪽으로 90° 돌리기">↻ 90°</button>
+    <button type="button" class="ghost" id="pe-fliph" title="좌우 뒤집기">좌우 뒤집기</button>
+    <button type="button" class="ghost" id="pe-flipv" title="상하 뒤집기">상하 뒤집기</button>
+    <button type="button" class="ghost" id="pe-resize">크기 바꾸기</button>
+    <span class="pe-sep"></span>
+    <button type="button" class="ghost" id="pe-fit" title="화면에 맞추기">맞추기</button>
+    <label class="pe-zoom">확대 <input type="range" id="pe-zoom" min="10" max="400" value="100" aria-label="확대 비율"><span id="pe-zv">100%</span></label>
+    <span class="pe-grow"></span>
+    <button type="button" class="go" id="pe-save">결과 폴더에 저장</button>
+    <details class="more"><summary>다른 화면으로</summary><div class="menu">
+      <button type="button" data-pto="edit">이미지 편집으로</button><button type="button" data-pto="up">업스케일로</button>
+      <button type="button" data-pto="rmbg">배경 지우기로</button><button type="button" data-pto="vid">영상으로 만들기</button>
+      <button type="button" data-pto="dl">내 컴퓨터에 받기 (PNG)</button></div></details>
+  </div>
+  <div class="pe-main">
+    <div class="pe-tools" role="radiogroup" aria-label="도구">
+      <button type="button" data-tool="move" title="이동 (V) — 고른 레이어를 끌어서 옮겨요">이동</button>
+      <button type="button" data-tool="brush" title="브러시 (B)">브러시</button>
+      <button type="button" data-tool="eraser" title="지우개 (E) — 고른 레이어를 투명하게 지워요">지우개</button>
+      <button type="button" data-tool="text" title="글자 (T) — 누른 곳에 글자를 넣어요">글자</button>
+      <button type="button" data-tool="rect" title="사각형 (R)">사각형</button>
+      <button type="button" data-tool="ellipse" title="원 (O)">원</button>
+      <button type="button" data-tool="line" title="선 (L)">선</button>
+      <button type="button" data-tool="crop" title="자르기 (C) — 남길 부분을 끌어서 고른 뒤 [자르기 적용]">자르기</button>
+      <button type="button" data-tool="pick" title="스포이드 (I) — 누른 곳의 색을 가져와요">스포이드</button>
+    </div>
+    <div class="pe-stage" id="pe-stage" tabindex="0" aria-label="편집 화면">
+      <div class="pe-empty" id="pe-empty">사진을 열거나, 여기로 끌어다 놓거나, Ctrl+V 로 붙여 넣어요.<br><small>다른 화면 결과의 [더 보기] → '사진 편집기로'로도 열 수 있어요.</small></div>
+      <div class="pe-wrap" id="pe-wrap" hidden><canvas id="pe-cv"></canvas><canvas id="pe-ov"></canvas></div>
+    </div>
+    <div class="pe-side">
+      <div class="card pe-card"><h4>도구 설정</h4>
+        <div class="row"><label class="f">색<input type="color" id="pe-color" value="#e8433a"></label><label class="f">굵기 <span id="pe-sizev" class="mute">24</span><input type="range" id="pe-size" min="1" max="300" value="24"></label></div>
+        <label class="f">불투명도 <span id="pe-alphav" class="mute">100%</span><input type="range" id="pe-alpha" min="5" max="100" value="100"></label>
+        <div data-for-tool="rect ellipse" class="row"><label class="chk"><input type="checkbox" id="pe-fill"> 안을 채우기</label></div>
+        <div data-for-tool="text"><label class="f">글자<input type="text" id="pe-text" value="안녕하세요" maxlength="200"></label>
+          <div class="row"><label class="chk"><input type="checkbox" id="pe-bold" checked> 굵게</label><label class="chk"><input type="checkbox" id="pe-stroke"> 테두리</label></div></div>
+        <div data-for-tool="crop"><p class="hint plain" id="pe-cropinfo">남길 부분을 끌어서 골라요.</p><div class="row"><button type="button" class="go" id="pe-cropok" disabled>자르기 적용</button><button type="button" class="ghost" id="pe-cropno">취소</button></div></div>
+      </div>
+      <div class="card pe-card"><h4>색·밝기 조정 <small class="mute">고른 레이어</small></h4>
+        <label class="f">밝기 <span class="mute" data-v="b">100</span><input type="range" data-adj="b" min="0" max="200" value="100"></label>
+        <label class="f">대비 <span class="mute" data-v="c">100</span><input type="range" data-adj="c" min="0" max="200" value="100"></label>
+        <label class="f">채도 <span class="mute" data-v="s">100</span><input type="range" data-adj="s" min="0" max="300" value="100"></label>
+        <label class="f">색조 <span class="mute" data-v="h">0</span><input type="range" data-adj="h" min="-180" max="180" value="0"></label>
+        <label class="f">흐림 <span class="mute" data-v="bl">0</span><input type="range" data-adj="bl" min="0" max="30" value="0"></label>
+        <label class="f">흑백 <span class="mute" data-v="g">0</span><input type="range" data-adj="g" min="0" max="100" value="0"></label>
+        <label class="f">세피아 <span class="mute" data-v="sp">0</span><input type="range" data-adj="sp" min="0" max="100" value="0"></label>
+        <div class="row"><label class="chk"><input type="checkbox" data-adj="inv"> 색 반전</label></div>
+        <div class="row"><button type="button" class="go" id="pe-adjok" disabled>조정 적용</button><button type="button" class="ghost" id="pe-adjno">원래대로</button><button type="button" class="ghost" id="pe-sharp">선명하게</button></div>
+      </div>
+      <div class="card pe-card"><h4>레이어</h4>
+        <div id="pe-layers" role="listbox" aria-label="레이어"></div>
+        <label class="f">불투명도 <span id="pe-lopv" class="mute">100%</span><input type="range" id="pe-lop" min="0" max="100" value="100"></label>
+        <div class="pe-lbtns"><button type="button" class="ghost sm" id="pe-ladd">새 레이어</button><button type="button" class="ghost sm" id="pe-ldup">복제</button><button type="button" class="ghost sm" id="pe-lup" title="위로">▲</button><button type="button" class="ghost sm" id="pe-ldown" title="아래로">▼</button><button type="button" class="ghost sm" id="pe-lmerge" title="아래 레이어와 합치기">아래로 합치기</button><button type="button" class="ghost sm" id="pe-ldel">삭제</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="view split" id="v-vedit">
+  <form id="f-vedit" autocomplete="off" novalidate>
+    <button class="go">이어 붙이기</button>
+    <p class="warn" id="ve-noff" hidden>영상 편집에는 ffmpeg 가 필요해요. 설치와 모델 > 내 PC 점검의 [빠진 부품 설치]로 한 번만 설치하면 돼요.</p>
+    <div class="vemodes" role="radiogroup" aria-label="할 일">
+      <label><input type="radio" name="op" value="concat" checked><span>이어 붙이기</span></label>
+      <label><input type="radio" name="op" value="trim"><span>자르기</span></label>
+      <label><input type="radio" name="op" value="extend"><span>AI 이어 그리기</span></label>
+    </div>
+    <p class="hint plain" id="ve-hint"></p>
+    <div data-ve="concat">
+      <div id="ve-list"></div>
+      <div class="vmrow"><button type="button" class="ghost" id="ve-add">영상 추가</button><label class="ghost vpick">내 컴퓨터에서 고르기<input type="file" accept="video/*,.mkv" hidden id="ve-file"></label></div>
+      <label class="f">영상 사이 넘김<select name="fade"><option value="0">바로 이어서</option><option value="0.5">0.5초 겹쳐 부드럽게</option><option value="1">1초 겹쳐 부드럽게</option></select></label>
+    </div>
+    <div data-ve="trim extend" hidden>
+      <div class="f"><span>영상</span><div class="vmrow"><select name="file" id="ve-one"></select><label class="ghost vpick">내 컴퓨터에서 고르기<input type="file" accept="video/*,.mkv" hidden id="ve-file1"></label></div>
+        <video id="ve-prev" controls preload="metadata" hidden></video></div>
+    </div>
+    <div data-ve="trim" hidden>
+      <div class="row"><label class="f">시작 (초)<input type="number" name="start" id="ve-s" value="0" min="0" step="0.1"></label><label class="f">끝 (초)<input type="number" name="end" id="ve-e" min="0" step="0.1" placeholder="끝까지"></label></div>
+      <div class="vmrow"><button type="button" class="ghost sm" id="ve-setS">지금 위치를 시작으로</button><button type="button" class="ghost sm" id="ve-setE">지금 위치를 끝으로</button><span class="mute" id="ve-len"></span></div>
+    </div>
+    <div data-ve="extend" hidden>
+      <p class="warn" id="ve-novace" hidden>AI로 이어 그리려면 'Wan VACE' 모델이 필요해요. <a href="#" data-go="setup">설치와 모델</a> > 영상에서 설치해 주세요.</p>
+      <label class="f">이어질 장면 설명 (선택)<textarea name="prompt" rows="3" placeholder="예: 그녀가 천천히 뒤돌아 걸어간다, 카메라가 따라간다"></textarea></label>
+      <label class="f">이어 그릴 길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초 (오래 걸려요)</option></select></label>
+    </div>
+    <p class="hint plain">결과는 새 영상 파일로 기록 갤러리의 [영상]에 쌓이고, 원본은 그대로 남아요.</p>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
+    <div class="res"></div>
+  </div>
+</section>
 <section class="view split" id="v-vmix">
   <form id="f-vmix" autocomplete="off" novalidate>
     <button class="go">합쳐서 새 영상 만들기</button>
@@ -952,16 +1058,15 @@
   <div class="cs-body">
 <div class="cpane" id="fold-rec"><div class="card"><h3>추천 모델</h3>
 <p class="mute" id="gpuinfo"></p>
-<div class="actions"><button class="ghost" id="rec" type="button">내 GPU에 맞춰 고르기</button><button class="go" id="inst" type="button">선택한 항목 설치</button></div>
+<div class="recbar"><div class="actions"><button class="ghost" id="rec" type="button">내 GPU에 맞춰 고르기</button><button class="go" id="inst" type="button">선택한 항목 설치</button></div>
 <div id="sel-sum" class="selsum" aria-live="polite"></div>
+<div id="tasks-wrap" hidden><h4>받는 중</h4><div id="tasks"></div></div></div>
     <h4>대화 모델</h4><div id="cat-llm"></div>
     <h4>이미지 모델</h4><div id="cat-img"></div>
     <h4>영상 모델</h4><div id="cat-vid"></div>
     <h4>음악·효과음 모델</h4><div id="cat-aud"></div>
     <h4>음성 모델 <small class="mute">(음성 만들기 전용 공간에 따로 설치돼요)</small></h4><div id="cat-voice"></div>
     <h4>3D 모델</h4><div id="cat-3d"></div>
-  
-<h4>진행 상황</h4><div id="tasks"></div>
 </div></div>
 <div class="cpane" id="fold-manage"><div class="card"><h3>설치된 모델</h3>
     <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>
@@ -1131,6 +1236,7 @@
       <button type="button" data-to="gvar" title="이 그림을 바탕으로 구도는 비슷하게 4장 변형해요">비슷하게 변형 4장</button>
       <button type="button" data-to="edit">이미지 편집으로 보내기</button>
       <button type="button" data-to="up">업스케일로 보내기</button>
+      <button type="button" data-to="photo">사진 편집기로</button>
       <button type="button" data-to="rmbg">배경 지우기</button>
       <button type="button" data-to="vid">영상으로 만들기</button>
       <button type="button" data-to="chsave" title="이 그림의 프롬프트·LoRA·시드와 사진을 캐릭터·스타일 보관함에 묶어서 저장해요">캐릭터·스타일로 저장</button></div></details>
