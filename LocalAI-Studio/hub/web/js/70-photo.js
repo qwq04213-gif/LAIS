@@ -66,10 +66,22 @@
    $('#pe-empty').hidden=true;wrap.hidden=false;size();fit();selClear();draw();lyr();btns();adjReset(true)}
  const openURL=(u,name)=>new Promise((ok,bad)=>{const im=new Image();im.onload=()=>{openImg(im,name);ok()};im.onerror=()=>{toast('사진을 열지 못했어요.');bad()};im.src=u});
  window.photoOpen=async(u,name)=>{show('photo');await openURL(u,name||decodeURIComponent(String(u).split('/').pop().split('?')[0]))};
+  /* ── 이미지를 새 레이어로 넣기: 캔버스보다 크면 캔버스에 맞게 줄여 가운데에 놓아요 */
+ function addImg(img,name){if(!D.layers.length)return openImg(img,name);
+   const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,k=Math.min(1,D.W/w,D.H/h),dw=Math.max(1,Math.round(w*k)),dh=Math.max(1,Math.round(h*k));
+   const c=mk(D.W,D.H),x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(img,Math.round((D.W-dw)/2),Math.round((D.H-dh)/2),dw,dh);
+   push();D.layers.splice(D.act+1,0,layer(String(name||'이미지').replace(/\.[^.]+$/,'').slice(0,24),c));D.act++;draw();lyr();setTool('move');
+   toast((k<1?'캔버스에 맞게 줄여서 ':'')+'새 레이어로 넣었어요. [이동]으로 옮기고, 레이어의 [크기]로 키우거나 줄여요.')}
+ const addURL=(u,name)=>new Promise(ok=>{const im=new Image();im.onload=()=>{addImg(im,name);ok()};im.onerror=()=>{toast('사진을 열지 못했어요.');ok()};im.src=u});
+ async function addFiles(fs){fs=fs.filter(x=>/^image\//.test(x.type));if(!fs.length)return;let i=0;
+   if(!D.layers.length){await openURL(URL.createObjectURL(fs[0]),fs[0].name).catch(()=>{});i=1}
+   for(;i<fs.length;i++)await addURL(URL.createObjectURL(fs[i]),fs[i].name)}
+ window.photoAddLayer=async(u,name)=>{show('photo');await addURL(u,name||decodeURIComponent(String(u).split('/').pop().split('?')[0]))};
+ $('#pe-addimg').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
  $('#pe-file').onchange=e=>{const f=e.target.files[0];if(f)openURL(URL.createObjectURL(f),f.name);e.target.value=''};
  stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drop')});stage.addEventListener('dragleave',()=>stage.classList.remove('drop'));
- stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drop');const f=[...e.dataTransfer.files].find(x=>/^image\//.test(x.type));if(f)openURL(URL.createObjectURL(f),f.name)});
- document.addEventListener('paste',e=>{if(!V.classList.contains('on'))return;const f=[...(e.clipboardData||{}).files||[]].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();openURL(URL.createObjectURL(f),'붙여넣기')}});
+ stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drop');addFiles([...e.dataTransfer.files])});
+ document.addEventListener('paste',e=>{if(!V.classList.contains('on')||/^(INPUT|TEXTAREA)$/.test((document.activeElement||{}).tagName||''))return;const f=[...(e.clipboardData||{}).files||[]].filter(x=>/^image\//.test(x.type));if(f.length){e.preventDefault();addFiles(f)}});
  $('#pe-new').onclick=()=>{const s=prompt('새 캔버스 크기 (가로x세로)','1024x1024');if(!s)return;const m=s.match(/(\d+)\s*[x×*]\s*(\d+)/);if(!m)return toast('예: 1024x1024 처럼 적어 주세요.');
    const w=Math.min(8192,+m[1]),h=Math.min(8192,+m[2]),c=mk(w,h),x=c.getContext('2d');x.fillStyle='#ffffff';x.fillRect(0,0,w,h);openImg(c,'새 캔버스')};
  /* ── 좌표 · 설정 */
@@ -184,6 +196,17 @@
  $('#pe-lop').oninput=e=>{const l=A();if(!l)return;l.op=+e.target.value/100;$('#pe-lopv').textContent=e.target.value+'%';draw()};
  $('#pe-lop').onchange=()=>push();
  $('#pe-lblend').onchange=e=>{const l=A();if(!l)return;push();l.blend=e.target.value;draw();lyr()};
+ /* 레이어 크기·좌우 반전: 그림이 있는 범위의 가운데를 기준으로 해요 */
+ const bbox=c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,W=c.width,H=c.height;let x0=W,y0=H,x1=-1,y1=-1;
+   for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(d[(y*W+x)*4+3]>0){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+   return x1<0?{x:0,y:0,w:W,h:H}:{x:x0,y:y0,w:x1-x0+1,h:y1-y0+1}};
+ let SC=null;
+ $('#pe-lsc').oninput=()=>{const l=A();if(!l)return;const s=+$('#pe-lsc').value/100;$('#pe-lscv').textContent=Math.round(s*100)+'%';
+   if(!SC||SC.l!==l){push();SC={l,base:clone(l.c),b:bbox(l.c)}}
+   const {base,b}=SC,c=mk(D.W,D.H),x=c.getContext('2d'),cx=b.x+b.w/2,cy=b.y+b.h/2;x.imageSmoothingQuality='high';
+   x.drawImage(base,b.x,b.y,b.w,b.h,cx-b.w*s/2,cy-b.h*s/2,b.w*s,b.h*s);l.c=c;draw()};
+ $('#pe-lsc').onchange=()=>{SC=null;$('#pe-lsc').value=100;$('#pe-lscv').textContent='100%';lyr()};
+ $('#pe-lflip').onclick=()=>{const l=A();if(!l)return;push();const b=bbox(l.c),c=mk(D.W,D.H),x=c.getContext('2d');x.setTransform(-1,0,0,1,2*b.x+b.w,0);x.drawImage(l.c,0,0);l.c=c;draw();lyr()};
  $('#pe-ladd').onclick=()=>{if(!D.layers.length)return;push();D.layers.splice(D.act+1,0,layer('레이어 '+(D.layers.length+1),mk(D.W,D.H)));D.act++;draw();lyr()};
  $('#pe-ldup').onclick=()=>{const l=A();if(!l)return;push();D.layers.splice(D.act+1,0,{...l,name:l.name+' 복사',c:clone(l.c)});D.act++;draw();lyr()};
  $('#pe-ldel').onclick=()=>{if(D.layers.length<2)return toast('레이어가 하나뿐이면 지울 수 없어요.');push();D.layers.splice(D.act,1);D.act=Math.max(0,D.act-1);draw();lyr()};

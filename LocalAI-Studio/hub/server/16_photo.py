@@ -2,7 +2,7 @@
 # hub.py 가 이 폴더의 파일을 번호 순서대로 같은 공간(hub 모듈)에 읽어 들여요. 다른 파일의 이름을 그대로 쓸 수 있어요.
 # ruff: noqa: F821
 
-PHOTO_SUB = "사진 편집"
+PHOTO_SUB = OUT_SUB["photo"]
 
 
 def photo_save(p):

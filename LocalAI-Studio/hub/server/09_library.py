@@ -320,7 +320,22 @@ def describe_image(p):
 
 # ───────────────────────── 기록 갤러리 ─────────────────────────
 GAL_FILE = ROOT / "gallery.json"
-GAL_EXT = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm"}
+GAL_IMG = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+GAL_VID = {".mp4", ".webm"}
+GAL_AUD = {".wav", ".mp3", ".flac", ".opus", ".ogg", ".m4a"}
+GAL_3D = {".glb"}
+GAL_EXT = GAL_IMG | GAL_VID | GAL_AUD | GAL_3D
+
+
+def gal_type(f):
+    """갤러리 칸의 종류: image · video · audio · 3d"""
+    s = Path(f).suffix.lower()
+    return "video" if s in GAL_VID else "audio" if s in GAL_AUD else "3d" if s in GAL_3D else "image"
+
+
+def gal_sides(f):
+    """결과 파일 옆에 붙는 설정(.json)·자막(.srt) 파일"""
+    return [x for x in (f.with_name(f.name + ".json"), f.with_suffix(".srt")) if x != f and x.is_file()]
 _GMETA = {}
 
 
@@ -358,7 +373,7 @@ def gal_prompt(path, mtime):
                 txt = json.loads(h).get("prompt", "") if h else ""
                 if not txt and im.info.get("parameters"):
                     txt = str(im.info["parameters"]).split("\nNegative prompt:")[0]
-        elif path.suffix.lower() in (".mp4", ".webm"):
+        else:
             sc = path.with_name(path.name + ".json")
             txt = json.loads(sc.read_text(encoding="utf-8")).get("prompt", "") if sc.is_file() else ""
     except Exception:
@@ -401,8 +416,7 @@ def gal_delete(p):
         try:
             thumb_drop(fp)
             fp.unlink()
-            side = fp.with_name(fp.name + ".json")
-            if side.is_file():
+            for side in gal_sides(fp):
                 side.unlink()
             keys.append(parts[0] + "/" + fp.name)
             gone += 1
@@ -449,10 +463,10 @@ def organize_outputs(p):
             for f in fs:
                 try:
                     dst = _unique(dd / f.name)
-                    side = f.with_name(f.name + ".json")
+                    sides = gal_sides(f)
                     f.rename(dst)
-                    if side.is_file():
-                        side.rename(dst.with_name(dst.name + ".json"))
+                    for side in sides:
+                        side.rename(dst.with_name(dst.name + ".json") if side.suffix == ".json" else dst.with_suffix(".srt"))
                     moved += 1
                 except OSError:
                     failed += 1
@@ -466,6 +480,7 @@ def gallery(q):
     only_fav, lim = (q.get("fav") or [""])[0] == "1", 60
     day = (q.get("date") or [""])[0]
     day = day if DATE_RX.match(day) else ""
+    ftype = (q.get("type") or [""])[0]
     favs, rows = gal_favs(), []
     for sub in OUT_SUB.values():
         if kind and kind != sub:
@@ -474,6 +489,8 @@ def gallery(q):
         if not d.is_dir():
             continue
         for f in out_files(d):
+            if ftype and gal_type(f) != ftype:
+                continue
             try:
                 st = f.stat()
             except OSError:
@@ -520,7 +537,7 @@ def gallery(q):
                 ginfo[r[3]] = (gid, len(groups[k]), k)
     page = out[off:off + lim]
     items = [{"day": dayof(mt), "url": "/out/" + "/".join(urllib.parse.quote(x) for x in f.relative_to(OUT).parts), "kind": sub, "name": f.name, "time": int(mt),
-              "fav": key in favs, "video": f.suffix.lower() in (".mp4", ".webm"),
+              "fav": key in favs, "video": f.suffix.lower() in GAL_VID, "type": gal_type(f),
               "prompt": (pr if pr is not None else gal_prompt(f, mt))[:200],
               **({"g": ginfo[key][0], "gn": ginfo[key][1], "gp": ginfo[key][2][:120]} if key in ginfo else {})} for mt, sub, f, key, pr in page]
     return {"items": items, "total": len(out), "more": off + lim < len(out), "days": [[d, n] for d, n in list(days.items())[:400]]}

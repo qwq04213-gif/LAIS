@@ -56,12 +56,13 @@ function libShow(){chLoad();plLoad();wcLoad();i2pInit()}
 
 /* ══════════ 기록 갤러리 ══════════ */
 let GAL={off:0,items:[]};
+const galType=x=>x.type||(x.video?'video':'image');
 /* 영상 칸은 화면 가까이 왔을 때만 불러와요(영상이 많아도 처음 열 때 느려지지 않게) */
 const GAL_IO=window.IntersectionObserver?new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;const v=e.target;GAL_IO.unobserve(v);if(v.dataset.src){v.preload='metadata';v.src=v.dataset.src}}),{rootMargin:'400px'}):null;
 const galLazyVideos=()=>$$('#gal-grid video[data-src]:not([src])').forEach(v=>GAL_IO?GAL_IO.observe(v):(v.src=v.dataset.src));
 async function galLoad(more){
   if(!more){GAL={off:0,items:[],last:'',lastg:''};$('#gal-grid').innerHTML=''}
-  const qs=new URLSearchParams({q:$('#gal-q').value.trim(),kind:$('#gal-kind').value,fav:$('#gal-fav').checked?'1':'',date:$('#gal-date').value,sort:$('#gal-sort').value,same:$('#gal-same').checked?'1':'',offset:GAL.off});
+  const qs=new URLSearchParams({q:$('#gal-q').value.trim(),kind:$('#gal-kind').value,type:$('#gal-type').value,fav:$('#gal-fav').checked?'1':'',date:$('#gal-date').value,sort:$('#gal-sort').value,same:$('#gal-same').checked?'1':'',offset:GAL.off});
   let r;try{r=await api('/api/gallery?'+qs)}catch{return}
   GAL.items.push(...r.items);GAL.off+=r.items.length;
   const dmap=Object.fromEntries(r.days||[]),today=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),
@@ -73,20 +74,24 @@ async function galLoad(more){
   $('#gal-grid').insertAdjacentHTML('beforeend',r.items.map(x=>{const tn=x.url.replace('/out/','/thumb/');
     let head='';if(same&&x.g&&x.g!==GAL.lastg){GAL.lastg=x.g;head=`<h3 class="gday" data-g="${x.g}">${x.gp?'같은 프롬프트':'프롬프트 정보 없음'} · ${x.gn}장 <small title="${esc(x.gp||'')}">${esc((x.gp||'').slice(0,60))}</small></h3>`}
     else if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
-    const noprev=D.dataset.galprev==='off';
-    return head+`<figure class="gt${noprev?' noprev':''}" data-u="${x.url}">${noprev?`<div class="gnoimg" title="${esc(x.prompt||x.name)}"><b>${x.video?'▶ ':''}${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span></div>`:x.video?`<video data-src="${x.url}" controls muted loop playsinline preload="none"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`}
+    const noprev=D.dataset.galprev==='off',ty=galType(x),ic={video:'▶ ',audio:'♪ ','3d':'🧊 '}[ty]||'';
+    const media=ty==='audio'?`<div class="gnoimg gaud" title="${esc(x.prompt||x.name)}"><b>♪ ${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span><audio src="${x.url}" controls preload="none"></audio></div>`
+      :ty==='3d'?`<div class="gnoimg g3d" title="${esc(x.prompt||x.name)}"><b>🧊 3D 모델</b><span>${esc(x.name)}</span><a class="ghost sm" href="${x.url}" download>내려받기 (.glb)</a></div>`
+      :noprev?`<div class="gnoimg" title="${esc(x.prompt||x.name)}"><b>${ic}${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span></div>`
+      :ty==='video'?`<video data-src="${x.url}" controls muted loop playsinline preload="none"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`;
+    return head+`<figure class="gt${noprev||ty==='audio'||ty==='3d'?' noprev':''}" data-u="${x.url}" data-type="${ty}">${media}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
-    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${x.video?`<button type="button" data-u="${x.url}" data-to="vmix" title="이 영상에 소리·자막 넣기">♪</button>`:`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
+    <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${ty==='audio'||ty==='3d'?'':ty==='video'?`<button type="button" data-u="${x.url}" data-to="vmix" title="이 영상에 소리·자막 넣기">♪</button>`:`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button></span></figcaption></figure>`}).join(''));
   galLazyVideos();
-  $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value||$('#gal-date').value);
+  $('#gal-n').textContent=r.total+'개';$('#gal-more').hidden=!r.more;$('#gal-empty').hidden=!!GAL.items.length||!!($('#gal-q').value||$('#gal-fav').checked||$('#gal-kind').value||$('#gal-type').value||$('#gal-date').value);
 }
-$('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-fav').onchange=$('#gal-date').onchange=()=>galLoad();
+$('#gal-q').oninput=debounce(()=>galLoad(),350);$('#gal-kind').onchange=$('#gal-type').onchange=$('#gal-fav').onchange=$('#gal-date').onchange=()=>galLoad();
 $('#gal-sort').value=ls.get('gal:sort','new');if(!$('#gal-sort').value)$('#gal-sort').value='new';$('#gal-same').checked=!!ls.get('gal:same',false);
 $('#gal-sort').onchange=()=>{ls.set('gal:sort',$('#gal-sort').value);galLoad()};$('#gal-same').onchange=()=>{ls.set('gal:same',$('#gal-same').checked);$('#gal-group').disabled=$('#gal-same').checked;galLoad()};$('#gal-group').disabled=$('#gal-same').checked;
 $('#gal-group').checked=!!ls.get('gal:group',false);$('#gal-group').onchange=()=>{ls.set('gal:group',$('#gal-group').checked);galLoad()};$('#gal-more').onclick=()=>galLoad(true);
 let GSEL=false,GPICK=new Set();
 const galSelUi=()=>{$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?'선택 끝내기':'선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
-  {const two=[...GPICK].filter(u=>!/\.(mp4|webm|webp|gif)$/i.test(u));$('#gal-cmp').hidden=!(GSEL&&GPICK.size===2&&two.length===2)}
+  {const two=[...GPICK].filter(u=>/\.(png|jpe?g)$/i.test(u));$('#gal-cmp').hidden=!(GSEL&&GPICK.size===2&&two.length===2)}
   $$('#gal-grid .gt').forEach(t=>t.classList.toggle('picked',GPICK.has(t.dataset.u)))};
 async function galDelete(urls){if(!urls.length)return;
   if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;
@@ -108,9 +113,13 @@ $('#gal-grid').addEventListener('click',async e=>{
   const st=e.target.closest('[data-star]');if(st){const on=!st.classList.contains('on'),r=await api('/api/gallery/fav',{file:st.dataset.star,on});
     if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
   const nv=e.target.closest('.gt .gnoimg');if(nv){const t=nv.closest('.gt'),u=t.dataset.u,it=GAL.items.find(x=>x.url===u);
-    if(it&&it.video){nv.outerHTML=`<video src="${u}" controls autoplay playsinline></video>`;return}
-    const imgs=GAL.items.filter(x=>!x.video);lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1})),Math.max(0,imgs.findIndex(x=>x.url===u)));return}
-  const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>!x.video),u=im.closest('.gt').dataset.u;
+    if(e.target.closest('audio,a'))return;
+    const ty=it?galType(it):'image';
+    if(ty==='video'){nv.outerHTML=`<video src="${u}" controls autoplay playsinline></video>`;return}
+    if(ty==='audio'){const a=$('audio',nv);if(a)a.paused?a.play():a.pause();return}
+    if(ty==='3d')return;
+    const imgs=GAL.items.filter(x=>galType(x)==='image');lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1})),Math.max(0,imgs.findIndex(x=>x.url===u)));return}
+  const im=e.target.closest('.gt img');if(im){const imgs=GAL.items.filter(x=>galType(x)==='image'),u=im.closest('.gt').dataset.u;
     lbOpen(imgs.map(x=>({url:x.url,before:null,name:x.name,fav:!!x.fav,gal:1})),Math.max(0,imgs.findIndex(x=>x.url===u)))}
 });
 

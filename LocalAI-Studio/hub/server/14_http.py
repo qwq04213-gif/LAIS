@@ -10,7 +10,7 @@ def folder_map():
     return m
 
 
-MEDIA = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
+MEDIA = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".glb": "model/gltf-binary", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.css": ("app.css", "text/css; charset=utf-8")}
 _JSB = {"key": None, "data": b"", "gz": b"", "etag": ""}
 
@@ -183,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "image failed"}, 500)
         if u.startswith("/thumb/"):
             fp = out_path(u[7:])
-            if fp.suffix.lower() not in GAL_EXT or fp.suffix.lower() in (".mp4", ".webm") or not fp.is_file():
+            if fp.suffix.lower() not in GAL_IMG or not fp.is_file():
                 return self.send_json({"error": "not found"}, 404)
             try:
                 return self.send_bytes(thumb_bytes(fp), "image/jpeg", extra={"Cache-Control": "max-age=3600"})

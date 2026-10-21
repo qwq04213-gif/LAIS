@@ -94,6 +94,8 @@ document.addEventListener('click',async e=>{
   if(to==='vmix'||to==='vmixa'){vmixOpen(to==='vmix'?{video:u}:{audio:u});return}
   if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
+  if(to==='cmpi'){const w=b.closest('figure').querySelector('.cmpw');if(!w)return;const on=$('.cbf',w).hidden;$$('.cbf,.cbl,.cbr',w).forEach(x=>x.hidden=!on);
+    w.classList.toggle('on',on);b.textContent=on?'비교 끄기':'전후 비교';cmpInline($('.cbr',w));return}
   IV[to].set(await urlToDataURL(u));show(to);
 });
 
@@ -350,3 +352,6 @@ $('#f-feat').onsubmit=e=>{e.preventDefault();const f=e.target,spec=FEATS.find(x=
   for(const fd of spec.fields.filter(x=>x.required&&x.type!=='image'&&x.type!=='check'))if(!(f.elements[fd.name]?.value||'').trim())return need(f,`'${fd.label}' 칸을 채워 주세요.`);
   run('feat',f,{})};
 
+/* 결과 칸 안의 전후 비교 슬라이더: 원본을 왼쪽부터 슬라이더 위치까지 덮어요 */
+function cmpInline(r){const w=r.closest('.cmpw'),s=+r.value;$('.cbf',w).style.clipPath=`inset(0 ${100-s}% 0 0)`;$('.cbl',w).style.left=s+'%'}
+document.addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('cbr'))cmpInline(e.target)});

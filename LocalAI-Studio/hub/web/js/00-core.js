@@ -557,7 +557,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('resize',()=>{if(!$('#lb').hidden)lbFit()});
 function openFrom(img,cmp){
-  const imgs=$$('.res figure img',img.closest('.view'));
+  const imgs=$$('.res figure img:not(.cbf)',img.closest('.view'));
   lbOpen(imgs.map(m=>({url:m.getAttribute('src'),before:COMPARE[m.dataset.u]||null,name:(m.dataset.u||'').split('/').pop()||'image.png'})),imgs.indexOf(img),cmp);
 }
 

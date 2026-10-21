@@ -3,7 +3,7 @@
 # ruff: noqa: F821
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악", "tts": "음성"}
+OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악", "tts": "음성", "photo": "사진 편집", "etc": "기타"}
 
 
 def out_path(rel):

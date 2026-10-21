@@ -584,3 +584,8 @@ html[data-qpos=side] .qfloat{display:none}html[data-qpos=side] #qpanel{right:aut
 @media(max-width:700px){.pe-main{grid-template-columns:1fr}.pe-tools{flex-direction:row;flex-wrap:wrap}.pe-stage{height:60vh}}
 #f-vedit [data-ve]>.f,#f-vedit [data-ve]>label.f{margin-top:10px}
 #toast a{color:#9db4ff}
+.gt .gaud,.gt .g3d{cursor:default;min-height:120px;align-content:center}.gt .gaud audio{width:100%;height:34px;margin-top:4px}.gt .g3d a{justify-self:start;margin-top:4px;text-decoration:none}
+.cmpw{position:relative;display:inline-block;max-width:100%;line-height:0}.cmpw>img:first-child{display:block}
+.cmpw .cbf{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;border-color:transparent}
+.cmpw .cbl{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.45);pointer-events:none}
+.cmpw .cbr{position:absolute;left:8px;right:8px;bottom:8px;width:calc(100% - 16px);margin:0}
