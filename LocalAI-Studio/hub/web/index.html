@@ -354,13 +354,15 @@
       <label class="f">크기 프리셋<select id="size-preset"><option value="">선택</option><option value="832x1216">세로 832×1216</option><option value="1216x832">가로 1216×832</option><option value="1024x1024">정사각 1024×1024</option><option value="768x1344">세로 길게 768×1344</option><option value="1344x768">가로 길게 1344×768</option></select></label>
       <label class="f">장수<input type="number" name="n" value="1" min="1" max="8"></label>
     </div>
-    <details data-for="sdxl"><summary>하이레스 픽스 (2단계 생성)</summary>
+    <details data-for="sdxl flux chroma krea2"><summary>하이레스 픽스 (2단계 생성)</summary>
       <label class="chk"><input type="checkbox" name="hires"> 켜기</label>
       <div class="row">
         <label class="f">확대 배율<input type="number" name="hires_scale" value="1.5" step="0.05" min="1" max="3"></label>
-        <label class="f">변화 강도<input type="number" name="hires_denoise" value="0.5" step="0.01" min="0.1" max="1"></label>
+        <label class="f">변화 강도<input type="number" name="hires_denoise" value="0.5" step="0.01" min="0.05" max="1"></label>
       </div>
       <label class="f">2단계 단계 수<input type="number" name="hires_steps" value="15" min="1" max="100"></label>
+      <label class="f" data-for="flux chroma krea2">키우는 방법<select name="hires_upm"></select></label>
+      <p class="hint plain" data-for="flux chroma krea2">FLUX·Krea·Chroma 는 변화 강도 0.3~0.45, 단계 10~15가 무난해요. 높이면 디테일이 늘지만 얼굴·구도가 바뀔 수 있어요. 키우는 방법에 업스케일 모델을 고르면 더 선명해요(최대 2.5배).</p>
     </details>
     <details><summary>이미지로 시작 (이미지→이미지)</summary>
       <div class="mini" data-img="init"></div>

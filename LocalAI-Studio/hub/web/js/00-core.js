@@ -419,7 +419,7 @@ async function loadLists(force){
   if(!force&&Date.now()-listsAt<8000&&LISTS.llm)return;   // 탭을 오갈 때마다 서버를 다시 훑지 않아요(파일을 넣고 돌아오면 focus 로 새로고침)
   try{LISTS=await api('/api/lists');listsAt=Date.now()}catch{return}
   fill('#llm',LISTS.llm);fill('select[name=ckpt]:not(#feat-form select)',LISTS.checkpoints);      /* 기타 기능 화면의 모델 칸은 FLUX·Krea 2 묶음이 있어서 따로 그려요 */ fill('select[name=vae]',LISTS.vaes,'체크포인트 내장');
-  $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');$$('select[name=cn_model]').forEach(s=>s.form&&cnFilter(s.form));
+  $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=hires_upm]',LISTS.upscalers,'부드럽게 늘리기 (Lanczos)');fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');$$('select[name=cn_model]').forEach(s=>s.form&&cnFilter(s.form));
   fill('select[name=fx_vae],select[name=q_vae],select[name=k2_vae]',LISTS.vaes,'자동');fill('select[name=q_te],select[name=k2_te]',LISTS.text_encoders||[],'자동');
   {const te=LISTS.text_encoders||[],t5=n=>/(t5|xxl)/i.test(n)&&!/umt5/i.test(n);   // T5 칸엔 T5 만, CLIP-L 칸엔 T5·Qwen 이 아닌 것만
   fill('select[name=fx_t5]',te.filter(n=>!/qwen|umt5|clip|llama|gemma|mistral|vl[_-]?\d|_vl|-vl/i.test(n)),'자동');fill('select[name=fx_clip]',te.filter(n=>!t5(n)&&!/qwen|umt5/i.test(n)),'자동')}fill('select[name=q_unet]',LISTS.diffusion||[],'자동');

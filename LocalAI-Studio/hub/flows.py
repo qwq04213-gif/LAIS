@@ -297,6 +297,7 @@ def wf_flux(q):
         lat, denoise = [w.add("VAEEncode", pixels=[li, 0], vae=vae), 0], q["init_denoise"]
     else:
         lat = [w.add("EmptyLatentImage" if q["family"] == "krea2" else "EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    base_model = model
     if q.get("k2c"):      # Krea 2 컨트롤 LoRA(깊이·포즈·캐니 등): 확장 노드 Krea2Control* 3개
         c = q["k2c"]
         img = [w.add("LoadImage", image=c["image"]), 0]
@@ -308,6 +309,15 @@ def wf_flux(q):
                     invert=False, batch_mode="independent_images", latent=lat)
         model = [w.add("Krea2ControlApply", model=model, control_latent=[enc, 0]), 0]
     k = flux_sample(w, q, model, pos, neg, lat, denoise)
+    hr = q.get("hires")
+    if hr:      # 하이레스 픽스: 그림으로 풀어 키운 뒤(16의 배수) 다시 넣어 한 번 더 그려요. Krea 2 는 잠재 형식이 달라 그림 단계에서 키우는 게 안전해요
+        img = [w.add("VAEDecode", samples=[k, 0], vae=vae), 0]
+        if hr.get("model"):
+            img = [w.add("ImageUpscaleWithModel", upscale_model=[w.add("UpscaleModelLoader", model_name=hr["model"]), 0], image=img), 0]
+        img = [w.add("ImageScale", image=img, upscale_method="lanczos", width=hr["w"], height=hr["h"], crop="disabled"), 0]
+        lat2 = [w.add("VAEEncode", pixels=img, vae=vae), 0]
+        k = w.add("KSampler", model=base_model, seed=q["seed"], steps=hr["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
+                  scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat2, denoise=hr["denoise"])
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
     return w.n
 

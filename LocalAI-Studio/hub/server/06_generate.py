@@ -284,7 +284,14 @@ def do_gen_flux(p, J):
                                strength=clamp(num(p, "cn_strength", 0.7), 0.0, 2.0),
                                start=clamp(num(p, "cn_start", 0.0), 0.0, 1.0), end=clamp(num(p, "cn_end", 1.0), 0.0, 1.0))
                 cn_note = f'{p["cn_model"]} {q["cn"]["strength"]}'
-        J["msg"] = f"생성 중 ({i + 1}/{n})"
+        hr_note = {}
+        if p.get("hires"):
+            sc = clamp(num(p, "hires_scale", 1.5), 1.0, 2.5)
+            up = p.get("hires_upm") if p.get("hires_upm") in files("upscale_models") else None
+            q["hires"] = dict(scale=sc, w=min(4096, int(round(w0 * sc / 16)) * 16), h=min(4096, int(round(h0 * sc / 16)) * 16), model=up,
+                              denoise=clamp(num(p, "hires_denoise", 0.4), 0.05, 1.0), steps=clamp(num(p, "hires_steps", 12, int), 1, 100))
+            hr_note = {"Denoising strength": q["hires"]["denoise"], "Hires upscale": sc, "Hires steps": q["hires"]["steps"], "Hires upscaler": up or "Lanczos"}
+        J["msg"] = f"생성 중 ({i + 1}/{n})" + (" · 하이레스 픽스 포함" if hr_note else "")
         J["pi"], J["pn"] = i, n
         g = flows.wf_flux(q)
         try:
@@ -297,7 +304,7 @@ def do_gen_flux(p, J):
         info = dict(kind="gen-" + fam, prompt=text, negative=neg, steps=q["steps"],
                     cfg=q["guidance"] if fam == "flux" else q["cfg"], sampler=q["sampler"], scheduler=sch, seed=q["seed"],
                     w=res.width, h=res.height, model=f["unet"], loras=[[a, b] for a, b in q["loras"]],
-                    extra={"Family": fam, **({"Distilled CFG": q["guidance"]} if fam == "flux" else {}), **({"ControlNet": cn_note} if cn_note else {})})
+                    extra={"Family": fam, **({"Distilled CFG": q["guidance"]} if fam == "flux" else {}), **({"ControlNet": cn_note} if cn_note else {}), **hr_note})
         out.append((res, info, g if init is None and cnimg is None else None))
     return out
 
