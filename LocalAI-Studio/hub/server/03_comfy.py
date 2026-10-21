@@ -355,7 +355,7 @@ def ws_loop():
                     continue
                 x = d.get("data") or {}
                 if d.get("type") == "progress" and x.get("prompt_id"):
-                    WSP[x["prompt_id"]] = (x.get("value", 0), max(1, x.get("max", 1)))
+                    WSP[x["prompt_id"]] = (x.get("value", 0), max(1, x.get("max", 1)), str(x.get("node") or ""))
                 elif d.get("type") == "executing" and x.get("prompt_id"):
                     if x.get("node") is None:
                         EXE.pop(x["prompt_id"], None)
@@ -443,6 +443,9 @@ def run_wf(wf, J, raw=False):
         raise RuntimeError(comfy_err(e)) from None
     J["pid"] = pid
     t0 = time.time()
+    # 그리는 단계(KSampler 등)가 여러 개인 작업(긴 말하는 영상, 하이레스 픽스 …)은 단계마다 0→100% 가 반복돼 보이지 않게 전체 몫으로 나눠요
+    samp = sorted((k for k, n in wf.items() if "Sampler" in n.get("class_type", "") and "Select" not in n.get("class_type", "")), key=lambda k: [int(x) if x.isdigit() else 0 for x in str(k).split(":")])
+    base_msg = J.get("msg", "")
     while True:
         if J.get("cancel"):
             comfy_cancel(pid)
@@ -450,8 +453,13 @@ def run_wf(wf, J, raw=False):
         h = http(CUI + f"/history/{pid}", timeout=15).get(pid)
         J["phase"] = phase_of(wf, pid) if not h else "gen"
         if pid in WSP:
-            v, m = WSP[pid]
-            set_progress(J, v / m * 0.97)
+            v, m, nd = (WSP[pid] + ("",))[:3]
+            if len(samp) > 1 and nd in samp:
+                i = samp.index(nd)
+                set_progress(J, (i + v / m) / len(samp) * 0.97)
+                J["msg"] = f"{base_msg} · {i + 1}/{len(samp)}단계"
+            else:
+                set_progress(J, v / m * 0.97)
         elif not h:   # 웹소켓 신호가 없으면 시간 기반 추정(실제보다 부정확해요)
             set_progress(J, 0.95 * (1 - 2.718 ** (-(time.time() - t0) / 40)), est=True)
         if h:
