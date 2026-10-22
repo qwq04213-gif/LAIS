@@ -43,6 +43,11 @@ AGENT_TOOLS = {
                    "direction": {"type": "string", "enum": ["auto", "right", "left", "top", "front", "back"]},
                    "color": {"type": "string", "enum": ["auto", "warm", "neutral", "cool"]}},
         "required": ["image", "light"], "act": True},
+    "analyze_video": {
+        "desc": "Analyze a video from the gallery: scene cuts, key frames, quality, silence and (optionally) the spoken words. Opens the video analysis screen for highlight editing.",
+        "params": {"video": {"type": "string", "maxLength": 400, "description": "an '/out/...' video address from recent_results(kind=video)"},
+                   "speech": {"type": "boolean", "description": "also transcribe the spoken words (needs the transcription engine)"}},
+        "required": ["video"], "act": True},
     "edit_image": {
         "desc": "Edit one image by an instruction (Qwen-Image-Edit or FLUX Kontext, as chosen on the image edit screen).",
         "params": {"instruction": {"type": "string", "maxLength": 1000, "description": "edit instruction in English, one imperative sentence"},
@@ -61,6 +66,7 @@ Decide whether the user wants something DONE in the app (make or edit an image, 
 - To make an image and then change it, call generate_image and then edit_image with image='previous'.
 - To compare several styles / looks of one idea, call explore_prompts.
 - To change only the lighting of a photo, call relight_image.
+- To analyze a video or make a highlight, call recent_results(kind=video) to find it, then analyze_video.
 - If something essential is missing or unclear, ask one short question in Korean instead of calling a tool.
 - Answer in Korean. Be brief."""
 
@@ -142,6 +148,10 @@ def agent_check(name, args, ctx):
     for k in ("prompt", "negative", "instruction", "goal", "custom_light"):
         if k in out and blocked(out[k]):
             return None, BLOCK_MSG
+    if name == "analyze_video":
+        f = agent_out_path(out["video"])
+        if not f or f.suffix.lower() not in GAL_VID:
+            return None, f"결과 폴더에 있는 영상 주소가 아니에요: {out['video'][:80]}"
     if name == "relight_image" and out["light"] == "custom" and not out.get("custom_light"):
         return None, "custom 조명이면 custom_light 가 필요해요."
     if name in ("edit_image", "relight_image"):
@@ -201,6 +211,8 @@ def agent_summary(name, a, base):
     if name == "explore_prompts":
         vary = a.get("vary") or ["style", "light", "color"]
         return f'프롬프트 탐색 · {a.get("count", 4)}가지 · 바꿔 볼 것: ' + ", ".join(EXP_NAMES[k] for k in vary)
+    if name == "analyze_video":
+        return "영상 분석 · " + urllib.parse.unquote(a["video"]).rsplit("/", 1)[-1] + (" · 대사 받아쓰기" if a.get("speech") else "")
     if name == "relight_image":
         names = {"cinematic": "영화 같은 측면 조명", "window": "창가 자연광", "golden": "해 질 녘 황금빛", "neon": "네온사인", "candle": "촛불", "moon": "달빛",
                  "studio": "스튜디오", "rim": "역광", "dramatic": "강한 명암", "soft": "부드럽게", "custom": "직접 지정"}
@@ -313,7 +325,7 @@ def agent_view(pid):
     for s in P["steps"]:
         J = JOBS.get(s["job"]) if s["job"] else None
         row = {"tool": s["tool"], "args": s["args"], "summary": s["summary"], "state": s["state"], "error": s["error"], "images": s["images"], "job": s["job"],
-               **{k: s[k] for k in ("explore", "done_n", "all_n", "need") if k in s}}
+               **{k: s[k] for k in ("explore", "done_n", "all_n", "need", "vana") if k in s}}
         if J and s["state"] == "running":
             ahead = (QUEUE.index(J["id"]) + 1) if J.get("state") == "queued" and J["id"] in QUEUE else 0
             row.update(msg=J.get("msg", ""), progress=J.get("progress"), eta=J.get("eta"), models=J.get("models") or [],
@@ -364,6 +376,8 @@ def agent_job_params(P, i):
         if re.search("[가-힣]", a["prompt"]):
             g["translate"] = "on"
         return g
+    if s["tool"] == "analyze_video":
+        return {"kind": "vana", "op": "analyze", "video": a["video"], "asr": bool(a.get("speech"))}
     if s["tool"] == "relight_image":
         return {"kind": "feat", "feature": "relight", "image": agent_src(P, i, a["image"]), "light": a["light"], "custom": a.get("custom_light", ""),
                 "dir": a.get("direction", "auto"), "temp": a.get("color", "auto"), "power": "normal", "keep": "on"}
@@ -406,6 +420,8 @@ def agent_run_thread(pid):
         s["error"] = str(J.get("error") or "")[:300]
         if J.get("need"):
             s["need"] = J["need"]
+        if J.get("vana"):
+            s["vana"] = J["vana"]
         if s["state"] != "done":
             break
     for s in P["steps"]:

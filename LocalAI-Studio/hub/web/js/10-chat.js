@@ -142,7 +142,7 @@ function planCard(P,i){const act=P.state==='wait'?`<button type="button" class="
     :P.state==='running'?`<button type="button" class="ghost sm" data-pstop="${i}">중단</button>`:'';
   return `<div class="plan" data-st="${P.state}"><b>실행 계획</b><ol>${P.steps.map(s=>`<li data-st="${s.state}"><span class="ps">${esc(s.summary)}</span> <small class="pst">${s.state==='running'&&s.queued?(s.ahead>1?`대기열 ${s.ahead}번째`:'곧 시작'):AG_ST[s.state]||s.state}</small>${agRun(s)}${
     s.error?`<div class="st bad">${esc(s.error)}</div>${needBox(s.need)}`:''}<details><summary>보낼 값</summary><pre>${esc(JSON.stringify(s.args,null,1))}</pre></details>${
-    s.images?.length?`<div class="cthumbs pimgs">${s.images.map(u=>/\.(png|jpe?g|webp|gif)$/i.test(u)?`<img src="${u}" data-pimg="${u}" alt="결과 (누르면 크게 보기)">`:`<a href="${u}" target="_blank">${esc(decodeURIComponent(u.split('/').pop()))}</a>`).join('')}</div>`:''}${s.explore?`<a href="#" class="pxp" data-xp="${esc(s.explore)}">프롬프트 탐색 화면에서 비교·고르기 →</a>`:''}</li>`).join('')}</ol><div class="pa">${act}</div></div>`}
+    s.images?.length?`<div class="cthumbs pimgs">${s.images.map(u=>/\.(png|jpe?g|webp|gif)$/i.test(u)?`<img src="${u}" data-pimg="${u}" alt="결과 (누르면 크게 보기)">`:`<a href="${u}" target="_blank">${esc(decodeURIComponent(u.split('/').pop()))}</a>`).join('')}</div>`:''}${s.explore?`<a href="#" class="pxp" data-xp="${esc(s.explore)}">프롬프트 탐색 화면에서 비교·고르기 →</a>`:''}${s.vana?`<a href="#" class="pxp" data-vana="${esc(s.vana)}">영상 분석 화면에서 하이라이트 만들기 →</a>`:''}</li>`).join('')}</ol><div class="pa">${act}</div></div>`}
 const fmtEta=t=>t==null?'':t<60?'1분 안':t<3600?`약 ${Math.round(t/60)}분`:`약 ${Math.floor(t/3600)}시간 ${Math.round(t%3600/60)}분`;
 function agRun(s){const ms=s.models?.length?`<div class="pmod" title="${esc(s.models.join('\n'))}">모델: ${esc(s.models[0])}${s.models.length>1?` <span class="mute">+ ${esc(s.models.slice(1).join(', '))}</span>`:''}</div>`:'';
   if(s.state!=='running'||s.queued)return ms;const pc=typeof s.progress==='number'?Math.round(s.progress*100):null;
@@ -170,6 +170,7 @@ async function agentPoll(i){const m=Chat.hist[i];if(!m?.plan)return;
   m.after=`${m.plan.state==='done'?`✔ 끝났어요. 결과 ${n}개는 기록 갤러리에도 있어요.`:m.plan.state==='cancelled'?'중단했어요.':`⚠ ${bad?.summary||'작업'} 단계에서 멈췄어요: ${bad?.error||''}`}`;
   paint();chatSave()}
 $('#log').addEventListener('click',async e=>{
+  const va=e.target.closest('[data-vana]');if(va){e.preventDefault();show('vana');typeof vaOpenA==='function'&&vaOpenA(va.dataset.vana);return}
   const xp=e.target.closest('[data-xp]');if(xp){e.preventDefault();show('explore');window.xpOpen&&xpOpen(xp.dataset.xp);typeof xpInfo==='function'&&xpInfo();return}
   const im=e.target.closest('[data-pimg]');if(im){const L=[...im.closest('.pimgs').querySelectorAll('img')].map(x=>({url:x.dataset.pimg,name:x.dataset.pimg.split('/').pop()}));lbOpen(L,L.findIndex(x=>x.url===im.dataset.pimg));return}
   const run=e.target.closest('[data-prun]'),stop=e.target.closest('[data-pstop]');if(!run&&!stop)return;

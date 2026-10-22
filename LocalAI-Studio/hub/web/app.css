@@ -665,3 +665,17 @@ details.more[open]>.menu:not([style]){visibility:hidden}
 .xmsrc p{margin:4px 0 0;font-size:calc(12px*var(--ui,1));display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .xmbox textarea{width:100%}.xmchips{display:flex;gap:6px;flex-wrap:wrap}.xmcount input{width:80px}.xmact{display:flex;justify-content:flex-end;gap:8px}
 .xpc{display:flex;flex-direction:column;width:100%;max-width:600px;justify-self:center}.xpc>.xpimg,.xpc>figcaption{width:100%;box-sizing:border-box}
+
+/* 영상 분석 */
+.va-src,.va-opts,.va-act,.va-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}.va-src .f{min-width:280px;flex:1}.va-small{font-size:calc(12px*var(--ui,1));color:var(--mute)}.va-small input{width:60px}
+#va-pg{width:100%;max-width:520px;height:8px}.va-meta{margin:12px 0;line-height:1.7}
+.va-tl{position:relative;display:flex;height:22px;border-radius:6px;overflow:hidden;background:var(--table);margin:6px 0}.va-tl i{height:100%;border-right:1px solid var(--chrome);background:var(--raised);cursor:pointer}
+.va-tl i.on{background:var(--acc)}.va-tl i.dark{background-image:repeating-linear-gradient(45deg,transparent 0 4px,rgba(0,0,0,.35) 4px 6px)}.va-tl i.blurry{opacity:.6}
+.va-tl.sil{height:8px}.va-tl.sil i{position:absolute;top:0;background:#e0a21b;cursor:default}
+.va-plan{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:12px 0}.va-plan h3{margin:0 0 6px}#va-goal{flex:1;min-width:240px}#va-target{width:80px}
+.va-pt{width:100%;border-collapse:collapse}.va-pt td{padding:4px 6px;border-top:1px solid var(--line);vertical-align:middle}.va-pt tr.off{opacity:.45}.va-pt input[type=number]{width:84px}
+.va-shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}.va-shot{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--chrome)}
+.va-shot.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}.va-shot img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#000}.va-shot figcaption{padding:8px 10px;display:grid;gap:4px;font-size:calc(12.5px*var(--ui,1))}
+.va-shot .chip{font-size:calc(11px*var(--ui,1));padding:1px 7px;cursor:default}.va-tool{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;display:grid;gap:8px}
+.va-tool video,.va-tool img,#va-out video{max-width:min(100%,720px);border-radius:8px}
+#tagbox .tk{color:var(--acc);margin-left:6px}

@@ -233,6 +233,24 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(monitor_view())
         if u == "/api/explore":
             return self.send_json(explore_list())
+        if u == "/api/vana":
+            return self.send_json(vana_list())
+        if u == "/api/asr":
+            return self.send_json(asr_models.status(ROOT))
+        if u.startswith("/vana/"):
+            parts = u.split("/")
+            try:
+                fp = vana_thumb(parts[2], parts[3]) if len(parts) == 4 else None
+            except ValueError:
+                fp = None
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_file(fp, "image/jpeg")
+        if u.startswith("/api/vana/"):
+            try:
+                return self.send_json(vana_view(u[10:]))
+            except ValueError as e:
+                return self.send_json({"error": str(e)})
         if u.startswith("/api/explore/"):
             try:
                 return self.send_json(explore_view(u[13:]))
@@ -244,7 +262,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -275,6 +293,15 @@ class Handler(BaseHTTPRequestHandler):
                 log("[실행 모드 오류]", repr(e))
                 agent_log(ev="error", error=repr(e))
                 return self.send_json({"error": str(e) if isinstance(e, RuntimeError) else "대화 엔진(Ollama)에 연결할 수 없어요. 잠시 후 다시 시도해 주세요."})
+        if u in ("/api/vana/plan", "/api/vana/render"):
+            try:
+                return self.send_json((vana_plan if u.endswith("plan") else vana_render)(p))
+            except (ValueError, RuntimeError) as e:
+                return self.send_json({"error": str(e), **({"need": need_ids(e)} if need_ids(e) else {})})
+        if u == "/api/asr/install":
+            return self.send_json(asr_models.install(ROOT))
+        if u == "/api/asr/uninstall":
+            return self.send_json(asr_models.uninstall(ROOT))
         if u in ("/api/explore/analyze", "/api/explore/candidates", "/api/explore/run", "/api/explore/pick"):
             fn = {"analyze": explore_analyze, "candidates": explore_candidates, "run": explore_run, "pick": explore_pick}[u.rsplit("/", 1)[1]]
             try:
@@ -294,7 +321,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/agent/cancel":
             return self.send_json(agent_cancel(str(p.get("id"))))
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if p["kind"] == "batch":
                 try:

@@ -753,11 +753,11 @@
   "id": "depth",
   "title": "깊이 맵 만들기",
   "icon": "◭",
-  "summary": "사진에서 가까운 곳·먼 곳을 AI로 추정한 깊이 맵을 만들어요(가까울수록 밝게). 깊이를 기준으로 앞쪽만 남긴 투명 PNG 도 만들 수 있어요. 실제로 잰 거리가 아니라 추정값이라 유리·거울·가려진 곳은 틀릴 수 있어요. ControlNet '깊이' 지도로도 쓸 수 있어요.",
+  "summary": "사진에서 가까운 곳·먼 곳을 AI로 추정한 깊이 맵을 만들고, 깊이로 효과를 줘요: 흑백·색 깊이 맵, 앞쪽만 남기기(투명 PNG), 배경 흐림(초점 거리 조절), 배경만 흑백·어둡게·안개. 깊이 맵은 '깊이 맵' 폴더에 모이고, 같은 사진은 다시 계산하지 않아요. 실제로 잰 거리가 아니라 추정값이에요.",
   "steps": [
    "사진을 올려요",
-   "결과 종류를 골라요 (흑백 깊이 맵 / 색으로 보기 / 앞쪽만 남기기)",
-   "[만들기] — 결과는 PNG 로 따로 저장돼요"
+   "결과를 골라요 (깊이 맵 / 앞쪽만 / 배경 흐림 / 배경 효과)",
+   "[만들기] — 깊이 맵 결과는 [ControlNet 깊이로] 버튼으로 바로 생성에 쓸 수 있어요"
   ],
   "needs": {
    "nodes": [
@@ -771,6 +771,11 @@
     "type": "image",
     "label": "사진",
     "required": true
+   },
+   {
+    "name": "depth_img",
+    "type": "image",
+    "label": "이미 만든 깊이 맵 (선택 — 비우면 자동으로 만들어요. 같은 사진은 저장해 둔 깊이 맵을 다시 써요)"
    },
    {
     "name": "out",
@@ -789,8 +794,102 @@
      [
       "cut",
       "깊이로 앞쪽만 남기기 (투명 PNG)"
+     ],
+     [
+      "blur",
+      "배경 흐림 (카메라 렌즈처럼)"
+     ],
+     [
+      "fx",
+      "배경만 효과 (흑백·어둡게·안개 …)"
      ]
     ]
+   },
+   {
+    "name": "focus",
+    "type": "select",
+    "label": "초점",
+    "default": "auto",
+    "show_if": {
+     "out": "blur"
+    },
+    "options": [
+     [
+      "auto",
+      "가장 가까운 것 (자동)"
+     ],
+     [
+      "90",
+      "아주 가까운 곳"
+     ],
+     [
+      "70",
+      "가까운 곳"
+     ],
+     [
+      "50",
+      "가운데"
+     ],
+     [
+      "30",
+      "먼 곳"
+     ]
+    ]
+   },
+   {
+    "name": "blur",
+    "type": "number",
+    "label": "흐림 세기",
+    "default": 12,
+    "min": 1,
+    "max": 60,
+    "step": 1,
+    "show_if": {
+     "out": "blur"
+    }
+   },
+   {
+    "name": "effect",
+    "type": "select",
+    "label": "배경 효과",
+    "default": "gray",
+    "show_if": {
+     "out": "fx"
+    },
+    "options": [
+     [
+      "gray",
+      "배경만 흑백"
+     ],
+     [
+      "desat",
+      "배경 색 빼기 (반쯤 흑백)"
+     ],
+     [
+      "dark",
+      "배경 어둡게"
+     ],
+     [
+      "blur",
+      "배경 흐리게"
+     ],
+     [
+      "fog",
+      "먼 곳일수록 안개"
+     ]
+    ]
+   },
+   {
+    "name": "amount",
+    "type": "number",
+    "label": "효과 세기 (%)",
+    "default": 80,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "show_if": {
+     "out": "fx"
+    }
    },
    {
     "name": "near",
@@ -801,7 +900,10 @@
     "max": 99,
     "step": 1,
     "show_if": {
-     "out": "cut"
+     "out": [
+      "cut",
+      "fx"
+     ]
     }
    },
    {
@@ -813,7 +915,10 @@
     "max": 60,
     "step": 1,
     "show_if": {
-     "out": "cut"
+     "out": [
+      "cut",
+      "fx"
+     ]
     }
    },
    {
@@ -821,6 +926,159 @@
     "type": "check",
     "label": "깊이 뒤집기 (먼 곳을 밝게)",
     "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "parallax",
+  "title": "패럴랙스 영상 (사진 → 입체 움직임)",
+  "icon": "◫",
+  "summary": "사진 한 장을 깊이에 따라 가까운 것은 많이, 먼 것은 조금 움직여 카메라가 움직이는 듯한 짧은 영상(mp4)을 만들어요. 이미지 엔진은 깊이 추정에만 쓰고, 영상은 바로 만들어요. 영상 분석 화면에서 추정한 카메라 움직임을 그대로 따라 할 수도 있어요.",
+  "steps": [
+   "사진을 올려요",
+   "움직임과 길이를 골라요",
+   "[만들기] — 결과는 mp4 영상이에요"
+  ],
+  "needs": {
+   "nodes": [
+    "DepthAnythingV2Preprocessor"
+   ],
+   "pack": "comfyui_controlnet_aux"
+  },
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "사진",
+    "required": true
+   },
+   {
+    "name": "depth_img",
+    "type": "image",
+    "label": "이미 만든 깊이 맵 (선택 — 비우면 자동으로 만들어요. 같은 사진은 저장해 둔 깊이 맵을 다시 써요)"
+   },
+   {
+    "name": "motion",
+    "type": "select",
+    "label": "움직임",
+    "default": "orbit",
+    "options": [
+     [
+      "orbit",
+      "둥글게 돌기"
+     ],
+     [
+      "sway",
+      "좌우로 흔들기"
+     ],
+     [
+      "dolly",
+      "앞으로 다가가기"
+     ],
+     [
+      "rise",
+      "위로 올라가며 다가가기"
+     ],
+     [
+      "camera",
+      "영상에서 추정한 카메라 움직임 따라 하기"
+     ]
+    ]
+   },
+   {
+    "name": "camera",
+    "type": "text",
+    "label": "카메라 움직임 파일 (영상 분석 결과의 주소, /out/… .json)",
+    "show_if": {
+     "motion": "camera"
+    }
+   },
+   {
+    "name": "sec",
+    "type": "number",
+    "label": "길이 (초)",
+    "default": 4,
+    "min": 1,
+    "max": 15,
+    "step": 0.5
+   },
+   {
+    "name": "strength",
+    "type": "number",
+    "label": "움직임 크기 (%)",
+    "default": 5,
+    "min": 1,
+    "max": 12,
+    "step": 0.5
+   },
+   {
+    "name": "fps",
+    "type": "select",
+    "label": "초당 장면 수",
+    "default": "24",
+    "options": [
+     [
+      "24",
+      "24"
+     ],
+     [
+      "30",
+      "30"
+     ],
+     [
+      "12",
+      "12 (가볍게)"
+     ]
+    ],
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "depth3d",
+  "title": "깊이 → 3D 메시",
+  "icon": "▦",
+  "summary": "사진과 깊이 맵으로 앞에서 본 모양의 3D 메시(.glb, 사진이 표면 무늬)를 만들어요. 기록 갤러리에서 돌려 보거나 Blender 등에서 열 수 있어요. 깊이 추정으로 만든 '부조' 같은 메시라 뒤쪽·가려진 부분은 없어요(실제 3D 복원은 '사진 → 3D 모델' 기능).",
+  "steps": [
+   "사진을 올려요",
+   "세밀함과 깊이 정도를 골라요",
+   "[만들기] — 결과는 .glb 파일이에요"
+  ],
+  "needs": {
+   "nodes": [
+    "DepthAnythingV2Preprocessor"
+   ],
+   "pack": "comfyui_controlnet_aux"
+  },
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "사진",
+    "required": true
+   },
+   {
+    "name": "depth_img",
+    "type": "image",
+    "label": "이미 만든 깊이 맵 (선택 — 비우면 자동으로 만들어요. 같은 사진은 저장해 둔 깊이 맵을 다시 써요)"
+   },
+   {
+    "name": "grid",
+    "type": "number",
+    "label": "세밀함 (격자 칸 수)",
+    "default": 192,
+    "min": 32,
+    "max": 512,
+    "step": 16
+   },
+   {
+    "name": "zscale",
+    "type": "number",
+    "label": "깊이 정도 (%)",
+    "default": 35,
+    "min": 5,
+    "max": 100,
+    "step": 1
    }
   ]
  },

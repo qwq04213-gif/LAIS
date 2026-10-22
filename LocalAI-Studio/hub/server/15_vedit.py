@@ -34,6 +34,8 @@ def do_vedit(p, J):
             info = dict(kind="vedit", op="trim", file=src.name, start=num(p, "start", 0.0), seconds=round(dur, 2))
         elif op == "extend":
             return vedit_extend(p, J, ff, work)
+        elif op == "cutlist":
+            return vedit_cutlist(p, J, ff, work)
         else:
             raise ValueError("알 수 없는 영상 편집이에요.")
         return [(out.read_bytes(), info, ".mp4")]

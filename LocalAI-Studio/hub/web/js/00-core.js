@@ -517,14 +517,14 @@ function loadMV(){if(!window.customElements||customElements.get('model-viewer')|
 function sendMenu(type,u){
   const b=(to,t,tip)=>`<button type="button" data-u="${u}" data-to="${to}"${tip?` title="${esc(tip)}"`:''}>${t}</button>`,h=t=>`<b class="mh">${t}</b>`;
   const ft=(id,t)=>{const f=(typeof FEATS!=='undefined'?FEATS:[]).find(x=>x.id===id);return b('feat:'+id,esc((f&&f.title)||t))};
-  if(type==='video')return h('보기')+b('fs','전체 화면으로 보기')+h('보내기')+b('vmix','소리·자막 넣기')+b('vcont','마지막 장면으로 이어서 만들기')+
+  if(type==='video')return h('보기')+b('fs','전체 화면으로 보기')+h('보내기')+b('vana','영상 분석·하이라이트','장면 나누기·대사 받아쓰기·하이라이트 편집·깊이 영상·카메라 움직임')+b('vmix','소리·자막 넣기')+b('vcont','마지막 장면으로 이어서 만들기')+
     h('영상 편집')+b('ve:trim','자르기')+b('ve:concat','다른 영상과 이어 붙이기')+b('ve:extend','AI로 이어 그리기','Wan VACE 필요')+
     h('다듬기')+b('vp:interp','프레임 늘리기 (부드럽게)','RIFE 확장 필요')+b('vp:upscale','해상도 키우기')+b('vp:webp','움직이는 WebP로 저장')+b('vp:gif','GIF로 저장')+h('파일')+b('folder','출력 폴더 열기');
   if(type==='audio')return h('보내기')+b('vmixa','영상에 소리로 넣기')+h('파일')+b('folder','출력 폴더 열기');
   if(type==='3d')return h('보기')+b('fs','전체 화면으로 보기')+h('파일')+b('folder','출력 폴더 열기');
   return h('다시 만들기')+b('regen','이미지 생성으로 보내기','이 그림의 설정을 생성 화면에 채워요')+b('again','같은 설정으로 새 시드 4장')+b('gvar','비슷하게 변형 4장')+
     h('편집')+b('edit','이미지 편집으로')+b('up','업스케일로')+b('photo','사진 편집기로 열기')+b('photol','사진 편집기에 레이어로 넣기','지금 열린 그림 위에 새 레이어로 넣어요')+
-    h('기능 모음')+ft('rmbg','배경 지우기')+ft('outpaint','바깥 늘리기')+ft('detailer','얼굴·손 보정')+ft('color','색 보정')+ft('resize','크기 바꾸기')+ft('faceswap','얼굴 바꾸기')+ft('ipadapter','참고 이미지 스타일')+ft('img3d','3D 모델로')+
+    h('기능 모음')+ft('rmbg','배경 지우기')+ft('outpaint','바깥 늘리기')+ft('detailer','얼굴·손 보정')+ft('color','색 보정')+ft('resize','크기 바꾸기')+ft('faceswap','얼굴 바꾸기')+ft('ipadapter','참고 이미지 스타일')+ft('img3d','3D 모델로')+ft('relight','조명 바꾸기')+ft('depth','깊이 맵·배경 흐림')+ft('parallax','패럴랙스 영상')+ft('depth3d','깊이 → 3D 메시')+b('cndepth','ControlNet 깊이 지도로 쓰기','깊이 맵을 이미지 생성의 ControlNet 깊이 지도로 넣어요')+
     h('그 밖에')+b('vid','영상으로 만들기')+b('info','이미지 정보 보기')+b('chsave','캐릭터·스타일로 저장')+b('folder','출력 폴더 열기')}
 
 /* ══════════ 확대 보기 (휠 줌 / 드래그 이동 / 전후 비교) ══════════ */

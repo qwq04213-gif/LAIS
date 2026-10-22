@@ -118,17 +118,17 @@ def tags_rows():
         return _TAGS["rows"]
     rows, seen = [], {}
 
-    def add(shown, cat, weight, key=None):
+    def add(shown, cat, weight, key=None, note="", desc=""):
         k = _tag_norm(key or shown)
         if not k or len(k) > 60:
             return
         sk = (k, _tag_norm(shown))
         if sk in seen:
             if weight > rows[seen[sk]][3]:
-                rows[seen[sk]] = (k, shown, cat, weight)
+                rows[seen[sk]] = (k, shown, cat, weight, note, desc)
             return
         seen[sk] = len(rows)
-        rows.append((k, shown, cat, weight))
+        rows.append((k, shown, cat, weight, note, desc))
 
     try:
         for i, ln in enumerate((HUB / "tags_builtin.txt").read_text(encoding="utf-8").splitlines()):
@@ -146,10 +146,12 @@ def tags_rows():
                         continue
                     cnt = int(c[2]) if len(c) > 2 and c[2].strip().isdigit() else 0
                     shown, cat = _tag_norm(c[0]), TAG_TYPES.get(c[1].strip() if len(c) > 1 else "0", "일반")
-                    add(shown, cat, 2000 + cnt / 1000)
-                    for al in (c[3].split(",") if len(c) > 3 else [])[:6]:
-                        if al.strip():
-                            add(shown, cat, 1500 + cnt / 2000, key=al)      # 별칭으로 찾아도 원래 태그를 넣어 줘요
+                    al, desc, group = tag_aliases(c[3] if len(c) > 3 else "")
+                    add(shown, cat, 2000 + cnt / 1000, desc=desc)
+                    for a in al:
+                        add(shown, cat, 1500 + cnt / 2000, key=a, note=a.strip(), desc=desc)      # 별칭(한국어 키워드 등)으로 찾아도 원래 태그를 넣어 줘요
+                    if group:
+                        add(shown, cat, 900 + cnt / 4000, key=group, note=group, desc=desc)      # 분류 이름(예: 헤어스타일)으로 찾으면 그 분류 태그가 나와요
             except (OSError, ValueError, csv.Error):
                 pass
     freq = {}
@@ -176,22 +178,47 @@ def tags_rows():
     return rows
 
 
+def tag_aliases(text):
+    """CSV 넷째 칸 → (별칭 목록, 설명, 분류 이름).
+    보통 형식: 'alias1,alias2'. 한국어 설명 형식: '[분류 > 세부] 설명임. 키워드: <묶음>, 한국어1, 한국어2' 도 읽어요."""
+    text = str(text or "").strip()
+    if not text:
+        return [], "", ""
+    if "키워드:" in text or text.startswith("["):
+        head, _, kw = text.partition("키워드:")
+        m = re.match(r"\s*\[([^\]]+)\]\s*(.*)", head)
+        desc = (m.group(2) if m else head).strip().rstrip(".")[:160]
+        path = [x.strip() for x in (m.group(1) if m else "").split(">") if x.strip()]
+        al = []
+        for x in kw.split(","):
+            x = x.strip()
+            if x.startswith("<") and x.endswith(">"):
+                path.append(x[1:-1].strip())
+            elif x:
+                al.append(x)
+        return al[:12], desc, (path[-1] if path else "")
+    return [x.strip() for x in text.split(",") if x.strip()][:6], "", ""
+
+
+HANGUL = re.compile("[가-힣ㄱ-ㅎ]")
+
+
 def tags_search(q, limit=10):
     k = _tag_norm(q)
-    if len(k) < 2:
+    if len(k) < (1 if HANGUL.search(k) else 2):
         return {"items": []}
     pre, mid = [], []
-    for key, shown, cat, w in tags_rows():
+    for key, shown, cat, w, note, desc in tags_rows():
         if key.startswith(k):
-            pre.append((w, shown, cat))
-        elif k in key and (f" {k}" in key or len(k) >= 3):
-            mid.append((w, shown, cat))
+            pre.append((w, shown, cat, note, desc))
+        elif k in key and (f" {k}" in key or len(k) >= 3 or HANGUL.search(k)):
+            mid.append((w, shown, cat, note, desc))
     out, seen = [], set()
-    for w, shown, cat in sorted(pre, key=lambda x: -x[0]) + sorted(mid, key=lambda x: -x[0]):
+    for w, shown, cat, note, desc in sorted(pre, key=lambda x: -x[0]) + sorted(mid, key=lambda x: -x[0]):
         if shown.lower() in seen or shown.lower() == k:
             continue
         seen.add(shown.lower())
-        out.append({"t": shown, "c": cat})
+        out.append({"t": shown, "c": cat, **({"n": note} if note and _tag_norm(note) != _tag_norm(shown) else {}), **({"d": desc} if desc else {})})
         if len(out) >= limit:
             break
     return {"items": out}

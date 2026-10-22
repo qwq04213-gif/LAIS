@@ -97,6 +97,8 @@ document.addEventListener('click',async e=>{
     if(window.galView)window.galView(u,true);return}
   if(to.startsWith('ve:')){const m=b.closest('.more');if(m)m.open=false;window.veditOpen(u,to.slice(3));return}
   if(to==='vmix'||to==='vmixa'){vmixOpen(to==='vmix'?{video:u}:{audio:u});return}
+  if(to==='cndepth'){const m=b.closest('.more');if(m)m.open=false;await cnUseDepth(u);return}
+  if(to==='vana'){const m=b.closest('.more');if(m)m.open=false;window.vanaOpen&&vanaOpen(u);return}
   if(to==='vid'){window.vidSetImage(await urlToDataURL(u));show('vid');return}
   if(to==='cmp'){openFrom(b.closest('figure').querySelector('img'),true);return}
   if(to==='cmpi'){const w=b.closest('figure').querySelector('.cmpw');if(!w)return;
@@ -352,7 +354,7 @@ function featForm(id,keep){
 }
 /* 다른 칸 값에 따라 보이는 칸(예: 배경을 '직접 고른 색'으로 했을 때만 색 고르기) */
 function featShowIf(){const F=$('#f-feat');$$('[data-show-if]',F).forEach(el=>{let c={};try{c=JSON.parse(el.dataset.showIf)}catch{}
-  el.hidden=!Object.entries(c).every(([k,v])=>F.elements[k]&&String(F.elements[k].value)===String(v))})}
+  el.hidden=!Object.entries(c).every(([k,v])=>F.elements[k]&&(Array.isArray(v)?v.map(String).includes(String(F.elements[k].value)):String(F.elements[k].value)===String(v)))})}
 $('#f-feat').addEventListener('change',featShowIf);
 $('#f-feat').onsubmit=e=>{e.preventDefault();const f=e.target,spec=FEATS.find(x=>x.id===featId);if(!spec)return;
   for(const fd of spec.fields.filter(x=>x.type==='image'&&x.required))if(!$(`.mini[data-img=${fd.name}]`,f).value)return need(f,'먼저 이미지를 올려 주세요.');

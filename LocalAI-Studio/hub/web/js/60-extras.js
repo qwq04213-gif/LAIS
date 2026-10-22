@@ -3,7 +3,7 @@ const QST={running:'진행 중',queued:'대기',done:'완료',error:'실패',can
 const qSound=()=>ls.get('q:sound',true),qDesk=()=>ls.get('q:desk',false);
 QSEEN=new Map();QINIT=false;QLAST=null;QUSER=null;     // QUSER: 사용자가 직접 연 'open' / 닫은 'closed' / 아직 안 건드림 null
 const qPin=()=>ls.get('q:pin',true);
-const QVIEW={gen:'gen',edit:'edit',up:'up',wf:'wf',feat:'feat',vid:'vid',vpost:'vid',vmix:'vmix',music:'music',tts:'tts',batch:'batch'};
+const QVIEW={gen:'gen',edit:'edit',up:'up',wf:'wf',feat:'feat',vid:'vid',vpost:'vid',vmix:'vmix',music:'music',tts:'tts',batch:'batch',vana:'vana'};
 function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
   try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=window.QCTX||(window.QCTX=new A());if(c.state==='suspended')c.resume();
     [[880,0],[1175,.16]].forEach(([f,t])=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);
@@ -271,13 +271,14 @@ document.addEventListener('keydown',e=>{
  function close(){box.hidden=true;items=[];sel=-1}
  function seg(el){const v=el.value,c=el.selectionStart,b=Math.max(v.lastIndexOf(',',c-1),v.lastIndexOf('\n',c-1))+1;
   const raw=v.slice(b,c),lead=raw.length-raw.trimStart().length,txt=raw.slice(lead).replace(/^[(\[{]+/,'');return{from:b+lead+(raw.slice(lead).length-txt.length),to:c,txt}}
- function draw(){box.innerHTML=items.map((x,i)=>`<div class="ti${i===sel?' on':''}" data-i="${i}" role="option"><span>${esc(x.t)}</span><em>${esc(x.c)}</em></div>`).join('');
+ function draw(){box.innerHTML=items.map((x,i)=>`<div class="ti${i===sel?' on':''}" data-i="${i}" role="option"${x.d?` title="${esc(x.d)}"`:''}><span>${esc(x.t)}${x.n?` <small class="tk">${esc(x.n)}</small>`:''}</span><em>${esc(x.c)}</em></div>`).join('');
   const r=ta.getBoundingClientRect();box.style.left=r.left+'px';box.style.top=(r.bottom+2)+'px';box.style.width=Math.min(r.width,420)+'px';box.hidden=!items.length}
  function pick(i){const x=items[i];if(!x||!ta)return;const s=seg(ta),v=ta.value,after=v.slice(s.to),ins=x.t+(/^\s*[,\n]/.test(after)?'':', ');
   ta.value=v.slice(0,s.from)+ins+after.replace(/^[ ]+/,'');ta.selectionStart=ta.selectionEnd=s.from+ins.length;ta.dispatchEvent(new Event('input',{bubbles:true}));close();ta.focus()}
- const ask=debounce(async el=>{const s=seg(el);if(s.txt.length<2||/^[<]/.test(s.txt)||/[.!?]\s/.test(s.txt)||s.txt.length>40)return close();
+ const ask=debounce(async el=>{const s=seg(el);if(s.txt.length<(/[가-힣ㄱ-ㅎ]/.test(s.txt)?1:2)||/^[<]/.test(s.txt)||/[.!?]\s/.test(s.txt)||s.txt.length>40)return close();
   const my=++seq;try{const r=await api('/api/tags?q='+encodeURIComponent(s.txt));if(my!==seq||document.activeElement!==el)return;items=(r.items||[]).slice(0,8);sel=-1;ta=el;draw()}catch{close()}},120);
- document.addEventListener('input',e=>{const el=e.target;if(!el.matches?.(SEL)||!on.checked||e.isComposing)return;ta=el;ask(el)});
+ document.addEventListener('input',e=>{const el=e.target;if(!el.matches?.(SEL)||!on.checked)return;ta=el;ask(el)});      // 한글은 조합 중에도 찾아요
+ document.addEventListener('compositionend',e=>{const el=e.target;if(el.matches?.(SEL)&&on.checked){ta=el;ask(el)}});
  document.addEventListener('keydown',e=>{if(box.hidden||e.isComposing||e.target!==ta)return;
   if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();sel+=e.key==='ArrowDown'?1:-1;if(sel>=items.length)sel=-1;if(sel<-1)sel=items.length-1;draw()}
   else if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();pick(sel<0?0:sel)}
@@ -604,3 +605,12 @@ document.addEventListener('pointerdown',e=>{const t=e.target;if(!(t instanceof E
   if(t.closest('#lb,.toast,#toasts,dialog'))return;
   const q=$('#qpanel');if(q&&!q.hidden&&!t.closest('#qpanel,#qbtn,#qfloat')){QUSER='closed';qApply()}
   const h=$('#hwpanel');if(h&&!h.hidden&&!t.closest('#hwpanel,#gbars'))hwToggle(false)},true);
+
+/* 깊이 맵 → 이미지 생성의 ControlNet 깊이 지도로 */
+async function cnUseDepth(u){const f=$('#f-gen');show('gen');const d=await urlToDataURL(u);
+  const det=[...f.querySelectorAll('details')].find(x=>x.querySelector('.cn-easy'));if(det)det.open=true;
+  const cm=$('.mini[data-img=cn_image]',f);if(cm)cm.set(d);f.elements.cn_prep.value='none';if(f.elements.cn_type)f.elements.cn_type.value='depth';f.elements.cn_strength.value=CN_STR.depth||0.7;
+  const pick=(CN_PICK.depth||[]).map(k=>(LISTS.controlnets||[]).find(n=>n.toLowerCase().includes(k))).find(Boolean);if(pick)f.elements.cn_model.value=pick;
+  saveForm(f);const st=$('.cn-st',f);
+  if(st)st.innerHTML=pick?`✔ 깊이 맵을 [제어 이미지]에 넣었어요. ControlNet 모델은 <b>${esc(pick)}</b> 로 맞췄어요. 프롬프트를 적고 생성하세요.`:`✔ 깊이 맵을 [제어 이미지]에 넣었어요. 그런데 깊이용 ControlNet 모델이 없어요.${needBox(['controlnet-union'])}`;
+  (det||f).scrollIntoView({block:'start',behavior:'smooth'});toast('깊이 맵을 ControlNet 깊이 지도로 넣었어요.')}

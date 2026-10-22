@@ -519,7 +519,7 @@ def feat_ipadapter(p, J):
 def do_feat(p, J):
     fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color,
           "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "img3d": feat_3d, "rmbg": feat_rmbg,
-          "relight": feat_relight, "depth": feat_depth}.get(p.get("feature"))
+          "relight": feat_relight, "depth": feat_depth, "parallax": feat_parallax, "depth3d": feat_depth3d}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
@@ -575,45 +575,3 @@ def feat_relight(p, J):
     out = do_edit(q, J)
     return [(im, {**info, "kind": "relight", "extra": {**(info.get("extra") or {}), "Relight": p.get("light"), "Direction": p.get("dir"), "Temperature": p.get("temp")}}, g)
             for im, info, g in out]
-
-
-def depth_colorize(gray):
-    """흑백 깊이 → 색(먼 곳 파랑 → 초록 → 노랑 → 가까운 곳 빨강)."""
-    stops = [(0, (40, 40, 160)), (85, (30, 170, 200)), (150, (90, 200, 80)), (205, (250, 210, 50)), (255, (220, 40, 30))]
-    lut = []
-    for ch in range(3):
-        for v in range(256):
-            a = max(s_ for s_ in stops if s_[0] <= v)
-            b = min((s_ for s_ in stops if s_[0] >= v), key=lambda s_: s_[0])
-            t = 0 if b[0] == a[0] else (v - a[0]) / (b[0] - a[0])
-            lut.append(round(a[1][ch] + (b[1][ch] - a[1][ch]) * t))
-    return Image.merge("RGB", [gray] * 3).point(lut)
-
-
-def feat_depth(p, J):
-    img = load_img(p["image"])
-    J["msg"] = "깊이를 추정하는 중"
-    r = control_prep({"type": "depth", "image": p["image"]})
-    if r.get("error"):
-        raise RuntimeError(r["error"])
-    d = Image.open(io.BytesIO(base64.b64decode(r["image"].split(",", 1)[1]))).convert("L").resize(img.size, RS.BICUBIC)
-    d = ImageOps.autocontrast(d)
-    if p.get("invert"):
-        d = ImageOps.invert(d)
-    out = p.get("out") if p.get("out") in ("gray", "color", "cut") else "gray"
-    info = {"kind": "depth", "prompt": "", "w": img.width, "h": img.height, "model": r.get("node", ""),
-            "extra": {"Depth": "AI 추정값(실제 측정 아님)", "Output": out, "Preprocessor": r.get("node", "")}}
-    if out == "gray":
-        return [(d.convert("RGB"), info, None)]
-    if out == "color":
-        return [(depth_colorize(d), info, None)]
-    near = clamp(num(p, "near", 50), 1, 99)
-    cut = round(near / 100 * 255)          # 클수록 더 가까운(밝은) 곳만 남겨요
-    mask = d.point(lambda v: 255 if v >= cut else 0)
-    fe = clamp(num(p, "feather", 4, int), 0, 60)
-    if fe:
-        mask = mask.filter(ImageFilter.GaussianBlur(fe))
-    rgba = img.convert("RGBA")
-    rgba.putalpha(mask)
-    info["extra"]["Near"] = near
-    return [(rgba, info, None)]
