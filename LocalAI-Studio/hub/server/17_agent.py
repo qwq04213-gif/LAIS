@@ -34,6 +34,15 @@ AGENT_TOOLS = {
                    "vary": {"type": "array", "items": {"type": "string", "enum": ["subject", "place", "action", "camera", "light", "color", "style", "detail"]},
                             "description": "which parts to vary, default style, light, color"}},
         "required": ["goal"], "act": True},
+    "relight_image": {
+        "desc": "Change only the lighting of one photo (direction, color, mood) while keeping the person, face and composition.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' address"},
+                   "light": {"type": "string", "enum": ["cinematic", "window", "golden", "neon", "candle", "moon", "studio", "rim", "dramatic", "soft", "custom"],
+                             "description": "lighting preset; use custom with 'custom_light' for anything else"},
+                   "custom_light": {"type": "string", "maxLength": 500, "description": "English description when light is custom"},
+                   "direction": {"type": "string", "enum": ["auto", "right", "left", "top", "front", "back"]},
+                   "color": {"type": "string", "enum": ["auto", "warm", "neutral", "cool"]}},
+        "required": ["image", "light"], "act": True},
     "edit_image": {
         "desc": "Edit one image by an instruction (Qwen-Image-Edit or FLUX Kontext, as chosen on the image edit screen).",
         "params": {"instruction": {"type": "string", "maxLength": 1000, "description": "edit instruction in English, one imperative sentence"},
@@ -51,6 +60,7 @@ Decide whether the user wants something DONE in the app (make or edit an image, 
 - To change a photo the user attached, call edit_image with image='attached'. To change the newest result, call recent_results first.
 - To make an image and then change it, call generate_image and then edit_image with image='previous'.
 - To compare several styles / looks of one idea, call explore_prompts.
+- To change only the lighting of a photo, call relight_image.
 - If something essential is missing or unclear, ask one short question in Korean instead of calling a tool.
 - Answer in Korean. Be brief."""
 
@@ -129,16 +139,18 @@ def agent_check(name, args, ctx):
                 return None, f"{k} 는 {', '.join(ok_)} 중에서 골라야 해요."
             v = list(dict.fromkeys(v))
         out[k] = v
-    for k in ("prompt", "negative", "instruction", "goal"):
+    for k in ("prompt", "negative", "instruction", "goal", "custom_light"):
         if k in out and blocked(out[k]):
             return None, BLOCK_MSG
-    if name == "edit_image":
+    if name == "relight_image" and out["light"] == "custom" and not out.get("custom_light"):
+        return None, "custom 조명이면 custom_light 가 필요해요."
+    if name in ("edit_image", "relight_image"):
         img = out["image"]
         if img == "attached":
             if not ctx.get("attached"):
                 return None, "붙인 사진이 없어요. 사진을 붙이거나 결과를 골라 주세요."
         elif img == "previous":
-            if not any(s["tool"] in ("generate_image", "edit_image", "explore_prompts") for s in ctx.get("steps", [])):
+            if not any(s["tool"] in ("generate_image", "edit_image", "explore_prompts", "relight_image") for s in ctx.get("steps", [])):
                 return None, "앞 단계 결과가 없어요."
         else:
             f = agent_out_path(img)
@@ -189,6 +201,11 @@ def agent_summary(name, a, base):
     if name == "explore_prompts":
         vary = a.get("vary") or ["style", "light", "color"]
         return f'프롬프트 탐색 · {a.get("count", 4)}가지 · 바꿔 볼 것: ' + ", ".join(EXP_NAMES[k] for k in vary)
+    if name == "relight_image":
+        names = {"cinematic": "영화 같은 측면 조명", "window": "창가 자연광", "golden": "해 질 녘 황금빛", "neon": "네온사인", "candle": "촛불", "moon": "달빛",
+                 "studio": "스튜디오", "rim": "역광", "dramatic": "강한 명암", "soft": "부드럽게", "custom": "직접 지정"}
+        src = {"attached": "붙인 사진", "previous": "앞 단계 결과"}.get(a["image"], "결과 " + urllib.parse.unquote(a["image"]).rsplit("/", 1)[-1])
+        return f"조명 바꾸기 · {src} · {names[a['light']]}"
     if name == "edit_image":
         src = {"attached": "붙인 사진", "previous": "앞 단계 결과"}.get(a["image"], "결과 " + urllib.parse.unquote(a["image"]).rsplit("/", 1)[-1])
         return f"이미지 편집 · {src}" + (" · 빠른 모드" if a.get("fast") else "")
@@ -296,7 +313,7 @@ def agent_view(pid):
     for s in P["steps"]:
         J = JOBS.get(s["job"]) if s["job"] else None
         row = {"tool": s["tool"], "args": s["args"], "summary": s["summary"], "state": s["state"], "error": s["error"], "images": s["images"], "job": s["job"],
-               **{k: s[k] for k in ("explore", "done_n", "all_n") if k in s}}
+               **{k: s[k] for k in ("explore", "done_n", "all_n", "need") if k in s}}
         if J and s["state"] == "running":
             ahead = (QUEUE.index(J["id"]) + 1) if J.get("state") == "queued" and J["id"] in QUEUE else 0
             row.update(msg=J.get("msg", ""), progress=J.get("progress"), eta=J.get("eta"), models=J.get("models") or [],
@@ -310,6 +327,22 @@ def agent_view(pid):
 def _agent_data_url(f):
     mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif"}.get(f.suffix.lower(), "image/png")
     return f"data:{mime};base64," + base64.b64encode(f.read_bytes()).decode()
+
+
+def agent_src(P, i, img):
+    """도구의 image 값('attached'·'previous'·'/out/...') → 작업에 넣을 data URL."""
+    if img == "attached":
+        return P["image"]
+    if img == "previous":
+        prev = next((x for x in reversed(P["steps"][:i]) if x["images"]), None)
+        f = agent_out_path(prev["images"][0]) if prev else None
+        if not f:
+            raise RuntimeError("앞 단계 결과 이미지를 찾지 못했어요.")
+        return _agent_data_url(f)
+    f = agent_out_path(img)
+    if not f:
+        raise RuntimeError("고른 결과 이미지가 없어졌어요.")
+    return _agent_data_url(f)
 
 
 def agent_job_params(P, i):
@@ -331,23 +364,13 @@ def agent_job_params(P, i):
         if re.search("[가-힣]", a["prompt"]):
             g["translate"] = "on"
         return g
+    if s["tool"] == "relight_image":
+        return {"kind": "feat", "feature": "relight", "image": agent_src(P, i, a["image"]), "light": a["light"], "custom": a.get("custom_light", ""),
+                "dir": a.get("direction", "auto"), "temp": a.get("color", "auto"), "power": "normal", "keep": "on"}
     e = dict(base.get("edit") or {})
     if e.get("engine") not in ("qwen", "flux") or (e.get("engine") == "flux" and not re.search("kontext", str(e.get("fx_model") or ""), re.I)):
         e["engine"] = "qwen"      # 말로 편집할 수 있는 엔진만 써요(칠해서 편집은 마스크가 필요해요)
-    img = a["image"]
-    if img == "attached":
-        src = P["image"]
-    elif img == "previous":
-        prev = next((x for x in reversed(P["steps"][:i]) if x["images"]), None)
-        f = agent_out_path(prev["images"][0]) if prev else None
-        if not f:
-            raise RuntimeError("앞 단계 결과 이미지를 찾지 못했어요.")
-        src = _agent_data_url(f)
-    else:
-        f = agent_out_path(img)
-        if not f:
-            raise RuntimeError("고른 결과 이미지가 없어졌어요.")
-        src = _agent_data_url(f)
+    src = agent_src(P, i, a["image"])
     e.update(kind="edit", prompt=a["instruction"], image=src, mask=None)
     e.pop("fast", None)
     if a.get("fast"):
@@ -372,7 +395,7 @@ def agent_run_thread(pid):
         except Exception as e:  # noqa: BLE001
             s["state"], s["error"] = "error", str(e)
             break
-        J = submit_job(jp, agent=pid)
+        J = submit_job(jp, agent=pid, view="chat")
         s["job"], s["state"] = J["id"], "running"
         while J.get("state") not in DONE_STATES:
             if P["cancel"] and not J.get("cancel"):
@@ -381,6 +404,8 @@ def agent_run_thread(pid):
         s["images"] = list(J.get("images") or [])
         s["state"] = {"done": "done", "cancelled": "cancelled"}.get(J["state"], "error")
         s["error"] = str(J.get("error") or "")[:300]
+        if J.get("need"):
+            s["need"] = J["need"]
         if s["state"] != "done":
             break
     for s in P["steps"]:

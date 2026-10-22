@@ -288,6 +288,7 @@ function show(v,f,how){
      if(NAVH.length>40)NAVH.shift()}
    NAVC=cur}
   navMark(v);
+  document.dispatchEvent(new CustomEvent('viewshow',{detail:v}));      // 화면을 바꾸기 직전(프롬프트 탐색이 생성 설정 칸을 빌려 가고 돌려줘요)
   $$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   if(v==='start')startInit();
   if(v==='batch')loadLists().then(()=>window.btInit&&btInit());
@@ -632,3 +633,41 @@ document.addEventListener('toggle',e=>{const d=e.target;if(!d.classList||!d.clas
   if(d.open)menuPlace(d);else{m.removeAttribute('style');d.classList.remove('up')}},true);
 addEventListener('scroll',e=>{const t=e.target;document.querySelectorAll('details.more[open]').forEach(d=>{if(t===document||t.contains&&t.contains(d)&&!d.contains(t))d.open=false})},true);      // 메뉴가 붙은 영역이 스크롤되면 닫아요
 addEventListener('resize',()=>document.querySelectorAll('details.more[open]').forEach(d=>menuPlace(d)));
+
+/* ══════════ 없는 모델 바로 받기: 경고·오류 옆의 [⬇ 바로 받기] — 받는 동안 그 자리에 진행률을 보여 줘요 ══════════ */
+const NEED={cat:null,watch:new Map()};
+async function needCat(force){if(!NEED.cat||force){try{const c=await api('/api/catalog');NEED.cat=Object.fromEntries([...c.llm,...c.image].map(m=>[m.id,m]))}catch{NEED.cat=NEED.cat||{}}}return NEED.cat}
+function needExpand(ids){const c=NEED.cat||{},out=[],q=[...ids];while(q.length){const i=q.shift();if(c[i]&&!out.includes(i)){out.push(i);q.push(...(c[i].requires||[]))}}return out}
+function needBox(ids){ids=(ids||[]).filter(Boolean);if(!ids.length)return'';const k=ids.join(',');
+  return `<span class="needdl" data-need="${esc(k)}"><button type="button" class="go sm" data-needgo="${esc(k)}">⬇ 바로 받기</button> <span class="ndl mute">불러오는 중…</span></span>`}
+function needPaint(){const c=NEED.cat;if(!c)return;
+  $$('.needdl[data-need]').forEach(box=>{const ids=box.dataset.need.split(','),all=needExpand(ids),w=NEED.watch.get(box.dataset.need),lab=$('.ndl',box),btn=$('[data-needgo]',box);
+    const todo=all.filter(i=>c[i]&&!c[i].installed),gb=todo.reduce((a,i)=>a+(c[i].gb||0),0),names=ids.map(i=>c[i]?.name).filter(Boolean).join(' · ');
+    const setH=h=>{if(lab.dataset.h!==h){lab.dataset.h=h;lab.innerHTML=h}},hide=v=>{if(btn.hidden!==v)btn.hidden=v};
+    if(w){hide(true);setH(w.html);return}
+    if(lab.dataset.fixed)return;
+    hide(!todo.length);setH(esc(todo.length?`${names}${gb?` (약 ${gb>=1?gb.toFixed(1)+'GB':Math.round(gb*1000)+'MB'})`:''}`:`${names} — 이미 받았어요. 다시 실행해 보세요.`))})}
+async function needPoll(key){const w=NEED.watch.get(key);if(!w)return;let t=[];try{t=await api('/api/install')}catch{}
+  const mine=t.filter(x=>w.ids.includes(x.mid)&&!w.skip.has(x.id)),run=mine.filter(x=>x.state==='queued'||x.state==='running'),bad=mine.filter(x=>x.state==='error');
+  const done=mine.reduce((a,x)=>a+(x.state==='done'?(x.total||x.done||0):(x.done||0)),0),tot=mine.reduce((a,x)=>a+(x.total||0),0);
+  if(run.length){const pc=tot?Math.round(done/tot*100):null;w.html=`받는 중 ${mine.length-run.length}/${mine.length}개 파일${pc!==null?` · ${pc}%`:''}${tot?` (${fmtSize(done)} / ${fmtSize(tot)})`:''}<progress max="100"${pc!==null?` value="${pc}"`:''}></progress> <a href="#" data-go="setup">설치와 모델에서 보기</a>`;needPaint();setTimeout(()=>needPoll(key),1200);return}
+  NEED.watch.delete(key);await needCat(true);
+  if(bad.length){needPaint();$$(`.needdl[data-need="${CSS.escape(key)}"] .ndl`).forEach(l=>{l.dataset.fixed=1;l.innerHTML=`<span class="bad">받지 못했어요: ${esc(bad[0].msg||'')}</span> — 다시 누르면 이어받아요.`;l.previousElementSibling.hidden=false});return}
+  toast('모델을 받았어요. 이제 다시 실행해 보세요.',6000);if(typeof loadLists==='function')loadLists(true);needPaint();
+  $$(`.needdl[data-need="${CSS.escape(key)}"] .ndl`).forEach(l=>{l.dataset.fixed=1;l.textContent='✔ 받았어요. 다시 실행해 보세요.'})}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-needgo]');if(!b)return;const key=b.dataset.needgo,ids=key.split(',');b.disabled=true;
+  let old=[];try{old=await api('/api/install')}catch{}
+  const r=await api('/api/install',{ids});b.disabled=false;if(r.error)return toast(r.error,6000);
+  $$(`.needdl[data-need="${CSS.escape(key)}"] .ndl`).forEach(l=>delete l.dataset.fixed);await needCat();NEED.watch.set(key,{ids:needExpand(r.ids||ids),skip:new Set(old.map(x=>x.id)),html:'받기를 시작했어요…'});needPaint();needPoll(key)});
+/* 화면의 '모델이 아직 없어요' 안내마다 받을 모델을 정해서 버튼을 붙여요 */
+const NEED_W={'w-chat':()=>['qwen35-9b'],'w-up':()=>['esrgan'],'w-i2p':()=>['qwen25vl-7b'],
+  'w-edit':()=>{const e=$('#f-edit')?.dataset.e;return e==='qwen'?['qwen-edit']:e==='flux'?['krea-dev']:['noobai','sdxl-vae-fix']},
+  'w-gen':()=>({sdxl:['noobai','sdxl-vae-fix'],flux:['krea-dev'],chroma:['chroma-hd'],krea2:['krea2-turbo'],sd35:['sd35-medium'],hidream:['hidream-fast'],lumina:['lumina2'],qwenimg:['qwen-image']})[$('#f-gen')?.dataset.g||'sdxl']||[],
+  'w-vid':()=>{const v=$('#f-vid')?.elements.wan_ver?.value;return {ltx:['ltx-video'],vace:['wan-vace'],s2v:['wan-s2v']}[v]||['wan22-ti2v-5b']},
+  'w-vid14':()=>[typeof VID_IMG!=='undefined'&&VID_IMG?'wan22-14b-i2v':'wan22-14b-t2v'],
+  'w-music':()=>[$('#f-music')?.elements.mengine?.value==='sfx'?'stable-audio-open':'ace-step-15-turbo']};
+function needDecorate(){let any=false;
+  for(const[id,f]of Object.entries(NEED_W)){const w=document.getElementById(id);if(!w||w.hidden)continue;const ids=f(),k=ids.join(','),cur=$('.needdl',w);
+    if(cur&&cur.dataset.need===k)continue;cur?.remove();if(ids.length){w.insertAdjacentHTML('beforeend',needBox(ids));any=true}}
+  if(any||$('.needdl'))needCat().then(needPaint)}
+new MutationObserver(debounce(needDecorate,80)).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden']});

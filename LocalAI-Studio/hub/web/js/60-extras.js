@@ -8,15 +8,16 @@ function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
   try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=window.QCTX||(window.QCTX=new A());if(c.state==='suspended')c.resume();
     [[880,0],[1175,.16]].forEach(([f,t])=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);
       const t0=c.currentTime+t;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.18,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.3);o.start(t0);o.stop(t0+.32)})}catch{}}
-function qGo(r){const v=QVIEW[r.kind];if(!v)return;show(v);if(v==='feat'&&r.feature&&typeof featForm==='function')setTimeout(()=>featForm(r.feature,true),400)}
+function qGo(r){if(r.view){show(r.view);if(r.view==='explore'&&r.xp&&window.xpOpen&&(typeof XP==='undefined'||XP.id!==r.xp))xpOpen(r.xp);return}
+  const v=QVIEW[r.kind];if(!v)return;show(v);if(v==='feat'&&r.feature&&typeof featForm==='function')setTimeout(()=>featForm(r.feature,true),400)}
 function qNotify(r){const ok=r.state==='done',t=ok?`✔ ${r.label} — 끝났어요`:`⚠ ${r.label} — 실패했어요`+(r.error?`: ${r.error}`:'');
-  toast(t,7000,r.kind&&QVIEW[r.kind]?()=>qGo(r):null);qBeep();
+  toast(t,7000,r.view||r.kind&&QVIEW[r.kind]?()=>qGo(r):null);qBeep();
   if(qDesk()&&document.hidden&&window.Notification&&Notification.permission==='granted'){try{new Notification(ok?'작업이 끝났어요':'작업에 실패했어요',{body:r.label+(ok||!r.error?'':'\n'+r.error)})}catch{}}}
 function qRender(q){const L=$('#qlist');if(!L)return;
   if(!q.items.length){L.innerHTML='<p class="mute">지금 진행 중이거나 기다리는 작업이 없어요.</p>';return}
   L.innerHTML=q.items.map(r=>{const act=r.state==='running'||r.state==='queued',pc=typeof r.progress==='number'&&r.state==='running'?Math.round(r.progress*100):null,
     ic={running:'▶',queued:r.pos+'',done:'✔',error:'⚠',cancelled:'■'}[r.state];
-    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}" data-view="${esc(QVIEW[r.kind]||'')}" data-feature="${esc(r.feature||'')}" title="누르면 이 작업의 화면으로 이동해요"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${r.state==='running'&&r.model?`<small class="qmod" title="${esc(r.model)}">모델: ${esc(r.model)}</small>`:''}${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
+    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}" data-view="${esc(QVIEW[r.kind]||'')}" data-feature="${esc(r.feature||'')}" data-qv="${esc(r.view||'')}" data-xp="${esc(r.xp||'')}" title="누르면 이 작업의 화면으로 이동해요"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${r.state==='running'&&r.model?`<small class="qmod" title="${esc(r.model)}">모델: ${esc(r.model)}</small>`:''}${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
     <div class="qb">${r.state==='queued'?`<button type="button" data-q="top" title="맨 앞으로">⤒</button><button type="button" data-q="up" title="한 칸 앞으로">▲</button><button type="button" data-q="down" title="한 칸 뒤로">▼</button>`:''}${act?`<button type="button" data-q="cancel" title="${r.state==='running'?'중단':'대기열에서 빼기'}">✕</button>`:''}</div></div>`}).join('')}
 async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
   const n=q.running+q.queued,c=$('#qcount');c.hidden=!n;c.textContent=n;$('#qbtn').classList.toggle('busy',n>0);
@@ -41,7 +42,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#qpanel').hidde
 $('#q-pin').onchange=e=>{ls.set('q:pin',e.target.checked);QUSER=e.target.checked?null:'open';qApply()};
 
 $('#qlist').addEventListener('click',async e=>{const row=e.target.closest('.qrow');
-  if(row&&!e.target.closest('[data-q]')){const v=row.dataset.view;if(v){qGo({kind:row.dataset.kind||Object.keys(QVIEW).find(k=>QVIEW[k]===v),feature:row.dataset.feature});if(!qPin()){QUSER='closed';qApply()}}return}
+  if(row&&!e.target.closest('[data-q]')){const v=row.dataset.view;if(row.dataset.qv){qGo({view:row.dataset.qv,xp:row.dataset.xp});if(!qPin()){QUSER='closed';qApply()}return}if(v){qGo({kind:row.dataset.kind||Object.keys(QVIEW).find(k=>QVIEW[k]===v),feature:row.dataset.feature});if(!qPin()){QUSER='closed';qApply()}}return}
   const b=e.target.closest('[data-q]');if(!b)return;const id=b.closest('.qrow').dataset.id;
   try{const r=b.dataset.q==='cancel'?await api('/api/job/cancel',{id}):await api('/api/queue/move',{id,to:b.dataset.q});if(r.error)toast(r.error)}catch{}qPoll()});
 $('#q-sound').onchange=e=>{ls.set('q:sound',e.target.checked);if(e.target.checked)qBeep()};
@@ -574,14 +575,15 @@ function hwPlace(){const pan=$('#hwpanel'),b=$('#gbars');if(pan.hidden||!b)retur
   Object.assign(pan.style,{left:(r.right+8)+'px',right:'auto',top:top+'px',bottom:'auto',maxHeight:(innerHeight-16)+'px'})}
 function hwRender(v){const g=v.live,j=v.job,row=(t,sub,btn)=>`<div class="hwr"><div><b>${t}</b>${sub?`<small>${sub}</small>`:''}</div>${btn||''}</div>`,
   fb=(what,t,tip)=>`<button type="button" class="ghost sm" data-hw="${esc(what)}"${tip?` title="${esc(tip)}"`:''}>${t}</button>`;
-  let h=`<div class="hwsum">${v.gpu?esc(v.gpu.name):'GPU'}${g?` · VRAM ${hwGB(g.used_mb)} / ${hwGB(g.total_mb)}${g.util!=null?` · 사용률 ${g.util}%`:''}${g.temp!=null?` · ${g.temp}°C`:''}`:' · 상태를 읽지 못했어요'}</div>`;
+  const mine=(v.comfy?.vram_mb||0)+v.ollama.reduce((a,m)=>a+(m.vram_mb||0),0)+v.others.reduce((a,o)=>a+(o.mb||0),0);
+  let h=`<div class="hwsum">스튜디오가 쓰는 그래픽 메모리 약 <b>${hwGB(mine)}</b>${g?` <span class="mute">(${v.gpu?esc(v.gpu.name)+' · ':''}전체 ${hwGB(g.total_mb)})</span>`:''}</div>`;
   h+='<h4>지금 하는 작업</h4>'+(j?row(esc(j.label),[j.model&&('모델: '+esc(j.model)),typeof j.progress==='number'&&Math.round(j.progress*100)+'%',j.msg&&esc(j.msg),j.elapsed+'초째',j.eta&&typeof fmtEta==='function'&&('남은 시간 '+fmtEta(j.eta))].filter(Boolean).join(' · '),fb('job:'+j.id,'중단','이 작업만 멈춰요'))
     :`<p class="mute">실행 중인 작업이 없어요.</p>`)+(v.queued?`<p class="mute">기다리는 작업 ${v.queued}개 · <a href="#" id="hw-q">작업 대기열 보기</a></p>`:'');
   h+='<h4>불러와 있는 모델</h4>';
   h+=row('이미지·영상 엔진 (ComfyUI)',!v.comfy_on?'꺼져 있어요':v.comfy?`그래픽 메모리 ${hwGB(v.comfy.vram_mb)} 사용${v.last_model?' · 마지막 모델: '+esc(v.last_model):''}`:'사용량을 읽지 못했어요',
     v.comfy_on?fb('comfy','내리기','이미지·영상 엔진이 불러 둔 모델을 내려요(실행 중인 작업은 끝난 뒤에 내려가요)'):'');
   h+=v.ollama.length?v.ollama.map(m=>row('대화 모델 · '+esc(m.name),`그래픽 메모리 ${hwGB(m.vram_mb)}${m.size_mb>m.vram_mb+64?` (나머지 ${hwGB(m.size_mb-m.vram_mb)}는 일반 메모리)`:''}`,fb('ollama:'+m.name,'내리기'))).join(''):row('대화 모델','불러온 모델이 없어요','');
-  if(v.others.length)h+='<h4>그 밖에 그래픽 메모리를 쓰는 프로그램</h4>'+v.others.map(o=>row(esc(o.who),esc(o.name)+' · '+hwGB(o.mb),'')).join('');
+  h+=v.others.map(o=>row(esc(o.who),hwGB(o.mb),'')).join('');
   $('#hwbody').innerHTML=h;hwPlace()}
 async function hwPoll(){if($('#hwpanel').hidden)return;try{hwRender(await api('/api/monitor'))}catch{}
   clearTimeout(HW.timer);HW.timer=setTimeout(hwPoll,document.hidden?6000:2000)}
@@ -596,3 +598,9 @@ $('#hwbody').addEventListener('click',async e=>{if(e.target.id==='hw-q'){e.preve
   const r=await api('/api/monitor/free',w.startsWith('job:')?{what:'job',id:w.slice(4)}:{what:w});
   if(r.error)toast(r.error);else toast(w.startsWith('job:')?'작업을 멈추는 중이에요.':'모델을 내렸어요.');setTimeout(hwPoll,800)});
 addEventListener('resize',hwPlace);
+
+/* 떠 있는 창(작업 대기열·작업 관리자)은 바깥을 누르면 닫혀요 */
+document.addEventListener('pointerdown',e=>{const t=e.target;if(!(t instanceof Element))return;
+  if(t.closest('#lb,.toast,#toasts,dialog'))return;
+  const q=$('#qpanel');if(q&&!q.hidden&&!t.closest('#qpanel,#qbtn,#qfloat')){QUSER='closed';qApply()}
+  const h=$('#hwpanel');if(h&&!h.hidden&&!t.closest('#hwpanel,#gbars'))hwToggle(false)},true);

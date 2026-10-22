@@ -518,7 +518,8 @@ def feat_ipadapter(p, J):
 
 def do_feat(p, J):
     fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color,
-          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "img3d": feat_3d, "rmbg": feat_rmbg}.get(p.get("feature"))
+          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "img3d": feat_3d, "rmbg": feat_rmbg,
+          "relight": feat_relight, "depth": feat_depth}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")
     spec = next(f for f in FEATURES if f["id"] == p["feature"])
@@ -529,3 +530,90 @@ def do_feat(p, J):
         raise RuntimeError("이 ComfyUI 에는 필요한 노드가 없어요: " + ", ".join(miss) + ". " +
                            (f"확장 '{pack}' 을(를) 설치하고 ComfyUI 를 다시 시작해 주세요." if pack else "ComfyUI 를 업데이트해 주세요."))
     return fn(p, J)
+
+
+# ───────────────────────── 조명 바꾸기 · 깊이 맵 ─────────────────────────
+RELIGHT = {"cinematic": "cinematic film lighting with a soft key light from the side and gentle shadows",
+           "window": "soft natural daylight coming through a window", "golden": "warm golden hour sunlight with long soft shadows",
+           "neon": "colorful neon light, pink and blue glow", "candle": "warm candlelight and cozy indoor lamp light",
+           "moon": "cool blue moonlight at night", "studio": "bright even studio three-point lighting",
+           "rim": "strong rim light outlining the subject from behind", "dramatic": "dramatic high-contrast chiaroscuro lighting with deep shadows",
+           "soft": "soft diffused bright lighting with gentle shadows"}
+RELIGHT_DIR = {"right": "coming from the right side", "left": "coming from the left side", "top": "coming from above", "front": "coming from the front",
+               "back": "coming from behind the subject (backlight)"}
+RELIGHT_TEMP = {"warm": "warm color temperature", "neutral": "neutral white color temperature", "cool": "cool bluish color temperature"}
+RELIGHT_POWER = {"subtle": "Make a subtle change.", "normal": "", "strong": "Make the new lighting clearly visible."}
+
+
+def relight_prompt(p):
+    """조명 바꾸기 지시문(영어). 직접 쓴 글(한글 가능)은 그대로 넣고 번역을 켜요."""
+    kind = p.get("light") if p.get("light") in RELIGHT or p.get("light") == "custom" else "cinematic"
+    light = str(p.get("custom") or "").strip()[:500] if kind == "custom" else RELIGHT[kind]
+    if not light:
+        raise ValueError("원하는 조명을 적어 주세요.")
+    parts = [f"Relight the photo with {light}"]
+    if RELIGHT_DIR.get(p.get("dir")):
+        parts[0] += ", " + RELIGHT_DIR[p["dir"]]
+    if RELIGHT_TEMP.get(p.get("temp")):
+        parts[0] += ", " + RELIGHT_TEMP[p["temp"]]
+    parts[0] += "."
+    parts.append("Change only the lighting, shadows, highlights and color of light.")
+    if p.get("keep") not in ("", None, False, "off"):
+        parts.append("Keep the person's face, identity, expression, pose, hair, clothing, the composition and the background layout exactly the same.")
+    if RELIGHT_POWER.get(p.get("power")):
+        parts.append(RELIGHT_POWER[p["power"]])
+    return " ".join(parts), bool(re.search("[가-힣]", light))
+
+
+def feat_relight(p, J):
+    text, ko = relight_prompt(p)
+    q = {"kind": "edit", "engine": "qwen", "image": p["image"], "prompt": text, "seed": p.get("seed", -1)}
+    if p.get("fast"):
+        q["fast"] = "on"
+    if ko:
+        q["translate"] = "on"
+    out = do_edit(q, J)
+    return [(im, {**info, "kind": "relight", "extra": {**(info.get("extra") or {}), "Relight": p.get("light"), "Direction": p.get("dir"), "Temperature": p.get("temp")}}, g)
+            for im, info, g in out]
+
+
+def depth_colorize(gray):
+    """흑백 깊이 → 색(먼 곳 파랑 → 초록 → 노랑 → 가까운 곳 빨강)."""
+    stops = [(0, (40, 40, 160)), (85, (30, 170, 200)), (150, (90, 200, 80)), (205, (250, 210, 50)), (255, (220, 40, 30))]
+    lut = []
+    for ch in range(3):
+        for v in range(256):
+            a = max(s_ for s_ in stops if s_[0] <= v)
+            b = min((s_ for s_ in stops if s_[0] >= v), key=lambda s_: s_[0])
+            t = 0 if b[0] == a[0] else (v - a[0]) / (b[0] - a[0])
+            lut.append(round(a[1][ch] + (b[1][ch] - a[1][ch]) * t))
+    return Image.merge("RGB", [gray] * 3).point(lut)
+
+
+def feat_depth(p, J):
+    img = load_img(p["image"])
+    J["msg"] = "깊이를 추정하는 중"
+    r = control_prep({"type": "depth", "image": p["image"]})
+    if r.get("error"):
+        raise RuntimeError(r["error"])
+    d = Image.open(io.BytesIO(base64.b64decode(r["image"].split(",", 1)[1]))).convert("L").resize(img.size, RS.BICUBIC)
+    d = ImageOps.autocontrast(d)
+    if p.get("invert"):
+        d = ImageOps.invert(d)
+    out = p.get("out") if p.get("out") in ("gray", "color", "cut") else "gray"
+    info = {"kind": "depth", "prompt": "", "w": img.width, "h": img.height, "model": r.get("node", ""),
+            "extra": {"Depth": "AI 추정값(실제 측정 아님)", "Output": out, "Preprocessor": r.get("node", "")}}
+    if out == "gray":
+        return [(d.convert("RGB"), info, None)]
+    if out == "color":
+        return [(depth_colorize(d), info, None)]
+    near = clamp(num(p, "near", 50), 1, 99)
+    cut = round(near / 100 * 255)          # 클수록 더 가까운(밝은) 곳만 남겨요
+    mask = d.point(lambda v: 255 if v >= cut else 0)
+    fe = clamp(num(p, "feather", 4, int), 0, 60)
+    if fe:
+        mask = mask.filter(ImageFilter.GaussianBlur(fe))
+    rgba = img.convert("RGBA")
+    rgba.putalpha(mask)
+    info["extra"]["Near"] = near
+    return [(rgba, info, None)]

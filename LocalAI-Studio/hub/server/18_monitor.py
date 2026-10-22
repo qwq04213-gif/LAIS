@@ -67,8 +67,7 @@ def monitor_view():
             comfy["proc_mb"] = pr["mb"]
         elif own == "tts":
             others.append({"who": "음성 엔진", "mb": pr["mb"], "name": Path(pr["name"]).name})
-        elif own == "other":
-            others.append({"who": "다른 프로그램", "mb": pr["mb"], "name": Path(pr["name"].replace("\\", "/")).name})
+
     return {"gpu": GPU, "live": live, "job": job, "queued": len(QUEUE), "ollama": ps, "comfy": comfy,
             "comfy_on": alive(CUI + "/system_stats"), "last_model": " · ".join(last[1]) if last else "", "others": others}
 

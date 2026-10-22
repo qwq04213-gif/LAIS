@@ -244,7 +244,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -267,7 +267,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.chat(p)
         if u == "/api/agent/plan":
             try:
-                return self.send_json(agent_plan(p))
+                r = agent_plan(p)
+                if r.get("error") and need_ids(r["error"]):
+                    r["need"] = need_ids(r["error"])
+                return self.send_json(r)
             except Exception as e:  # noqa: BLE001
                 log("[실행 모드 오류]", repr(e))
                 agent_log(ev="error", error=repr(e))
@@ -277,7 +280,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 return self.send_json(fn(p))
             except (ValueError, RuntimeError) as e:
-                return self.send_json({"error": str(e)})
+                return self.send_json({"error": str(e), **({"need": need_ids(e)} if need_ids(e) else {})})
             except Exception as e:  # noqa: BLE001
                 log("[프롬프트 탐색 오류]", repr(e))
                 return self.send_json({"error": f"처리하지 못했어요: {type(e).__name__}"})

@@ -640,7 +640,7 @@ details.more[open]>.menu:not([style]){visibility:hidden}
 .xp-mode .seg{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}.xpp{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.xpp textarea{flex:1;min-width:260px}
 #xp-vary{display:inline-flex;gap:10px;flex-wrap:wrap}#xp-count{width:64px}
 .xpr{display:flex;align-items:center;gap:10px;margin:16px 0 8px}.xpr h3{margin:0}
-.xpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.xpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));align-items:start;gap:16px}
 .xpc{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--chrome)}.xpc.picked{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
 .xpimg{aspect-ratio:1;background:var(--table);display:flex;align-items:center;justify-content:center}.xpimg img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
 .xpst{display:grid;gap:6px;justify-items:center;color:var(--mute);padding:10px;text-align:center}.xpst progress{width:80%}.xpst .bad{color:var(--bad)}
@@ -649,3 +649,19 @@ details.more[open]>.menu:not([style]){visibility:hidden}
 .plan .pxp{display:inline-block;margin-top:6px}
 .xpp[hidden]{display:none}.xpc .chip{cursor:default}
 .xp-row select{width:auto;max-width:min(420px,100%)}
+.needdl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}.needdl .ndl{font-size:calc(12.5px*var(--ui,1))}.needdl progress{width:160px;height:8px;margin-left:6px;vertical-align:middle}
+.item .ipg{display:block;color:var(--acc);margin-top:4px}.item .ipg[hidden]{display:none}.item .ipg progress{display:block;width:100%;max-width:320px;height:8px;margin-top:3px}
+
+/* 프롬프트 탐색: 빌려 온 생성 설정 칸 — 프롬프트·장수·이미지로 시작·만들기 버튼은 탐색이 대신 정해요 */
+.xp-gen{border:1px solid var(--line);border-radius:10px;padding:0 12px;margin:10px 0}.xp-gen>summary{cursor:pointer;padding:10px 0;font-weight:700}.xp-gen>summary .mute{font-weight:400;font-size:calc(12px*var(--ui,1))}
+#xp-genbox #f-gen{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 16px;align-items:start;padding-bottom:10px}
+#xp-genbox #f-gen>*{min-width:0}#xp-genbox #f-gen>details,#xp-genbox #f-gen>.presets,#xp-genbox #f-gen>.warn{grid-column:1/-1}
+#xp-genbox #f-gen>.go,#xp-genbox label.f:has(>textarea[name=prompt]),#xp-genbox label.f:has(>textarea[name=negative]),#xp-genbox details:has(.mini[data-img=init]),
+#xp-genbox details:has(#wcs),#xp-genbox label.f:has(input[name=n]),#xp-genbox #f-gen>p.hint[data-for="flux chroma krea2"]{display:none}
+/* '이걸로 더 탐색' 창 */
+.xmodal{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}.xmodal[hidden]{display:none}
+.xmbox{background:var(--chrome);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px 20px;display:grid;gap:12px}
+.xmbox h3{margin:0}.xmsrc{display:flex;gap:12px;align-items:flex-start;background:var(--table);border-radius:10px;padding:10px}.xmsrc img{width:96px;height:96px;object-fit:cover;border-radius:8px;flex:none}
+.xmsrc p{margin:4px 0 0;font-size:calc(12px*var(--ui,1));display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.xmbox textarea{width:100%}.xmchips{display:flex;gap:6px;flex-wrap:wrap}.xmcount input{width:80px}.xmact{display:flex;justify-content:flex-end;gap:8px}
+.xpc{display:flex;flex-direction:column;width:100%;max-width:600px;justify-self:center}.xpc>.xpimg,.xpc>figcaption{width:100%;box-sizing:border-box}

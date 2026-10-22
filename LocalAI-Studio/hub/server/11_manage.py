@@ -662,7 +662,7 @@ def install(p):
                  token=c.get("token") or None, name=Path(c.get("name") or "").name or None)
     if (p.get("ollama") or "").strip():
         add_task(p["ollama"].strip(), kind="ollama", model=p["ollama"].strip())
-    return {"ok": True}
+    return {"ok": True, "ids": [m["id"] for m in items]}
 
 
 # ───────────────────────── 설정(API 키) ─────────────────────────

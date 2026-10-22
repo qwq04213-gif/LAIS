@@ -303,14 +303,14 @@ async function loadFeat(){
 const fieldHTML=f=>{
   const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'',si=f.show_if?` data-show-if='${esc(JSON.stringify(f.show_if))}'`:'';
   if(f.type==='image')return `<div class="f"><span>${esc(f.label)}${req}</span><div class="mini${n==='image'&&!['ipadapter'].includes(featId)?' big':''}" data-img="${n}"></div>${hint}</div>`;
-  if(f.type==='textarea')return `<label class="f"><span>${esc(f.label)}${req}</span><textarea name="${n}" rows="${f.rows||3}"></textarea>${hint}</label>`;
+  if(f.type==='textarea')return `<label class="f"${si}><span>${esc(f.label)}${req}</span><textarea name="${n}" rows="${f.rows||3}"></textarea>${hint}</label>`;
   if(f.type==='lora')return `<div class="f"><span>${esc(f.label)}</span>${T.lora()}${hint}</div>`;
-  if(f.type==='check')return `<label class="chk${f.required?' consent':''}"><input type="checkbox" name="${n}"> <span>${esc(f.label)}</span></label>`;
+  if(f.type==='check')return `<label class="chk${f.required?' consent':''}"${si}><input type="checkbox" name="${n}"${f.default?' checked':''}> <span>${esc(f.label)}</span></label>`;
   if(f.type==='color')return `<label class="f"${si}>${esc(f.label)}<input type="color" name="${n}" value="${esc(f.default??'#ffffff')}">${hint}</label>`;
   if(f.type==='text')return `<label class="f"${si}>${esc(f.label)}<input name="${n}" value="${esc(f.default??'')}">${hint}</label>`;
-  if(f.type==='number')return `<label class="f">${esc(f.label)}<input type="number" name="${n}" value="${esc(f.default??'')}" min="${f.min??''}" max="${f.max??''}" step="${f.step??1}">${hint}</label>`;
+ if(f.type==='number')return `<label class="f"${si}>${esc(f.label)}<input type="number" name="${n}" value="${esc(f.default??'')}" min="${f.min??''}" max="${f.max??''}" step="${f.step??1}">${hint}</label>`;
   if(f.type==='seed')return `<label class="f">${esc(f.label)}<span class="seedrow"><input type="number" name="${n}" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>`;
-  if(f.type==='select')return `<label class="f">${esc(f.label)}<select name="${n}">${f.options.map(([v,t])=>`<option value="${esc(v)}"${v===f.default?' selected':''}>${esc(t)}</option>`).join('')}</select>${hint}</label>`;
+  if(f.type==='select')return `<label class="f"${si}>${esc(f.label)}<select name="${n}">${f.options.map(([v,t])=>`<option value="${esc(v)}"${v===f.default?' selected':''}>${esc(t)}</option>`).join('')}</select>${hint}</label>`;
   if(f.type==='list'&&f.list==='models'){
     const o=(arr,pre)=>arr.map(x=>`<option value="${esc(pre+x)}">${esc(fxLabel(x))}</option>`).join('');
     const gs=[['SD·SDXL 체크포인트',LISTS.checkpoints||[],''],['FLUX·Krea(FLUX.1)',LISTS.fluxmodels||[],'fx:flux:'],['Krea 2',LISTS.krea2models||[],'fx:krea2:'],['Chroma',LISTS.chromamodels||[],'fx:chroma:']].filter(g=>g[1].length&&!(f.exclude||[]).some(x=>g[2].startsWith('fx:'+x+':')));
@@ -329,11 +329,12 @@ function featForm(id,keep){
   featId=id;$('#feat-form').dataset.f=id;navMark($('#v-feat.on')?'feat':'');
   const keepVals=mem?mem.vals:{};
   const keepImgs=mem?mem.imgs:{}; // 창이 다시 활성화되며 목록을 새로 그려도 올린 이미지는 유지
-  const miss=[...(f.missing_nodes||[]).map(n=>`노드 ${n}`),...(f.missing_lists||[]).map(k=>({checkpoints:'체크포인트',anymodels:'이미지 모델'}[k]||k))];
+  const miss=[...(f.missing_nodes||[]).map(n=>`노드 ${n}`),...(f.missing_lists||[]).map(k=>({checkpoints:'체크포인트',anymodels:'이미지 모델',qwen:'Qwen-Image-Edit 편집 모델'}[k]||k))];
+  const needL=[...new Set((f.missing_lists||[]).flatMap(k=>({checkpoints:['noobai','sdxl-vae-fix'],anymodels:['noobai','sdxl-vae-fix'],qwen:['qwen-edit']})[k]||[]))];
   const main=f.fields.filter(x=>!x.advanced),adv=f.fields.filter(x=>x.advanced);
   $('#feat-form').innerHTML=`<h3>${esc(f.title)}</h3><p class="hint plain">${esc(f.summary)}</p>
     <ol class="steps">${f.steps.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>
-    ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?'아래 <b>[설치]</b> 버튼으로 확장을 설치하세요.':'<a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.'}${(f.missing_nodes||[]).length&&f.needs&&f.needs.alt?' '+esc(f.needs.alt):''}</p>`:''}
+    ${miss.length?`<p class="warn">필요한 것이 없어요: ${esc(miss.join(', '))}. ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?'아래 <b>[설치]</b> 버튼으로 확장을 설치하세요.':'<a href="#" data-go="setup">설치와 모델</a>에서 설치하거나 ComfyUI를 업데이트해 주세요.'}${(f.missing_nodes||[]).length&&f.needs&&f.needs.alt?' '+esc(f.needs.alt):''}${needBox(needL)}</p>`:''}
     ${(f.missing_nodes||[]).length&&f.needs&&f.needs.pack?`<div class="warn feat-nodes"><b>필요한 확장:</b> ${esc(f.needs.pack)}<div class="fn-list mute">설치할 수 있는 곳을 찾는 중…</div></div>`:''}
     ${id==='faceswap'&&!(f.missing_nodes||[]).length?'<div class="swapm" id="swapm"></div>':''}
     <button class="go">만들기</button>

@@ -223,7 +223,7 @@ def explore_run(p):
         if not todo:
             return {"error": "새로 그릴 후보가 없어요."}
         for c in todo:
-            J = submit_job(exp_job_params(S, c), label=f"프롬프트 탐색 · {c['label']}")
+            J = submit_job(exp_job_params(S, c), label=f"프롬프트 탐색 · {c['label']}", view="explore", xp=S["id"])
             c["job"], c["state"] = J["id"], "queued"
         exp_save(S)
     return explore_view(S["id"])

@@ -141,7 +141,7 @@ const AG_ST={wait:'대기',running:'진행 중',done:'완료',error:'실패',can
 function planCard(P,i){const act=P.state==='wait'?`<button type="button" class="go sm" data-prun="${i}">실행</button><button type="button" class="ghost sm" data-pstop="${i}">취소</button>`
     :P.state==='running'?`<button type="button" class="ghost sm" data-pstop="${i}">중단</button>`:'';
   return `<div class="plan" data-st="${P.state}"><b>실행 계획</b><ol>${P.steps.map(s=>`<li data-st="${s.state}"><span class="ps">${esc(s.summary)}</span> <small class="pst">${s.state==='running'&&s.queued?(s.ahead>1?`대기열 ${s.ahead}번째`:'곧 시작'):AG_ST[s.state]||s.state}</small>${agRun(s)}${
-    s.error?`<div class="st bad">${esc(s.error)}</div>`:''}<details><summary>보낼 값</summary><pre>${esc(JSON.stringify(s.args,null,1))}</pre></details>${
+    s.error?`<div class="st bad">${esc(s.error)}</div>${needBox(s.need)}`:''}<details><summary>보낼 값</summary><pre>${esc(JSON.stringify(s.args,null,1))}</pre></details>${
     s.images?.length?`<div class="cthumbs pimgs">${s.images.map(u=>/\.(png|jpe?g|webp|gif)$/i.test(u)?`<img src="${u}" data-pimg="${u}" alt="결과 (누르면 크게 보기)">`:`<a href="${u}" target="_blank">${esc(decodeURIComponent(u.split('/').pop()))}</a>`).join('')}</div>`:''}${s.explore?`<a href="#" class="pxp" data-xp="${esc(s.explore)}">프롬프트 탐색 화면에서 비교·고르기 →</a>`:''}</li>`).join('')}</ol><div class="pa">${act}</div></div>`}
 const fmtEta=t=>t==null?'':t<60?'1분 안':t<3600?`약 ${Math.round(t/60)}분`:`약 ${Math.floor(t/3600)}시간 ${Math.round(t%3600/60)}분`;
 function agRun(s){const ms=s.models?.length?`<div class="pmod" title="${esc(s.models.join('\n'))}">모델: ${esc(s.models[0])}${s.models.length>1?` <span class="mute">+ ${esc(s.models.slice(1).join(', '))}</span>`:''}</div>`:'';
@@ -157,7 +157,7 @@ async function agentSend(text,pics){
   const body={model:$('#llm').value,image:pics[0]||null,base:{gen:formBase('#f-gen'),edit:formBase('#f-edit')},
     messages:Chat.hist.slice(0,-1).filter(m=>m.content).map(({role,content})=>({role,content}))};
   try{const r=await(await fetch('/api/agent/plan',{method:'POST',body:JSON.stringify(body),signal:Chat.ctl.signal})).json(),m=Chat.hist.at(-1);
-    if(r.error){Chat.hist.splice(-2);$('#msg').value=text;Chat.pics=pics;picsPaint();ce.textContent=r.error;ce.hidden=false}
+    if(r.error){Chat.hist.splice(-2);$('#msg').value=text;Chat.pics=pics;picsPaint();ce.textContent=r.error;if(r.need)ce.insertAdjacentHTML('beforeend',needBox(r.need));ce.hidden=false}
     else{m.content=r.reply||(r.plan?'이렇게 할까요? 확인하고 [실행]을 눌러 주세요.':'');if(r.plan)m.plan=r.plan}
   }catch(e){if(e.name==='AbortError')Chat.hist.splice(-2);else{Chat.hist.splice(-2);$('#msg').value=text;ce.textContent='실행 모드 요청을 보내지 못했어요: '+e.message;ce.hidden=false}}
   Chat.ctl=null;$('#send').textContent='보내기';paint();chatSave()}

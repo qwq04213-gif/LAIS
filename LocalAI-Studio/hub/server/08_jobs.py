@@ -180,6 +180,9 @@ def job_thread(J, p):
             J["msg"] = f"중단했어요. 지금까지 {len(J['images'])}장은 저장돼 있어요."
     except Exception as e:
         J["state"], J["error"] = "error", str(e) or e.__class__.__name__
+        nd = need_ids(J["error"], p)
+        if nd:
+            J["need"] = nd
         if pymod_missing(J["error"]):
             J["pymod"] = pymod_missing(J["error"])
         og = oom_guide(J["error"], p)
@@ -218,6 +221,34 @@ def job_label(p):
         name = next((f["title"] for f in FEATURES if f["id"] == p.get("feature")), name)
     txt = " ".join(str(p.get("prompt") or "").split())
     return name + (f" · {txt[:36]}{'…' if len(txt) > 36 else ''}" if txt else "")
+
+
+NEED_RULES = [      # 작업 오류 글 → 바로 받을 추천 모델(models.json 의 id). 함께 필요한 공용 파일은 받을 때 같이 받아요.
+    (r"체크포인트가 없", ["noobai", "sdxl-vae-fix"]), (r"업스케일 모델이 없", ["esrgan"]), (r"감지 모델이 없", ["adetailer"]),
+    (r"Krea 2 스타일 참조", ["krea2-style-reference"]), (r"Krea 2 깊이 컨트롤", ["krea2-depth-control"]),
+    (r"Stable Audio|T5-base", ["stable-audio-open"]), (r"ACE-Step", ["ace-step-15-turbo"]), (r"4단계 가속 LoRA", ["wan22-lightning"]),
+    (r"Hunyuan3D", ["hunyuan3d-2"]), (r"LTX-Video", ["ltx-video"]), (r"Wan VACE", ["wan-vace"]), (r"S2V", ["wan-s2v"]),
+    (r"Wan 2\.2 14B 이미지", ["wan22-14b-i2v"]), (r"Wan 2\.2 14B 글", ["wan22-14b-t2v"]), (r"'Wan 2\.2 영상'", ["wan22-ti2v-5b"]),
+    (r"SD3\.5", ["sd35-medium"]), (r"HiDream", ["hidream-fast"]), (r"Lumina 2", ["lumina2"]), (r"Qwen-Image 모델|Qwen-Image 공용", ["qwen-image"]),
+    (r"Qwen 모델|Qwen-Image-Edit|편집 모델\(", ["qwen-edit"]), (r"Lightning LoRA", ["qwen-lightning"]),
+    (r"이미지를 볼 수 있는 대화 모델", ["qwen25vl-7b"]), (r"도우미로 쓸 대화 모델|도구 호출", ["qwen35-9b"]),
+]
+NEED_FAM = {"flux": ["krea-dev"], "chroma": ["chroma-hd"], "krea2": ["krea2-turbo"]}
+
+
+def need_ids(err, p=None):
+    """'설치와 모델에서 설치해 주세요' 같은 오류일 때 바로 받을 수 있는 추천 모델 id 목록(최대 3개)."""
+    err = str(err or "")
+    if "설치" not in err or "ffmpeg" in err or "부품" in err or "확장" in err or "노드" in err:
+        return []
+    known = {m["id"] for m in CATALOG["llm"] + CATALOG["image"]}
+    out = []
+    if (p or {}).get("kind") == "gen" and "없는 파일" in err:
+        out += NEED_FAM.get((p or {}).get("gengine"), [])
+    for rx, ids in NEED_RULES:
+        if re.search(rx, err):
+            out += ids
+    return [i for i in dict.fromkeys(out) if i in known][:3]
 
 
 def submit_job(p, **extra):
@@ -390,7 +421,7 @@ def _qrow(J, pos=0):
     return {"id": J["id"], "kind": J.get("kind"), "label": J.get("label") or "작업", "state": J["state"], "pos": pos,
             "msg": J.get("msg", ""), "progress": J.get("progress"), "error": str(J.get("error") or "")[:200],
             "images": len(J.get("images") or []), "t_end": J.get("t_end"), "feature": J.get("feature") or "",
-            "model": J.get("model_desc") or "", "eta": J.get("eta")}
+            "model": J.get("model_desc") or "", "eta": J.get("eta"), "view": J.get("view") or "", "xp": J.get("xp") or ""}
 
 
 def queue_view():

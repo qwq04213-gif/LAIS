@@ -13,6 +13,10 @@ async function loadTasks(){
   const t=await api('/api/install');
   $('#tasks').innerHTML=t.length?taskHead(t)+t.map(taskRow).join(''):'<p class="empty">진행 중인 설치가 없어요.</p>';
   {const w=$('#tasks-wrap');if(w)w.hidden=!t.some(x=>x.state==='queued'||x.state==='running'||x.state==='error')}   // 받는 중일 때만 맨 위에 보여요
+  $$('#v-setup .ipg[data-mid]').forEach(el=>{const mine=t.filter(x=>x.mid===el.dataset.mid),run=mine.filter(x=>x.state==='queued'||x.state==='running');      // 각 모델 줄에도 받는 상황
+    if(!run.length){const bad=mine.find(x=>x.state==='error');el.hidden=!bad;if(bad)el.innerHTML=`<span class="bad">받지 못했어요: ${esc(bad.msg||'')}</span>`;return}
+    const d=mine.reduce((a,x)=>a+(x.state==='done'?(x.total||x.done||0):(x.done||0)),0),tt=mine.reduce((a,x)=>a+(x.total||0),0),pc=tt?Math.round(d/tt*100):null;
+    el.hidden=false;el.innerHTML=`받는 중 ${mine.length-run.length}/${mine.length}개 파일${pc!==null?` · ${pc}% (${fmtSize(d)} / ${fmtSize(tt)})`:''}<progress max="100"${pc!==null?` value="${pc}"`:''}></progress>`});
   clearTimeout(tPoll);
   if(t.some(x=>x.state==='queued'||x.state==='running')){busy=true;tPoll=setTimeout(loadTasks,1000)}
   else if(busy){busy=false;loadSetup();loadLists(true)}
@@ -20,7 +24,7 @@ async function loadTasks(){
 async function loadSetup(){
   const[s,c]=await Promise.all([api('/api/status'),api('/api/catalog')]);
   $('#gpuinfo').textContent=s.gpu?`내 GPU: ${s.gpu.name}, VRAM ${s.gpu.vram_gb}GB`:'NVIDIA GPU를 찾지 못했어요. 이미지 기능은 매우 느리거나 동작하지 않을 수 있어요.';
-  const row=m=>`<label class="item"><input type="checkbox" value="${m.id}" ${m.installed?'disabled':''}><span><b>${esc(m.name)}</b><small>${esc(m.desc)}</small></span><em>${m.installed?`설치됨${m.disk_gb?` · ${m.disk_gb}GB`:''} <button type="button" class="ghost sm cat-del" data-id="${m.id}" data-n="${esc(m.name)}" data-gb="${m.gb||''}">삭제</button>`:m.gb+'GB'}</em></label>`;
+  const row=m=>`<label class="item"><input type="checkbox" value="${m.id}" ${m.installed?'disabled':''}><span><b>${esc(m.name)}</b><small>${esc(m.desc)}</small><small class="ipg" data-mid="${m.id}" hidden></small></span><em>${m.installed?`설치됨${m.disk_gb?` · ${m.disk_gb}GB`:''} <button type="button" class="ghost sm cat-del" data-id="${m.id}" data-n="${esc(m.name)}" data-gb="${m.gb||''}">삭제</button>`:m.gb+'GB'}</em></label>`;
   const keep=new Set($$('#v-setup .item input:checked').map(i=>i.value));
   loadManage();
   $('#cat-llm').innerHTML=c.llm.map(row).join('');

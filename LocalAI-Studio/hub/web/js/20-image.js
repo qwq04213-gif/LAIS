@@ -220,7 +220,7 @@ function addResults(sec,j,kind){
 /* 진행 표시줄: 이미지 아래에 상태를 보여 주고, 실행 중에는 [중단] 버튼을 보여 줘요 */
 function setBar(view,text,mode){
   const b=$('.jobbar',view),st=$('.st',b),run=mode==='run';
-  b.querySelectorAll('.oom').forEach(x=>x.remove());
+  b.querySelectorAll('.oom,.needdl').forEach(x=>x.remove());
   b.hidden=!text;b.dataset.m=mode;st.className='st'+(mode==='bad'?' bad':'');st.textContent=text||'';
   $('.spin',b).hidden=!run;$('.stop',b).hidden=!run;
   const pg=$('.pg',b);if(!run)pg.hidden=true;
@@ -245,7 +245,7 @@ async function run(kind,form,extra={}){
     id=r.id;qPoll().then(qSched);if(wantStop)await api('/api/job/cancel',{id});
     for(;;){
       await sleep(1000);const j=await api('/api/job/'+id);
-      if(j.state==='error'){const er=new Error(j.error);er.pymod=j.pymod;er.oom=j.oom;throw er}
+      if(j.state==='error'){const er=new Error(j.error);er.pymod=j.pymod;er.oom=j.oom;er.need=j.need;throw er}
       if(j.state==='cancelled'){setBar(view,'중단했어요.','ok');break}
       if(j.state==='done'){
         if(extra.image&&(kind==='edit'||kind==='up')){j.images.forEach(u=>COMPARE[u]=extra.image);IV[kind].showResult(j.images[0],extra.image)}
@@ -258,7 +258,7 @@ async function run(kind,form,extra={}){
       setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');
       if(!wantStop)setProg(view,j);
     }
-  }catch(e){setBar(view,e.message,'bad');if(e.pymod)pymodHelp($('.jobbar .st',view),e.pymod);if(e.oom)oomHelp(view,e.oom)}
+  }catch(e){setBar(view,e.message,'bad');if(e.pymod)pymodHelp($('.jobbar .st',view),e.pymod);if(e.oom)oomHelp(view,e.oom);if(e.need?.length)$('.jobbar .st',view).insertAdjacentHTML('afterend',needBox(e.need))}
   go.disabled=false;
 }
 /* ── 영상 만들기 ── */

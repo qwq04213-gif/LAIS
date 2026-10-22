@@ -1,1042 +1,1295 @@
 [
-  {
-    "id": "outpaint",
-    "title": "이미지 확장 (아웃페인팅)",
-    "icon": "⤢",
-    "summary": "사진 가장자리 바깥으로 그림을 이어서 그려 화면을 넓혀요. 세로 사진을 가로로 만들거나, 인물 주변 배경을 더 넓게 만들 때 써요.",
-    "steps": [
-      "확장할 이미지를 올려요",
-      "늘릴 방향의 픽셀 수를 적어요 (예: 오른쪽 512)",
-      "새로 그려질 부분에 어떤 풍경이 이어질지 적어요"
-    ],
-    "needs": {
-      "nodes": [
-        "ImagePadForOutpaint",
-        "InpaintModelConditioning",
-        "DifferentialDiffusion"
-      ],
-      "lists": [
-        "anymodels"
-      ]
-    },
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "확장할 이미지",
-        "required": true
-      },
-      {
-        "name": "prompt",
-        "type": "textarea",
-        "label": "이어서 그릴 내용",
-        "hint": "NoobAI·Pony 등은 영어 태그, 사실적 모델은 문장으로 적어요. 예: city street at night, neon signs",
-        "required": true
-      },
-      {
-        "name": "ckpt",
-        "type": "list",
-        "list": "models",
-        "label": "모델",
-        "hint": "SDXL 체크포인트뿐 아니라 FLUX·Krea·Krea 2·Chroma 모델로도 확장할 수 있어요. FLUX 계열은 단계 수·CFG를 모델에 맞게 자동으로 정해요."
-      },
-      {
-        "name": "left",
-        "type": "number",
-        "label": "왼쪽 (px)",
-        "default": 0,
-        "min": 0,
-        "max": 1024,
-        "step": 1
-      },
-      {
-        "name": "right",
-        "type": "number",
-        "label": "오른쪽 (px)",
-        "default": 256,
-        "min": 0,
-        "max": 1024,
-        "step": 1
-      },
-      {
-        "name": "top",
-        "type": "number",
-        "label": "위 (px)",
-        "default": 0,
-        "min": 0,
-        "max": 1024,
-        "step": 1
-      },
-      {
-        "name": "bottom",
-        "type": "number",
-        "label": "아래 (px)",
-        "default": 0,
-        "min": 0,
-        "max": 1024,
-        "step": 1
-      },
-      {
-        "name": "feather",
-        "type": "number",
-        "label": "경계 부드럽게 (px)",
-        "default": 40,
-        "min": 0,
-        "max": 200,
-        "step": 1,
-        "hint": "원본과 새 부분이 만나는 경계를 섞는 폭이에요. 이음새가 보이면 키워요.",
-        "advanced": true
-      },
-      {
-        "name": "steps",
-        "type": "number",
-        "label": "단계 수",
-        "default": 28,
-        "min": 1,
-        "max": 100,
-        "advanced": true,
-        "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
-      },
-      {
-        "name": "cfg",
-        "type": "number",
-        "label": "CFG",
-        "default": 5.5,
-        "min": 0,
-        "max": 30,
-        "step": 0.1,
-        "advanced": true,
-        "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
-      },
-      {
-        "name": "seed",
-        "type": "seed",
-        "label": "시드",
-        "default": -1,
-        "advanced": true
-      }
-    ]
+ {
+  "id": "outpaint",
+  "title": "이미지 확장 (아웃페인팅)",
+  "icon": "⤢",
+  "summary": "사진 가장자리 바깥으로 그림을 이어서 그려 화면을 넓혀요. 세로 사진을 가로로 만들거나, 인물 주변 배경을 더 넓게 만들 때 써요.",
+  "steps": [
+   "확장할 이미지를 올려요",
+   "늘릴 방향의 픽셀 수를 적어요 (예: 오른쪽 512)",
+   "새로 그려질 부분에 어떤 풍경이 이어질지 적어요"
+  ],
+  "needs": {
+   "nodes": [
+    "ImagePadForOutpaint",
+    "InpaintModelConditioning",
+    "DifferentialDiffusion"
+   ],
+   "lists": [
+    "anymodels"
+   ]
   },
-  {
-    "id": "regional",
-    "title": "영역별 프롬프트 (칸 나눠 그리기)",
-    "icon": "▦",
-    "summary": "화면을 둘 또는 셋으로 나눠 칸마다 다른 내용을 적어요. '왼쪽엔 소녀, 오른쪽엔 고양이'처럼 여러 대상이 섞이지 않게 그릴 때 좋아요.",
-    "steps": [
-      "나누는 방식을 골라요",
-      "전체 분위기를 공통 문장에 적어요",
-      "칸마다 그릴 내용을 적어요"
-    ],
-    "needs": {
-      "nodes": [
-        "ConditioningSetAreaPercentage",
-        "ConditioningCombine"
-      ],
-      "lists": [
-        "checkpoints"
-      ]
-    },
-    "fields": [
-      {
-        "name": "layout",
-        "type": "select",
-        "label": "나누는 방식",
-        "options": [
-          [
-            "lr",
-            "좌 / 우 (2칸)"
-          ],
-          [
-            "tb",
-            "위 / 아래 (2칸)"
-          ],
-          [
-            "lcr",
-            "좌 / 중 / 우 (3칸)"
-          ]
-        ],
-        "default": "lr"
-      },
-      {
-        "name": "common",
-        "type": "textarea",
-        "label": "전체 공통 (분위기·화풍·품질)",
-        "hint": "예: masterpiece, best quality, soft lighting",
-        "rows": 2
-      },
-      {
-        "name": "r1",
-        "type": "textarea",
-        "label": "1번 칸 (왼쪽 / 위)",
-        "required": true,
-        "rows": 2
-      },
-      {
-        "name": "r2",
-        "type": "textarea",
-        "label": "2번 칸 (오른쪽 / 아래 / 가운데)",
-        "required": true,
-        "rows": 2
-      },
-      {
-        "name": "r3",
-        "type": "textarea",
-        "label": "3번 칸 (오른쪽, 3칸일 때만)",
-        "rows": 2
-      },
-      {
-        "name": "ckpt",
-        "type": "list",
-        "list": "checkpoints",
-        "label": "체크포인트"
-      },
-      {
-        "name": "loras",
-        "type": "lora",
-        "label": "LoRA (선택)",
-        "hint": "칸에 <lora:이름:0.8> 태그를 적어도 돼요. LoRA는 그림 전체에 적용돼요(칸별로 따로 걸 수는 없어요)."
-      },
-      {
-        "name": "w",
-        "type": "number",
-        "label": "가로 (px)",
-        "default": 1216,
-        "min": 512,
-        "max": 2048,
-        "step": 1
-      },
-      {
-        "name": "h",
-        "type": "number",
-        "label": "세로 (px)",
-        "default": 832,
-        "min": 512,
-        "max": 2048,
-        "step": 1
-      },
-      {
-        "name": "steps",
-        "type": "number",
-        "label": "단계 수",
-        "default": 28,
-        "min": 1,
-        "max": 100,
-        "advanced": true
-      },
-      {
-        "name": "cfg",
-        "type": "number",
-        "label": "CFG",
-        "default": 5.5,
-        "min": 0,
-        "max": 30,
-        "step": 0.1,
-        "advanced": true
-      },
-      {
-        "name": "seed",
-        "type": "seed",
-        "label": "시드",
-        "default": -1,
-        "advanced": true
-      }
-    ]
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "확장할 이미지",
+    "required": true
+   },
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "이어서 그릴 내용",
+    "hint": "NoobAI·Pony 등은 영어 태그, 사실적 모델은 문장으로 적어요. 예: city street at night, neon signs",
+    "required": true
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "models",
+    "label": "모델",
+    "hint": "SDXL 체크포인트뿐 아니라 FLUX·Krea·Krea 2·Chroma 모델로도 확장할 수 있어요. FLUX 계열은 단계 수·CFG를 모델에 맞게 자동으로 정해요."
+   },
+   {
+    "name": "left",
+    "type": "number",
+    "label": "왼쪽 (px)",
+    "default": 0,
+    "min": 0,
+    "max": 1024,
+    "step": 1
+   },
+   {
+    "name": "right",
+    "type": "number",
+    "label": "오른쪽 (px)",
+    "default": 256,
+    "min": 0,
+    "max": 1024,
+    "step": 1
+   },
+   {
+    "name": "top",
+    "type": "number",
+    "label": "위 (px)",
+    "default": 0,
+    "min": 0,
+    "max": 1024,
+    "step": 1
+   },
+   {
+    "name": "bottom",
+    "type": "number",
+    "label": "아래 (px)",
+    "default": 0,
+    "min": 0,
+    "max": 1024,
+    "step": 1
+   },
+   {
+    "name": "feather",
+    "type": "number",
+    "label": "경계 부드럽게 (px)",
+    "default": 40,
+    "min": 0,
+    "max": 200,
+    "step": 1,
+    "hint": "원본과 새 부분이 만나는 경계를 섞는 폭이에요. 이음새가 보이면 키워요.",
+    "advanced": true
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.1,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "regional",
+  "title": "영역별 프롬프트 (칸 나눠 그리기)",
+  "icon": "▦",
+  "summary": "화면을 둘 또는 셋으로 나눠 칸마다 다른 내용을 적어요. '왼쪽엔 소녀, 오른쪽엔 고양이'처럼 여러 대상이 섞이지 않게 그릴 때 좋아요.",
+  "steps": [
+   "나누는 방식을 골라요",
+   "전체 분위기를 공통 문장에 적어요",
+   "칸마다 그릴 내용을 적어요"
+  ],
+  "needs": {
+   "nodes": [
+    "ConditioningSetAreaPercentage",
+    "ConditioningCombine"
+   ],
+   "lists": [
+    "checkpoints"
+   ]
   },
-  {
-    "id": "compare",
-    "title": "설정 비교표 (설정이 그림을 어떻게 바꾸는지)",
-    "icon": "▤",
-    "summary": "같은 프롬프트·같은 시드로 설정값 하나만 바꿔 여러 장을 만들고 한 장의 표로 보여 줘요. CFG나 단계 수를 바꾸면 어떻게 달라지는지 눈으로 익힐 수 있어요.",
-    "steps": [
-      "프롬프트를 적어요",
-      "바꿔 볼 설정을 고르고 값을 쉼표로 적어요 (예: 3,5,7,9)",
-      "표가 완성되면 마음에 드는 값을 생성 탭에 써요"
+  "fields": [
+   {
+    "name": "layout",
+    "type": "select",
+    "label": "나누는 방식",
+    "options": [
+     [
+      "lr",
+      "좌 / 우 (2칸)"
+     ],
+     [
+      "tb",
+      "위 / 아래 (2칸)"
+     ],
+     [
+      "lcr",
+      "좌 / 중 / 우 (3칸)"
+     ]
     ],
-    "needs": {
-      "nodes": [],
-      "lists": [
-        "checkpoints"
-      ]
-    },
-    "fields": [
-      {
-        "name": "prompt",
-        "type": "textarea",
-        "label": "프롬프트",
-        "required": true
-      },
-      {
-        "name": "ckpt",
-        "type": "list",
-        "list": "checkpoints",
-        "label": "체크포인트"
-      },
-      {
-        "name": "axis",
-        "type": "select",
-        "label": "가로로 바꿀 설정",
-        "options": [
-          [
-            "cfg",
-            "CFG (지시를 따르는 정도)"
-          ],
-          [
-            "steps",
-            "단계 수"
-          ],
-          [
-            "sampler",
-            "샘플러"
-          ],
-          [
-            "scheduler",
-            "스케줄러"
-          ],
-          [
-            "clip_skip",
-            "CLIP skip"
-          ]
-        ],
-        "default": "cfg"
-      },
-      {
-        "name": "values",
-        "type": "text",
-        "label": "값 목록 (쉼표로 구분, 최대 6개)",
-        "default": "3,5,7,9"
-      },
-      {
-        "name": "axis2",
-        "type": "select",
-        "label": "세로로 바꿀 설정 (선택)",
-        "options": [
-          [
-            "",
-            "사용 안 함"
-          ],
-          [
-            "cfg",
-            "CFG"
-          ],
-          [
-            "steps",
-            "단계 수"
-          ],
-          [
-            "sampler",
-            "샘플러"
-          ],
-          [
-            "scheduler",
-            "스케줄러"
-          ],
-          [
-            "clip_skip",
-            "CLIP skip"
-          ]
-        ],
-        "default": ""
-      },
-      {
-        "name": "values2",
-        "type": "text",
-        "label": "세로 값 목록 (최대 4개)",
-        "default": ""
-      },
-      {
-        "name": "w",
-        "type": "number",
-        "label": "칸 가로 (px)",
-        "default": 832,
-        "min": 512,
-        "max": 1536,
-        "step": 1,
-        "advanced": true
-      },
-      {
-        "name": "h",
-        "type": "number",
-        "label": "칸 세로 (px)",
-        "default": 1216,
-        "min": 512,
-        "max": 1536,
-        "step": 1,
-        "advanced": true
-      },
-      {
-        "name": "seed",
-        "type": "seed",
-        "label": "시드 (모든 칸에 같은 값)",
-        "default": -1,
-        "advanced": true
-      }
-    ]
+    "default": "lr"
+   },
+   {
+    "name": "common",
+    "type": "textarea",
+    "label": "전체 공통 (분위기·화풍·품질)",
+    "hint": "예: masterpiece, best quality, soft lighting",
+    "rows": 2
+   },
+   {
+    "name": "r1",
+    "type": "textarea",
+    "label": "1번 칸 (왼쪽 / 위)",
+    "required": true,
+    "rows": 2
+   },
+   {
+    "name": "r2",
+    "type": "textarea",
+    "label": "2번 칸 (오른쪽 / 아래 / 가운데)",
+    "required": true,
+    "rows": 2
+   },
+   {
+    "name": "r3",
+    "type": "textarea",
+    "label": "3번 칸 (오른쪽, 3칸일 때만)",
+    "rows": 2
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "checkpoints",
+    "label": "체크포인트"
+   },
+   {
+    "name": "loras",
+    "type": "lora",
+    "label": "LoRA (선택)",
+    "hint": "칸에 <lora:이름:0.8> 태그를 적어도 돼요. LoRA는 그림 전체에 적용돼요(칸별로 따로 걸 수는 없어요)."
+   },
+   {
+    "name": "w",
+    "type": "number",
+    "label": "가로 (px)",
+    "default": 1216,
+    "min": 512,
+    "max": 2048,
+    "step": 1
+   },
+   {
+    "name": "h",
+    "type": "number",
+    "label": "세로 (px)",
+    "default": 832,
+    "min": 512,
+    "max": 2048,
+    "step": 1
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.1,
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "compare",
+  "title": "설정 비교표 (설정이 그림을 어떻게 바꾸는지)",
+  "icon": "▤",
+  "summary": "같은 프롬프트·같은 시드로 설정값 하나만 바꿔 여러 장을 만들고 한 장의 표로 보여 줘요. CFG나 단계 수를 바꾸면 어떻게 달라지는지 눈으로 익힐 수 있어요.",
+  "steps": [
+   "프롬프트를 적어요",
+   "바꿔 볼 설정을 고르고 값을 쉼표로 적어요 (예: 3,5,7,9)",
+   "표가 완성되면 마음에 드는 값을 생성 탭에 써요"
+  ],
+  "needs": {
+   "nodes": [],
+   "lists": [
+    "checkpoints"
+   ]
   },
-  {
-    "id": "resize",
-    "title": "크기·자르기·회전",
-    "icon": "✂",
-    "summary": "사진을 원하는 비율로 자르고, 돌리고, 뒤집고, 긴 변 길이를 맞춰요. 모델이 필요 없고 바로 끝나요.",
-    "steps": [
-      "이미지를 올려요",
-      "필요한 것만 골라요 (자를 비율 / 회전 / 뒤집기 / 긴 변 크기)",
-      "[만들기]를 눌러요"
+  "fields": [
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "프롬프트",
+    "required": true
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "checkpoints",
+    "label": "체크포인트"
+   },
+   {
+    "name": "axis",
+    "type": "select",
+    "label": "가로로 바꿀 설정",
+    "options": [
+     [
+      "cfg",
+      "CFG (지시를 따르는 정도)"
+     ],
+     [
+      "steps",
+      "단계 수"
+     ],
+     [
+      "sampler",
+      "샘플러"
+     ],
+     [
+      "scheduler",
+      "스케줄러"
+     ],
+     [
+      "clip_skip",
+      "CLIP skip"
+     ]
     ],
-    "needs": {},
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "이미지",
-        "required": true
-      },
-      {
-        "name": "crop",
-        "type": "select",
-        "label": "비율대로 자르기",
-        "options": [
-          [
-            "none",
-            "자르지 않음"
-          ],
-          [
-            "1:1",
-            "1:1 (정사각형)"
-          ],
-          [
-            "4:3",
-            "4:3 가로"
-          ],
-          [
-            "3:4",
-            "3:4 세로"
-          ],
-          [
-            "3:2",
-            "3:2 가로"
-          ],
-          [
-            "2:3",
-            "2:3 세로"
-          ],
-          [
-            "16:9",
-            "16:9 가로"
-          ],
-          [
-            "9:16",
-            "9:16 세로"
-          ]
-        ],
-        "default": "none"
-      },
-      {
-        "name": "anchor",
-        "type": "select",
-        "label": "남길 위치",
-        "options": [
-          [
-            "center",
-            "가운데"
-          ],
-          [
-            "left",
-            "왼쪽 / 위쪽"
-          ],
-          [
-            "right",
-            "오른쪽 / 아래쪽"
-          ]
-        ],
-        "default": "center",
-        "hint": "왼쪽/위쪽을 고르면 그쪽을 남기고 반대쪽을 잘라요."
-      },
-      {
-        "name": "rotate",
-        "type": "select",
-        "label": "회전",
-        "options": [
-          [
-            "0",
-            "돌리지 않음"
-          ],
-          [
-            "90",
-            "오른쪽으로 90°"
-          ],
-          [
-            "180",
-            "180°"
-          ],
-          [
-            "270",
-            "왼쪽으로 90°"
-          ]
-        ],
-        "default": "0"
-      },
-      {
-        "name": "flip",
-        "type": "select",
-        "label": "뒤집기",
-        "options": [
-          [
-            "none",
-            "뒤집지 않음"
-          ],
-          [
-            "h",
-            "좌우 뒤집기"
-          ],
-          [
-            "v",
-            "상하 뒤집기"
-          ]
-        ],
-        "default": "none"
-      },
-      {
-        "name": "long_side",
-        "type": "number",
-        "label": "긴 변 길이 (px, 0=그대로)",
-        "default": 0,
-        "min": 0,
-        "max": 8192,
-        "step": 1
-      }
-    ]
+    "default": "cfg"
+   },
+   {
+    "name": "values",
+    "type": "text",
+    "label": "값 목록 (쉼표로 구분, 최대 6개)",
+    "default": "3,5,7,9"
+   },
+   {
+    "name": "axis2",
+    "type": "select",
+    "label": "세로로 바꿀 설정 (선택)",
+    "options": [
+     [
+      "",
+      "사용 안 함"
+     ],
+     [
+      "cfg",
+      "CFG"
+     ],
+     [
+      "steps",
+      "단계 수"
+     ],
+     [
+      "sampler",
+      "샘플러"
+     ],
+     [
+      "scheduler",
+      "스케줄러"
+     ],
+     [
+      "clip_skip",
+      "CLIP skip"
+     ]
+    ],
+    "default": ""
+   },
+   {
+    "name": "values2",
+    "type": "text",
+    "label": "세로 값 목록 (최대 4개)",
+    "default": ""
+   },
+   {
+    "name": "w",
+    "type": "number",
+    "label": "칸 가로 (px)",
+    "default": 832,
+    "min": 512,
+    "max": 1536,
+    "step": 1,
+    "advanced": true
+   },
+   {
+    "name": "h",
+    "type": "number",
+    "label": "칸 세로 (px)",
+    "default": 1216,
+    "min": 512,
+    "max": 1536,
+    "step": 1,
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드 (모든 칸에 같은 값)",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "resize",
+  "title": "크기·자르기·회전",
+  "icon": "✂",
+  "summary": "사진을 원하는 비율로 자르고, 돌리고, 뒤집고, 긴 변 길이를 맞춰요. 모델이 필요 없고 바로 끝나요.",
+  "steps": [
+   "이미지를 올려요",
+   "필요한 것만 골라요 (자를 비율 / 회전 / 뒤집기 / 긴 변 크기)",
+   "[만들기]를 눌러요"
+  ],
+  "needs": {},
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "이미지",
+    "required": true
+   },
+   {
+    "name": "crop",
+    "type": "select",
+    "label": "비율대로 자르기",
+    "options": [
+     [
+      "none",
+      "자르지 않음"
+     ],
+     [
+      "1:1",
+      "1:1 (정사각형)"
+     ],
+     [
+      "4:3",
+      "4:3 가로"
+     ],
+     [
+      "3:4",
+      "3:4 세로"
+     ],
+     [
+      "3:2",
+      "3:2 가로"
+     ],
+     [
+      "2:3",
+      "2:3 세로"
+     ],
+     [
+      "16:9",
+      "16:9 가로"
+     ],
+     [
+      "9:16",
+      "9:16 세로"
+     ]
+    ],
+    "default": "none"
+   },
+   {
+    "name": "anchor",
+    "type": "select",
+    "label": "남길 위치",
+    "options": [
+     [
+      "center",
+      "가운데"
+     ],
+     [
+      "left",
+      "왼쪽 / 위쪽"
+     ],
+     [
+      "right",
+      "오른쪽 / 아래쪽"
+     ]
+    ],
+    "default": "center",
+    "hint": "왼쪽/위쪽을 고르면 그쪽을 남기고 반대쪽을 잘라요."
+   },
+   {
+    "name": "rotate",
+    "type": "select",
+    "label": "회전",
+    "options": [
+     [
+      "0",
+      "돌리지 않음"
+     ],
+     [
+      "90",
+      "오른쪽으로 90°"
+     ],
+     [
+      "180",
+      "180°"
+     ],
+     [
+      "270",
+      "왼쪽으로 90°"
+     ]
+    ],
+    "default": "0"
+   },
+   {
+    "name": "flip",
+    "type": "select",
+    "label": "뒤집기",
+    "options": [
+     [
+      "none",
+      "뒤집지 않음"
+     ],
+     [
+      "h",
+      "좌우 뒤집기"
+     ],
+     [
+      "v",
+      "상하 뒤집기"
+     ]
+    ],
+    "default": "none"
+   },
+   {
+    "name": "long_side",
+    "type": "number",
+    "label": "긴 변 길이 (px, 0=그대로)",
+    "default": 0,
+    "min": 0,
+    "max": 8192,
+    "step": 1
+   }
+  ]
+ },
+ {
+  "id": "color",
+  "title": "밝기·색 보정",
+  "icon": "◐",
+  "summary": "밝기, 대비, 채도, 선명도, 흐림을 슬라이더 숫자로 조절해요. 100은 원래 그대로예요. 모델이 필요 없어요.",
+  "steps": [
+   "이미지를 올려요",
+   "바꾸고 싶은 값만 조절해요 (100 = 그대로)",
+   "[만들기]를 눌러요"
+  ],
+  "needs": {},
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "이미지",
+    "required": true
+   },
+   {
+    "name": "bright",
+    "type": "number",
+    "label": "밝기 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 1
+   },
+   {
+    "name": "contrast",
+    "type": "number",
+    "label": "대비 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 1
+   },
+   {
+    "name": "sat",
+    "type": "number",
+    "label": "채도 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 1
+   },
+   {
+    "name": "sharp",
+    "type": "number",
+    "label": "선명도 (%)",
+    "default": 100,
+    "min": 0,
+    "max": 300,
+    "step": 1
+   },
+   {
+    "name": "blur",
+    "type": "number",
+    "label": "흐림 (px, 0=없음)",
+    "default": 0,
+    "min": 0,
+    "max": 50,
+    "step": 1
+   }
+  ]
+ },
+ {
+  "id": "relight",
+  "title": "조명 바꾸기",
+  "icon": "☀",
+  "summary": "사진의 조명만 바꿔요(빛의 방향·색·분위기). 인물·얼굴·구도는 그대로 두라고 지시해 말로 편집(Qwen-Image-Edit)으로 다시 그려요. AI가 다시 그리는 방식이라 얼굴 세부가 조금 달라질 수 있어요 — 결과의 [전후 비교]로 확인하세요.",
+  "steps": [
+   "사진을 올려요",
+   "조명 종류·방향·색을 골라요 (직접 쓰기도 돼요)",
+   "[만들기] — 원본과 겹쳐 비교할 수 있어요"
+  ],
+  "needs": {
+   "lists": [
+    "qwen"
+   ]
   },
-  {
-    "id": "color",
-    "title": "밝기·색 보정",
-    "icon": "◐",
-    "summary": "밝기, 대비, 채도, 선명도, 흐림을 슬라이더 숫자로 조절해요. 100은 원래 그대로예요. 모델이 필요 없어요.",
-    "steps": [
-      "이미지를 올려요",
-      "바꾸고 싶은 값만 조절해요 (100 = 그대로)",
-      "[만들기]를 눌러요"
-    ],
-    "needs": {},
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "이미지",
-        "required": true
-      },
-      {
-        "name": "bright",
-        "type": "number",
-        "label": "밝기 (%)",
-        "default": 100,
-        "min": 0,
-        "max": 300,
-        "step": 1
-      },
-      {
-        "name": "contrast",
-        "type": "number",
-        "label": "대비 (%)",
-        "default": 100,
-        "min": 0,
-        "max": 300,
-        "step": 1
-      },
-      {
-        "name": "sat",
-        "type": "number",
-        "label": "채도 (%)",
-        "default": 100,
-        "min": 0,
-        "max": 300,
-        "step": 1
-      },
-      {
-        "name": "sharp",
-        "type": "number",
-        "label": "선명도 (%)",
-        "default": 100,
-        "min": 0,
-        "max": 300,
-        "step": 1
-      },
-      {
-        "name": "blur",
-        "type": "number",
-        "label": "흐림 (px, 0=없음)",
-        "default": 0,
-        "min": 0,
-        "max": 50,
-        "step": 1
-      }
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "사진",
+    "required": true
+   },
+   {
+    "name": "light",
+    "type": "select",
+    "label": "조명",
+    "default": "cinematic",
+    "options": [
+     [
+      "cinematic",
+      "영화 같은 측면 조명"
+     ],
+     [
+      "window",
+      "창가 자연광"
+     ],
+     [
+      "golden",
+      "해 질 녘 황금빛"
+     ],
+     [
+      "neon",
+      "네온사인 (분홍·파랑)"
+     ],
+     [
+      "candle",
+      "촛불·따뜻한 실내등"
+     ],
+     [
+      "moon",
+      "차가운 달빛 (밤)"
+     ],
+     [
+      "studio",
+      "스튜디오 조명 (밝고 고르게)"
+     ],
+     [
+      "rim",
+      "역광·윤곽 빛"
+     ],
+     [
+      "dramatic",
+      "강한 명암 대비"
+     ],
+     [
+      "soft",
+      "부드럽고 환하게"
+     ],
+     [
+      "custom",
+      "직접 쓰기"
+     ]
     ]
+   },
+   {
+    "name": "custom",
+    "type": "textarea",
+    "label": "원하는 조명 (한글도 돼요)",
+    "show_if": {
+     "light": "custom"
+    }
+   },
+   {
+    "name": "dir",
+    "type": "select",
+    "label": "빛이 들어오는 쪽",
+    "default": "auto",
+    "options": [
+     [
+      "auto",
+      "알아서"
+     ],
+     [
+      "right",
+      "오른쪽"
+     ],
+     [
+      "left",
+      "왼쪽"
+     ],
+     [
+      "top",
+      "위"
+     ],
+     [
+      "front",
+      "정면"
+     ],
+     [
+      "back",
+      "뒤 (역광)"
+     ]
+    ]
+   },
+   {
+    "name": "temp",
+    "type": "select",
+    "label": "빛의 색",
+    "default": "auto",
+    "options": [
+     [
+      "auto",
+      "조명에 맞게"
+     ],
+     [
+      "warm",
+      "따뜻하게 (노란빛)"
+     ],
+     [
+      "neutral",
+      "중간 (흰빛)"
+     ],
+     [
+      "cool",
+      "차갑게 (푸른빛)"
+     ]
+    ]
+   },
+   {
+    "name": "power",
+    "type": "select",
+    "label": "바뀌는 정도",
+    "default": "normal",
+    "options": [
+     [
+      "subtle",
+      "살짝"
+     ],
+     [
+      "normal",
+      "보통"
+     ],
+     [
+      "strong",
+      "확실하게"
+     ]
+    ]
+   },
+   {
+    "name": "keep",
+    "type": "check",
+    "label": "인물·얼굴·옷·구도 그대로 유지하라고 지시",
+    "default": true
+   },
+   {
+    "name": "fast",
+    "type": "check",
+    "label": "빠른 모드 (Lightning 4단계 LoRA 가 있을 때)",
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "depth",
+  "title": "깊이 맵 만들기",
+  "icon": "◭",
+  "summary": "사진에서 가까운 곳·먼 곳을 AI로 추정한 깊이 맵을 만들어요(가까울수록 밝게). 깊이를 기준으로 앞쪽만 남긴 투명 PNG 도 만들 수 있어요. 실제로 잰 거리가 아니라 추정값이라 유리·거울·가려진 곳은 틀릴 수 있어요. ControlNet '깊이' 지도로도 쓸 수 있어요.",
+  "steps": [
+   "사진을 올려요",
+   "결과 종류를 골라요 (흑백 깊이 맵 / 색으로 보기 / 앞쪽만 남기기)",
+   "[만들기] — 결과는 PNG 로 따로 저장돼요"
+  ],
+  "needs": {
+   "nodes": [
+    "DepthAnythingV2Preprocessor"
+   ],
+   "pack": "comfyui_controlnet_aux"
   },
-  {
-    "id": "rmbg",
-    "title": "배경 지우기",
-    "icon": "✂",
-    "summary": "사람·물체만 남기고 배경을 지워요. 기본은 투명 배경 PNG 이고, 흰색·검정·원하는 색으로 채울 수도 있어요. 이미지 엔진 없이 바로 처리돼요. 처음 한 번은 모델(5~179MB)을 받아요.",
-    "steps": [
-      "사진을 올려요",
-      "배경(투명/흰색 등)과 품질을 골라요",
-      "[만들기] — 결과는 PNG 로 저장돼요"
-    ],
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "사진",
-        "required": true
-      },
-      {
-        "name": "bg",
-        "type": "select",
-        "label": "배경",
-        "options": [
-          [
-            "transparent",
-            "투명 (PNG)"
-          ],
-          [
-            "white",
-            "흰색"
-          ],
-          [
-            "black",
-            "검정"
-          ],
-          [
-            "custom",
-            "직접 고른 색"
-          ]
-        ],
-        "default": "transparent"
-      },
-      {
-        "name": "bgcolor",
-        "type": "color",
-        "label": "배경 색",
-        "default": "#00ff00",
-        "show_if": {
-          "bg": "custom"
-        }
-      },
-      {
-        "name": "rmodel",
-        "type": "select",
-        "label": "품질",
-        "options": [
-          [
-            "fast",
-            "빠름 (5MB)"
-          ],
-          [
-            "normal",
-            "보통 (44MB)"
-          ],
-          [
-            "precise",
-            "정밀 (179MB, 머리카락 등 가장자리가 깔끔)"
-          ]
-        ],
-        "default": "normal"
-      },
-      {
-        "name": "crop",
-        "type": "check",
-        "label": "남은 부분에 맞춰 빈 테두리 잘라내기"
-      }
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "사진",
+    "required": true
+   },
+   {
+    "name": "out",
+    "type": "select",
+    "label": "결과",
+    "default": "gray",
+    "options": [
+     [
+      "gray",
+      "흑백 깊이 맵 (가까울수록 밝게)"
+     ],
+     [
+      "color",
+      "색으로 보기 (가까운 곳 빨강 → 먼 곳 파랑)"
+     ],
+     [
+      "cut",
+      "깊이로 앞쪽만 남기기 (투명 PNG)"
+     ]
     ]
+   },
+   {
+    "name": "near",
+    "type": "number",
+    "label": "남길 범위 (%) — 클수록 더 가까운 것만",
+    "default": 50,
+    "min": 1,
+    "max": 99,
+    "step": 1,
+    "show_if": {
+     "out": "cut"
+    }
+   },
+   {
+    "name": "feather",
+    "type": "number",
+    "label": "가장자리 부드럽게 (px)",
+    "default": 4,
+    "min": 0,
+    "max": 60,
+    "step": 1,
+    "show_if": {
+     "out": "cut"
+    }
+   },
+   {
+    "name": "invert",
+    "type": "check",
+    "label": "깊이 뒤집기 (먼 곳을 밝게)",
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "rmbg",
+  "title": "배경 지우기",
+  "icon": "✂",
+  "summary": "사람·물체만 남기고 배경을 지워요. 기본은 투명 배경 PNG 이고, 흰색·검정·원하는 색으로 채울 수도 있어요. 이미지 엔진 없이 바로 처리돼요. 처음 한 번은 모델(5~179MB)을 받아요.",
+  "steps": [
+   "사진을 올려요",
+   "배경(투명/흰색 등)과 품질을 골라요",
+   "[만들기] — 결과는 PNG 로 저장돼요"
+  ],
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "사진",
+    "required": true
+   },
+   {
+    "name": "bg",
+    "type": "select",
+    "label": "배경",
+    "options": [
+     [
+      "transparent",
+      "투명 (PNG)"
+     ],
+     [
+      "white",
+      "흰색"
+     ],
+     [
+      "black",
+      "검정"
+     ],
+     [
+      "custom",
+      "직접 고른 색"
+     ]
+    ],
+    "default": "transparent"
+   },
+   {
+    "name": "bgcolor",
+    "type": "color",
+    "label": "배경 색",
+    "default": "#00ff00",
+    "show_if": {
+     "bg": "custom"
+    }
+   },
+   {
+    "name": "rmodel",
+    "type": "select",
+    "label": "품질",
+    "options": [
+     [
+      "fast",
+      "빠름 (5MB)"
+     ],
+     [
+      "normal",
+      "보통 (44MB)"
+     ],
+     [
+      "precise",
+      "정밀 (179MB, 머리카락 등 가장자리가 깔끔)"
+     ]
+    ],
+    "default": "normal"
+   },
+   {
+    "name": "crop",
+    "type": "check",
+    "label": "남은 부분에 맞춰 빈 테두리 잘라내기"
+   }
+  ]
+ },
+ {
+  "id": "detailer",
+  "title": "얼굴·손 자동 보정",
+  "icon": "☺",
+  "summary": "그림 속 얼굴이나 손을 자동으로 찾아 그 부분만 다시 그려 또렷하게 만들어요(ADetailer 방식). SDXL 체크포인트뿐 아니라 FLUX.1 · Krea · Krea 2 · Chroma 모델로도 다시 그릴 수 있어요. ComfyUI 확장 'Impact Pack'과 감지 모델이 필요해요.",
+  "steps": [
+   "보정할 이미지를 올려요",
+   "얼굴 / 손 / 둘 다 중에서 골라요",
+   "[만들기] — 원본과 비교해 보고 마음에 안 들면 세기를 줄여 보세요"
+  ],
+  "needs": {
+   "nodes": [
+    "FaceDetailer",
+    "UltralyticsDetectorProvider"
+   ],
+   "lists": [
+    "anymodels"
+   ],
+   "pack": "ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack"
   },
-  {
-    "id": "detailer",
-    "title": "얼굴·손 자동 보정",
-    "icon": "☺",
-    "summary": "그림 속 얼굴이나 손을 자동으로 찾아 그 부분만 다시 그려 또렷하게 만들어요(ADetailer 방식). SDXL 체크포인트뿐 아니라 FLUX.1 · Krea · Krea 2 · Chroma 모델로도 다시 그릴 수 있어요. ComfyUI 확장 'Impact Pack'과 감지 모델이 필요해요.",
-    "steps": [
-      "보정할 이미지를 올려요",
-      "얼굴 / 손 / 둘 다 중에서 골라요",
-      "[만들기] — 원본과 비교해 보고 마음에 안 들면 세기를 줄여 보세요"
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "보정할 이미지",
+    "required": true
+   },
+   {
+    "name": "target",
+    "type": "select",
+    "label": "고칠 곳",
+    "options": [
+     [
+      "face",
+      "얼굴"
+     ],
+     [
+      "hand",
+      "손"
+     ],
+     [
+      "both",
+      "얼굴 + 손"
+     ]
     ],
-    "needs": {
-      "nodes": [
-        "FaceDetailer",
-        "UltralyticsDetectorProvider"
-      ],
-      "lists": [
-        "anymodels"
-      ],
-      "pack": "ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack"
-    },
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "보정할 이미지",
-        "required": true
-      },
-      {
-        "name": "target",
-        "type": "select",
-        "label": "고칠 곳",
-        "options": [
-          [
-            "face",
-            "얼굴"
-          ],
-          [
-            "hand",
-            "손"
-          ],
-          [
-            "both",
-            "얼굴 + 손"
-          ]
-        ],
-        "default": "face"
-      },
-      {
-        "name": "prompt",
-        "type": "textarea",
-        "label": "덧붙일 설명 (선택)",
-        "hint": "비워 두면 '또렷한 얼굴/손'만 요청해요. 예: blue eyes, smiling"
-      },
-      {
-        "name": "ckpt",
-        "type": "list",
-        "list": "models",
-        "label": "모델",
-        "hint": "그림을 만든 것과 같은 모델이 좋아요. FLUX.1 · Krea 2 · Chroma 는 단계 수·CFG 를 그 모델에 맞게 자동으로 정해요(아래 단계 수·CFG 칸은 SDXL 체크포인트일 때만 적용돼요)."
-      },
-      {
-        "name": "denoise",
-        "type": "number",
-        "label": "고치는 세기",
-        "default": 0.5,
-        "min": 0.1,
-        "max": 0.8,
-        "step": 0.01,
-        "hint": "높을수록 많이 바뀌어요. 0.4~0.6이 무난해요."
-      },
-      {
-        "name": "steps",
-        "type": "number",
-        "label": "단계 수",
-        "default": 28,
-        "min": 1,
-        "max": 100,
-        "advanced": true,
-        "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
-      },
-      {
-        "name": "cfg",
-        "type": "number",
-        "label": "CFG",
-        "default": 5.5,
-        "min": 0,
-        "max": 30,
-        "step": 0.1,
-        "advanced": true,
-        "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
-      },
-      {
-        "name": "seed",
-        "type": "seed",
-        "label": "시드",
-        "default": -1,
-        "advanced": true
-      }
-    ]
+    "default": "face"
+   },
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "덧붙일 설명 (선택)",
+    "hint": "비워 두면 '또렷한 얼굴/손'만 요청해요. 예: blue eyes, smiling"
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "models",
+    "label": "모델",
+    "hint": "그림을 만든 것과 같은 모델이 좋아요. FLUX.1 · Krea 2 · Chroma 는 단계 수·CFG 를 그 모델에 맞게 자동으로 정해요(아래 단계 수·CFG 칸은 SDXL 체크포인트일 때만 적용돼요)."
+   },
+   {
+    "name": "denoise",
+    "type": "number",
+    "label": "고치는 세기",
+    "default": 0.5,
+    "min": 0.1,
+    "max": 0.8,
+    "step": 0.01,
+    "hint": "높을수록 많이 바뀌어요. 0.4~0.6이 무난해요."
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.1,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "ipadapter",
+  "title": "참고 이미지로 그리기 — 스타일·얼굴 유지",
+  "icon": "❖",
+  "summary": "참고 이미지의 분위기(스타일)나 인물 얼굴 느낌을 따라 새 그림을 만들어요. SDXL 은 IP-Adapter, FLUX.1 은 Redux(분위기) 또는 FLUX Kontext 모델(사람·물건 그대로), Krea 2 는 공식 스타일 참조 LoRA 를 써요.",
+  "steps": [
+   "참고할 이미지를 올려요",
+   "스타일을 따를지, 얼굴을 따를지 고르고 새 그림 내용을 적어요",
+   "[만들기] — 닮는 정도는 '따르는 세기'로 조절해요"
+  ],
+  "needs": {
+   "nodes": [
+    "IPAdapterUnifiedLoader",
+    "IPAdapter"
+   ],
+   "lists": [
+    "anymodels"
+   ],
+   "pack": "ComfyUI_IPAdapter_plus",
+   "alt": "FLUX.1 · Krea 2 모델을 고르면 이 확장 없이도 쓸 수 있어요."
   },
-  {
-    "id": "ipadapter",
-    "title": "참고 이미지로 그리기 — 스타일·얼굴 유지",
-    "icon": "❖",
-    "summary": "참고 이미지의 분위기(스타일)나 인물 얼굴 느낌을 따라 새 그림을 만들어요. SDXL 은 IP-Adapter, FLUX.1 은 Redux(분위기) 또는 FLUX Kontext 모델(사람·물건 그대로), Krea 2 는 공식 스타일 참조 LoRA 를 써요.",
-    "steps": [
-      "참고할 이미지를 올려요",
-      "스타일을 따를지, 얼굴을 따를지 고르고 새 그림 내용을 적어요",
-      "[만들기] — 닮는 정도는 '따르는 세기'로 조절해요"
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "참고 이미지",
+    "required": true
+   },
+   {
+    "name": "mode",
+    "type": "select",
+    "label": "무엇을 따를까요",
+    "options": [
+     [
+      "style",
+      "스타일·분위기"
+     ],
+     [
+      "face",
+      "인물 얼굴"
+     ]
     ],
-    "needs": {
-      "nodes": [
-        "IPAdapterUnifiedLoader",
-        "IPAdapter"
-      ],
-      "lists": [
-        "anymodels"
-      ],
-      "pack": "ComfyUI_IPAdapter_plus",
-      "alt": "FLUX.1 · Krea 2 모델을 고르면 이 확장 없이도 쓸 수 있어요."
-    },
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "참고 이미지",
-        "required": true
-      },
-      {
-        "name": "mode",
-        "type": "select",
-        "label": "무엇을 따를까요",
-        "options": [
-          [
-            "style",
-            "스타일·분위기"
-          ],
-          [
-            "face",
-            "인물 얼굴"
-          ]
-        ],
-        "default": "style"
-      },
-      {
-        "name": "prompt",
-        "type": "textarea",
-        "label": "그릴 내용",
-        "hint": "NoobAI·Pony 등은 영어 태그로, FLUX.1 · Krea 2 는 문장으로 적어요. 예: 1girl, standing, city street / A woman standing on a city street at dusk",
-        "required": true
-      },
-      {
-        "name": "ckpt",
-        "type": "list",
-        "list": "models",
-        "label": "모델",
-        "hint": "SDXL 체크포인트 · FLUX.1 · Krea 2 모델을 고를 수 있어요. 얼굴을 그대로 이어 가려면 FLUX Kontext 모델이 가장 잘 맞아요. Chroma 는 참고 이미지 방식이 없어 목록에서 뺐어요. FLUX.1 Redux · Krea 2 스타일 참조는 '설치와 모델' 탭에서 받아요.",
-        "exclude": [
-          "chroma"
-        ]
-      },
-      {
-        "name": "weight",
-        "type": "number",
-        "label": "따르는 세기",
-        "default": 1.0,
-        "min": 0.1,
-        "max": 2.0,
-        "step": 0.01,
-        "hint": "높을수록 참고 이미지를 더 닮고 프롬프트는 덜 따라요. 0.8~1.2가 무난해요. (SDXL IP-Adapter · FLUX.1 Redux에 적용돼요)"
-      },
-      {
-        "name": "w",
-        "type": "number",
-        "label": "가로 (px)",
-        "default": 1024,
-        "min": 512,
-        "max": 2048,
-        "step": 1,
-        "advanced": true
-      },
-      {
-        "name": "h",
-        "type": "number",
-        "label": "세로 (px)",
-        "default": 1024,
-        "min": 512,
-        "max": 2048,
-        "step": 1,
-        "advanced": true
-      },
-      {
-        "name": "steps",
-        "type": "number",
-        "label": "단계 수",
-        "default": 28,
-        "min": 1,
-        "max": 100,
-        "advanced": true,
-        "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
-      },
-      {
-        "name": "cfg",
-        "type": "number",
-        "label": "CFG",
-        "default": 5.5,
-        "min": 0,
-        "max": 30,
-        "step": 0.1,
-        "advanced": true,
-        "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
-      },
-      {
-        "name": "kweight",
-        "type": "number",
-        "label": "Krea 2 스타일 참조 세기",
-        "default": 1.0,
-        "min": 0.1,
-        "max": 1.5,
-        "step": 0.01,
-        "advanced": true,
-        "hint": "Krea 2 모델일 때만 적용돼요. 공식 예시는 1.0이에요."
-      },
-      {
-        "name": "seed",
-        "type": "seed",
-        "label": "시드",
-        "default": -1,
-        "advanced": true
-      }
+    "default": "style"
+   },
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "그릴 내용",
+    "hint": "NoobAI·Pony 등은 영어 태그로, FLUX.1 · Krea 2 는 문장으로 적어요. 예: 1girl, standing, city street / A woman standing on a city street at dusk",
+    "required": true
+   },
+   {
+    "name": "ckpt",
+    "type": "list",
+    "list": "models",
+    "label": "모델",
+    "hint": "SDXL 체크포인트 · FLUX.1 · Krea 2 모델을 고를 수 있어요. 얼굴을 그대로 이어 가려면 FLUX Kontext 모델이 가장 잘 맞아요. Chroma 는 참고 이미지 방식이 없어 목록에서 뺐어요. FLUX.1 Redux · Krea 2 스타일 참조는 '설치와 모델' 탭에서 받아요.",
+    "exclude": [
+     "chroma"
     ]
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "label": "따르는 세기",
+    "default": 1.0,
+    "min": 0.1,
+    "max": 2.0,
+    "step": 0.01,
+    "hint": "높을수록 참고 이미지를 더 닮고 프롬프트는 덜 따라요. 0.8~1.2가 무난해요. (SDXL IP-Adapter · FLUX.1 Redux에 적용돼요)"
+   },
+   {
+    "name": "w",
+    "type": "number",
+    "label": "가로 (px)",
+    "default": 1024,
+    "min": 512,
+    "max": 2048,
+    "step": 1,
+    "advanced": true
+   },
+   {
+    "name": "h",
+    "type": "number",
+    "label": "세로 (px)",
+    "default": 1024,
+    "min": 512,
+    "max": 2048,
+    "step": 1,
+    "advanced": true
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 28,
+    "min": 1,
+    "max": 100,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.5,
+    "min": 0,
+    "max": 30,
+    "step": 0.1,
+    "advanced": true,
+    "hint": "SDXL 체크포인트를 쓸 때만 적용돼요."
+   },
+   {
+    "name": "kweight",
+    "type": "number",
+    "label": "Krea 2 스타일 참조 세기",
+    "default": 1.0,
+    "min": 0.1,
+    "max": 1.5,
+    "step": 0.01,
+    "advanced": true,
+    "hint": "Krea 2 모델일 때만 적용돼요. 공식 예시는 1.0이에요."
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "faceswap",
+  "title": "얼굴 교체",
+  "icon": "☺",
+  "summary": "한 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요(ReActor). 본인이거나 허락받은 사람, 성인 가상 인물의 사진에만 쓰세요. 확장 설치 때 모델(inswapper, 연구·비상업 용도)도 함께 받아서 용량이 커요. 확장 안에 자체 안전 검사(부적절한 이미지는 건너뜀)가 들어 있어요.",
+  "steps": [
+   "얼굴을 바꿀 사진(바탕)을 올려요",
+   "가져올 얼굴이 있는 사진을 올려요",
+   "[만들기]를 눌러요 — 사진에 얼굴이 여러 개면 '고급 설정'에서 번호를 골라요(0부터, 큰 얼굴 순)"
+  ],
+  "needs": {
+   "nodes": [
+    "ReActorFaceSwap"
+   ],
+   "pack": "ComfyUI-ReActor"
   },
-  {
-    "id": "faceswap",
-    "title": "얼굴 교체",
-    "icon": "☺",
-    "summary": "한 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요(ReActor). 본인이거나 허락받은 사람, 성인 가상 인물의 사진에만 쓰세요. 확장 설치 때 모델(inswapper, 연구·비상업 용도)도 함께 받아서 용량이 커요. 확장 안에 자체 안전 검사(부적절한 이미지는 건너뜀)가 들어 있어요.",
-    "steps": [
-      "얼굴을 바꿀 사진(바탕)을 올려요",
-      "가져올 얼굴이 있는 사진을 올려요",
-      "[만들기]를 눌러요 — 사진에 얼굴이 여러 개면 '고급 설정'에서 번호를 골라요(0부터, 큰 얼굴 순)"
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "바탕 사진 (얼굴이 바뀔 사진)",
+    "required": true
+   },
+   {
+    "name": "source",
+    "type": "image",
+    "label": "가져올 얼굴 사진",
+    "required": true
+   },
+   {
+    "name": "restore",
+    "type": "select",
+    "label": "얼굴 다듬기",
+    "options": [
+     [
+      "gfpgan",
+      "GFPGAN (자연스럽게)"
+     ],
+     [
+      "codeformer",
+      "CodeFormer (또렷하게)"
+     ],
+     [
+      "none",
+      "안 함"
+     ]
     ],
-    "needs": {
-      "nodes": [
-        "ReActorFaceSwap"
-      ],
-      "pack": "ComfyUI-ReActor"
-    },
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "바탕 사진 (얼굴이 바뀔 사진)",
-        "required": true
-      },
-      {
-        "name": "source",
-        "type": "image",
-        "label": "가져올 얼굴 사진",
-        "required": true
-      },
-      {
-        "name": "restore",
-        "type": "select",
-        "label": "얼굴 다듬기",
-        "options": [
-          [
-            "gfpgan",
-            "GFPGAN (자연스럽게)"
-          ],
-          [
-            "codeformer",
-            "CodeFormer (또렷하게)"
-          ],
-          [
-            "none",
-            "안 함"
-          ]
-        ],
-        "default": "gfpgan"
-      },
-      {
-        "name": "vis",
-        "type": "number",
-        "label": "다듬기 세기",
-        "default": 1.0,
-        "min": 0.1,
-        "max": 1.0,
-        "step": 0.01,
-        "advanced": true
-      },
-      {
-        "name": "cf",
-        "type": "number",
-        "label": "CodeFormer 가중치",
-        "default": 0.5,
-        "min": 0.0,
-        "max": 1.0,
-        "step": 0.01,
-        "advanced": true
-      },
-      {
-        "name": "target_face",
-        "type": "text",
-        "label": "바탕 사진에서 바꿀 얼굴 번호",
-        "default": "0",
-        "hint": "0부터 시작, 큰 얼굴 순서예요. 여러 개는 쉼표로(예: 0,1)",
-        "advanced": true
-      },
-      {
-        "name": "source_face",
-        "type": "text",
-        "label": "가져올 사진에서 쓸 얼굴 번호",
-        "default": "0",
-        "advanced": true
-      }
-    ]
+    "default": "gfpgan"
+   },
+   {
+    "name": "vis",
+    "type": "number",
+    "label": "다듬기 세기",
+    "default": 1.0,
+    "min": 0.1,
+    "max": 1.0,
+    "step": 0.01,
+    "advanced": true
+   },
+   {
+    "name": "cf",
+    "type": "number",
+    "label": "CodeFormer 가중치",
+    "default": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.01,
+    "advanced": true
+   },
+   {
+    "name": "target_face",
+    "type": "text",
+    "label": "바탕 사진에서 바꿀 얼굴 번호",
+    "default": "0",
+    "hint": "0부터 시작, 큰 얼굴 순서예요. 여러 개는 쉼표로(예: 0,1)",
+    "advanced": true
+   },
+   {
+    "name": "source_face",
+    "type": "text",
+    "label": "가져올 사진에서 쓸 얼굴 번호",
+    "default": "0",
+    "advanced": true
+   }
+  ]
+ },
+ {
+  "id": "img3d",
+  "title": "사진 → 3D 모델",
+  "icon": "◆",
+  "summary": "사진 한 장으로 3D 모델(GLB)을 만들어요(Hunyuan3D 2). 배경이 단순하고 물체 하나가 가운데 있는 사진이 잘 돼요. 결과는 화면에서 돌려 보고 .glb 로 저장해 Blender·Windows 3D 뷰어 등에서 열 수 있어요. 색(텍스처)은 없고 모양만 만들어요.",
+  "steps": [
+   "물체 하나가 잘 보이는 사진을 올려요(배경을 지운 사진이면 더 좋아요)",
+   "[만들기]를 눌러요 — 1~3분 걸려요",
+   "결과를 마우스로 돌려 보고 [저장]으로 .glb 를 받아요"
+  ],
+  "needs": {
+   "nodes": [
+    "Hunyuan3Dv2Conditioning",
+    "VAEDecodeHunyuan3D",
+    "VoxelToMesh",
+    "SaveGLB"
+   ]
   },
-  {
-    "id": "img3d",
-    "title": "사진 → 3D 모델",
-    "icon": "◆",
-    "summary": "사진 한 장으로 3D 모델(GLB)을 만들어요(Hunyuan3D 2). 배경이 단순하고 물체 하나가 가운데 있는 사진이 잘 돼요. 결과는 화면에서 돌려 보고 .glb 로 저장해 Blender·Windows 3D 뷰어 등에서 열 수 있어요. 색(텍스처)은 없고 모양만 만들어요.",
-    "steps": [
-      "물체 하나가 잘 보이는 사진을 올려요(배경을 지운 사진이면 더 좋아요)",
-      "[만들기]를 눌러요 — 1~3분 걸려요",
-      "결과를 마우스로 돌려 보고 [저장]으로 .glb 를 받아요"
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "사진",
+    "required": true
+   },
+   {
+    "name": "octree",
+    "type": "select",
+    "label": "세밀함",
+    "options": [
+     [
+      "256",
+      "보통 (빠름)"
+     ],
+     [
+      "384",
+      "높게"
+     ],
+     [
+      "512",
+      "아주 높게 (느리고 메모리 많이 씀)"
+     ]
     ],
-    "needs": {
-      "nodes": [
-        "Hunyuan3Dv2Conditioning",
-        "VAEDecodeHunyuan3D",
-        "VoxelToMesh",
-        "SaveGLB"
-      ]
-    },
-    "fields": [
-      {
-        "name": "image",
-        "type": "image",
-        "label": "사진",
-        "required": true
-      },
-      {
-        "name": "octree",
-        "type": "select",
-        "label": "세밀함",
-        "options": [
-          [
-            "256",
-            "보통 (빠름)"
-          ],
-          [
-            "384",
-            "높게"
-          ],
-          [
-            "512",
-            "아주 높게 (느리고 메모리 많이 씀)"
-          ]
-        ],
-        "default": "256"
-      },
-      {
-        "name": "steps",
-        "type": "number",
-        "label": "단계 수",
-        "default": 30,
-        "min": 5,
-        "max": 100,
-        "advanced": true
-      },
-      {
-        "name": "cfg",
-        "type": "number",
-        "label": "CFG",
-        "default": 5.0,
-        "min": 1,
-        "max": 15,
-        "step": 0.1,
-        "advanced": true
-      },
-      {
-        "name": "seed",
-        "type": "seed",
-        "label": "시드",
-        "default": -1,
-        "advanced": true
-      }
-    ]
-  }
+    "default": "256"
+   },
+   {
+    "name": "steps",
+    "type": "number",
+    "label": "단계 수",
+    "default": 30,
+    "min": 5,
+    "max": 100,
+    "advanced": true
+   },
+   {
+    "name": "cfg",
+    "type": "number",
+    "label": "CFG",
+    "default": 5.0,
+    "min": 1,
+    "max": 15,
+    "step": 0.1,
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "default": -1,
+    "advanced": true
+   }
+  ]
+ }
 ]
