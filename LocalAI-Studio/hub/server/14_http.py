@@ -231,13 +231,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(manage())
         if u == "/api/monitor":
             return self.send_json(monitor_view())
+        if u == "/api/explore":
+            return self.send_json(explore_list())
+        if u.startswith("/api/explore/"):
+            try:
+                return self.send_json(explore_view(u[13:]))
+            except ValueError as e:
+                return self.send_json({"error": str(e)})
         if u.startswith("/api/agent/"):
             return self.send_json(agent_view(u[11:]))
         if u.startswith("/api/job/"):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -265,6 +272,15 @@ class Handler(BaseHTTPRequestHandler):
                 log("[실행 모드 오류]", repr(e))
                 agent_log(ev="error", error=repr(e))
                 return self.send_json({"error": str(e) if isinstance(e, RuntimeError) else "대화 엔진(Ollama)에 연결할 수 없어요. 잠시 후 다시 시도해 주세요."})
+        if u in ("/api/explore/analyze", "/api/explore/candidates", "/api/explore/run", "/api/explore/pick"):
+            fn = {"analyze": explore_analyze, "candidates": explore_candidates, "run": explore_run, "pick": explore_pick}[u.rsplit("/", 1)[1]]
+            try:
+                return self.send_json(fn(p))
+            except (ValueError, RuntimeError) as e:
+                return self.send_json({"error": str(e)})
+            except Exception as e:  # noqa: BLE001
+                log("[프롬프트 탐색 오류]", repr(e))
+                return self.send_json({"error": f"처리하지 못했어요: {type(e).__name__}"})
         if u == "/api/monitor/free":
             try:
                 return self.send_json(monitor_free(p))

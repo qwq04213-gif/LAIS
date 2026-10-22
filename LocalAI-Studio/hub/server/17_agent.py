@@ -27,6 +27,13 @@ AGENT_TOOLS = {
                    "width": {"type": "integer", "minimum": 256, "maximum": 2048},
                    "height": {"type": "integer", "minimum": 256, "maximum": 2048}},
         "required": ["prompt"], "act": True},
+    "explore_prompts": {
+        "desc": "Prompt exploration: split the idea into parts, make several variations (e.g. different styles or lighting) and draw one image each for side-by-side comparison.",
+        "params": {"goal": {"type": "string", "maxLength": 1500, "description": "the user's image idea, may be Korean"},
+                   "count": {"type": "integer", "minimum": 2, "maximum": 6, "description": "number of versions incl. the base, default 4"},
+                   "vary": {"type": "array", "items": {"type": "string", "enum": ["subject", "place", "action", "camera", "light", "color", "style", "detail"]},
+                            "description": "which parts to vary, default style, light, color"}},
+        "required": ["goal"], "act": True},
     "edit_image": {
         "desc": "Edit one image by an instruction (Qwen-Image-Edit or FLUX Kontext, as chosen on the image edit screen).",
         "params": {"instruction": {"type": "string", "maxLength": 1000, "description": "edit instruction in English, one imperative sentence"},
@@ -43,6 +50,7 @@ Decide whether the user wants something DONE in the app (make or edit an image, 
 - To make an image, call generate_image once with an English prompt (comma-separated details are fine). Use count only when asked.
 - To change a photo the user attached, call edit_image with image='attached'. To change the newest result, call recent_results first.
 - To make an image and then change it, call generate_image and then edit_image with image='previous'.
+- To compare several styles / looks of one idea, call explore_prompts.
 - If something essential is missing or unclear, ask one short question in Korean instead of calling a tool.
 - Answer in Korean. Be brief."""
 
@@ -115,8 +123,13 @@ def agent_check(name, args, ctx):
         elif spec["type"] == "boolean":
             if not isinstance(v, bool):
                 return None, f"{k} 는 참/거짓이어야 해요."
+        elif spec["type"] == "array":
+            ok_ = spec["items"]["enum"]
+            if not isinstance(v, list) or len(v) > len(ok_) or any(x not in ok_ for x in v):
+                return None, f"{k} 는 {', '.join(ok_)} 중에서 골라야 해요."
+            v = list(dict.fromkeys(v))
         out[k] = v
-    for k in ("prompt", "negative", "instruction"):
+    for k in ("prompt", "negative", "instruction", "goal"):
         if k in out and blocked(out[k]):
             return None, BLOCK_MSG
     if name == "edit_image":
@@ -125,7 +138,7 @@ def agent_check(name, args, ctx):
             if not ctx.get("attached"):
                 return None, "붙인 사진이 없어요. 사진을 붙이거나 결과를 골라 주세요."
         elif img == "previous":
-            if not any(s["tool"] in ("generate_image", "edit_image") for s in ctx.get("steps", [])):
+            if not any(s["tool"] in ("generate_image", "edit_image", "explore_prompts") for s in ctx.get("steps", [])):
                 return None, "앞 단계 결과가 없어요."
         else:
             f = agent_out_path(img)
@@ -173,6 +186,9 @@ def agent_summary(name, a, base):
         model = g.get("fx_model") if g.get("gengine") in ("flux", "chroma", "krea2") else g.get("ckpt") or g.get("gengine") or ""
         size = f'{a.get("width") or g.get("w") or "?"}×{a.get("height") or g.get("h") or "?"}'
         return f'이미지 만들기 · {a.get("count", 1)}장 · {size}' + (f" · {model}" if model else "")
+    if name == "explore_prompts":
+        vary = a.get("vary") or ["style", "light", "color"]
+        return f'프롬프트 탐색 · {a.get("count", 4)}가지 · 바꿔 볼 것: ' + ", ".join(EXP_NAMES[k] for k in vary)
     if name == "edit_image":
         src = {"attached": "붙인 사진", "previous": "앞 단계 결과"}.get(a["image"], "결과 " + urllib.parse.unquote(a["image"]).rsplit("/", 1)[-1])
         return f"이미지 편집 · {src}" + (" · 빠른 모드" if a.get("fast") else "")
@@ -279,9 +295,14 @@ def agent_view(pid):
     steps = []
     for s in P["steps"]:
         J = JOBS.get(s["job"]) if s["job"] else None
-        row = {"tool": s["tool"], "args": s["args"], "summary": s["summary"], "state": s["state"], "error": s["error"], "images": s["images"], "job": s["job"]}
+        row = {"tool": s["tool"], "args": s["args"], "summary": s["summary"], "state": s["state"], "error": s["error"], "images": s["images"], "job": s["job"],
+               **{k: s[k] for k in ("explore", "done_n", "all_n") if k in s}}
         if J and s["state"] == "running":
-            row.update(msg=J.get("msg", ""), progress=J.get("progress"))
+            ahead = (QUEUE.index(J["id"]) + 1) if J.get("state") == "queued" and J["id"] in QUEUE else 0
+            row.update(msg=J.get("msg", ""), progress=J.get("progress"), eta=J.get("eta"), models=J.get("models") or [],
+                       queued=J.get("state") == "queued", ahead=ahead, elapsed=int(time.time() - J["t_start"]) if J.get("t_start") and J.get("state") == "running" else 0)
+        elif J:
+            row["models"] = J.get("models") or []
         steps.append(row)
     return {"id": pid, "state": P["state"], "steps": steps}
 
@@ -342,6 +363,10 @@ def agent_run_thread(pid):
         if P["cancel"]:
             s["state"] = "skipped"
             continue
+        if s["tool"] == "explore_prompts":
+            if not agent_explore_step(P, s):
+                break
+            continue
         try:
             jp = agent_job_params(P, i)
         except Exception as e:  # noqa: BLE001
@@ -364,6 +389,37 @@ def agent_run_thread(pid):
     bad = [s for s in P["steps"] if s["state"] in ("error", "cancelled")]
     P["state"] = "cancelled" if P["cancel"] else "error" if bad else "done"
     agent_log(ev="run", plan=pid, state=P["state"], steps=[{k: s[k] for k in ("tool", "state", "error", "images", "job")} for s in P["steps"]])
+
+
+def agent_explore_step(P, s):
+    """실행 모드의 프롬프트 탐색 단계: 후보를 만들어 그리고, 모두 끝날 때까지 기다려요."""
+    a = s["args"]
+    s["state"] = "running"
+    try:
+        sid = explore_auto(a["goal"], P["model"], (P["base"] or {}).get("gen") or {}, a.get("count", 4), a.get("vary") or [])
+    except Exception as e:  # noqa: BLE001
+        s["state"], s["error"] = "error", str(e)[:300]
+        return False
+    s["explore"] = sid
+    while True:
+        v = explore_view(sid)
+        live = [c for c in v["cands"] if c["state"] in ("queued", "running")]
+        run = next((c for c in live if c["state"] == "running"), None)
+        s["job"] = run["job"] if run else (live[0]["job"] if live else None)
+        s["done_n"], s["all_n"] = sum(1 for c in v["cands"] if c["job"] and c["state"] not in ("queued", "running")), sum(1 for c in v["cands"] if c["job"])
+        if P["cancel"]:
+            for c in live:
+                J = JOBS.get(c["job"])
+                if J and not J.get("cancel"):
+                    queue_cancel(J)
+        if not live:
+            break
+        time.sleep(0.5)
+    s["images"] = [u for c in v["cands"] for u in c["images"]]
+    bad = [c for c in v["cands"] if c["job"] and c["state"] != "done"]
+    s["state"] = "cancelled" if P["cancel"] else "done" if s["images"] else "error"
+    s["error"] = "" if not bad else f"{len(bad)}개 후보를 그리지 못했어요: " + (bad[0]["error"] or bad[0]["state"])
+    return s["state"] == "done"
 
 
 def agent_run(pid):

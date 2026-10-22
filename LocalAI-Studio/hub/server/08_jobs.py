@@ -252,7 +252,7 @@ def job_history_add(J):
 
 
 def enqueue(J, p):
-    J["kind"], J["label"], J["t_add"] = p["kind"], job_label(p), time.time()
+    J["kind"], J["label"], J["t_add"] = p["kind"], J.get("label") or job_label(p), time.time()
     with _QCV:
         QP[J["id"]] = p
         QUEUE.append(J["id"])
@@ -389,7 +389,8 @@ def queue_move(p):
 def _qrow(J, pos=0):
     return {"id": J["id"], "kind": J.get("kind"), "label": J.get("label") or "작업", "state": J["state"], "pos": pos,
             "msg": J.get("msg", ""), "progress": J.get("progress"), "error": str(J.get("error") or "")[:200],
-            "images": len(J.get("images") or []), "t_end": J.get("t_end"), "feature": J.get("feature") or ""}
+            "images": len(J.get("images") or []), "t_end": J.get("t_end"), "feature": J.get("feature") or "",
+            "model": J.get("model_desc") or "", "eta": J.get("eta")}
 
 
 def queue_view():

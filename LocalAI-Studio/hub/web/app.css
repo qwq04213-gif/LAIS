@@ -610,7 +610,7 @@ nav .ngb{display:flex;flex-direction:column;gap:1px}nav .ngb[hidden]{display:non
 .mcard2 .mname{margin-left:4px;padding:1px 7px;font-size:calc(11.5px*var(--ui,1))}.mcard2 .mmemo{font-size:calc(12.5px*var(--ui,1));color:var(--tx);margin:2px 0}
 #qpanel .qh .qkill{margin-left:auto;margin-right:6px;color:#d0473c;border-color:currentColor}#qpanel .qh .qkill:hover{background:rgba(229,115,106,.12)}
 /* 대화 실행 모드 */
-.chk.agt{font-weight:600}#v-chat.agent .compose{box-shadow:0 0 0 2px var(--acc,#6a8cff) inset;border-radius:10px}
+.chk.agt{font-weight:600}#v-chat.agent #msg{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
 .plan{margin-top:8px;padding:10px 12px;border:1px solid var(--line,#8884);border-radius:10px;background:var(--raised,#0001)}
 .plan ol{margin:6px 0 8px;padding-left:20px}.plan li{margin:4px 0}.plan li .pst{color:var(--mute,#888)}
 .plan li[data-st=done] .pst{color:var(--ok,#3a3)}.plan li[data-st=error] .pst{color:var(--bad,#d44)}
@@ -626,3 +626,26 @@ nav .ngb{display:flex;flex-direction:column;gap:1px}nav .ngb[hidden]{display:non
 #hwpanel .qh .qkill{margin-left:auto;margin-right:6px;color:#d0473c;border-color:currentColor}
 body:has(#lb:not([hidden])) #hwpanel{display:none}
 .pafter{margin-top:8px}
+.plan .pmod{font-size:calc(12px*var(--ui,1));color:var(--mute);overflow-wrap:anywhere}
+.plan .prun{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0}.plan .prun progress{flex:1;min-width:140px;height:8px}.plan .prun small{color:var(--mute);width:100%}
+.qm .qmod{display:block;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 펼침 메뉴: 화면 기준 자리를 잡기 전(한 순간)에는 숨겨서 왼쪽에 잠깐 떴다가 옮겨 가 보이지 않게 */
+details.more[open]>.menu:not([style]){visibility:hidden}
+
+/* 프롬프트 탐색 */
+#v-explore .xp-top textarea{width:100%}.xp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.xp-info{font-size:calc(12px*var(--ui,1))}
+.xp-els,.xp-mode{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}
+.xp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-top:8px}.xp-grid input{width:100%}
+.xp-mode .seg{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}.xpp{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.xpp textarea{flex:1;min-width:260px}
+#xp-vary{display:inline-flex;gap:10px;flex-wrap:wrap}#xp-count{width:64px}
+.xpr{display:flex;align-items:center;gap:10px;margin:16px 0 8px}.xpr h3{margin:0}
+.xpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.xpc{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--chrome)}.xpc.picked{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.xpimg{aspect-ratio:1;background:var(--table);display:flex;align-items:center;justify-content:center}.xpimg img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+.xpst{display:grid;gap:6px;justify-items:center;color:var(--mute);padding:10px;text-align:center}.xpst progress{width:80%}.xpst .bad{color:var(--bad)}
+.xpc figcaption{padding:8px 10px;display:grid;gap:6px}.xpc .chip{font-size:calc(11px*var(--ui,1));padding:1px 7px;border-radius:9px;background:var(--raised)}
+.xpc pre{white-space:pre-wrap;font-size:calc(12px*var(--ui,1));margin:4px 0}.xpch{font-size:calc(12px*var(--ui,1))}.xpb{display:flex;gap:6px;flex-wrap:wrap}.xpb button{font-size:calc(12px*var(--ui,1))}
+.plan .pxp{display:inline-block;margin-top:6px}
+.xpp[hidden]{display:none}.xpc .chip{cursor:default}
+.xp-row select{width:auto;max-width:min(420px,100%)}

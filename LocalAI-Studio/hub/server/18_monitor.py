@@ -58,7 +58,7 @@ def monitor_view():
     job = None
     if run:
         job = {"id": run["id"], "label": run.get("label") or "작업", "kind": run.get("kind"), "msg": run.get("msg", ""),
-               "progress": run.get("progress"), "model": run.get("model_desc") or "", "elapsed": int(time.time() - (run.get("t_start") or time.time()))}
+               "progress": run.get("progress"), "model": ", ".join(run.get("models") or []) or run.get("model_desc") or "", "eta": run.get("eta"), "elapsed": int(time.time() - (run.get("t_start") or time.time()))}
     last = LAST_MODEL.get("key")
     others = []
     for pr in gpu_procs():

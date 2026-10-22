@@ -438,10 +438,32 @@ def note_models_used(wf, now=None):
         pass
 
 
+MAIN_KEYS = ("ckpt_name", "unet_name")
+SIDE_KEYS = ("lora_name", "model_name", "control_net_name")
+
+
+def wf_models(wf):
+    """워크플로가 불러오는 모델 이름(본 모델 먼저, 그다음 LoRA·업스케일·ControlNet). 확장자는 빼요."""
+    main, side = [], []
+    for node in wf.values():
+        for k, v in (node.get("inputs") or {}).items():
+            if isinstance(v, str) and Path(v.replace("\\", "/")).suffix.lower() in EXT:
+                n = Path(v.replace("\\", "/")).stem
+                (main if k in MAIN_KEYS else side if k in SIDE_KEYS else []).append(n)
+    return list(dict.fromkeys(main)) + [x for x in dict.fromkeys(side) if x not in main]
+
+
 def run_wf(wf, J, raw=False):
     """raw=True 이면 이미지 대신 결과 파일(영상) 바이트를 [(파일명, 바이트)] 로 돌려줘요."""
     check_cancel(J)
     note_models_used(wf)
+    try:
+        ms = wf_models(wf)
+        if ms:
+            J["models"] = ms[:6]
+            J["model_desc"] = ms[0] + (f" + {len(ms) - 1}개" if len(ms) > 1 else "")
+    except Exception:  # noqa: BLE001
+        pass
     try:
         pid = http(CUI + "/prompt", {"prompt": wf, "client_id": CID}, 30)["prompt_id"]
     except urllib.error.HTTPError as e:

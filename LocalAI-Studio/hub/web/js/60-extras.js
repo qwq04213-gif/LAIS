@@ -16,7 +16,7 @@ function qRender(q){const L=$('#qlist');if(!L)return;
   if(!q.items.length){L.innerHTML='<p class="mute">지금 진행 중이거나 기다리는 작업이 없어요.</p>';return}
   L.innerHTML=q.items.map(r=>{const act=r.state==='running'||r.state==='queued',pc=typeof r.progress==='number'&&r.state==='running'?Math.round(r.progress*100):null,
     ic={running:'▶',queued:r.pos+'',done:'✔',error:'⚠',cancelled:'■'}[r.state];
-    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}" data-view="${esc(QVIEW[r.kind]||'')}" data-feature="${esc(r.feature||'')}" title="누르면 이 작업의 화면으로 이동해요"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
+    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}" data-view="${esc(QVIEW[r.kind]||'')}" data-feature="${esc(r.feature||'')}" title="누르면 이 작업의 화면으로 이동해요"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${r.state==='running'&&r.model?`<small class="qmod" title="${esc(r.model)}">모델: ${esc(r.model)}</small>`:''}${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
     <div class="qb">${r.state==='queued'?`<button type="button" data-q="top" title="맨 앞으로">⤒</button><button type="button" data-q="up" title="한 칸 앞으로">▲</button><button type="button" data-q="down" title="한 칸 뒤로">▼</button>`:''}${act?`<button type="button" data-q="cancel" title="${r.state==='running'?'중단':'대기열에서 빼기'}">✕</button>`:''}</div></div>`}).join('')}
 async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
   const n=q.running+q.queued,c=$('#qcount');c.hidden=!n;c.textContent=n;$('#qbtn').classList.toggle('busy',n>0);
@@ -575,7 +575,7 @@ function hwPlace(){const pan=$('#hwpanel'),b=$('#gbars');if(pan.hidden||!b)retur
 function hwRender(v){const g=v.live,j=v.job,row=(t,sub,btn)=>`<div class="hwr"><div><b>${t}</b>${sub?`<small>${sub}</small>`:''}</div>${btn||''}</div>`,
   fb=(what,t,tip)=>`<button type="button" class="ghost sm" data-hw="${esc(what)}"${tip?` title="${esc(tip)}"`:''}>${t}</button>`;
   let h=`<div class="hwsum">${v.gpu?esc(v.gpu.name):'GPU'}${g?` · VRAM ${hwGB(g.used_mb)} / ${hwGB(g.total_mb)}${g.util!=null?` · 사용률 ${g.util}%`:''}${g.temp!=null?` · ${g.temp}°C`:''}`:' · 상태를 읽지 못했어요'}</div>`;
-  h+='<h4>지금 하는 작업</h4>'+(j?row(esc(j.label),[j.model&&('모델: '+esc(j.model)),typeof j.progress==='number'&&Math.round(j.progress*100)+'%',j.msg&&esc(j.msg),j.elapsed+'초째'].filter(Boolean).join(' · '),fb('job:'+j.id,'중단','이 작업만 멈춰요'))
+  h+='<h4>지금 하는 작업</h4>'+(j?row(esc(j.label),[j.model&&('모델: '+esc(j.model)),typeof j.progress==='number'&&Math.round(j.progress*100)+'%',j.msg&&esc(j.msg),j.elapsed+'초째',j.eta&&typeof fmtEta==='function'&&('남은 시간 '+fmtEta(j.eta))].filter(Boolean).join(' · '),fb('job:'+j.id,'중단','이 작업만 멈춰요'))
     :`<p class="mute">실행 중인 작업이 없어요.</p>`)+(v.queued?`<p class="mute">기다리는 작업 ${v.queued}개 · <a href="#" id="hw-q">작업 대기열 보기</a></p>`:'');
   h+='<h4>불러와 있는 모델</h4>';
   h+=row('이미지·영상 엔진 (ComfyUI)',!v.comfy_on?'꺼져 있어요':v.comfy?`그래픽 메모리 ${hwGB(v.comfy.vram_mb)} 사용${v.last_model?' · 마지막 모델: '+esc(v.last_model):''}`:'사용량을 읽지 못했어요',
