@@ -450,8 +450,7 @@ def feat_reference_fx(p, p2, fam, ref, mode, J):
         lora = pick_file(files("loras"), r"krea2.*style.?ref", r"style.?ref.*krea")
         if not lora:
             raise RuntimeError("Krea 2 스타일 참조 LoRA(krea2_style_reference)가 없어요. '설치와 모델' 탭에서 'Krea 2 스타일 참조'를 설치해 주세요.")
-        spec = ((caps()["info"].get("FluxKontextMultiReferenceLatentMethod") or {}).get("input", {}).get("required") or {})
-        mkey = next((k for k, v in spec.items() if isinstance(v, list) and v and (v[0] == "COMBO" and "index_timestep_zero" in ((v[1] or {}).get("options") or []) or isinstance(v[0], list) and "index_timestep_zero" in v[0])), "reference_latents_method")
+        mkey = ref_method_key()
         q = flux_q(p2, J, "krea2", text, tags, seed_of(p), w, h)
         if mode == "face":
             warn(J, "Krea 2 에는 얼굴만 따로 따르는 방식이 없어요. 스타일 참조로 그리니, 글에 '같은 사람' 같은 설명을 같이 적어 주세요.")

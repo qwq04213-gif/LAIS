@@ -217,9 +217,6 @@ function addResults(sec,j,kind){
   const bt=$('.res .batch',sec),goto=()=>bt.scrollIntoView({block:'nearest'});goto();
   bt.querySelectorAll('img').forEach(i=>{if(!i.complete)i.addEventListener('load',goto,{once:true})}); // 사진이 다 불러와진 뒤 높이가 커져도 다시 맞춰요
 }
-document.addEventListener('toggle',e=>{const d=e.target;if(!d.classList||!d.classList.contains('more')||!d.open)return;
-  const m=$('.menu',d);d.classList.remove('up');const r=d.getBoundingClientRect(),h=m.offsetHeight+10,pane=d.closest('.res')||document.body,pr=pane.getBoundingClientRect();
-  if(innerHeight-r.bottom<h&&r.top-Math.max(0,pr.top)>h)d.classList.add('up')},true);
 /* 진행 표시줄: 이미지 아래에 상태를 보여 주고, 실행 중에는 [중단] 버튼을 보여 줘요 */
 function setBar(view,text,mode){
   const b=$('.jobbar',view),st=$('.st',b),run=mode==='run';

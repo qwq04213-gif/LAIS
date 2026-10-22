@@ -1,6 +1,20 @@
 {
  "llm": [
   {
+   "id": "qwen35-9b",
+   "name": "Qwen3.5 9B (작업 실행 추천)",
+   "gb": 6.6,
+   "desc": "대화의 '실행 모드'에서 요청을 작업으로 바꾸는 데 알맞은 모델(도구 호출 지원). 사진도 볼 수 있어요. VRAM 8GB 이상 권장. 공식 모델이라 일부 요청은 거절할 수 있어요.",
+   "ollama": "qwen3.5:9b"
+  },
+  {
+   "id": "qwen35-4b",
+   "name": "Qwen3.5 4B (가벼운 작업 실행용)",
+   "gb": 3.4,
+   "desc": "실행 모드용 가벼운 모델. 이미지 작업과 그래픽 메모리를 나눠 쓰기 쉬워요. 9B보다 요청을 잘못 알아들을 수 있어요.",
+   "ollama": "qwen3.5:4b"
+  },
+  {
    "id": "qwen3-8b",
    "name": "Qwen3 8B Abliterated",
    "gb": 5.2,
@@ -46,13 +60,13 @@
  "image": [
   {
    "id": "qwen-edit",
-   "name": "Qwen-Image-Edit 2509 (fp8)",
+   "name": "Qwen-Image-Edit 2511 (fp8)",
    "gb": 30,
-   "desc": "말로 지시하는 고품질 편집. 인물·질감·글자 일관성이 높아요. VRAM 12GB 이상, RAM 32GB 이상 권장. Apache-2.0.",
+   "desc": "말로 지시하는 고품질 편집. 인물·질감·글자 일관성이 높고, 2511은 여러 인물 사진과 부분 편집이 더 정확해요. VRAM 12GB 이상, RAM 32GB 이상 권장. Apache-2.0.",
    "files": [
     {
      "dir": "diffusion_models",
-     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors"
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors"
     },
     {
      "dir": "text_encoders",
@@ -66,13 +80,13 @@
   },
   {
    "id": "qwen-lightning",
-   "name": "Qwen-Edit Lightning 4단계 LoRA",
-   "gb": 1.7,
-   "desc": "편집 속도를 약 5배 높이는 '빠른 모드'용 LoRA.",
+   "name": "Qwen-Edit 2511 Lightning 4단계 LoRA",
+   "gb": 0.85,
+   "desc": "편집 속도를 약 5배 높이는 '빠른 모드'용 LoRA. Qwen-Image-Edit 2511 전용이에요(2509 모델에는 2509용 LoRA가 따로 필요해요).",
    "files": [
     {
      "dir": "loras",
-     "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors"
+     "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
     }
    ]
   },

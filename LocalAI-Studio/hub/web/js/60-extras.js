@@ -564,3 +564,35 @@ function qPlace(){const D=document.documentElement,pill=$('#qfloat'),pan=$('#qpa
 $('#q-killall').onclick=async()=>{if(!confirm('대기 중인 작업과 실행 중인 작업을 모두 멈추고, 불러 둔 모델을 내려 그래픽카드 메모리(VRAM)를 비울까요?\n(이미 저장된 결과는 그대로 남아요. 다음 작업은 모델을 다시 불러오느라 처음 한 번 느려요)'))return;
   try{const r=await api('/api/job/cancel_all',{});toast((r.n?`작업 ${r.n}개를 멈췄어요.`:'멈출 작업은 없었어요.')+' 불러 둔 모델을 내려 VRAM 을 비우는 중이에요(몇 초 걸려요).',6000)}catch{toast('멈추지 못했어요. 서버와 연결을 확인해 주세요.')}
   try{qPoll()}catch{}};
+
+/* ══════════ 작업 관리자: 사이드바의 하드웨어 모니터를 누르면 옆에 붙어서 열려요 ══════════ */
+const HW={timer:null};
+const hwGB=mb=>mb==null?'알 수 없음':mb>=1024?(mb/1024).toFixed(1)+' GB':mb+' MB';
+function hwPlace(){const pan=$('#hwpanel'),b=$('#gbars');if(pan.hidden||!b)return;
+  if(innerWidth<=860){Object.assign(pan.style,{left:'16px',right:'16px',top:'auto',bottom:'64px',maxHeight:'70vh'});return}
+  const r=b.getBoundingClientRect(),h=pan.offsetHeight,top=Math.max(8,Math.min(r.top,innerHeight-h-8));
+  Object.assign(pan.style,{left:(r.right+8)+'px',right:'auto',top:top+'px',bottom:'auto',maxHeight:(innerHeight-16)+'px'})}
+function hwRender(v){const g=v.live,j=v.job,row=(t,sub,btn)=>`<div class="hwr"><div><b>${t}</b>${sub?`<small>${sub}</small>`:''}</div>${btn||''}</div>`,
+  fb=(what,t,tip)=>`<button type="button" class="ghost sm" data-hw="${esc(what)}"${tip?` title="${esc(tip)}"`:''}>${t}</button>`;
+  let h=`<div class="hwsum">${v.gpu?esc(v.gpu.name):'GPU'}${g?` · VRAM ${hwGB(g.used_mb)} / ${hwGB(g.total_mb)}${g.util!=null?` · 사용률 ${g.util}%`:''}${g.temp!=null?` · ${g.temp}°C`:''}`:' · 상태를 읽지 못했어요'}</div>`;
+  h+='<h4>지금 하는 작업</h4>'+(j?row(esc(j.label),[j.model&&('모델: '+esc(j.model)),typeof j.progress==='number'&&Math.round(j.progress*100)+'%',j.msg&&esc(j.msg),j.elapsed+'초째'].filter(Boolean).join(' · '),fb('job:'+j.id,'중단','이 작업만 멈춰요'))
+    :`<p class="mute">실행 중인 작업이 없어요.</p>`)+(v.queued?`<p class="mute">기다리는 작업 ${v.queued}개 · <a href="#" id="hw-q">작업 대기열 보기</a></p>`:'');
+  h+='<h4>불러와 있는 모델</h4>';
+  h+=row('이미지·영상 엔진 (ComfyUI)',!v.comfy_on?'꺼져 있어요':v.comfy?`그래픽 메모리 ${hwGB(v.comfy.vram_mb)} 사용${v.last_model?' · 마지막 모델: '+esc(v.last_model):''}`:'사용량을 읽지 못했어요',
+    v.comfy_on?fb('comfy','내리기','이미지·영상 엔진이 불러 둔 모델을 내려요(실행 중인 작업은 끝난 뒤에 내려가요)'):'');
+  h+=v.ollama.length?v.ollama.map(m=>row('대화 모델 · '+esc(m.name),`그래픽 메모리 ${hwGB(m.vram_mb)}${m.size_mb>m.vram_mb+64?` (나머지 ${hwGB(m.size_mb-m.vram_mb)}는 일반 메모리)`:''}`,fb('ollama:'+m.name,'내리기'))).join(''):row('대화 모델','불러온 모델이 없어요','');
+  if(v.others.length)h+='<h4>그 밖에 그래픽 메모리를 쓰는 프로그램</h4>'+v.others.map(o=>row(esc(o.who),esc(o.name)+' · '+hwGB(o.mb),'')).join('');
+  $('#hwbody').innerHTML=h;hwPlace()}
+async function hwPoll(){if($('#hwpanel').hidden)return;try{hwRender(await api('/api/monitor'))}catch{}
+  clearTimeout(HW.timer);HW.timer=setTimeout(hwPoll,document.hidden?6000:2000)}
+function hwToggle(on){const p=$('#hwpanel');p.hidden=on===undefined?!p.hidden:!on;clearTimeout(HW.timer);if(!p.hidden){hwPlace();hwPoll()}}
+$('#gbars').addEventListener('click',()=>hwToggle());
+$('#gbars').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();hwToggle()}});
+$('#hwpanel .qx').onclick=()=>hwToggle(false);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#hwpanel').hidden)hwToggle(false)});
+$('#hw-kill').onclick=()=>{$('#q-killall').click();setTimeout(hwPoll,1500)};
+$('#hwbody').addEventListener('click',async e=>{if(e.target.id==='hw-q'){e.preventDefault();QUSER='open';qApply();qPoll();return}
+  const b=e.target.closest('[data-hw]');if(!b)return;const w=b.dataset.hw;b.disabled=true;
+  const r=await api('/api/monitor/free',w.startsWith('job:')?{what:'job',id:w.slice(4)}:{what:w});
+  if(r.error)toast(r.error);else toast(w.startsWith('job:')?'작업을 멈추는 중이에요.':'모델을 내렸어요.');setTimeout(hwPoll,800)});
+addEventListener('resize',hwPlace);

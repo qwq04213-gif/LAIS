@@ -375,10 +375,12 @@ def wf_qwen(q, img, refs, plus):
             return w.add("TextEncodeQwenImageEditPlus", clip=[clip, 0], prompt=text, vae=[vae, 0], image1=[li, 0], **extra)
         return w.add("TextEncodeQwenImageEdit", clip=[clip, 0], prompt=text, vae=[vae, 0], image=[li, 0])
 
-    pos, neg = enc(q["prompt"]), enc("")
+    pos, neg = [enc(q["prompt"]), 0], [enc(""), 0]
+    if q.get("ref_method"):      # 2511: 공식 워크플로처럼 양쪽 조건을 index_timestep_zero 로 묶어요
+        pos, neg = ([w.add("FluxKontextMultiReferenceLatentMethod", conditioning=c, **{q["ref_method"]: "index_timestep_zero"}), 0] for c in (pos, neg))
     lat = w.add("VAEEncode", pixels=[li, 0], vae=[vae, 0])
     k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
-              scheduler=q["scheduler"], positive=[pos, 0], negative=[neg, 0], latent_image=[lat, 0], denoise=q.get("denoise", 1.0))
+              scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=[lat, 0], denoise=q.get("denoise", 1.0))
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=[vae, 0]), 0])
     return w.n
 

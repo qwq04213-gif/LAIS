@@ -27,7 +27,7 @@ function md(t){
   return t.replace(/\u0000(\d+)\u0000/g,(_,i)=>'<pre><code>'+blocks[i]+'</code></pre>');
 }
 const wait=m=>`<span class="mute">${m.think?'생각하는 중…':'…'}</span>`;
-const bubble=m=>`<div class="m ${m.role}"><div class="bub">${m.images?.length?`<div class="cthumbs">${m.images.map(u=>`<img src="${u}" alt="붙인 사진">`).join('')}</div>`:''}${md(m.content)||(m.images?.length&&m.role==='user'?'':wait(m))}</div></div>`;
+const bubble=(m,i)=>`<div class="m ${m.role}"><div class="bub">${m.images?.length?`<div class="cthumbs">${m.images.map(u=>`<img src="${u}" alt="붙인 사진">`).join('')}</div>`:''}${md(m.content)||(m.plan||m.images?.length&&m.role==='user'?'':wait(m))}${m.plan?planCard(m.plan,i):''}${m.after?`<div class="pafter">${md(m.after)}</div>`:''}</div></div>`;
 function paint(){const l=$('#log');
   l.innerHTML=Chat.hist.map(bubble).join('')||'<p class="empty">무엇이든 물어보세요. 모든 대화는 이 컴퓨터 안에서만 처리돼요.</p>';
   l.scrollTop=l.scrollHeight}
@@ -35,9 +35,10 @@ function paintLast(){const l=$('#log'),b=$$('.bub',l).at(-1);
   if(b){const m=Chat.hist.at(-1);b.innerHTML=md(m.content)||wait(m);l.scrollTop=l.scrollHeight}}
 async function send(){
   if(Chat.ctl){Chat.ctl.abort();return}
-  const pics=Chat.pics.slice(),text=$('#msg').value.trim()||(pics.length?'이 사진을 설명해 줘.':'');if(!text)return;
+  const pics=Chat.pics.slice(),text=$('#msg').value.trim()||(pics.length&&!agentOn()?'이 사진을 설명해 줘.':'');if(!text)return;
   const sys=$('#sys').value.trim(),ce=$('#cerr');ce.hidden=true;
   if(!$('#llm').value){ce.textContent='대화 모델이 아직 없어요. [설치와 모델]에서 설치해 주세요.';ce.hidden=false;return}
+  if(agentOn())return agentSend(text,pics);
   if(pics.length||Chat.hist.some(m=>m.images?.length)){      // 사진이 있으면 이미지를 볼 수 있는 모델이어야 해요
     let vm=[];try{vm=(await api('/api/vision')).models||[]}catch{}
     if(pics.length&&!vm.includes($('#llm').value)){
@@ -90,10 +91,10 @@ $('#msg').addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])]
 {const cm=$('#v-chat .chatmain');['dragover','dragenter'].forEach(ev=>cm.addEventListener(ev,e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();cm.classList.add('drop')}}));
  ['dragleave','drop'].forEach(ev=>cm.addEventListener(ev,e=>{if(ev==='drop'||e.target===cm)cm.classList.remove('drop')}));
  cm.addEventListener('drop',e=>{if(e.dataTransfer?.files?.length){e.preventDefault();addPics(e.dataTransfer.files)}})}
-$('#log').addEventListener('click',e=>{const i=e.target.closest('.cthumbs img');if(i)window.open(i.src,'_blank')});
+$('#log').addEventListener('click',e=>{const i=e.target.closest('.cthumbs:not(.pimgs) img');if(i)window.open(i.src,'_blank')});
 paint();
 /* ── 대화 목록: 대화마다 파일에 저장하고, 새 대화를 시작해도 이전 대화는 남아요 ── */
-async function chatSave(){const msgs=Chat.hist.filter(m=>m.content||m.images?.length).map(({role,content,images})=>({role,content,...(images?.length?{images}:{})}));
+async function chatSave(){const msgs=Chat.hist.filter(m=>m.content||m.images?.length).map(({role,content,images,after})=>({role,content:after?content+'\n\n'+after:content,...(images?.length?{images}:{})}));
   if(!msgs.length)return;
   try{const r=await api('/api/chats/save',{id:Chat.id,msgs,model:$('#llm').value,sys:$('#sys').value,persona:$('#persona').value});
     if(r.error){toast(r.error);return}Chat.id=r.id;chatList()}catch{}}
@@ -126,3 +127,47 @@ $('#cl-export').onclick=()=>{if(!Chat.hist.length)return toast('내보낼 대화
   if(old.length&&!r.items.length){try{const s=await api('/api/chats/save',{msgs:old.map(({role,content})=>({role,content}))});if(!s.error){ls.set('chat',[]);r=await api('/api/chats')}}catch{}}
   if(r.items.length&&!Chat.hist.length)await chatOpen(r.items[0].id);else chatList()})();
 
+
+/* ── 실행 모드: 말한 요청을 등록된 작업(도구)으로 바꿔 계획을 보여 주고, [실행]을 누르면 대기열에 넣어요 ── */
+const agentOn=()=>$('#c-agent').checked;
+function agentUI(){const on=agentOn();$('#c-agent-hint').hidden=!on;$('#v-chat').classList.toggle('agent',on);
+  $('#msg').placeholder=on?'할 일을 말해 보세요. 예: 비 오는 밤의 사이버펑크 도시를 두 장 그려 줘 / 붙인 사진을 수채화풍으로 바꿔 줘':'메시지를 입력하세요. Enter로 보내고 Shift+Enter로 줄을 바꿔요.'}
+$('#c-agent').checked=ls.get('chat:agent',false);agentUI();
+$('#c-agent').onchange=()=>{ls.set('chat:agent',agentOn());agentUI()};
+function formBase(sel){const f=$(sel);if(!f)return{};const o={};
+  for(const[k,v]of new FormData(f))if(typeof v==='string')o[k]=v;
+  $$('.mini[data-img]',f).forEach(m=>{if(m.value)o[m.dataset.img]=m.value});return o}
+const AG_ST={wait:'대기',running:'진행 중',done:'완료',error:'실패',cancelled:'중단됨',skipped:'건너뜀'};
+function planCard(P,i){const act=P.state==='wait'?`<button type="button" class="go sm" data-prun="${i}">실행</button><button type="button" class="ghost sm" data-pstop="${i}">취소</button>`
+    :P.state==='running'?`<button type="button" class="ghost sm" data-pstop="${i}">중단</button>`:'';
+  return `<div class="plan" data-st="${P.state}"><b>실행 계획</b><ol>${P.steps.map(s=>`<li data-st="${s.state}"><span class="ps">${esc(s.summary)}</span> <small class="pst">${AG_ST[s.state]||s.state}${s.state==='running'&&s.msg?' · '+esc(s.msg):''}${s.state==='running'&&typeof s.progress==='number'?' · '+Math.round(s.progress*100)+'%':''}</small>${
+    s.error?`<div class="st bad">${esc(s.error)}</div>`:''}<details><summary>보낼 값</summary><pre>${esc(JSON.stringify(s.args,null,1))}</pre></details>${
+    s.images?.length?`<div class="cthumbs pimgs">${s.images.map(u=>/\.(png|jpe?g|webp|gif)$/i.test(u)?`<img src="${u}" data-pimg="${u}" alt="결과 (누르면 크게 보기)">`:`<a href="${u}" target="_blank">${esc(decodeURIComponent(u.split('/').pop()))}</a>`).join('')}</div>`:''}</li>`).join('')}</ol><div class="pa">${act}</div></div>`}
+async function agentSend(text,pics){
+  const ce=$('#cerr');
+  if(pics.length>1)toast('실행 모드에서는 붙인 사진 중 첫 장만 써요.');
+  Chat.hist.push({role:'user',content:text,...(pics.length?{images:pics.slice(0,1)}:{})},{role:'assistant',content:''});
+  $('#msg').value='';Chat.pics=[];picsPaint();paint();
+  Chat.ctl=new AbortController();$('#send').textContent='멈춤';
+  const body={model:$('#llm').value,image:pics[0]||null,base:{gen:formBase('#f-gen'),edit:formBase('#f-edit')},
+    messages:Chat.hist.slice(0,-1).filter(m=>m.content).map(({role,content})=>({role,content}))};
+  try{const r=await(await fetch('/api/agent/plan',{method:'POST',body:JSON.stringify(body),signal:Chat.ctl.signal})).json(),m=Chat.hist.at(-1);
+    if(r.error){Chat.hist.splice(-2);$('#msg').value=text;Chat.pics=pics;picsPaint();ce.textContent=r.error;ce.hidden=false}
+    else{m.content=r.reply||(r.plan?'이렇게 할까요? 확인하고 [실행]을 눌러 주세요.':'');if(r.plan)m.plan=r.plan}
+  }catch(e){if(e.name==='AbortError')Chat.hist.splice(-2);else{Chat.hist.splice(-2);$('#msg').value=text;ce.textContent='실행 모드 요청을 보내지 못했어요: '+e.message;ce.hidden=false}}
+  Chat.ctl=null;$('#send').textContent='보내기';paint();chatSave()}
+async function agentPoll(i){const m=Chat.hist[i];if(!m?.plan)return;
+  for(;;){await sleep(1000);let v;try{v=await api('/api/agent/'+m.plan.id)}catch{continue}
+    if(v.error){m.plan.state='error';break}
+    m.plan=v;paint();if(typeof qPoll==='function')qPoll();
+    if(v.state!=='running')break}
+  const n=m.plan.steps.reduce((a,s)=>a+(s.images?.length||0),0),bad=m.plan.steps.find(s=>s.state==='error');
+  m.after=`${m.plan.state==='done'?`✔ 끝났어요. 결과 ${n}개는 기록 갤러리에도 있어요.`:m.plan.state==='cancelled'?'중단했어요.':`⚠ ${bad?.summary||'작업'} 단계에서 멈췄어요: ${bad?.error||''}`}`;
+  paint();chatSave()}
+$('#log').addEventListener('click',async e=>{
+  const im=e.target.closest('[data-pimg]');if(im){const L=[...im.closest('.pimgs').querySelectorAll('img')].map(x=>({url:x.dataset.pimg,name:x.dataset.pimg.split('/').pop()}));lbOpen(L,L.findIndex(x=>x.url===im.dataset.pimg));return}
+  const run=e.target.closest('[data-prun]'),stop=e.target.closest('[data-pstop]');if(!run&&!stop)return;
+  const i=+(run||stop).dataset[run?'prun':'pstop'],m=Chat.hist[i];if(!m?.plan)return;(run||stop).disabled=true;
+  const r=await api(run?'/api/agent/run':'/api/agent/cancel',{id:m.plan.id});
+  if(r.error){toast(r.error);m.plan.state='error';paint();return}
+  m.plan=r.plan;paint();if(run){if(typeof qPoll==='function')qPoll().then(()=>typeof qSched==='function'&&qSched());agentPoll(i)}});

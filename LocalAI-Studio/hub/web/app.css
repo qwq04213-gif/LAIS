@@ -609,3 +609,20 @@ nav .ngb{display:flex;flex-direction:column;gap:1px}nav .ngb[hidden]{display:non
 .mini [hidden]{display:none!important}
 .mcard2 .mname{margin-left:4px;padding:1px 7px;font-size:calc(11.5px*var(--ui,1))}.mcard2 .mmemo{font-size:calc(12.5px*var(--ui,1));color:var(--tx);margin:2px 0}
 #qpanel .qh .qkill{margin-left:auto;margin-right:6px;color:#d0473c;border-color:currentColor}#qpanel .qh .qkill:hover{background:rgba(229,115,106,.12)}
+/* 대화 실행 모드 */
+.chk.agt{font-weight:600}#v-chat.agent .compose{box-shadow:0 0 0 2px var(--acc,#6a8cff) inset;border-radius:10px}
+.plan{margin-top:8px;padding:10px 12px;border:1px solid var(--line,#8884);border-radius:10px;background:var(--raised,#0001)}
+.plan ol{margin:6px 0 8px;padding-left:20px}.plan li{margin:4px 0}.plan li .pst{color:var(--mute,#888)}
+.plan li[data-st=done] .pst{color:var(--ok,#3a3)}.plan li[data-st=error] .pst{color:var(--bad,#d44)}
+.plan details summary{font-size:.85em;color:var(--mute,#888);cursor:pointer}.plan pre{font-size:.8em;white-space:pre-wrap;word-break:break-all;margin:4px 0}
+.plan .pa{display:flex;gap:6px}.plan .pa:empty{display:none}.pimgs{margin-top:6px}
+
+/* 작업 관리자 */
+#gbars[role=button]{cursor:pointer;border-radius:8px}#gbars[role=button]:hover{background:var(--table)}
+#hwpanel{position:fixed;width:min(400px,calc(100vw - 32px));overflow:auto;background:var(--raised);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);z-index:91;padding:12px 14px}
+#hwpanel[hidden]{display:none}#hwpanel h4{margin:12px 0 4px;font-size:calc(12.5px*var(--ui,1));color:var(--mute)}
+#hwpanel .hwsum{font-size:calc(12.5px*var(--ui,1))}#hwpanel .hwr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+#hwpanel .hwr small{display:block;color:var(--mute);font-size:calc(11.5px*var(--ui,1))}#hwpanel .hwr>div{min-width:0;overflow-wrap:anywhere}
+#hwpanel .qh .qkill{margin-left:auto;margin-right:6px;color:#d0473c;border-color:currentColor}
+body:has(#lb:not([hidden])) #hwpanel{display:none}
+.pafter{margin-top:8px}

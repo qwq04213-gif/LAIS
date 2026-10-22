@@ -220,6 +220,37 @@ def job_label(p):
     return name + (f" · {txt[:36]}{'…' if len(txt) > 36 else ''}" if txt else "")
 
 
+def submit_job(p, **extra):
+    """작업 하나를 만들어 대기열에 넣어요(화면의 /api/job 과 대화 실행 모드가 같이 써요)."""
+    if len(JOBS) > 50:
+        for k, v in list(JOBS.items()):
+            if v.get("state") in DONE_STATES:
+                del JOBS[k]
+                break
+    J = {"id": uuid.uuid4().hex[:10], "state": "queued", "msg": "대기 중", "elapsed": 0, "images": [], "tmp": [], **extra}
+    JOBS[J["id"]] = J
+    J["feature"] = str(p.get("feature") or "")[:40]
+    enqueue(J, p)
+    return J
+
+
+HIST_FILE = LOGS / "job-history.jsonl"
+HIST_MAX = 4 << 20
+
+
+def job_history_add(J):
+    """끝난 작업을 logs\\job-history.jsonl 에 한 줄씩 남겨요(프로그램을 다시 켜도 남아요. 4MB 를 넘으면 한 번 옮겨 두고 새로 써요)."""
+    try:
+        LOGS.mkdir(exist_ok=True)
+        if HIST_FILE.is_file() and HIST_FILE.stat().st_size > HIST_MAX:
+            HIST_FILE.replace(HIST_FILE.with_suffix(".old.jsonl"))
+        row = {k: J.get(k) for k in ("id", "kind", "label", "feature", "state", "error", "t_add", "t_start", "t_end", "images", "warn", "agent")}
+        with open(HIST_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps({k: v for k, v in row.items() if v not in (None, "", [])}, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
 def enqueue(J, p):
     J["kind"], J["label"], J["t_add"] = p["kind"], job_label(p), time.time()
     with _QCV:
@@ -287,6 +318,7 @@ def job_worker():
         try:
             J["t_start"] = time.time()
             mk = model_key(p)
+            J["model_desc"] = " · ".join(mk[1]) if mk else ""
             job_thread(J, p)
             if mk is not None:
                 LAST_MODEL["key"] = mk
@@ -294,6 +326,7 @@ def job_worker():
             J["state"], J["error"] = "error", repr(e)
             log("[대기열 오류]", repr(e))
         J["t_end"] = time.time()
+        job_history_add(J)
         STATE["idle_since"] = time.time()
 
 

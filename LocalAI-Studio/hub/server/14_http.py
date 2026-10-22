@@ -229,6 +229,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"models": vision_models()})
         if u == "/api/manage":
             return self.send_json(manage())
+        if u == "/api/monitor":
+            return self.send_json(monitor_view())
+        if u.startswith("/api/agent/"):
+            return self.send_json(agent_view(u[11:]))
         if u.startswith("/api/job/"):
             J = JOBS.get(u[9:])
             if not J:
@@ -254,14 +258,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "bad json"}, 400)
         if u == "/api/chat":
             return self.chat(p)
+        if u == "/api/agent/plan":
+            try:
+                return self.send_json(agent_plan(p))
+            except Exception as e:  # noqa: BLE001
+                log("[실행 모드 오류]", repr(e))
+                agent_log(ev="error", error=repr(e))
+                return self.send_json({"error": str(e) if isinstance(e, RuntimeError) else "대화 엔진(Ollama)에 연결할 수 없어요. 잠시 후 다시 시도해 주세요."})
+        if u == "/api/monitor/free":
+            try:
+                return self.send_json(monitor_free(p))
+            except Exception as e:  # noqa: BLE001
+                return self.send_json({"error": f"처리하지 못했어요: {e}"})
+        if u == "/api/agent/run":
+            return self.send_json(agent_run(str(p.get("id"))))
+        if u == "/api/agent/cancel":
+            return self.send_json(agent_cancel(str(p.get("id"))))
         if u == "/api/job":
             if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch"):
                 return self.send_json({"error": "unknown kind"}, 400)
-            if len(JOBS) > 50:
-                for k, v in list(JOBS.items()):
-                    if v.get("state") in DONE_STATES:
-                        del JOBS[k]
-                        break
             if p["kind"] == "batch":
                 try:
                     p["count"] = len(batch_files(batch_folder(p), bool(p.get("sub") or p.get("outsub")))[:BATCH_MAX])
@@ -269,11 +284,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"error": str(e)})
                 if not p["count"]:
                     return self.send_json({"error": "처리할 이미지가 없어요. (png · jpg · webp · bmp)"})
-            J = {"id": uuid.uuid4().hex[:10], "state": "queued", "msg": "대기 중", "elapsed": 0, "images": [], "tmp": []}
-            JOBS[J["id"]] = J
-            J["feature"] = str(p.get("feature") or "")[:40]
-            enqueue(J, p)
-            return self.send_json({"id": J["id"]})
+            return self.send_json({"id": submit_job(p)["id"]})
         if u == "/api/install":
             return self.send_json(install(p))
         if u == "/api/install/cancel":

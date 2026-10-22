@@ -366,7 +366,7 @@ function gbars(g){const box=$('#gbars');if(!box)return;
   if(g.util!=null)h+=gbar('GPU 사용률',g.util,g.util+'%',85,98);
   if(g.temp!=null)h+=gbar('온도',g.temp,g.temp+'°C',75,85);
   if(g.power!=null&&g.power_max)h+=gbar('전력',g.power/g.power_max*100,`${g.power} / ${g.power_max} W`,85,98);
-  box.innerHTML=h;box.hidden=false}
+  box.innerHTML=h;box.hidden=false;if(!box.title){box.title='누르면 작업 관리자를 열어요 (지금 불러온 모델·사용량·강제 종료)';box.setAttribute('role','button');box.tabIndex=0}}
 async function stat(){
   try{const s=await api('/api/status');GPU=s.gpu;if(BOOT===null&&s.boot)BOOT=s.boot;
     if(s.version)$('#ver').textContent='버전 '+s.version;
@@ -616,3 +616,19 @@ function musicWarn(){const w=$('#w-music'),f=$('#f-music');if(!w||!f)return;cons
   if(sx){w.hidden=!!LISTS.sfx_ready;w.innerHTML='효과음 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a> > 음악·효과음에서 \'Stable Audio Open 1.0\'을 설치해 주세요. (약 5GB, HuggingFace 사용 동의 필요)';return}
   const has=(LISTS.musicmodels||[]).length>0,nodes=LISTS.music_nodes!==false;w.hidden=has&&nodes;
   w.innerHTML=!has?'음악 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 \'ACE-Step 1.5 Turbo\'를 설치해 주세요. (약 10GB)':'이 ComfyUI 에는 음악 만들기 노드가 없어요. ComfyUI 를 업데이트해 주세요.'}
+
+/* 펼침 메뉴(더 보기·⋯·다른 화면으로)는 화면 기준으로 띄워요: 오른쪽·아래가 모자라면 반대쪽으로 열고, 위아래 모두 모자라면 넓은 쪽에 맞춰 스크롤해요.
+   (갤러리 칸·스크롤 영역 밖으로 나가도 잘리지 않아요) */
+function menuPlace(d){const m=$('.menu',d),sm=d.querySelector(':scope>summary');if(!m||!sm)return;
+  const s=sm.getBoundingClientRect(),W=document.documentElement.clientWidth,H=innerHeight,pad=8;
+  Object.assign(m.style,{position:'fixed',left:'0px',top:'0px',right:'auto',bottom:'auto',maxHeight:'none',overflowY:'visible'});
+  const mw=m.offsetWidth,mh=m.offsetHeight;
+  let x=s.left;if(x+mw>W-pad)x=s.right-mw;x=Math.max(pad,Math.min(x,W-pad-mw));
+  const below=H-s.bottom-pad-4,above=s.top-pad-4;let y,mx=0;
+  if(mh<=below)y=s.bottom+4;else if(mh<=above)y=s.top-4-mh;else if(below>=above){y=s.bottom+4;mx=below}else{mx=above;y=s.top-4-mx}
+  Object.assign(m.style,{left:Math.round(x)+'px',top:Math.round(y)+'px'});if(mx){m.style.maxHeight=Math.max(120,mx)+'px';m.style.overflowY='auto'}
+  d.classList.toggle('up',y<s.top)}
+document.addEventListener('toggle',e=>{const d=e.target;if(!d.classList||!d.classList.contains('more'))return;const m=$('.menu',d);if(!m)return;
+  if(d.open)menuPlace(d);else{m.removeAttribute('style');d.classList.remove('up')}},true);
+addEventListener('scroll',e=>{const t=e.target;document.querySelectorAll('details.more[open]').forEach(d=>{if(t===document||t.contains&&t.contains(d)&&!d.contains(t))d.open=false})},true);      // 메뉴가 붙은 영역이 스크롤되면 닫아요
+addEventListener('resize',()=>document.querySelectorAll('details.more[open]').forEach(d=>menuPlace(d)));
