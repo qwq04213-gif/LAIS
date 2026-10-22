@@ -204,7 +204,12 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/rmbg/status":
             return self.send_json(rmbg_status())
         if u == "/api/tags":
-            return self.send_json(tags_search((urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0]))
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                lim, off = max(0, min(1000, int((qs.get("limit") or ["50"])[0]))), int((qs.get("offset") or ["0"])[0])
+            except ValueError:
+                lim, off = 50, 0
+            return self.send_json(tags_search((qs.get("q") or [""])[0], lim, off))
         if u == "/api/chats":
             return self.send_json(chats_list((urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0]))
         if u.startswith("/api/chats/"):

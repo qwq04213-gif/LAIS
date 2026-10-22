@@ -203,25 +203,32 @@ def tag_aliases(text):
 HANGUL = re.compile("[가-힣ㄱ-ㅎ]")
 
 
-def tags_search(q, limit=10):
+_TQ = {"key": None, "items": []}
+
+
+def tags_search(q, limit=50, offset=0):
+    """자동완성 후보. 결과 전체를 순서대로 만들어 두고(같은 검색어는 다시 쓰고) offset 부터 limit 개를 줘요(limit 0 이면 전부)."""
     k = _tag_norm(q)
     if len(k) < (1 if HANGUL.search(k) else 2):
-        return {"items": []}
-    pre, mid = [], []
-    for key, shown, cat, w, note, desc in tags_rows():
-        if key.startswith(k):
-            pre.append((w, shown, cat, note, desc))
-        elif k in key and (f" {k}" in key or len(k) >= 3 or HANGUL.search(k)):
-            mid.append((w, shown, cat, note, desc))
-    out, seen = [], set()
-    for w, shown, cat, note, desc in sorted(pre, key=lambda x: -x[0]) + sorted(mid, key=lambda x: -x[0]):
-        if shown.lower() in seen or shown.lower() == k:
-            continue
-        seen.add(shown.lower())
-        out.append({"t": shown, "c": cat, **({"n": note} if note and _tag_norm(note) != _tag_norm(shown) else {}), **({"d": desc} if desc else {})})
-        if len(out) >= limit:
-            break
-    return {"items": out}
+        return {"items": [], "total": 0}
+    rows = tags_rows()
+    if _TQ["key"] != (k, id(rows)):
+        pre, mid = [], []
+        for key, shown, cat, w, note, desc in rows:
+            if key.startswith(k):
+                pre.append((w, shown, cat, note, desc))
+            elif k in key and (f" {k}" in key or len(k) >= 3 or HANGUL.search(k)):
+                mid.append((w, shown, cat, note, desc))
+        out, seen = [], set()
+        for w, shown, cat, note, desc in sorted(pre, key=lambda x: -x[0]) + sorted(mid, key=lambda x: -x[0]):
+            if shown.lower() in seen or shown.lower() == k:
+                continue
+            seen.add(shown.lower())
+            out.append({"t": shown, "c": cat, **({"n": note} if note and _tag_norm(note) != _tag_norm(shown) else {}), **({"d": desc} if desc else {})})
+        _TQ.update(key=(k, id(rows)), items=out)
+    items = _TQ["items"]
+    offset = max(0, int(offset or 0))
+    return {"items": items[offset:offset + limit] if limit else items[offset:], "total": len(items), "offset": offset}
 
 
 THUMB_DIR = ROOT / "cache" / "thumbs"

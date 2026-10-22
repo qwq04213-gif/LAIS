@@ -267,26 +267,38 @@ document.addEventListener('keydown',e=>{
 {const SEL='#f-gen textarea[name=prompt],#f-gen textarea[name=negative],#f-edit textarea[name=prompt],#f-edit textarea[name=negative],#f-batch textarea[name=prompt],#pl-form textarea[name=text],#pl-form textarea[name=negative]';
  const on=$('#tag-on');on.checked=!ls.get('tags:off',false);on.onchange=()=>{ls.set('tags:off',!on.checked);close()};
  const box=document.createElement('div');box.id='tagbox';box.hidden=true;box.setAttribute('role','listbox');document.body.append(box);
- let ta=null,items=[],sel=-1,seq=0;
- function close(){box.hidden=true;items=[];sel=-1}
+ let ta=null,items=[],sel=-1,seq=0,total=0,q='',loading=false,inBox=false;
+ function close(){box.hidden=true;items=[];sel=-1;total=0}
  function seg(el){const v=el.value,c=el.selectionStart,b=Math.max(v.lastIndexOf(',',c-1),v.lastIndexOf('\n',c-1))+1;
   const raw=v.slice(b,c),lead=raw.length-raw.trimStart().length,txt=raw.slice(lead).replace(/^[(\[{]+/,'');return{from:b+lead+(raw.slice(lead).length-txt.length),to:c,txt}}
- function draw(){box.innerHTML=items.map((x,i)=>`<div class="ti${i===sel?' on':''}" data-i="${i}" role="option"${x.d?` title="${esc(x.d)}"`:''}><span>${esc(x.t)}${x.n?` <small class="tk">${esc(x.n)}</small>`:''}</span><em>${esc(x.c)}</em></div>`).join('');
-  const r=ta.getBoundingClientRect();box.style.left=r.left+'px';box.style.top=(r.bottom+2)+'px';box.style.width=Math.min(r.width,420)+'px';box.hidden=!items.length}
+ function tagRow(x,i){return `<div class="ti${i===sel?' on':''}" data-i="${i}" role="option"${x.d?` title="${esc(x.d)}"`:''}><span>${esc(x.t)}${x.n?` <small class="tk">${esc(x.n)}</small>`:''}</span><em>${esc(x.c)}</em></div>`}
+ function draw(keep){const st=keep?box.scrollTop:0;
+  box.innerHTML=`<div class="thd">검색 결과 ${total.toLocaleString()}개${total>items.length?` · 내리면 더 보여요`:''}</div>`+items.map(tagRow).join('')+(total>items.length?'<div class="tmore">더 불러오는 중…</div>':'');
+  const r=ta.getBoundingClientRect(),below=innerHeight-r.bottom-12,above=r.top-12,up=below<240&&above>below;
+  box.style.left=r.left+'px';box.style.width=Math.min(Math.max(r.width,320),520)+'px';box.style.maxHeight=Math.max(160,Math.min(up?above:below,innerHeight*0.6))+'px';
+  if(up){box.style.top='auto';box.style.bottom=(innerHeight-r.top+2)+'px'}else{box.style.bottom='auto';box.style.top=(r.bottom+2)+'px'}
+  box.hidden=!items.length;box.scrollTop=st}
+ async function more(){if(loading||items.length>=total||!ta)return;loading=true;const my=seq;
+  try{const r=await api(`/api/tags?q=${encodeURIComponent(q)}&offset=${items.length}&limit=200`);if(my!==seq)return;items=items.concat(r.items||[]);total=r.total||items.length;draw(true)}catch{}finally{loading=false}}
+ box.addEventListener('scroll',()=>{if(box.scrollTop+box.clientHeight>box.scrollHeight-120)more()});
  function pick(i){const x=items[i];if(!x||!ta)return;const s=seg(ta),v=ta.value,after=v.slice(s.to),ins=x.t+(/^\s*[,\n]/.test(after)?'':', ');
   ta.value=v.slice(0,s.from)+ins+after.replace(/^[ ]+/,'');ta.selectionStart=ta.selectionEnd=s.from+ins.length;ta.dispatchEvent(new Event('input',{bubbles:true}));close();ta.focus()}
  const ask=debounce(async el=>{const s=seg(el);if(s.txt.length<(/[가-힣ㄱ-ㅎ]/.test(s.txt)?1:2)||/^[<]/.test(s.txt)||/[.!?]\s/.test(s.txt)||s.txt.length>40)return close();
-  const my=++seq;try{const r=await api('/api/tags?q='+encodeURIComponent(s.txt));if(my!==seq||document.activeElement!==el)return;items=(r.items||[]).slice(0,8);sel=-1;ta=el;draw()}catch{close()}},120);
+  const my=++seq;try{const r=await api('/api/tags?q='+encodeURIComponent(s.txt)+'&limit=100');if(my!==seq||document.activeElement!==el)return;items=r.items||[];total=r.total||items.length;q=s.txt;sel=-1;ta=el;draw()}catch{close()}},120);
  document.addEventListener('input',e=>{const el=e.target;if(!el.matches?.(SEL)||!on.checked)return;ta=el;ask(el)});      // 한글은 조합 중에도 찾아요
  document.addEventListener('compositionend',e=>{const el=e.target;if(el.matches?.(SEL)&&on.checked){ta=el;ask(el)}});
  document.addEventListener('keydown',e=>{if(box.hidden||e.isComposing||e.target!==ta)return;
-  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();sel+=e.key==='ArrowDown'?1:-1;if(sel>=items.length)sel=-1;if(sel<-1)sel=items.length-1;draw()}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();sel+=e.key==='ArrowDown'?1:-1;if(sel>=items.length)sel=-1;if(sel<-1)sel=items.length-1;
+    box.querySelectorAll('.ti').forEach(x=>x.classList.toggle('on',+x.dataset.i===sel));box.querySelector('.ti.on')?.scrollIntoView({block:'nearest'});if(sel>items.length-15)more()}
+  else if(e.key==='PageDown'||e.key==='PageUp'){e.preventDefault();box.scrollTop+=(e.key==='PageDown'?1:-1)*box.clientHeight*0.9}
   else if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();pick(sel<0?0:sel)}
   else if(e.key==='Enter'&&sel>=0&&!e.ctrlKey&&!e.metaKey){e.preventDefault();e.stopImmediatePropagation();pick(sel)}
   else if(e.key==='Escape'){e.stopPropagation();close()}},true);
+ box.addEventListener('pointerdown',()=>{inBox=true});      // 목록 안(스크롤바 포함)을 누르는 동안은 닫지 않아요
+ addEventListener('pointerup',()=>{if(inBox){inBox=false;if(ta&&!box.hidden&&document.activeElement!==ta)ta.focus({preventScroll:true})}},true);
  box.addEventListener('mousedown',e=>{const t=e.target.closest('.ti');if(t){e.preventDefault();pick(+t.dataset.i)}});
- document.addEventListener('focusout',e=>{if(e.target===ta)setTimeout(close,120)});
- addEventListener('scroll',()=>{if(!box.hidden)close()},true);addEventListener('resize',close)}
+ document.addEventListener('focusout',e=>{if(e.target===ta)setTimeout(()=>{if(!inBox&&document.activeElement!==ta)close()},150)});
+ addEventListener('scroll',e=>{if(!box.hidden&&e.target!==box&&!box.contains(e.target))close()},true);addEventListener('resize',close)}
 
 {const sel=$('#ui-scale'),get=()=>{try{return parseFloat(localStorage.getItem('ui:scale'))||1.25}catch{return 1.25}};
  {const ops=[...sel.options].map(o=>+o.value),g=get();sel.value=String(ops.reduce((a,b)=>Math.abs(b-g)<Math.abs(a-g)?b:a))}      // 예전에 저장된 값이 목록에 없으면 가장 가까운 크기로 보여요
