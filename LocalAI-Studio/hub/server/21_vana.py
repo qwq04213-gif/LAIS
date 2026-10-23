@@ -5,6 +5,7 @@
 
 import asr_models
 import vana
+import numpy as np
 
 VANA_DIR = ROOT / "analysis"
 VANA_CAP_MAX = 60          # 장면 설명은 이만큼의 샷까지만(오래 걸려서)
@@ -185,9 +186,69 @@ def vana_camera(p, J):
     return [(json.dumps(data, ensure_ascii=False).encode("utf-8"), {"kind": "camera-2d", "source": vmix_name(src)}, ".camera.json"), (chart, info2, None)]
 
 
+def vana_cam3d(p, J):
+    """영상 → 3D 카메라 경로(특징점 매칭으로 회전·이동 추정) + 깊이를 그 경로에 맞춰 쌓은 점 구름(.glb).
+    카메라 한 대라 거리 단위는 모르는 '상대 크기'예요. 깊이도 AI 추정이라 점 구름은 대략적인 모양이에요."""
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        raise RuntimeError("3D 카메라 추정에는 파이썬 부품 opencv 가 필요해요. (No module named 'cv2')") from None
+    ff = vana_ff()
+    src = vmix_src(p.get("video"), vmix.VIDEO_EXT, "영상")
+    info = vmix.probe(ff, src)
+    fps = clamp(num(p, "fps", 4, int), 2, 10)
+    sec = min(float(info.get("dur") or 0), 90 / fps)
+    work = ROOT / "cache" / "vcam3d" / uuid.uuid4().hex[:8]
+    out = []
+    try:
+        J["msg"] = "프레임 뽑는 중"
+        fs = vana.frames(ff, src, fps, 480, work, 0.0, sec)
+        if len(fs) < 3:
+            raise ValueError("영상이 너무 짧아요(1초 이상 필요해요).")
+        frames_ = [Image.open(f).convert("RGB") for f in fs]
+        J["msg"], J["progress"] = "카메라 움직임 계산 중(특징점 매칭)", 0.1
+        poses, foc, warns = depthfx.vo_track(frames_, clamp(num(p, "fov", 60), 20, 120))
+        for w in warns:
+            warn(J, w)
+        rows = depthfx.pose_rows(poses, fps)
+        data = {"kind": "camera-3d", "note": "카메라 한 대로 추정한 상대 경로 — 회전·방향은 대략 맞지만 거리 단위(m)는 알 수 없어요", "source": vmix_name(src),
+                "fps": fps, "focal_px": round(foc, 1), "width": frames_[0].width, "height": frames_[0].height, "frames": rows}
+        out.append((json.dumps(data, ensure_ascii=False).encode("utf-8"), {"kind": "camera-3d", "source": vmix_name(src)}, ".camera3d.json"))
+        out.append((depthfx.pose_chart(rows), {"kind": "camera-3d", "prompt": "", "source": vmix_name(src), "note": data["note"]}, None))
+        if flag(p, "cloud", True):
+            keys = list(range(0, len(frames_), max(1, len(frames_) // 24)))
+            Ps, Cs = [], []
+            span = float(np.median([np.linalg.norm(x["t"]) for x in poses[1:]] or [1.0])) or 1.0
+            for n, i in enumerate(keys):
+                check_cancel(J)
+                J["msg"], J["progress"] = f"깊이로 점 구름 쌓는 중 {n + 1}/{len(keys)}", 0.2 + 0.75 * (n + 1) / len(keys)
+                b = io.BytesIO()
+                frames_[i].save(b, "PNG")
+                r = control_prep({"type": "depth", "image": "data:image/png;base64," + base64.b64encode(b.getvalue()).decode()})
+                if r.get("error"):
+                    warn(J, "깊이 추정이 안 돼서 점 구름은 만들지 못했어요: " + r["error"][:160])
+                    Ps = []
+                    break
+                d = Image.open(io.BytesIO(base64.b64decode(r["image"].split(",", 1)[1]))).convert("L")
+                P_, C_ = depthfx.cloud_points(frames_[i], d, poses[i], foc, step=5, scale=2.0 / span)
+                Ps.append(P_)
+                Cs.append(C_)
+            if Ps:
+                P_, C_ = np.concatenate(Ps), np.concatenate(Cs)
+                if len(P_) > 400000:
+                    sel = np.random.default_rng(0).choice(len(P_), 400000, replace=False)
+                    P_, C_ = P_[sel], C_[sel]
+                out.append((depthfx.points_glb(P_, C_), {"kind": "pointcloud", "source": vmix_name(src), "points": int(len(P_)),
+                                                          "note": "AI 깊이 + 추정 카메라로 쌓은 대략적인 점 구름(정밀 3D 복원 아님)"}, ".glb"))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    J["msg"] = f"카메라 {len(rows)}개 위치 추정" + ("" if len(out) < 3 else " · 점 구름 만듦")
+    return out
+
+
 def do_vana(p, J):
     op = p.get("op") or "analyze"
-    fn = {"analyze": vana_analyze, "vdepth": vana_vdepth, "camera": vana_camera}.get(op)
+    fn = {"analyze": vana_analyze, "vdepth": vana_vdepth, "camera": vana_camera, "cam3d": vana_cam3d}.get(op)
     if not fn:
         raise ValueError("알 수 없는 분석이에요.")
     return fn(p, J)

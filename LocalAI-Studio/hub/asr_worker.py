@@ -3,6 +3,18 @@
 job: {audio, model, lang, out, models}. 진행은 'PROGRESS:0.42 글' 줄로 알려요."""
 import json
 import sys
+import wave
+
+
+def read_wav(path):
+    """허브가 미리 뽑아 둔 16kHz 모노 wav 를 ffmpeg 없이 읽어요(whisper.load_audio 는 'ffmpeg' 실행 파일을 찾다가 못 찾으면 실패해요)."""
+    import numpy as np
+    with wave.open(path, "rb") as w:
+        if w.getsampwidth() != 2 or w.getframerate() != 16000:
+            return None
+        ch = w.getnchannels()
+        a = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+    return a.reshape(-1, ch).mean(axis=1) if ch > 1 else a
 
 
 def main():
@@ -13,7 +25,13 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     model = whisper.load_model(job["model"], device=dev, download_root=job["models"])
     print(f"PROGRESS:0.1 받아쓰는 중({'그래픽카드' if dev == 'cuda' else 'CPU — 느려요'})", flush=True)
-    audio = whisper.load_audio(job["audio"])
+    audio = None
+    try:
+        audio = read_wav(job["audio"])
+    except (wave.Error, OSError, EOFError):
+        audio = None
+    if audio is None:
+        audio = whisper.load_audio(job["audio"])
     total = max(1.0, len(audio) / 16000)
     segs = []
     res = model.transcribe(audio, language=job.get("lang") or None, fp16=dev == "cuda", verbose=None, condition_on_previous_text=False)

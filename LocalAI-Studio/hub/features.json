@@ -750,6 +750,264 @@
   ]
  },
  {
+  "id": "recompose",
+  "title": "구도 바꾸기·새 장면",
+  "icon": "⟲",
+  "summary": "사진 속 인물·사물은 그대로 두고 카메라 각도·높이·거리를 바꾸거나, 같은 인물로 새 장면의 사진을 만들어요. 다른 사진의 포즈를 따라 하게 하거나, 사진의 구도(포즈·깊이·윤곽)만 가져와 이미지 생성 화면의 모델로 새로 그릴 수도 있어요. AI가 다시 그리는 방식이라 얼굴·세부가 조금 달라질 수 있어요.",
+  "steps": [
+   "사진을 올려요",
+   "방법을 골라요 (각도 바꾸기 / 새 장면 / 포즈 따라 하기 / 구도만 가져와 새로 그리기)",
+   "[만들기] — 전후 비교로 확인해요"
+  ],
+  "needs": {
+   "lists": [
+    "qwen"
+   ]
+  },
+  "fields": [
+   {
+    "name": "image",
+    "type": "image",
+    "label": "사진",
+    "required": true
+   },
+   {
+    "name": "mode",
+    "type": "select",
+    "label": "방법",
+    "default": "angle",
+    "options": [
+     [
+      "angle",
+      "카메라 각도·거리 바꾸기"
+     ],
+     [
+      "scene",
+      "같은 인물·사물로 새 장면"
+     ],
+     [
+      "pose",
+      "참고 사진의 포즈 따라 하기"
+     ],
+     [
+      "structure",
+      "구도만 가져와 새로 그리기 (생성 화면 모델)"
+     ]
+    ]
+   },
+   {
+    "name": "az",
+    "type": "select",
+    "label": "보는 방향",
+    "default": "fr",
+    "show_if": {
+     "mode": "angle"
+    },
+    "options": [
+     [
+      "keep",
+      "그대로"
+     ],
+     [
+      "front",
+      "정면"
+     ],
+     [
+      "fr",
+      "오른쪽 앞 (45°)"
+     ],
+     [
+      "right",
+      "오른쪽 옆 (90°)"
+     ],
+     [
+      "br",
+      "오른쪽 뒤 (135°)"
+     ],
+     [
+      "back",
+      "뒤"
+     ],
+     [
+      "bl",
+      "왼쪽 뒤 (225°)"
+     ],
+     [
+      "left",
+      "왼쪽 옆 (270°)"
+     ],
+     [
+      "fl",
+      "왼쪽 앞 (315°)"
+     ]
+    ]
+   },
+   {
+    "name": "el",
+    "type": "select",
+    "label": "카메라 높이",
+    "default": "eye",
+    "show_if": {
+     "mode": "angle"
+    },
+    "options": [
+     [
+      "keep",
+      "그대로"
+     ],
+     [
+      "low",
+      "아래에서 올려다보기"
+     ],
+     [
+      "eye",
+      "눈높이"
+     ],
+     [
+      "elev",
+      "조금 위에서"
+     ],
+     [
+      "high",
+      "위에서 내려다보기"
+     ]
+    ]
+   },
+   {
+    "name": "dist",
+    "type": "select",
+    "label": "거리(화각)",
+    "default": "medium",
+    "show_if": {
+     "mode": "angle"
+    },
+    "options": [
+     [
+      "keep",
+      "그대로"
+     ],
+     [
+      "close",
+      "가까이 (클로즈업)"
+     ],
+     [
+      "medium",
+      "중간"
+     ],
+     [
+      "wide",
+      "멀리 (주변까지)"
+     ]
+    ]
+   },
+   {
+    "name": "use_lora",
+    "type": "check",
+    "label": "카메라 각도 LoRA 쓰기 (설치돼 있으면 각도가 더 정확해요)",
+    "default": true,
+    "show_if": {
+     "mode": "angle"
+    }
+   },
+   {
+    "name": "scene",
+    "type": "textarea",
+    "label": "새 장면 (한글 가능) — 예: 해 질 녘 바닷가를 웃으며 걷는 모습",
+    "show_if": {
+     "mode": "scene"
+    }
+   },
+   {
+    "name": "keep_outfit",
+    "type": "check",
+    "label": "옷도 그대로 유지",
+    "default": true,
+    "show_if": {
+     "mode": "scene"
+    }
+   },
+   {
+    "name": "pose_ref",
+    "type": "image",
+    "label": "따라 할 포즈가 담긴 참고 사진",
+    "show_if": {
+     "mode": "pose"
+    }
+   },
+   {
+    "name": "skind",
+    "type": "select",
+    "label": "가져올 구도",
+    "default": "pose",
+    "show_if": {
+     "mode": "structure"
+    },
+    "options": [
+     [
+      "pose",
+      "포즈 (사람 자세)"
+     ],
+     [
+      "depth",
+      "깊이 (공간 배치)"
+     ],
+     [
+      "canny",
+      "윤곽선"
+     ],
+     [
+      "lineart",
+      "선화"
+     ]
+    ]
+   },
+   {
+    "name": "prompt",
+    "type": "textarea",
+    "label": "새로 그릴 내용 (한글 가능)",
+    "show_if": {
+     "mode": "structure"
+    }
+   },
+   {
+    "name": "strength",
+    "type": "number",
+    "label": "구도 따르는 정도",
+    "default": 0.75,
+    "min": 0.1,
+    "max": 1.5,
+    "step": 0.05,
+    "show_if": {
+     "mode": "structure"
+    }
+   },
+   {
+    "name": "extra",
+    "type": "text",
+    "label": "덧붙일 지시 (선택, 한글 가능)",
+    "show_if": {
+     "mode": [
+      "angle",
+      "scene",
+      "pose"
+     ]
+    }
+   },
+   {
+    "name": "fast",
+    "type": "check",
+    "label": "빠른 모드 (Lightning 4단계 LoRA 가 있을 때)",
+    "advanced": true
+   },
+   {
+    "name": "seed",
+    "type": "seed",
+    "label": "시드",
+    "advanced": true
+   }
+  ]
+ },
+ {
   "id": "depth",
   "title": "깊이 맵 만들기",
   "icon": "◭",

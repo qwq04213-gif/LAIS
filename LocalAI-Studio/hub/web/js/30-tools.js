@@ -304,7 +304,7 @@ async function loadFeat(){
 }
 const fieldHTML=f=>{
   const n=esc(f.name),hint=f.hint?`<small>${esc(f.hint)}</small>`:'',req=f.required?' <i class="req">필수</i>':'',si=f.show_if?` data-show-if='${esc(JSON.stringify(f.show_if))}'`:'';
-  if(f.type==='image')return `<div class="f"><span>${esc(f.label)}${req}</span><div class="mini${n==='image'&&!['ipadapter'].includes(featId)?' big':''}" data-img="${n}"></div>${hint}</div>`;
+  if(f.type==='image')return `<div class="f"${si}><span>${esc(f.label)}${req}</span><div class="mini${n==='image'&&!['ipadapter'].includes(featId)?' big':''}" data-img="${n}"></div>${hint}</div>`;
   if(f.type==='textarea')return `<label class="f"${si}><span>${esc(f.label)}${req}</span><textarea name="${n}" rows="${f.rows||3}"></textarea>${hint}</label>`;
   if(f.type==='lora')return `<div class="f"><span>${esc(f.label)}</span>${T.lora()}${hint}</div>`;
   if(f.type==='check')return `<label class="chk${f.required?' consent':''}"${si}><input type="checkbox" name="${n}"${f.default?' checked':''}> <span>${esc(f.label)}</span></label>`;
@@ -360,7 +360,7 @@ $('#f-feat').onsubmit=e=>{e.preventDefault();const f=e.target,spec=FEATS.find(x=
   for(const fd of spec.fields.filter(x=>x.type==='image'&&x.required))if(!$(`.mini[data-img=${fd.name}]`,f).value)return need(f,'먼저 이미지를 올려 주세요.');
   for(const fd of spec.fields.filter(x=>x.required&&x.type==='check'))if(!f.elements[fd.name]?.checked)return need(f,'동의 확인 칸에 체크해 주세요.');
   for(const fd of spec.fields.filter(x=>x.required&&x.type!=='image'&&x.type!=='check'))if(!(f.elements[fd.name]?.value||'').trim())return need(f,`'${fd.label}' 칸을 채워 주세요.`);
-  run('feat',f,{})};
+  run('feat',f,featId==='recompose'&&f.elements.mode?.value==='structure'?{gen:formBase('#f-gen')}:{})};
 
 /* 결과 칸 안의 전후 비교 슬라이더: 원본을 왼쪽부터 슬라이더 위치까지 덮어요 */
 function cmpInline(r){const w=r.closest('.cmpw'),s=+r.value;$('.cbf',w).style.clipPath=`inset(0 ${100-s}% 0 0)`;$('.cbl',w).style.left=s+'%'}

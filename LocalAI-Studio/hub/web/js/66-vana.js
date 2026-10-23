@@ -41,6 +41,13 @@ $('#va-cam').onclick=async()=>{const v=$('#va-video').value;if(!v)return vaSt('�
   const j=await vaRun({kind:'vana',op:'camera',video:v},'카메라 움직임 계산 중');if(!j)return;
   const js=j.images.find(u=>/\.json$/i.test(u)),png=j.images.find(u=>/\.png$/i.test(u));
   vaTool(`<b>카메라 움직임 (화면 2D 추정)</b> <span class="mute">실제 3D 카메라 위치가 아니라 화면이 움직인 정도예요.</span>${png?`<img src="${png}" alt="카메라 경로">`:''}<div class="xpb"><a href="${js}" download>움직임 파일(.json) 저장</a><button type="button" data-vacam="${esc(js)}">이 움직임으로 패럴랙스 영상 만들기</button></div>`)};
+$('#va-cam3d').onclick=async()=>{const v=$('#va-video').value;if(!v)return vaSt('영상을 골라 주세요.',null,true);
+  const j=await vaRun({kind:'vana',op:'cam3d',video:v},'3D 카메라 경로 계산 중');if(!j)return;
+  const js=j.images.find(u=>/\.json$/i.test(u)),png=j.images.find(u=>/\.png$/i.test(u)),glb=j.images.find(u=>/\.glb$/i.test(u));
+  vaTool(`<b>3D 카메라 경로${glb?' · 점 구름':''}</b> <span class="mute">카메라 한 대로 추정한 상대 경로예요. 회전·방향은 대략 맞지만 실제 거리(m)는 알 수 없어요.${glb?' 점 구름은 AI 깊이로 쌓은 대략적인 모양이에요.':''}</span>
+    ${png?`<img src="${png}" alt="카메라 경로(위·옆에서 본 모습)">`:''}${glb?`<model-viewer src="${glb}" camera-controls auto-rotate style="width:100%;max-width:720px;height:420px;background:var(--raised);border-radius:8px"></model-viewer>`:''}
+    <div class="xpb">${js?`<a href="${js}" download>카메라 경로(.json) 저장</a>`:''}${glb?`<a href="${glb}" download>점 구름(.glb) 저장</a>`:''}</div>`);
+  if(glb&&window.customElements&&!customElements.get('model-viewer')){const sc=document.createElement('script');sc.type='module';sc.src='https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js';document.head.appendChild(sc)}};
 function vaTool(h){$('#va-tools').insertAdjacentHTML('afterbegin',`<div class="va-tool">${h}</div>`)}
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-vacam]');if(!b)return;
   show('feat','parallax');await sleep(300);await featForm('parallax',true);const F=$('#f-feat');F.elements.motion.value='camera';F.elements.camera.value=b.dataset.vacam;featShowIf();toast('패럴랙스 영상에 카메라 움직임을 넣었어요. 사진을 올리고 [만들기]를 눌러 주세요.',6000)});

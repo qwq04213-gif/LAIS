@@ -277,3 +277,138 @@ def track_chart(track, w=640, h=360):
         dr.line(zp, fill=(250, 200, 80), width=2)
     dr.text((8, top + 6), f"zoom {smin:.3f} ~ {smax:.3f}", fill=(200, 200, 210))
     return im
+
+
+# ─────────────────────────── 3D 카메라 추정(특징점) · 점 구름 ───────────────────────────
+def _quat(R):
+    """회전 행렬 → 사원수 [x, y, z, w]."""
+    t = np.trace(R)
+    if t > 0:
+        s = math.sqrt(t + 1.0) * 2
+        return [(R[2, 1] - R[1, 2]) / s, (R[0, 2] - R[2, 0]) / s, (R[1, 0] - R[0, 1]) / s, 0.25 * s]
+    i = int(np.argmax([R[0, 0], R[1, 1], R[2, 2]]))
+    j, k = (i + 1) % 3, (i + 2) % 3
+    s = math.sqrt(1.0 + R[i, i] - R[j, j] - R[k, k]) * 2
+    q = [0.0, 0.0, 0.0, (R[k, j] - R[j, k]) / s]
+    q[i] = 0.25 * s
+    q[j] = (R[j, i] + R[i, j]) / s
+    q[k] = (R[k, i] + R[i, k]) / s
+    return q
+
+
+def vo_track(frames, fov_deg=60.0):
+    """프레임(PIL)들 → 카메라 위치·방향(특징점 매칭 + 기본 행렬, OpenCV). 한 대의 카메라라 거리 단위는 정할 수 없어서
+    '상대 크기'예요(움직인 방향·회전은 꽤 맞지만 몇 m 인지는 몰라요). 돌려주는 값: (포즈 목록, 초점 거리 px, 경고 목록)"""
+    import cv2
+    g0 = np.asarray(frames[0].convert("L"))
+    H, W = g0.shape
+    f = 0.5 * W / math.tan(math.radians(fov_deg) / 2)
+    K = np.array([[f, 0, W / 2], [0, f, H / 2], [0, 0, 1]], dtype=np.float64)
+    orb = cv2.ORB_create(2000)
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+    Rwc, twc = np.eye(3), np.zeros(3)
+    poses = [{"R": Rwc.copy(), "t": twc.copy(), "ok": True, "matches": 0}]
+    warns = []
+    kp0, de0 = orb.detectAndCompute(g0, None)
+    lost = 0
+    for fr in frames[1:]:
+        g = np.asarray(fr.convert("L"))
+        kp, de = orb.detectAndCompute(g, None)
+        ok_, nm = False, 0
+        if de0 is not None and de is not None and len(kp0) > 20 and len(kp) > 20:
+            m = [a for a, b in (x for x in bf.knnMatch(de0, de, k=2) if len(x) == 2) if a.distance < 0.78 * b.distance]
+            nm = len(m)
+            if nm >= 20:
+                p0 = np.float64([kp0[x.queryIdx].pt for x in m])
+                p1 = np.float64([kp[x.trainIdx].pt for x in m])
+                flow = float(np.median(np.linalg.norm(p1 - p0, axis=1)))
+                E, mask = cv2.findEssentialMat(p0, p1, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+                if E is not None and E.shape == (3, 3):
+                    n_in, R, t, _ = cv2.recoverPose(E, p0, p1, K, mask=mask)
+                    if n_in >= 12:
+                        step = min(1.0, flow / (0.05 * W))      # 화면이 거의 안 움직였으면 이동도 작게(회전만 있는 경우)
+                        Rwc = Rwc @ R.T
+                        twc = twc - Rwc @ t.reshape(3) * step
+                        ok_ = True
+        if not ok_:
+            lost += 1
+        poses.append({"R": Rwc.copy(), "t": twc.copy(), "ok": ok_, "matches": nm})
+        kp0, de0 = kp, de
+    if lost:
+        warns.append(f"{len(frames) - 1}개 구간 중 {lost}곳은 특징점이 모자라 움직임을 이어 붙였어요(벽·하늘처럼 무늬가 없거나 너무 흐린 장면).")
+    return poses, f, warns
+
+
+def pose_rows(poses, fps):
+    return [{"t": round(i / fps, 3), "pos": [round(float(x), 5) for x in p["t"]], "quat": [round(float(x), 6) for x in _quat(p["R"])],
+             "forward": [round(float(x), 5) for x in p["R"] @ np.array([0, 0, 1.0])], "ok": p["ok"], "matches": p["matches"]} for i, p in enumerate(poses)]
+
+
+def cloud_points(frame, depth, pose, f, step=4, scale=1.0):
+    """한 프레임의 깊이를 카메라 위치·방향에 맞춰 3D 점으로(색은 사진에서). 깊이는 '가까울수록 밝게'인 상대값이라 거리는 대략이에요."""
+    img = np.asarray(frame.convert("RGB"), dtype=np.float32) / 255.0
+    H, W = img.shape[:2]
+    d = as_depth(depth, (W, H))
+    z = 1.0 / (0.15 + d)                         # 가까울수록 작은 z
+    ys, xs = np.mgrid[0:H:step, 0:W:step]
+    zz = z[ys, xs]
+    keep = d[ys, xs] > 0.04 if float(d.max()) > 0.2 else np.ones(ys.shape, bool)      # 아주 먼 배경(하늘 등)은 빼요(깊이 차이가 없으면 다 써요)
+    X = (xs - W / 2) * zz / f
+    Y = (ys - H / 2) * zz / f
+    P = np.stack([X, Y, zz], -1)[keep]
+    Pw = (pose["R"] @ P.T).T + pose["t"] * scale
+    C = img[ys, xs][keep]
+    return Pw.astype(np.float32), C.astype(np.float32)
+
+
+def points_glb(P, C):
+    """점 구름 → glTF 바이너리(.glb, 점 모드). 화면 좌표(y 아래)를 glTF(y 위)로 뒤집어요."""
+    if not len(P):
+        raise ValueError("점이 하나도 없어요(깊이 차이가 없는 장면이에요).")
+    P = P.copy()
+    P[:, 1] *= -1
+    P[:, 2] *= -1
+    c = P.mean(0)
+    P -= c
+    span = float(np.percentile(np.abs(P), 98)) or 1.0
+    P /= span
+    pos, col = P.astype(np.float32).tobytes(), np.clip(C, 0, 1).astype(np.float32).tobytes()
+    bin_ = pos + col
+    gltf = {"asset": {"version": "2.0", "generator": "LocalAI-Studio depthfx"}, "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0}],
+            "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "mode": 0}]}],
+            "accessors": [{"bufferView": 0, "componentType": 5126, "count": len(P), "type": "VEC3", "min": P.min(0).tolist(), "max": P.max(0).tolist()},
+                          {"bufferView": 1, "componentType": 5126, "count": len(P), "type": "VEC3"}],
+            "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(pos), "target": 34962}, {"buffer": 0, "byteOffset": len(pos), "byteLength": len(col), "target": 34962}],
+            "buffers": [{"byteLength": len(bin_)}]}
+    js = json.dumps(gltf, separators=(",", ":")).encode()
+    while len(js) % 4:
+        js += b" "
+    return struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(bin_)) + struct.pack("<II", len(js), 0x4E4F534A) + js + struct.pack("<II", len(bin_), 0x004E4942) + bin_
+
+
+def pose_chart(rows, w=720, h=360):
+    """카메라 경로: 왼쪽 위에서 본 모습(x-z), 오른쪽 옆에서 본 모습(z-y). 화살표 = 보는 방향."""
+    from PIL import ImageDraw
+    im = Image.new("RGB", (w, h), (24, 24, 28))
+    dr = ImageDraw.Draw(im)
+    P = np.array([r["pos"] for r in rows])
+    Fv = np.array([r["forward"] for r in rows])
+    for k, (a, b, title) in enumerate(((0, 2, "top view (x-z)"), (2, 1, "side view (z-y)"))):
+        x0 = k * w // 2
+        dr.rectangle((x0 + 4, 4, x0 + w // 2 - 4, h - 4), outline=(70, 70, 80))
+        dr.text((x0 + 10, 8), title, fill=(200, 200, 210))
+        xs, ys = P[:, a], P[:, b] * (-1 if b == 1 else 1)
+        span = max(1e-6, float(max(np.ptp(xs), np.ptp(ys))))
+        cx, cy = (xs.max() + xs.min()) / 2, (ys.max() + ys.min()) / 2
+        sc = (min(w // 2, h) - 60) / span
+        pts = [(x0 + w // 4 + (x - cx) * sc, h / 2 + (y - cy) * sc) for x, y in zip(xs, ys)]
+        if len(pts) > 1:
+            dr.line(pts, fill=(120, 170, 255), width=2)
+        for i in range(0, len(pts), max(1, len(pts) // 12)):
+            fx, fy = Fv[i, a], Fv[i, b] * (-1 if b == 1 else 1)
+            n = math.hypot(fx, fy) or 1
+            dr.line((pts[i], (pts[i][0] + fx / n * 14, pts[i][1] + fy / n * 14)), fill=(250, 200, 80), width=2)
+        dr.ellipse((pts[0][0] - 4, pts[0][1] - 4, pts[0][0] + 4, pts[0][1] + 4), fill=(90, 220, 120))
+        dr.ellipse((pts[-1][0] - 4, pts[-1][1] - 4, pts[-1][0] + 4, pts[-1][1] + 4), fill=(240, 90, 80))
+    dr.text((10, h - 20), "green=start red=end yellow=looking direction (relative scale)", fill=(200, 200, 210))
+    return im

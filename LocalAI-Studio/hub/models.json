@@ -91,6 +91,21 @@
    ]
   },
   {
+   "id": "qwen-angles",
+   "name": "Qwen-Edit 2511 카메라 각도 LoRA",
+   "gb": 0.3,
+   "desc": "'구도 바꾸기·새 장면'에서 사진 속 인물·사물을 다른 각도(앞·옆·뒤 8방향, 아래·눈높이·위, 가까이·멀리)에서 본 모습으로 바꿀 때 써요. Qwen-Image-Edit 2511 전용. Apache-2.0.",
+   "files": [
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors"
+    }
+   ],
+   "requires": [
+    "qwen-edit"
+   ]
+  },
+  {
    "id": "qwen-image",
    "name": "Qwen-Image (fp8) — 글자 잘 그리는 생성 모델",
    "gb": 28,

@@ -48,6 +48,16 @@ AGENT_TOOLS = {
         "params": {"video": {"type": "string", "maxLength": 400, "description": "an '/out/...' video address from recent_results(kind=video)"},
                    "speech": {"type": "boolean", "description": "also transcribe the spoken words (needs the transcription engine)"}},
         "required": ["video"], "act": True},
+    "recompose_image": {
+        "desc": "Show the subject of a photo from another camera angle/height/distance (mode angle), or put the same person/object into a new scene (mode scene).",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' address"},
+                   "mode": {"type": "string", "enum": ["angle", "scene"]},
+                   "direction": {"type": "string", "enum": ["keep", "front", "fr", "right", "br", "back", "bl", "left", "fl"],
+                                 "description": "fr=front-right 45°, br=back-right, bl=back-left, fl=front-left"},
+                   "height": {"type": "string", "enum": ["keep", "low", "eye", "elev", "high"]},
+                   "distance": {"type": "string", "enum": ["keep", "close", "medium", "wide"]},
+                   "scene": {"type": "string", "maxLength": 800, "description": "the new scene for mode scene (English or Korean)"}},
+        "required": ["image", "mode"], "act": True},
     "edit_image": {
         "desc": "Edit one image by an instruction (Qwen-Image-Edit or FLUX Kontext, as chosen on the image edit screen).",
         "params": {"instruction": {"type": "string", "maxLength": 1000, "description": "edit instruction in English, one imperative sentence"},
@@ -66,6 +76,7 @@ Decide whether the user wants something DONE in the app (make or edit an image, 
 - To make an image and then change it, call generate_image and then edit_image with image='previous'.
 - To compare several styles / looks of one idea, call explore_prompts.
 - To change only the lighting of a photo, call relight_image.
+- To see a photo's subject from another angle or put the same person into a new scene, call recompose_image.
 - To analyze a video or make a highlight, call recent_results(kind=video) to find it, then analyze_video.
 - If something essential is missing or unclear, ask one short question in Korean instead of calling a tool.
 - Answer in Korean. Be brief."""
@@ -145,7 +156,7 @@ def agent_check(name, args, ctx):
                 return None, f"{k} 는 {', '.join(ok_)} 중에서 골라야 해요."
             v = list(dict.fromkeys(v))
         out[k] = v
-    for k in ("prompt", "negative", "instruction", "goal", "custom_light"):
+    for k in ("prompt", "negative", "instruction", "goal", "custom_light", "scene"):
         if k in out and blocked(out[k]):
             return None, BLOCK_MSG
     if name == "analyze_video":
@@ -154,13 +165,15 @@ def agent_check(name, args, ctx):
             return None, f"결과 폴더에 있는 영상 주소가 아니에요: {out['video'][:80]}"
     if name == "relight_image" and out["light"] == "custom" and not out.get("custom_light"):
         return None, "custom 조명이면 custom_light 가 필요해요."
-    if name in ("edit_image", "relight_image"):
+    if name == "recompose_image" and out["mode"] == "scene" and not out.get("scene"):
+        return None, "scene 모드에는 scene 이 필요해요."
+    if name in ("edit_image", "relight_image", "recompose_image"):
         img = out["image"]
         if img == "attached":
             if not ctx.get("attached"):
                 return None, "붙인 사진이 없어요. 사진을 붙이거나 결과를 골라 주세요."
         elif img == "previous":
-            if not any(s["tool"] in ("generate_image", "edit_image", "explore_prompts", "relight_image") for s in ctx.get("steps", [])):
+            if not any(s["tool"] in ("generate_image", "edit_image", "explore_prompts", "relight_image", "recompose_image") for s in ctx.get("steps", [])):
                 return None, "앞 단계 결과가 없어요."
         else:
             f = agent_out_path(img)
@@ -211,6 +224,9 @@ def agent_summary(name, a, base):
     if name == "explore_prompts":
         vary = a.get("vary") or ["style", "light", "color"]
         return f'프롬프트 탐색 · {a.get("count", 4)}가지 · 바꿔 볼 것: ' + ", ".join(EXP_NAMES[k] for k in vary)
+    if name == "recompose_image":
+        src = {"attached": "붙인 사진", "previous": "앞 단계 결과"}.get(a["image"], "결과 " + urllib.parse.unquote(a["image"]).rsplit("/", 1)[-1])
+        return f"구도 바꾸기 · {src} · " + ("새 장면" if a["mode"] == "scene" else "카메라 각도")
     if name == "analyze_video":
         return "영상 분석 · " + urllib.parse.unquote(a["video"]).rsplit("/", 1)[-1] + (" · 대사 받아쓰기" if a.get("speech") else "")
     if name == "relight_image":
@@ -376,6 +392,9 @@ def agent_job_params(P, i):
         if re.search("[가-힣]", a["prompt"]):
             g["translate"] = "on"
         return g
+    if s["tool"] == "recompose_image":
+        return {"kind": "feat", "feature": "recompose", "image": agent_src(P, i, a["image"]), "mode": a["mode"], "az": a.get("direction", "fr"),
+                "el": a.get("height", "eye"), "dist": a.get("distance", "medium"), "scene": a.get("scene", ""), "keep_outfit": "on", "use_lora": "on"}
     if s["tool"] == "analyze_video":
         return {"kind": "vana", "op": "analyze", "video": a["video"], "asr": bool(a.get("speech"))}
     if s["tool"] == "relight_image":
