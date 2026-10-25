@@ -294,7 +294,7 @@ def comfy_cancel(pid):
 WSP = {}          # prompt_id -> (value, max)
 EXE = {}          # prompt_id -> 지금 실행 중인 노드 번호(문자열)
 LOAD_CLS = {"CheckpointLoaderSimple", "UNETLoader", "CLIPLoader", "DualCLIPLoader", "VAELoader", "LoraLoader", "LoraLoaderModelOnly",
-            "ControlNetLoader", "UpscaleModelLoader", "CLIPTextEncode", "TextEncodeQwenImageEdit", "TextEncodeQwenImageEditPlus", "VAEEncode"}
+            "ControlNetLoader", "UpscaleModelLoader", "CLIPTextEncode", "TextEncodeQwenImageEdit", "TextEncodeQwenImageEditPlus", "TextEncodeQwenImage21", "VAEEncode"}
 WS_STATE = {"on": False, "ok": False}
 
 

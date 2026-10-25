@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>로컬 AI 스튜디오</title>
-<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};D.dataset.galprev=g('opt:galprev','on');var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','side');D.style.setProperty('--sbw',g('opt:sbw',208));D.style.setProperty('--bubw',g('opt:bubw',72));if(!g('opt:gosticky',true))D.dataset.gosticky='off';if(!g('opt:start',true))D.dataset.nostart='1'}catch(e){}</script>
+<script>try{var D=document.documentElement,g=function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};D.dataset.galprev=g('opt:galprev','on');var ac=g('opt:accent','');if(ac)D.dataset.accent=ac;if(g('opt:motion',false))D.dataset.motion='off';if(g('opt:hints',false))D.dataset.hints='off';D.style.setProperty('--chatfs',g('opt:chatfs',1));D.style.setProperty('--galmin',g('opt:galsz',190));D.style.setProperty('--resh',g('opt:ressz',420));D.dataset.qpos=g('opt:qpos','side');D.style.setProperty('--sbw',g('opt:sbw',208));D.style.setProperty('--bubw',g('opt:bubw',72));var fo=g('opt:font','');if(fo)D.style.setProperty('--font',fo==='system-ui'?'system-ui':'"'+fo+'","Pretendard Variable","Malgun Gothic",sans-serif');var pw=+g('opt:pagew',0);if(pw===1400)pw=1240;if(pw===1800)pw=1560;if(pw)D.style.setProperty('--pagew',pw>=9999?'100%':pw+'px');if(!g('opt:gosticky',true))D.dataset.gosticky='off';if(!g('opt:start',true))D.dataset.nostart='1'}catch(e){}</script>
 <script>try{var t=localStorage.getItem('theme')||'auto';document.documentElement.dataset.theme=t==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}try{var z=parseFloat(localStorage.getItem('ui:scale'));document.documentElement.style.setProperty('--ui',z>=0.8&&z<=2?z:1.25)}catch(e){document.documentElement.style.setProperty('--ui',1.25)}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <aside id="rail">
   <div class="brand">로컬 AI 스튜디오<small id="ver" role="button" tabindex="0" title="버전별 변경 사항 보기"></small></div>
+  <button type="button" class="sp-btn" id="sp-btn" title="기능·설정·그림·프롬프트·대화를 한 번에 찾아요"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>검색</span><kbd>Ctrl K</kbd></button>
   <div id="gbars" hidden></div>
   <nav>
     <div class="ng" data-g="start"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">처음<i aria-hidden="true"></i></span>
@@ -119,10 +120,10 @@
     <label>창의성 <input type="range" id="temp" min="0" max="1.5" step="0.01" value="0.8"><b id="tv">0.8</b></label>
     <label>기억 길이 <select id="ctx"><option value="4096">짧게</option><option value="8192" selected>보통</option><option value="16384">길게</option><option value="32768">아주 길게</option></select></label>
     <label class="chk agt" title="켜면 요청을 작업(이미지 만들기·편집, 대기열 보기 등)으로 바꿔요. 계획을 먼저 보여 주고 [실행]을 눌러야 시작해요."><input type="checkbox" id="c-agent"> 실행 모드</label>
+    <label class="chk" title="켜면 질문으로 웹을 검색(SearXNG)해서 그 결과를 근거로 출처와 함께 답해요"><input type="checkbox" id="c-web"> 웹 검색</label>
     <button class="ghost sm" id="cl-toggle" type="button" title="왼쪽 대화 목록을 보이거나 숨겨요">대화 목록</button>
     <button class="ghost sm" id="cl-export" type="button" title="지금 대화를 마크다운(.md) 파일로 저장해요">내보내기</button>
   </div>
-  <p class="hint" id="c-agent-hint" hidden>실행 모드: 할 일을 말하면 계획을 보여 드려요. [실행]을 눌러야 작업이 대기열에 들어가요. 이미지 만들기는 <a href="#" data-go="gen">이미지 생성</a> 화면에, 편집은 <a href="#" data-go="edit">이미지 편집</a> 화면에 지금 고른 모델·설정을 따라요. 도구 호출을 지원하는 모델(예: Qwen3.5 9B, Qwen3)이 필요해요.</p>
   <details class="sysd"><summary>역할 지침과 고급 옵션</summary>
     <textarea id="sys" rows="3"></textarea>
     <div class="grid4">
@@ -134,8 +135,7 @@
       <label class="f">시드<input type="number" id="o-seed" placeholder="무작위"></label>
       <label class="f wide2">중단 문자열(쉼표로 구분)<input id="o-stop" placeholder="예: User:, ###"></label>
     </div>
-    <p class="hint">캐릭터 카드(PNG)는 이미지 정보 탭에서 열어 바로 적용할 수 있어요.</p>
-  </details>
+      </details>
   <div class="chatwrap">
     <aside id="clist" aria-label="대화 목록">
       <div class="clh"><button class="go" id="cl-new" type="button">+ 새 대화</button></div>
@@ -149,7 +149,7 @@
     <div class="compose">
       <button class="ghost sm" id="c-attach" type="button" title="사진을 붙여서 물어봐요 (끌어다 놓거나 Ctrl+V 로 붙여 넣어도 돼요). 이미지를 볼 수 있는 모델이 필요해요.">사진</button>
       <input type="file" id="c-file" accept="image/*" multiple hidden>
-      <textarea id="msg" rows="2" placeholder="메시지를 입력하세요. Enter로 보내고 Shift+Enter로 줄을 바꿔요."></textarea>
+      <textarea id="msg" rows="1" placeholder="메시지를 입력하세요. Enter로 보내고 Shift+Enter로 줄을 바꿔요."></textarea>
       <button class="go" id="send" type="button">보내기</button>
     </div>
     </div>
@@ -164,7 +164,7 @@
     <p class="warn" id="w-edit" hidden>이 편집 방식에 필요한 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 설치해 주세요.</p>
     <label class="f">편집 방식
       <select name="engine">
-        <option value="qwen">말로 편집 (Qwen-Image-Edit)</option>
+        <option value="qwen">말로 편집 (Qwen-Image 2.1)</option>
         <option value="sdxl">칠해서 편집 (SDXL 인페인트)</option>
         <option value="flux">칠해서 편집 (FLUX · Krea · Krea 2 · Chroma)</option>
       </select></label>
@@ -202,7 +202,7 @@
     </div>
     <div class="qwen">
       <label class="chk"><input type="checkbox" name="fast"> 빠른 모드 (Lightning 4단계)</label>
-      <label class="chk"><input type="checkbox" name="hires"> 원본 해상도로 복원 (Real-ESRGAN)</label>
+      <label class="chk"><input type="checkbox" name="hires"> 원본 크기로 키우기</label>
       <div class="f">참조 이미지 (선택, 최대 2장)
         <div class="mini" data-img="ref1"></div>
         <div class="mini" data-img="ref2"></div>
@@ -221,18 +221,17 @@
     </details>
     <details class="qwen"><summary>Qwen 설정 (고급)</summary>
       <details><summary>모델 파일 직접 고르기</summary>
-        <label class="f">Qwen 편집 모델<select name="q_unet"></select></label>
+        <label class="f">Qwen-Image 2.1 모델<select name="q_unet"></select></label>
         <label class="f">텍스트 인코더<select name="q_te"></select></label>
         <label class="f">VAE<select name="q_vae"></select></label>
         <p class="hint plain"></p>
       </details>
       <div class="row">
-        <label class="f">처리 해상도(메가픽셀)<select name="q_mp"><option>0.6</option><option selected>1.0</option><option>1.5</option><option>2.0</option></select></label>
-        <label class="f">시프트<input type="number" name="q_shift" value="3" step="0.1" min="0.5" max="10"></label>
+        <label class="f">처리 해상도(메가픽셀)<select name="q_mp"><option>0.6</option><option selected>1.0</option><option>1.5</option><option>2.0</option><option>4.0</option></select></label>
       </div>
       <div class="row">
-        <label class="f">단계 수<input type="number" name="q_steps" value="20" min="1" max="100"></label>
-        <label class="f">CFG<input type="number" name="q_cfg" value="4" step="0.1" min="0" max="20"></label>
+        <label class="f">단계 수<input type="number" name="q_steps" value="25" min="1" max="100"></label>
+        <label class="f">CFG<input type="number" name="q_cfg" value="1" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="q_sampler" data-def="euler"></select></label>
@@ -256,8 +255,8 @@
     <details class="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
     <details><summary>LoRA (엔진에 맞는 것만 고르세요)</summary><div data-blk="lora"></div></details>
     <details><summary>프롬프트와 저장 옵션</summary>
-      <label class="chk"><input type="checkbox" name="translate"> 한국어 프롬프트를 영어로 자동 번역</label>
-      <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
+      <label class="chk"><input type="checkbox" name="translate"> 한국어 → 영어 자동 번역</label>
+      <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트·와일드카드</label>
       <label class="chk sdxl"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label>
       <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
     </details>
@@ -327,15 +326,16 @@
         <option value="chroma">Chroma (무검열 FLUX 계열)</option>
         <option value="krea2">Krea 2 (새 12B 모델)</option>
         <option value="sd35">Stable Diffusion 3.5</option>
-        <option value="hidream">HiDream (I1 Full·Dev·Fast)</option>
-        <option value="lumina">Lumina 2</option>
-        <option value="qwenimg">Qwen-Image (글자 잘 그리는 모델)</option>
+        <option value="qwenimg">Qwen-Image 2.1 (글자·포스터, 편집과 같은 모델)</option>
+        <option value="moss">MOSS-Image (배치 지정·긴 글자, 시험 중)</option>
       </select></label>
     <div data-for="sdxl" data-blk="sd-main"></div>
-    <div data-for="flux chroma krea2 sd35 hidream lumina qwenimg">
+    <div data-for="flux chroma krea2 sd35 qwenimg moss">
       <label class="f">모델 파일<select name="fx_model"></select></label>
       <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button> <span data-for="sd35"><button type="button" class="link" data-open="checkpoints">체크포인트 폴더 열기</button></span></p>
-      <p class="hint plain" data-for="sd35 hidream lumina qwenimg">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 안 되면 '설치와 모델'에서 해당 공용 파일을 설치해 주세요. 문장형 프롬프트가 잘 맞아요.</p>
+      <p class="hint plain" data-for="sd35 qwenimg moss">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 문장형 프롬프트가 잘 맞아요.</p>
+      <p class="hint plain" data-for="qwenimg">단계를 8 이하로 두면 Lightning LoRA(있으면)로 4단계에 그려요.</p>
+      <p class="hint plain" data-for="moss">배치 지정: 프롬프트에 JSON 을 그대로 써요. 예: {"caption":"카페 포스터","layout":[{"bbox":[0.1,0.05,0.9,0.25],"text":"OPEN"}]}</p>
       <details data-for="flux chroma krea2"><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
         <label class="f" data-for="flux chroma">VAE<select name="fx_vae"></select></label>
         <label class="f" data-for="flux chroma">T5 텍스트 인코더<select name="fx_t5"></select></label>
@@ -351,7 +351,7 @@
       <p class="hint" id="wcs"></p>
     </details>
     <p class="hint" data-for="flux chroma krea2">FLUX·Krea 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
-    <label class="f" data-for="sdxl chroma krea2 sd35 hidream lumina qwenimg">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <label class="f" data-for="sdxl chroma krea2 sd35 qwenimg moss">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="row">
       <label class="f">가로<input type="number" name="w" value="1024" step="1" min="256" max="2048"></label>
@@ -396,11 +396,11 @@
       </div>
     </details>
     <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
-    <details data-for="flux chroma krea2 sd35 hidream lumina qwenimg" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
+    <details data-for="flux chroma krea2 sd35 qwenimg moss" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
         <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.1" min="0" max="20"></label>
-        <label class="f" data-for="chroma krea2 sd35 hidream lumina qwenimg">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
+        <label class="f" data-for="chroma krea2 sd35 qwenimg moss">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
@@ -409,8 +409,8 @@
     </details>
     <details><summary>LoRA</summary><div data-blk="lora"></div></details>
     <details><summary>프롬프트와 저장 옵션</summary>
-      <label class="chk"><input type="checkbox" name="translate" checked> 한국어 프롬프트를 영어로 자동 번역</label>
-      <label class="chk"><input type="checkbox" name="dyn" checked> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
+      <label class="chk"><input type="checkbox" name="translate" checked> 한국어 → 영어 자동 번역</label>
+      <label class="chk"><input type="checkbox" name="dyn" checked> 다이나믹 프롬프트·와일드카드</label>
       <label class="chk" data-for="sdxl"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label>
       <label class="chk"><input type="checkbox" name="embed" checked> 결과 PNG에 생성 정보 기록</label>
     </details>
@@ -479,7 +479,7 @@
     <p class="warn" id="w-vid14" hidden></p>
     <label class="chk" id="vid-fast-row" hidden><input type="checkbox" name="fast"> 4단계 가속 (LoRA — 몇 배 빨라요) <span class="mute" id="vid-fast-hint"></span></label>
     <p class="warn" id="w-vid" hidden>Wan 2.2 영상 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Wan 2.2 영상 5B'를 설치해 주세요. (약 18GB, 영상 한 편에 몇 분 걸려요)</p>
-    <p class="hint plain">글만 쓰면 새 영상을, 시작 이미지를 올리면 그 이미지가 움직이는 영상을 만들어요. 처음 한 번은 모델을 불러오느라 오래 걸려요.</p>
+    <p class="hint plain">글만 쓰면 새 영상을, 시작 이미지를 올리면 그 이미지가 움직이는 영상을 만들어요.</p>
     <label class="f">장면 설명<textarea name="prompt" rows="5" placeholder="예: 비 오는 밤 네온 거리를 걸어가는 여자, 카메라가 천천히 따라간다, 영화 같은 조명"></textarea></label>
     <p class="hint plain">무엇이 <b>어떻게 움직이는지</b>를 문장으로 쓰면 잘 나와요. 카메라 움직임(천천히 다가간다, 오른쪽으로 돈다)도 적어 보세요.</p>
     <div class="f vstart"><span>시작 이미지 (선택)</span>
@@ -492,7 +492,7 @@
     </div>
     <p class="warn" id="vid-long-warn" hidden></p>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
-    <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트 {a|b}, __와일드카드__</label>
+    <label class="chk"><input type="checkbox" name="dyn"> 다이나믹 프롬프트·와일드카드</label>
     <details><summary>고급 설정</summary>
       <label class="f">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 Wan 기본 문구를 써요"></textarea></label>
       <div class="row">
@@ -544,7 +544,7 @@
         <label class="f">단계 수<input type="number" name="steps" value="8" min="1" max="100"></label>
         <label class="f">CFG<input type="number" name="cfg" value="1" min="0" max="20" step="0.1"></label>
       </div>
-      <label class="chk"><input type="checkbox" name="no_codes"> 빠르게 만들기 (품질 보조 단계를 생략해요)</label>
+      <label class="chk"><input type="checkbox" name="no_codes"> 빠르게 만들기</label>
     </details>
   </form>
   <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
@@ -621,7 +621,7 @@
       </div>
       <div class="card pe-card"><h4>선택 영역</h4>
         <div class="pe-lbtns"><button type="button" class="ghost sm" id="pe-sall" title="Ctrl+A">전체 선택</button><button type="button" class="ghost sm" id="pe-snone" title="Ctrl+D">선택 해제</button><button type="button" class="ghost sm" id="pe-sinv" title="Ctrl+Shift+I">반전</button>
-          <button type="button" class="ghost sm" id="pe-sdel" title="Delete">지우기</button><button type="button" class="ghost sm" id="pe-sfill">지금 색으로 채우기</button><button type="button" class="ghost sm" id="pe-scopy" title="Ctrl+J">새 레이어로 복사</button><button type="button" class="ghost sm" id="pe-scrop">선택 부분만 남기고 자르기</button></div>
+          <button type="button" class="ghost sm" id="pe-sdel" title="Delete">지우기</button><button type="button" class="ghost sm" id="pe-sfill">지금 색으로 채우기</button><button type="button" class="ghost sm" id="pe-scopy" title="Ctrl+J">새 레이어로 복사</button><button type="button" class="ghost sm" id="pe-scrop">선택 부분만 남기기</button></div>
       </div>
       <div class="card pe-card"><h4>색·밝기 조정 <small class="mute">고른 레이어 · 선택 영역 안</small></h4>
         <label class="f">밝기 <span class="mute" data-v="b">100</span><input type="range" data-adj="b" min="0" max="200" value="100"></label>
@@ -656,6 +656,7 @@
     <p class="hint plain" id="ve-hint"></p>
     <div data-ve="concat">
       <div id="ve-list"></div>
+      <video id="ve-lprev" class="vprev" controls muted preload="metadata" hidden></video>
       <div class="vmrow"><button type="button" class="ghost" id="ve-add">영상 추가</button><label class="ghost vpick">내 컴퓨터에서 고르기<input type="file" accept="video/*,.mkv" hidden id="ve-file"></label></div>
       <label class="f">영상 사이 넘김<select name="fade"><option value="0">바로 이어서</option><option value="0.5">0.5초 겹쳐 부드럽게</option><option value="1">1초 겹쳐 부드럽게</option></select></label>
     </div>
@@ -672,7 +673,7 @@
       <label class="f">이어질 장면 설명 (선택)<textarea name="prompt" rows="3" placeholder="예: 그녀가 천천히 뒤돌아 걸어간다, 카메라가 따라간다"></textarea></label>
       <label class="f">이어 그릴 길이<select name="sec"><option value="2">2초</option><option value="3" selected>3초</option><option value="5">5초 (오래 걸려요)</option></select></label>
     </div>
-    <p class="hint plain">결과는 새 영상 파일로 기록 갤러리의 [영상]에 쌓이고, 원본은 그대로 남아요.</p>
+
   </form>
   <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
   <div class="col">
@@ -684,7 +685,7 @@
   <form id="f-vmix" autocomplete="off" novalidate>
     <button class="go">합쳐서 새 영상 만들기</button>
     <p class="warn" id="vm-noff" hidden>영상을 합치려면 ffmpeg 가 필요해요. [합쳐서 새 영상 만들기]를 누르면 나오는 [빠진 부품 설치] 버튼으로 한 번만 설치하면 돼요.</p>
-    <p class="hint plain">영상에 음성·음악을 입히고 자막을 넣어 <b>새 영상 파일</b>로 저장해요. 원본 영상은 그대로 남아요. 음성은 [음성 만들기], 음악은 [음악 만들기]에서 먼저 만들어 두면 아래 목록에 나와요.</p>
+    <p class="hint plain">영상에 음성·음악·자막을 넣어 새 영상으로 저장해요.</p>
     <div class="f"><span>영상</span>
       <div class="vmrow"><select name="video" id="vm-video"></select><label class="ghost vpick">내 컴퓨터에서 고르기<input type="file" accept="video/*,.mkv" hidden id="vm-vfile"></label></div>
       <video id="vm-vprev" controls muted preload="metadata" hidden></video>
@@ -715,7 +716,7 @@
       </div>
       <div class="row">
         <label class="f">글자 색<input type="color" name="sub_color" value="#ffffff"></label>
-        <div class="f"><label class="chk"><input type="checkbox" name="sub_outline" checked> 글자 테두리 (밝은 장면에서도 잘 보여요)</label><label class="chk"><input type="checkbox" name="sub_bg"> 반투명 검은 배경 상자</label></div>
+        <div class="f"><label class="chk"><input type="checkbox" name="sub_outline" checked> 글자 테두리</label><label class="chk"><input type="checkbox" name="sub_bg"> 글자 배경 상자</label></div>
       </div>
     </details>
     <label class="chk"><input type="checkbox" name="save_srt"> 자막 파일(.srt)도 같이 저장</label>
@@ -750,7 +751,7 @@
         <label class="f" id="tt-emo-row">감정<select name="emotion"><option value="calm">차분하게</option><option value="normal" selected>보통</option><option value="rich">풍부하게</option></select></label>
         <div id="tt-clone-row"><div class="f"><span>목소리 샘플 (선택, wav 파일 5~15초)</span><span class="seedrow"><label class="ghost vpick">wav 파일 고르기<input type="file" id="tt-ref-file" accept=".wav,audio/wav" hidden></label><button type="button" class="ghost sm" id="tt-ref-clear" hidden>빼기</button> <button type="button" class="ghost sm" id="tt-rec" title="웹사이트·프로그램에서 나오는 소리를 녹음하고 필요한 부분만 잘라 목소리 샘플로 써요">PC 소리 녹음해서 만들기</button></span><input type="hidden" name="ref" id="tt-ref"></div>
           <label class="f" id="tt-reftext-row" hidden>샘플에서 말한 내용 (선택, 적으면 목소리가 더 비슷해져요)<input name="ref_text" maxlength="500" placeholder="예: 안녕하세요, 오늘 날씨가 정말 좋네요."></label>
-          <p class="hint" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok" checked hidden>목소리 샘플은 본인 목소리이거나 허락받은 목소리만 쓰세요. 다른 사람을 속이거나 흉내 내는 데 쓰지 않아요.</p></div>
+          <p class="hint" id="tt-clone-ok-row" hidden><input type="checkbox" name="clone_ok" checked hidden></p></div>
       </div>
     </div>
     <p class="warn" id="tt-edge-warn" hidden>Edge 읽어 주기 부품이 아직 없어요. <button type="button" class="ghost sm" id="tt-install">부품 설치</button> <span class="mute" id="tt-inst-st"></span></p>
@@ -770,124 +771,132 @@
 </section>
 
 <!-- 기록 갤러리 -->
-<section class="view" id="v-explore">
-  <h2>프롬프트 탐색</h2>
-  <p class="hint plain">그리고 싶은 장면을 요소(주제·배경·조명·스타일 …)로 나눈 뒤, 한 가지씩 바꾼 후보를 여러 장 그려서 나란히 비교해요. 마음에 드는 후보는 생성 화면으로 보내거나 그 후보에서 한 번 더 탐색할 수 있어요.</p>
-  <div class="xp-top">
-    <textarea id="xp-goal" rows="2" placeholder="예: 비 오는 밤의 사이버펑크 도시를 영화 같은 느낌으로 만들고 싶어"></textarea>
-    <div class="xp-row">
-      <button type="button" class="go" id="xp-analyze">요소 나누기</button>
-      <button type="button" class="ghost sm" id="xp-fromgen" title="이미지 생성 화면의 프롬프트를 '주제' 칸에 그대로 가져와요">생성 화면 프롬프트 가져오기</button>
-      <select id="xp-sessions" title="이전에 한 탐색을 다시 열어요"><option value="">이전 탐색 열기…</option></select>
-      <button type="button" class="ghost sm" id="xp-new">새 탐색</button>
-    </div>
+<section class="view split" id="v-explore">
+  <div class="vleft">
+    <button type="button" class="go" id="xp-analyze">요소 나누기</button>
+    <p class="hint plain">장면을 요소로 나누고, 한 가지씩 바꾼 후보를 그려 나란히 비교해요.</p>
+    <label class="f">만들고 싶은 그림<textarea id="xp-goal" rows="3" placeholder="예: 비 오는 밤의 사이버펑크 도시를 영화 같은 느낌으로"></textarea></label>
+    <div class="xp-row"><button type="button" class="ghost sm" id="xp-fromgen" title="이미지 생성 화면의 프롬프트를 '주제' 칸에 가져와요">생성 화면 프롬프트 가져오기</button><button type="button" class="ghost sm" id="xp-new">새 탐색</button></div>
+    <label class="f">이전 탐색<select id="xp-sessions"><option value="">이전 탐색 열기…</option></select></label>
     <p class="mute xp-info" id="xp-info"></p>
     <p class="st bad" id="xp-err" hidden></p>
+    <details class="xp-gen" open><summary>그리기 설정 <span class="mute">이미지 생성 화면과 같아요</span></summary><div id="xp-genbox"></div></details>
   </div>
-  <details class="xp-gen" open><summary>그리기 설정 — 모델·LoRA·크기·단계 등 <span class="mute">(이미지 생성 화면과 같은 설정이에요. 여기서 바꾸면 생성 화면도 같이 바뀌어요)</span></summary><div id="xp-genbox"></div></details>
-  <div id="xp-els" class="xp-els" hidden></div>
-  <div id="xp-mode" class="xp-mode" hidden>
-    <div class="seg" role="radiogroup" aria-label="비교 방식">
-      <label><input type="radio" name="xpm" value="auto" checked> AI가 바꿔 보기</label>
-      <label><input type="radio" name="xpm" value="manual"> 한 요소를 직접 바꿔 보기</label>
-      <label><input type="radio" name="xpm" value="param"> 설정 비교</label>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div id="xp-els" class="xp-els" hidden></div>
+    <div id="xp-mode" class="xp-mode" hidden>
+      <div class="seg" role="radiogroup" aria-label="비교 방식">
+        <label><input type="radio" name="xpm" value="auto" checked> AI가 바꿔 보기</label>
+        <label><input type="radio" name="xpm" value="manual"> 한 요소 직접 바꾸기</label>
+        <label><input type="radio" name="xpm" value="param"> 설정 비교</label>
+      </div>
+      <div class="xpp" data-m="auto"><label>후보 수 <input type="number" id="xp-count" min="2" max="7" value="4"></label> <span class="mute">바꿀 요소</span> <span id="xp-vary"></span></div>
+      <div class="xpp" data-m="manual" hidden><label>바꿀 요소 <select id="xp-key"></select></label><textarea id="xp-vals" rows="3" placeholder="바꿔 볼 값을 한 줄에 하나씩 (한글도 돼요)&#10;예: neon signs reflecting on wet street&#10;golden hour sunlight"></textarea></div>
+      <div class="xpp" data-m="param" hidden><label>설정 <select id="xp-param"><option value="cfg">CFG</option><option value="steps">단계 수</option><option value="seed">시드</option></select></label> <label>값 <input id="xp-pvals" placeholder="예: 4, 6, 8"></label></div>
+      <button type="button" class="go" id="xp-make">후보 만들기</button>
     </div>
-    <div class="xpp" data-m="auto"><label>후보 수 <input type="number" id="xp-count" min="2" max="7" value="4"></label> <span class="mute">바꿀 요소:</span> <span id="xp-vary"></span></div>
-    <div class="xpp" data-m="manual" hidden><label>바꿀 요소 <select id="xp-key"></select></label><textarea id="xp-vals" rows="3" placeholder="바꿔 볼 값을 한 줄에 하나씩 (한글도 돼요)&#10;예: neon signs reflecting on wet street&#10;golden hour sunlight"></textarea></div>
-    <div class="xpp" data-m="param" hidden><label>설정 <select id="xp-param"><option value="cfg">CFG (프롬프트 따르는 정도)</option><option value="steps">단계 수</option><option value="seed">시드</option></select></label> <label>값 <input id="xp-pvals" placeholder="예: 4, 6, 8"></label></div>
-    <button type="button" class="go" id="xp-make">후보 만들기</button>
+    <div id="xp-cands"><p class="vempty" id="xp-empty">왼쪽에 만들고 싶은 그림을 적고 [요소 나누기]를 누르세요. 후보가 여기에 나란히 나와요.</p></div>
   </div>
-  <div id="xp-cands"></div>
 </section>
 
-<section class="view" id="v-vana">
-  <h2>영상 분석·하이라이트</h2>
-  <p class="hint plain">영상을 장면(샷)으로 나누고 대표 장면·화질·무음 구간·대사를 정리해요. 그걸 바탕으로 하이라이트 구간을 AI나 자동으로 고르고, 직접 고친 뒤 새 영상으로 만들어요. 원본은 그대로 두고 새 파일로 저장해요.</p>
-  <div class="va-src">
-    <label class="f">영상<select id="va-video"></select></label>
-    <button type="button" class="ghost sm" id="va-up">내 컴퓨터에서 올리기</button><input type="file" id="va-file" accept="video/*" hidden>
-    <select id="va-hist" title="이전 분석 다시 열기"><option value="">이전 분석 열기…</option></select>
-  </div>
-  <div class="va-opts">
-    <label class="chk"><input type="checkbox" id="va-asr"> 대사 받아쓰기</label>
-    <select id="va-asr-model" title="받아쓰기 모델"><option value="turbo">정확하게 (turbo, 1.6GB)</option><option value="small">가볍게 (small, 0.5GB)</option><option value="base">아주 가볍게 (base)</option></select>
-    <span id="va-asr-st" class="mute"></span>
-    <label class="chk"><input type="checkbox" id="va-cap"> 장면 설명 쓰기</label><select id="va-vision" title="이미지를 볼 수 있는 대화 모델"></select>
-    <label>장면 나누기 <select id="va-sens"><option value="0.45">크게</option><option value="0.32" selected>보통</option><option value="0.22">잘게</option></select></label>
-  </div>
-  <div class="va-act">
+<section class="view split" id="v-vana">
+  <form class="vform" autocomplete="off" novalidate onsubmit="return false">
     <button type="button" class="go" id="va-go">분석하기</button>
-    <button type="button" class="ghost" id="va-vdepth" title="프레임마다 깊이를 추정하고, 영상 전체 기준으로 맞춰 깜빡임을 줄인 깊이 영상을 만들어요">깊이 영상 만들기</button>
-    <button type="button" class="ghost" id="va-cam3d" title="특징점을 따라가 카메라가 3D 공간에서 어떻게 돌고 움직였는지 추정하고, 깊이를 그 경로에 맞춰 쌓아 점 구름(.glb)을 만들어요. 거리 단위는 상대값이에요">3D 카메라·점 구름</button>
-    <button type="button" class="ghost" id="va-cam" title="화면이 좌우·상하로 움직이고 확대·축소되는 정도를 프레임마다 어림해요(2D 추정)">카메라 움직임 추정</button>
-    <label class="va-small">깊이 영상 <select id="va-dlook"><option value="gray">흑백</option><option value="color">색</option></select> <select id="va-dfps"><option value="12">초당 12장</option><option value="8">8장</option><option value="24">24장</option></select> 부드럽게 <input type="number" id="va-dsmooth" value="60" min="0" max="95" step="5">%</label>
+    <p class="hint plain">장면·화질·무음·대사를 정리하고 하이라이트를 골라 새 영상으로 만들어요.</p>
+    <div class="f vsrc"><span>영상</span>
+      <div class="vmrow"><select id="va-video" data-prev="va-prev"></select><button type="button" class="ghost vpick" id="va-up">내 컴퓨터에서 고르기</button><input type="file" id="va-file" accept="video/*" hidden></div>
+      <video id="va-prev" class="vprev" controls muted preload="metadata" hidden></video>
+    </div>
+    <label class="f">이전 분석<select id="va-hist"><option value="">이전 분석 열기…</option></select></label>
+    <fieldset class="vset"><legend>분석</legend>
+      <label class="chk"><input type="checkbox" id="va-asr"> 대사 받아쓰기</label>
+      <label class="f">받아쓰기 모델<select id="va-asr-model"><option value="turbo">정확하게 (turbo, 1.6GB)</option><option value="small">가볍게 (small, 0.5GB)</option><option value="base">아주 가볍게 (base)</option></select></label>
+      <p id="va-asr-st" class="mute"></p>
+      <label class="chk"><input type="checkbox" id="va-cap"> 장면 설명 쓰기</label>
+      <label class="f">설명 모델<select id="va-vision"></select></label>
+      <label class="f">장면 나누기<select id="va-sens"><option value="0.45">크게</option><option value="0.32" selected>보통</option><option value="0.22">잘게</option></select></label>
+    </fieldset>
+    <fieldset class="vset"><legend>깊이·카메라</legend>
+      <div class="vbtns"><button type="button" class="ghost" id="va-vdepth" title="프레임마다 깊이를 추정하고 깜빡임을 줄인 깊이 영상">깊이 영상</button>
+      <button type="button" class="ghost" id="va-cam3d" title="카메라가 3D 공간에서 움직인 경로와 점 구름(.glb). 거리는 상대값">3D 카메라·점 구름</button>
+      <button type="button" class="ghost" id="va-cam" title="화면이 좌우·상하로 움직이고 확대·축소된 정도(2D)">카메라 움직임</button></div>
+      <div class="row"><label class="f">깊이 영상 색<select id="va-dlook"><option value="gray">흑백</option><option value="color">색</option></select></label>
+      <label class="f">초당 장수<select id="va-dfps"><option value="12">12장</option><option value="8">8장</option><option value="24">24장</option></select></label>
+      <label class="f">부드럽게(%)<input type="number" id="va-dsmooth" value="60" min="0" max="95" step="5"></label></div>
+    </fieldset>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="vstat"><p class="st" id="va-st" hidden></p><progress id="va-pg" max="100" hidden></progress><button type="button" class="ghost sm" id="va-stop" hidden>중단</button></div>
+    <div id="va-tools"></div>
+    <div id="va-res"><p class="vempty">영상을 고르고 [분석하기]를 누르면 결과가 여기에 나와요.</p></div>
   </div>
-  <p class="st" id="va-st" hidden></p><progress id="va-pg" max="100" hidden></progress><button type="button" class="ghost sm" id="va-stop" hidden>중단</button>
-  <div id="va-tools"></div>
-  <div id="va-res"></div>
 </section>
 
-<section class="view" id="v-vrestore">
-  <h2>영상 복원</h2>
-  <p class="hint plain">옛 영상·흔들린 영상·어두운 영상을 다듬어요. 먼저 [상태 진단]을 누르면 줄무늬·노이즈·깜빡임·흔들림·해상도를 재서 고칠 항목을 켜 줘요. 원본은 그대로 두고 새 파일로 저장하고, 원래 소리는 그대로 옮긴 뒤 소리·길이가 맞는지 확인해요.</p>
-  <div class="va-src">
-    <label class="f">영상<select id="vr-video"></select></label>
-    <button type="button" class="ghost sm" id="vr-up">내 컴퓨터에서 올리기</button><input type="file" id="vr-file" accept="video/*" hidden>
-    <button type="button" class="ghost" id="vr-diag">상태 진단</button>
-  </div>
-  <div id="vr-report"></div>
-  <div class="vr-opts">
-    <fieldset><legend>고르게 다듬기 <span class="mute">(ffmpeg · 빠름)</span></legend>
+<section class="view split" id="v-vrestore">
+  <form class="vform" autocomplete="off" novalidate onsubmit="return false">
+    <button type="button" class="go" id="vr-go">복원하기</button>
+    <p class="hint plain">옛 영상·흔들린 영상·어두운 영상을 다듬어 새 파일로 저장해요. 원래 소리는 그대로 옮겨요.</p>
+    <div class="f vsrc"><span>영상</span>
+      <div class="vmrow"><select id="vr-video" data-prev="vr-prev"></select><button type="button" class="ghost vpick" id="vr-up">내 컴퓨터에서 고르기</button><input type="file" id="vr-file" accept="video/*" hidden></div>
+      <video id="vr-prev" class="vprev" controls muted preload="metadata" hidden></video>
+    </div>
+    <button type="button" class="ghost wide" id="vr-diag" title="줄무늬·노이즈·깜빡임·흔들림·해상도를 재서 고칠 항목을 자동으로 켜요">상태 진단</button>
+    <fieldset class="vset"><legend>고르게 다듬기 <span class="mute">ffmpeg · 빠름</span></legend>
       <label class="chk"><input type="checkbox" id="vr-deint"> 줄무늬(인터레이스) 없애기</label>
-      <label>노이즈 줄이기 <select id="vr-denoise"><option value="off">안 함</option><option value="light">약하게</option><option value="medium">보통</option><option value="strong">강하게</option></select></label>
+      <label class="f">노이즈 줄이기<select id="vr-denoise"><option value="off">안 함</option><option value="light">약하게</option><option value="medium">보통</option><option value="strong">강하게</option></select></label>
       <label class="chk"><input type="checkbox" id="vr-deflicker"> 깜빡임 줄이기</label>
       <label class="chk"><input type="checkbox" id="vr-color"> 밝기 자동 맞추기</label>
-      <label class="chk"><input type="checkbox" id="vr-stab"> 흔들림 보정 <span class="mute">(가장자리가 조금 잘려요)</span></label>
+      <label class="chk" title="가장자리가 조금 잘려요"><input type="checkbox" id="vr-stab"> 흔들림 보정</label>
       <label class="chk"><input type="checkbox" id="vr-sharpen"> 살짝 선명하게</label>
     </fieldset>
-    <fieldset><legend>AI 로 키우기·부드럽게 <span class="mute">(ComfyUI · 조각씩 처리)</span></legend>
-      <label>업스케일 <select id="vr-scale"><option value="0">안 함</option><option value="1.5">1.5배</option><option value="2">2배</option><option value="3">3배</option><option value="4">4배</option></select></label>
-      <label>모델 <select id="vr-upm"></select></label>
-      <label class="chk"><input type="checkbox" id="vr-interp"> 프레임 2배 (RIFE, 부드럽게)</label>
-      <p class="mute">영상을 메모리에 맞는 짧은 조각으로 나눠 하나씩 처리해요. 중간에 멈추거나 실패해도 같은 설정으로 다시 누르면 끝난 조각부터 이어서 해요.</p>
+    <fieldset class="vset"><legend>AI 로 키우기·부드럽게 <span class="mute">ComfyUI · 조각씩</span></legend>
+      <div class="row"><label class="f">업스케일<select id="vr-scale"><option value="0">안 함</option><option value="1.5">1.5배</option><option value="2">2배</option><option value="3">3배</option><option value="4">4배</option></select></label>
+      <label class="f">모델<select id="vr-upm"></select></label></div>
+      <label class="chk" title="RIFE 로 움직임을 부드럽게"><input type="checkbox" id="vr-interp"> 프레임 2배</label>
+      <p class="mute">멈추거나 실패해도 같은 설정으로 다시 누르면 끝난 조각부터 이어서 해요.</p>
     </fieldset>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="vstat"><p class="st" id="vr-st" hidden></p><progress id="vr-pg" max="100" hidden></progress><button type="button" class="ghost sm" id="vr-stop" hidden>중단</button></div>
+    <div id="vr-report"></div>
+    <div id="vr-out"><p class="vempty">[상태 진단]으로 영상 상태를 보고, [복원하기]를 누르면 결과와 원본 비교가 여기에 나와요.</p></div>
   </div>
-  <div class="va-act"><button type="button" class="go" id="vr-go">복원하기</button><button type="button" class="ghost sm" id="vr-stop" hidden>중단</button></div>
-  <p class="st" id="vr-st" hidden></p><progress id="vr-pg" max="100" hidden></progress>
-  <div id="vr-out"></div>
 </section>
 
-<section class="view" id="v-audio">
-  <h2>소리 분리·복원</h2>
-  <p class="hint plain">노래·영상의 소리를 목소리와 악기(드럼·베이스·나머지)로 나누고, 웅웅·윙·딱딱·쉬익 같은 잡음을 줄이고 음량을 맞춰요. 갈래마다 따로 저장되고, 원본과 번갈아 들으며 비교하거나 볼륨을 바꿔 다시 섞을 수 있어요.</p>
-  <div id="au-eng" class="lo-eng"></div>
-  <div class="va-src">
-    <label class="f">소리·영상<select id="au-src"></select></label>
-    <button type="button" class="ghost sm" id="au-up">내 컴퓨터에서 올리기</button><input type="file" id="au-file" accept="audio/*,video/*" hidden>
-  </div>
-  <div class="vr-opts">
-    <fieldset><legend>1. 나누기 <span class="mute">(Demucs)</span></legend>
-      <label>모델 <select id="au-model"><option value="htdemucs">기본 — 4갈래, 빠름</option><option value="htdemucs_ft">정확하게 — 4갈래, 4배 느림</option><option value="htdemucs_6s">6갈래 — 기타·피아노까지</option></select></label>
+<section class="view split" id="v-audio">
+  <form class="vform" autocomplete="off" novalidate onsubmit="return false">
+    <div class="vgo2"><button type="button" class="go" id="au-sep">나누기</button><button type="button" class="go" id="au-fix">고치기</button></div>
+    <p class="hint plain">목소리·악기로 나누고, 잡음을 줄이고 음량을 맞춰요. 갈래마다 따로 저장돼요.</p>
+    <div id="au-eng" class="lo-eng"></div>
+    <div class="f vsrc"><span>소리·영상</span>
+      <div class="vmrow"><select id="au-src" data-prev="au-prev"></select><button type="button" class="ghost vpick" id="au-up">내 컴퓨터에서 고르기</button><input type="file" id="au-file" accept="audio/*,video/*" hidden></div>
+      <video id="au-prev" class="vprev aprev" controls preload="metadata" hidden></video>
+    </div>
+    <fieldset class="vset"><legend>나누기 <span class="mute">Demucs</span></legend>
+      <label class="f">모델<select id="au-model"><option value="htdemucs">기본 — 4갈래, 빠름</option><option value="htdemucs_ft">정확하게 — 4갈래, 4배 느림</option><option value="htdemucs_6s">6갈래 — 기타·피아노까지</option></select></label>
       <label class="chk"><input type="checkbox" id="au-two"> 목소리 / 반주 둘로만</label>
-      <button type="button" class="go" id="au-sep">나누기</button>
     </fieldset>
-    <fieldset><legend>2. 고치기 <span class="mute">(ffmpeg · 고른 소리에)</span></legend>
+    <fieldset class="vset"><legend>고치기 <span class="mute">ffmpeg</span></legend>
       <label class="chk"><input type="checkbox" id="au-rumble"> 웅웅(바람·저음 잡음) 줄이기</label>
-      <label>윙 소리(전기 험) <select id="au-hum"><option value="">안 함</option><option value="60">60Hz (한국·미국)</option><option value="50">50Hz (유럽·일본 동부)</option></select></label>
+      <label class="f">윙 소리(전기 험)<select id="au-hum"><option value="">안 함</option><option value="60">60Hz (한국·미국)</option><option value="50">50Hz (유럽·일본 동부)</option></select></label>
       <label class="chk"><input type="checkbox" id="au-declick"> 딱딱·지직 소리 줄이기</label>
-      <label>쉬익 노이즈 <select id="au-denoise"><option value="off">안 함</option><option value="light">약하게</option><option value="medium" selected>보통</option><option value="strong">강하게</option></select></label>
-      <label>음량 맞추기 <select id="au-loud"><option value="speech">말소리·유튜브 (-16 LUFS)</option><option value="music">음악 (-14 LUFS)</option><option value="broadcast">방송 (-23 LUFS)</option><option value="off">안 맞춤</option></select></label>
-      <button type="button" class="go" id="au-fix">고치기</button>
+      <label class="f">쉬익 노이즈<select id="au-denoise"><option value="off">안 함</option><option value="light">약하게</option><option value="medium" selected>보통</option><option value="strong">강하게</option></select></label>
+      <label class="f">음량 맞추기<select id="au-loud"><option value="speech">말소리·유튜브 (-16 LUFS)</option><option value="music">음악 (-14 LUFS)</option><option value="broadcast">방송 (-23 LUFS)</option><option value="off">안 맞춤</option></select></label>
     </fieldset>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="vstat"><p class="st" id="au-st" hidden></p><progress id="au-pg" max="100" hidden></progress><button type="button" class="ghost sm" id="au-stop" hidden>중단</button></div>
+    <div id="au-out"><p class="vempty">나눈 소리·고친 소리가 여기에 나와요. 원본과 번갈아 들으며 비교할 수 있어요.</p></div>
   </div>
-  <p class="st" id="au-st" hidden></p><progress id="au-pg" max="100" hidden></progress><button type="button" class="ghost sm" id="au-stop" hidden>중단</button>
-  <div id="au-out"></div>
 </section>
 
 <section class="view" id="v-lora">
   <h2>LoRA 만들기</h2>
   <p class="hint plain">사진 15~40장으로 특정 인물·캐릭터, 그림체, 사물을 기억하는 LoRA 를 직접 만들어요. 사진 모으기 → 자동 캡션 → 학습 순서예요. 지금은 SD1.5 · SDXL 계열(Illustrious·Pony·NoobAI 포함) 체크포인트로 만들 수 있어요.</p>
-  <p class="warn">본인이거나 허락받은 사람의 사진, 직접 만든 그림처럼 쓸 권리가 있는 사진만 쓰세요. 미성년자 사진은 쓰지 마세요.</p>
   <div id="lo-eng" class="lo-eng"></div>
   <div class="lo-top"><select id="lo-sets"><option value="">+ 새 LoRA</option></select><button type="button" class="ghost sm" id="lo-del" hidden>이 세트 지우기</button></div>
   <div class="lo-meta">
@@ -906,6 +915,14 @@
       <button type="button" class="ghost" id="lo-cap">자동 캡션 달기</button><button type="button" class="ghost" id="lo-capsave">고친 캡션 저장</button></div>
     <p class="hint plain">트리거 단어는 학습할 때 캡션 맨 앞에 자동으로 붙어요. 인물 LoRA 는 머리색·눈 색처럼 '항상 같은 특징'을 캡션에서 빼면 트리거 단어가 그 특징을 기억해요.</p>
     <div id="lo-grid" class="lo-grid"></div>
+    <details class="lo-aug" id="lo-aug"><summary>사진 불리기 <span class="mute">몇 장만 있어도 학습 사진을 늘려요</span></summary>
+      <div class="lo-capbar"><select id="lo-amode"><option value="simple">간단히 — 뒤집기·잘라 확대·밝기 (바로 만들어요)</option><option value="ai">AI로 비슷한 사진 — 각도·배경·옷·표정 바꾸기 (Qwen-Image 2.1)</option></select>
+        <label>만들 장수 <input type="number" id="lo-acount" value="12" min="1" max="60"></label>
+        <label class="chk" title="Lightning LoRA 로 4단계"><input type="checkbox" id="lo-afast"> 빠른 모드</label>
+        <button type="button" class="ghost" id="lo-aug-go">후보 만들기</button></div>
+      <p class="hint plain">만든 사진은 바로 넣지 않고 후보로 보여 줘요. 얼굴·특징이 달라진 건 빼고 고른 것만 넣으세요.</p>
+      <div id="lo-cands"></div>
+    </details>
   </div>
   <div id="lo-train" hidden>
     <h3>3. 학습</h3>
@@ -1078,7 +1095,7 @@
   <dl class="gloss">
     <dt>글만으로 그림을 만들고 싶어요</dt><dd><b>이미지 생성</b> 탭 → 모델을 고르고 프롬프트를 적고 [이미지 생성]. 처음이면 프로필은 '자동'으로 두세요.</dd>
     <dt>마음에 든 그림을 조금만 바꿔서 또 만들고 싶어요</dt><dd>결과 아래 <b>[같은 설정으로]</b>(갤러리에서는 큰 화면의 [이어서 작업 → 이미지 생성으로 보내기])를 누른 뒤 프롬프트나 시드만 바꿔요. 시드를 그대로 두면 같은 구도로 나와요.</dd>
-    <dt>사진 속 옷·머리색·표정만 바꾸고 싶어요</dt><dd><b>이미지 편집</b> → 사진을 올리고 [선택 도구]로 바꿀 곳을 클릭 → 원하는 변화를 적고 [편집 실행]. 말로만 바꾸려면 'Qwen-Image-Edit'을 쓰세요.</dd>
+    <dt>사진 속 옷·머리색·표정만 바꾸고 싶어요</dt><dd><b>이미지 편집</b> → 사진을 올리고 [선택 도구]로 바꿀 곳을 클릭 → 원하는 변화를 적고 [편집 실행]. 말로만 바꾸려면 'Qwen-Image 2.1'을 쓰세요.</dd>
     <dt>사진을 더 크고 선명하게 만들고 싶어요</dt><dd><b>업스케일</b> → 빠른 업스케일. 더 자세한 질감이 필요하면 '디테일 재생성'(실사는 변화 강도 0.2 안팎).</dd>
     <dt>사진의 배경만 지우고 싶어요</dt><dd><b>이미지 편집</b> → [배경] → [선택 반전] → [선택만 남겨 투명 PNG 저장].</dd>
     <dt>그림의 바깥을 더 넓히고 싶어요</dt><dd><b>기타 기능 → 이미지 확장</b>. 세로 사진을 가로로 만들 때 좋아요.</dd>
@@ -1115,7 +1132,7 @@
     <tr><td>배경 지우기 (투명 PNG · 흰색 등 색 배경 · 테두리 자르기)</td><td class="y">지원</td><td>기타 기능 → 배경 지우기 (결과·큰 화면의 [배경 지우기]로 바로 보내기, 여러 장은 일괄 처리)</td></tr>
     <tr><td>크기 바꾸기 · 비율 자르기 · 회전 · 밝기/색 보정</td><td class="y">지원</td><td>기타 기능</td></tr>
     <tr><td>LoRA 가 어느 모델용인지 확인</td><td class="y">지원</td><td>이미지 생성·편집·업스케일의 LoRA 칸</td></tr>
-    <tr><td>Stable Diffusion 3.5 · HiDream · Lumina 2</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류 (설치와 모델에서 받아요)</td></tr>
+    <tr><td>Stable Diffusion 3.5 · MOSS-Image</td><td class="p">미검증</td><td>이미지 생성 → 모델 종류 (설치와 모델에서 받아요)</td></tr>
     <tr><td>음악 만들기 (ACE-Step 1.5)</td><td class="p">미검증</td><td>사이드바 [음악 만들기] — 스타일과 가사로 곡을 만들어요</td></tr>
     <tr><td>음성 만들기 (글 읽어 주기 — 윈도우 내장 음성 · Edge 읽어 주기)</td><td class="p">미검증</td><td>사이드바 [음성 만들기] — ComfyUI 없이 동작해요. Edge 방식은 글이 마이크로소프트 서버로 전송돼요</td></tr>
     <tr><td>얼굴 교체 (ReActor)</td><td class="y">지원</td><td>기타 기능 → 얼굴 교체 — 한 번만 안내 후 사용, 확장 설치 버튼 포함(설치 용량이 커요)</td></tr>
@@ -1286,7 +1303,7 @@
 </div></div>
 <div class="cpane" id="fold-minfo"><div class="card"><h3>LoRA · 모델 정보</h3>
     <p class="hint plain">설치된 LoRA와 모델이 어느 계열용인지, 파일 안에 적힌 트리거 단어·자주 쓰인 태그가 무엇인지 보여 줘요. LoRA 파일 옆에 같은 이름의 그림 파일(예: 이름.preview.png)이 있으면 미리보기로 써요. 이미지 생성·편집 화면에서 LoRA를 고르면 같은 정보가 칸 아래에 나오고, 단어를 누르면 프롬프트에 들어가요.</p>
-    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-fam" title="모델 종류별로 보기"><option value="">모든 모델 종류</option><option value="sd15,sdxl">SD1.5 · SDXL · Illustrious · Pony 계열</option><option value="flux">FLUX.1 · Krea 계열</option><option value="chroma">Chroma</option><option value="krea2">Krea 2</option><option value="sd3">Stable Diffusion 3.5</option><option value="hidream">HiDream</option><option value="lumina">Lumina 2</option><option value="qwen">Qwen-Image-Edit</option><option value="unknown">판별 불가</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">캐릭터</option><option value="style">스타일</option><option value="background">배경·풍경</option><option value="other">기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
+    <div class="plbar"><select id="mi-kind"><option value="loras">LoRA</option><option value="checkpoints">체크포인트·모델</option></select><select id="mi-fam" title="모델 종류별로 보기"><option value="">모든 모델 종류</option><option value="sd15,sdxl">SD1.5 · SDXL · Illustrious · Pony 계열</option><option value="flux">FLUX.1 · Krea 계열</option><option value="chroma">Chroma</option><option value="krea2">Krea 2</option><option value="sd3">Stable Diffusion 3.5</option><option value="hidream">HiDream</option><option value="lumina">Lumina 2</option><option value="qwen">Qwen-Image 2.1</option><option value="unknown">판별 불가</option></select><select id="mi-filter" title="종류로 걸러 보기"><option value="all">모든 종류</option><option value="character">캐릭터</option><option value="style">스타일</option><option value="background">배경·풍경</option><option value="other">기타</option><option value="unknown">미분류</option></select><input id="mi-q" type="search" placeholder="이름·트리거 단어로 검색"><button type="button" class="ghost" id="mi-reload">새로 읽기</button></div>
     <div id="mi-list"></div>
   
 </div></div>
@@ -1335,10 +1352,11 @@
 <section class="view" id="v-conf">
   <h2>설정</h2>
   <p class="hint plain">모델 설치와 폴더는 <a href="#" data-go="setup">설치와 모델</a>에 있어요. 바꾼 값은 바로 적용되고 이 컴퓨터에 기억돼요.</p>
-  <div class="cs"><nav class="cs-nav" id="cs-nav" aria-label="설정 분류"><button type="button" data-pane="ui" class="on">화면</button><button type="button" data-pane="input">입력·단축키</button><button type="button" data-pane="notify">알림</button><button type="button" data-pane="gen">메모리·속도</button><button type="button" data-pane="backup">백업·복원</button><button type="button" data-pane="diag">문제 해결</button><button type="button" data-pane="app">프로그램</button></nav>
+  <div class="cs"><nav class="cs-nav" id="cs-nav" aria-label="설정 분류"><button type="button" data-pane="ui" class="on">화면</button><button type="button" data-pane="input">입력·단축키</button><button type="button" data-pane="notify">알림</button><button type="button" data-pane="web">웹 검색</button><button type="button" data-pane="gen">메모리·속도</button><button type="button" data-pane="backup">백업·복원</button><button type="button" data-pane="diag">문제 해결</button><button type="button" data-pane="app">프로그램</button></nav>
   <div class="cs-body">
   <div class="cpane on" id="fold-ui"><div class="card"><h3>모양</h3>
 <div class="row"><div class="rl"><b>글자·메뉴 크기</b><span>글자와 왼쪽 메뉴가 같이 커지거나 작아져요. 브라우저 확대(Ctrl + 휠)와 따로 기억돼요.</span></div><div class="rc"><select id="ui-scale"><option value="1">작게 (80%)</option><option value="1.125">조금 작게 (90%)</option><option value="1.25">보통 (100%, 기본)</option><option value="1.375">조금 크게 (110%)</option><option value="1.5">크게 (120%)</option><option value="1.875">아주 크게 (150%)</option></select></div></div>
+<div class="row"><div class="rl"><b>글꼴</b><span>화면 전체 글꼴이에요. 컴퓨터에 없는 글꼴은 기본 글꼴로 보여요.</span></div><div class="rc"><select id="opt-font"><option value="">기본 (Pretendard)</option><option value="Noto Sans KR">Noto Sans KR</option><option value="Malgun Gothic">맑은 고딕</option><option value="NanumGothic">나눔고딕</option><option value="NanumSquare">나눔스퀘어</option><option value="NanumBarunGothic">나눔바른고딕</option><option value="Gulim">굴림</option><option value="system-ui">시스템 기본</option></select> <button type="button" class="ghost sm" id="opt-font-more" title="이 컴퓨터에 설치된 글꼴을 목록에 더해요(브라우저가 한 번 허락을 물어요)">내 PC 글꼴 더 보기</button></div></div>
 <div class="row"><div class="rl"><b>화면 색</b><span>어둡게·밝게, 또는 컴퓨터 설정을 따라가요.</span></div><div class="rc"><div class="theme-pick" id="theme-pick"><label><input type="radio" name="theme" value="auto"> 컴퓨터 설정에 맞춤</label><label><input type="radio" name="theme" value="dark"> 어둡게</label><label><input type="radio" name="theme" value="light"> 밝게</label></div></div></div>
 <div class="row"><div class="rl"><b>강조 색</b><span>버튼과 선택 표시에 쓰는 색이에요.</span></div><div class="rc"><div class="swatches" id="accent-pick"><label class="swatch" title="기본"><input type="radio" name="accent" value=""><i class="a-def"></i></label><label class="swatch" title="초록"><input type="radio" name="accent" value="green"><i class="a-green"></i></label><label class="swatch" title="주황"><input type="radio" name="accent" value="orange"><i class="a-orange"></i></label><label class="swatch" title="분홍"><input type="radio" name="accent" value="pink"><i class="a-pink"></i></label><label class="swatch" title="청록"><input type="radio" name="accent" value="teal"><i class="a-teal"></i></label></div></div></div>
 <div class="row"><div class="rl"><b>대화 글자 크기</b><span>대화 화면의 글자만 따로 키우거나 줄여요.</span></div><div class="rc"><select id="opt-chatfs"><option value="0.9">작게</option><option value="1">보통</option><option value="1.15">크게</option><option value="1.3">아주 크게</option></select></div></div>
@@ -1354,7 +1372,7 @@
 <div class="row"><div class="rl"><b>대화 말풍선 너비</b><span>대화 답변이 한 줄에 놓이는 최대 폭이에요.</span></div><div class="rc"><select id="opt-bubw"><option value="56">좁게</option><option value="72">보통</option><option value="96">넓게</option><option value="130">아주 넓게</option></select></div></div>
 <div class="row"><div class="rl"><b>알림 메시지 표시 시간</b><span>화면 아래에 잠깐 뜨는 안내 문구가 머무는 시간이에요.</span></div><div class="rc"><select id="opt-toast"><option value="2">짧게(2초)</option><option value="3.5">보통(3.5초)</option><option value="7">길게(7초)</option><option value="12">아주 길게(12초)</option></select></div></div>
 <div class="row"><div class="rl"><b>만들기 버튼 고정</b><span>입력 칸을 내려도 [만들기] 버튼이 위에 따라와요. 끄면 제자리에 있어요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-gosticky"><i></i></label></div></div>
-<div class="row"><div class="rl"><b>한 줄 화면 너비</b><span>설정·다운로드·설치와 모델·프롬프트·일괄 처리처럼 오른쪽 칸이 없는 화면의 최대 너비예요. 넓은 모니터에서 오른쪽이 많이 비면 넓혀 보세요.</span></div><div class="rc"><select id="opt-pagew"><option value="0">기본</option><option value="1400">넓게</option><option value="1800">아주 넓게</option><option value="9999">화면 꽉 채우기</option></select></div></div>
+<div class="row"><div class="rl"><b>한 줄 화면 너비</b><span>설정·다운로드·설치와 모델·프롬프트·일괄 처리처럼 오른쪽 칸이 없는 화면의 최대 너비예요. 넓은 모니터에서 오른쪽이 많이 비면 넓혀 보세요.</span></div><div class="rc"><select id="opt-pagew"><option value="0">기본</option><option value="1240">넓게</option><option value="1560">아주 넓게</option><option value="9999">화면 꽉 채우기</option></select></div></div>
 <div class="row"><div class="rl"><b>갤러리 미리보기 크기</b><span>기록 갤러리의 그림 크기예요.</span></div><div class="rc"><select id="opt-galsz"><option value="150">작게</option><option value="190">보통</option><option value="250">크게</option><option value="340">아주 크게</option></select></div></div>
 <div class="row"><div class="rl"><b>갤러리 미리보기</b><span>[끄기]로 두면 그림을 불러오지 않고 파일 이름·프롬프트만 보여 줘요. 그림이 아주 많아 느릴 때 쓰세요. 칸을 누르면 큰 그림으로 열려요.</span></div><div class="rc"><select id="opt-galprev"><option value="on">켜기</option><option value="off">끄기</option></select></div></div>
 </div></div>
@@ -1372,6 +1390,12 @@
 <div class="row"><div class="rl"><b>바탕화면 알림</b><span>다른 창을 보는 중일 때 작업이 끝나면 알림을 띄워요. 처음 켤 때 브라우저가 허락을 물어봐요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="s-desk"><i></i></label></div></div>
 <div class="row"><div class="rl"><b>창을 닫을 때 경고</b><span>작업이 진행 중인데 탭을 닫거나 새로고침하면 한 번 물어봐요.</span></div><div class="rc"><label class="sw"><input type="checkbox" id="opt-leave"><i></i></label></div></div>
 <div class="actions"><button type="button" class="ghost sm" id="s-test">알림 시험해 보기</button></div></div></div>
+  <div class="cpane" id="fold-web"><div class="card"><h3>웹 검색 (SearXNG)</h3>
+<div class="row"><div class="rl"><b>검색 서버</b><span>대화에서 '웹 검색'을 켜면 이 서버로 검색해요. SearXNG 는 내 PC 에서 도는 검색 중계 서버라 키·요금이 없어요.</span></div><div class="rc"><span id="ws-st" class="mute">확인 중…</span></div></div>
+<div class="row"><div class="rl"><b>설치·켜기</b><span>Docker Desktop 이 있으면 버튼 한 번으로 SearXNG 를 받아 켜요(처음 한 번 수백 MB).</span></div><div class="rc"><button type="button" class="go sm" id="ws-setup">SearXNG 설치·켜기</button></div></div>
+<div class="row"><div class="rl"><b>주소</b><span>이미 띄워 둔 SearXNG 가 있으면 주소를 넣어요. 설정에서 JSON 결과(search &gt; formats: json)가 켜져 있어야 해요.</span></div><div class="rc"><input id="ws-url" placeholder="http://127.0.0.1:8899"> <button type="button" class="ghost sm" id="ws-save">저장</button></div></div>
+<div class="row"><div class="rl"><b>본문까지 읽을 결과 수</b><span>위쪽 결과 몇 개는 페이지 본문까지 읽어 답이 더 정확해져요. 늘리면 느려져요.</span></div><div class="rc"><select id="ws-pages"><option value="0">읽지 않기</option><option value="2">2개</option><option value="3" selected>3개</option><option value="5">5개</option></select></div></div>
+</div></div>
   <div class="cpane" id="fold-gen"><div class="card"><h3>메모리와 속도</h3>
 <div class="row"><div class="rl"><b>대화 모델을 메모리에 두는 시간</b><span>마지막 대화 뒤 이 시간이 지나면 모델을 내려서 그래픽 메모리를 비워요. 길수록 다음 대답이 빠르고, 짧을수록 이미지 생성에 메모리를 더 줘요.</span></div><div class="rc"><select id="pf-ka"><option value="0">바로 내리기</option><option value="5m">5분 (기본)</option><option value="30m">30분</option><option value="2h">2시간</option><option value="-1">계속 두기</option></select></div></div>
 <div class="row"><div class="rl"><b>그래픽 메모리(VRAM) 사용 방식</b><span>메모리 부족 오류가 자주 나면 '아끼기'로 바꿔요. 느려지지만 큰 모델도 돌아가요. 프로그램을 다시 시작하면 적용돼요.</span></div><div class="rc"><select id="pf-vram"><option value="auto">자동 (기본)</option><option value="low">아끼기 (--lowvram)</option><option value="none">최대한 아끼기 (--novram, 아주 느림)</option><option value="high">넉넉하게 (--highvram, VRAM 많은 PC)</option></select></div></div>
@@ -1476,19 +1500,10 @@
   <canvas id="rec-wave" width="900" height="110" hidden></canvas>
   <div class="row" id="rec-cut" hidden><label class="f">시작(초)<input type="number" id="rec-s" step="0.1" min="0" value="0"></label><label class="f">끝(초)<input type="number" id="rec-e" step="0.1" min="0" value="0"></label><span class="mute" id="rec-len"></span>
     <button type="button" class="ghost" id="rec-play">고른 부분 듣기</button><button type="button" class="ghost" id="rec-save">wav 로 저장</button><button type="button" class="go" id="rec-use">목소리 샘플로 쓰기</button></div>
-  <p class="hint">본인 목소리이거나 허락받은 목소리만 쓰세요.</p>
   <p style="text-align:right;margin-bottom:0"><button class="ghost" id="rec-x">닫기</button></p>
 </form></dialog>
-<dialog id="ack"><form method="dialog">
-  <h3 style="margin-top:0">사용 전에 확인해 주세요</h3>
-  <p>이 도구는 성인이 자기 컴퓨터에서 쓰도록 만들어졌고, 성인 콘텐츠를 제한하는 필터를 두지 않아요. 아래 내용을 한 번만 안내해요.</p>
-  <ul>
-    <li>저는 성인이며, 만들거나 편집하는 인물은 모두 성인이거나 성인으로 설정한 가상의 인물이에요.</li>
-    <li>실존 인물의 사진은 본인의 동의가 있을 때만 편집해요. 동의 없는 노출·성적 합성물을 만들거나 퍼뜨리는 일은 불법이에요.</li>
-    <li>미성년자와 관련된 성적 콘텐츠는 만들지 않아요. 이런 요청은 자동으로 차단돼요.</li>
-  </ul>
-  <p style="text-align:right;margin-bottom:0"><button class="go" id="ackb">확인하고 시작하기</button></p>
-</form></dialog>
+
+<dialog id="sp" aria-label="검색"><div class="sp-box"><input id="sp-q" type="search" placeholder="무엇을 찾을까요? 예: 업스케일, 글꼴, 고양이, 지난번 대화" autocomplete="off"><div id="sp-list"></div></div></dialog>
 
 <script src="/app.js"></script>
 </body>

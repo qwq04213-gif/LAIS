@@ -59,69 +59,74 @@
  ],
  "image": [
   {
-   "id": "qwen-edit",
-   "name": "Qwen-Image-Edit 2511 (fp8)",
-   "gb": 30,
-   "desc": "말로 지시하는 고품질 편집. 인물·질감·글자 일관성이 높고, 2511은 여러 인물 사진과 부분 편집이 더 정확해요. VRAM 12GB 이상, RAM 32GB 이상 권장. Apache-2.0.",
+   "id": "qwen-image",
+   "name": "Qwen-Image 2.1 (int8) — 생성·편집 하나로",
+   "gb": 17.3,
+   "desc": "이미지 생성(모델 종류 'Qwen-Image 2.1')과 말로 편집·조명 바꾸기·구도 바꾸기·타일 리파인에 함께 써요. 글자(한글·영어)·포스터·여러 사진 합치기에 강해요. VRAM 12GB 이상, RAM 32GB 이상 권장. 비상업(연구용) 라이선스.",
+   "license": "비상업(Qwen Research License)",
    "files": [
     {
      "dir": "diffusion_models",
-     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors"
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors"
     },
     {
      "dir": "text_encoders",
-     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors"
     },
     {
      "dir": "vae",
-     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "qwen-te-small",
+   "name": "Qwen-Image 2.1 가벼운 텍스트 인코더 (w4a8)",
+   "gb": 6.3,
+   "requires": [
+    "qwen-image"
+   ],
+   "desc": "VRAM 8~12GB 에서 메모리가 모자랄 때. 받으면 int8 인코더 대신 고를 수 있어요(편집 화면 Qwen 설정 > 모델 파일 직접 고르기).",
+   "files": [
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_w4a8.safetensors"
     }
    ]
   },
   {
    "id": "qwen-lightning",
-   "name": "Qwen-Edit 2511 Lightning 4단계 LoRA",
-   "gb": 0.85,
-   "desc": "편집 속도를 약 5배 높이는 '빠른 모드'용 LoRA. Qwen-Image-Edit 2511 전용이에요(2509 모델에는 2509용 LoRA가 따로 필요해요).",
-   "files": [
-    {
-     "dir": "loras",
-     "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
-    }
-   ]
-  },
-  {
-   "id": "qwen-angles",
-   "name": "Qwen-Edit 2511 카메라 각도 LoRA",
-   "gb": 0.3,
-   "desc": "'구도 바꾸기·새 장면'에서 사진 속 인물·사물을 다른 각도(앞·옆·뒤 8방향, 아래·눈높이·위, 가까이·멀리)에서 본 모습으로 바꿀 때 써요. Qwen-Image-Edit 2511 전용. Apache-2.0.",
-   "files": [
-    {
-     "dir": "loras",
-     "url": "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors"
-    }
-   ],
+   "name": "Qwen-Image 2.1 Lightning 4단계 LoRA",
+   "gb": 0.07,
    "requires": [
-    "qwen-edit"
+    "qwen-image"
+   ],
+   "desc": "'빠른 모드'용(lightx2v). 생성·편집 모두 4단계, CFG 1 로 아주 빨라져요. 디테일은 조금 덜해요.",
+   "files": [
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/main/pytorch_lora_weights.safetensors",
+     "name": "qwen_image_2.1_lightning_4step.safetensors"
+    }
    ]
   },
   {
-   "id": "qwen-image",
-   "name": "Qwen-Image (fp8) — 글자 잘 그리는 생성 모델",
-   "gb": 28,
-   "desc": "이미지 생성 > 모델 종류 'Qwen-Image'. 그림 속 글자(한글·영어)와 포스터·간판을 잘 그려요. 편집 모델(Qwen-Image-Edit)과 텍스트 인코더·VAE를 같이 써요. VRAM 12GB 이상, RAM 32GB 이상 권장. Apache-2.0.",
+   "id": "moss-image",
+   "name": "MOSS-Image SFT (int8) — 배치 지정·긴 글자",
+   "gb": 15.5,
+   "desc": "5B 새 모델(OpenMOSS, 2026-10). 이미지 생성 > 모델 종류 'MOSS-Image'. 프롬프트를 배치 JSON 으로 쓰면 글자·물체를 원하는 자리에 놓아요. 영어·중국어 긴 글자에 강해요. 50단계·CFG 3 이라 느린 편. 필요한 VRAM 은 아직 공식 수치가 없어요(시험 중). Apache-2.0.",
    "files": [
     {
      "dir": "diffusion_models",
-     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors"
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/diffusion_models/moss_image_sft_int8_convrot.safetensors"
     },
     {
      "dir": "text_encoders",
-     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors"
     },
     {
      "dir": "vae",
-     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae.safetensors"
     }
    ]
   },
@@ -628,110 +633,6 @@
     {
      "dir": "checkpoints",
      "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors"
-    }
-   ]
-  },
-  {
-   "id": "hidream-common",
-   "name": "HiDream 공용 파일 (텍스트 인코더 4개 + VAE)",
-   "gb": 16.2,
-   "desc": "HiDream 이 쓰는 CLIP-L·CLIP-G·T5·Llama 3.1 텍스트 인코더와 VAE. 아래 HiDream 모델을 고르면 자동으로 함께 설치돼요.",
-   "files": [
-    {
-     "dir": "text_encoders",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/clip_l_hidream.safetensors"
-    },
-    {
-     "dir": "text_encoders",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/clip_g_hidream.safetensors"
-    },
-    {
-     "dir": "text_encoders",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors"
-    },
-    {
-     "dir": "text_encoders",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/llama_3.1_8b_instruct_fp8_scaled.safetensors"
-    },
-    {
-     "dir": "vae",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/vae/ae.safetensors"
-    }
-   ]
-  },
-  {
-   "id": "hidream-fast",
-   "name": "HiDream I1 Fast (fp8, 16단계)",
-   "gb": 17.1,
-   "requires": [
-    "hidream-common"
-   ],
-   "desc": "가장 빠른 HiDream. 16단계, CFG 1. 이미지 생성 탭에서 '모델 종류'를 HiDream 으로 골라요. VRAM 16GB 이상 권장.",
-   "files": [
-    {
-     "dir": "diffusion_models",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_fast_fp8.safetensors"
-    }
-   ]
-  },
-  {
-   "id": "hidream-dev",
-   "name": "HiDream I1 Dev (fp8, 28단계)",
-   "gb": 17.1,
-   "requires": [
-    "hidream-common"
-   ],
-   "desc": "속도와 품질 균형. 28단계, CFG 1.",
-   "files": [
-    {
-     "dir": "diffusion_models",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_dev_fp8.safetensors"
-    }
-   ]
-  },
-  {
-   "id": "hidream-full",
-   "name": "HiDream I1 Full (fp8, 50단계)",
-   "gb": 17.1,
-   "requires": [
-    "hidream-common"
-   ],
-   "desc": "가장 품질이 좋은 HiDream. 50단계, CFG 5라 느려요.",
-   "files": [
-    {
-     "dir": "diffusion_models",
-     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_full_fp8.safetensors"
-    }
-   ]
-  },
-  {
-   "id": "lumina2-common",
-   "name": "Lumina 2 공용 파일 (Gemma 2 텍스트 인코더 + VAE)",
-   "gb": 5.6,
-   "desc": "Lumina 2 가 쓰는 Gemma 2 텍스트 인코더와 VAE. 아래 Lumina 2 를 고르면 자동으로 함께 설치돼요.",
-   "files": [
-    {
-     "dir": "text_encoders",
-     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/text_encoders/gemma_2_2b_fp16.safetensors"
-    },
-    {
-     "dir": "vae",
-     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors"
-    }
-   ]
-  },
-  {
-   "id": "lumina2",
-   "name": "Lumina Image 2.0 (bf16, 2.6B)",
-   "gb": 5.2,
-   "requires": [
-    "lumina2-common"
-   ],
-   "desc": "가볍고 빠른 문장형 모델(약 2.6B). 이미지 생성 탭에서 '모델 종류'를 Lumina 2 로 골라요. VRAM 8GB 부터 가능해요.",
-   "files": [
-    {
-     "dir": "diffusion_models",
-     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/diffusion_models/lumina_2_model_bf16.safetensors"
     }
    ]
   },

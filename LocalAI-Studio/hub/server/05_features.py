@@ -376,7 +376,7 @@ def swap_download():
 
 
 def feat_faceswap(p, J):
-    """얼굴 교체(ReActor). 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요. (본인·허락받은 성인·성인 가상 인물만: 처음 시작할 때 안내)"""
+    """얼굴 교체(ReActor). 사진 속 얼굴을 다른 사진의 얼굴로 바꿔요. """
     if not p.get("image") or not p.get("source"):
         raise ValueError("얼굴을 바꿀 사진과, 가져올 얼굴 사진을 둘 다 올려 주세요.")
     if mods_missing(REACTOR_MODS):      # 설치 때 pip 가 조용히 실패한 부품(예: onnx)이 있으면 지금 채워 넣어요

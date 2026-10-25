@@ -258,6 +258,8 @@ class Handler(BaseHTTPRequestHandler):
             if not fp:
                 return self.send_json({"error": "없어요"}, 404)
             return self.send_file(fp, "image/png" if fp.suffix.lower() == ".png" else "image/jpeg")
+        if u == "/api/websearch":
+            return self.send_json(srx_status())
         if u == "/api/audio/engine":
             return self.send_json(audio_sep.status(ROOT))
         if u.startswith("/upfile/"):
@@ -335,8 +337,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json((vana_plan if u.endswith("plan") else vana_render)(p))
             except (ValueError, RuntimeError) as e:
                 return self.send_json({"error": str(e), **({"need": need_ids(e)} if need_ids(e) else {})})
-        if u in ("/api/lora/set/new", "/api/lora/set/update", "/api/lora/set/remove", "/api/lora/set/delete", "/api/lora/set/from_gallery"):
-            fn = {"new": lset_new, "update": lset_update, "remove": lset_remove, "delete": lset_delete, "from_gallery": lset_from_gallery}[u.rsplit("/", 1)[1]]
+        if u in ("/api/lora/set/new", "/api/lora/set/update", "/api/lora/set/remove", "/api/lora/set/delete", "/api/lora/set/from_gallery", "/api/lora/set/cand"):
+            fn = {"new": lset_new, "update": lset_update, "remove": lset_remove, "delete": lset_delete, "from_gallery": lset_from_gallery, "cand": lset_cand}[u.rsplit("/", 1)[1]]
             try:
                 return self.send_json(fn(p))
             except ValueError as e:
@@ -345,6 +347,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(lora_train.install(ROOT))
         if u == "/api/lora/engine/uninstall":
             return self.send_json(lora_train.uninstall(ROOT))
+        if u == "/api/websearch/setup":
+            return self.send_json(srx_setup())
+        if u == "/api/websearch/save":
+            return self.send_json(srx_conf_save(p))
+        if u == "/api/websearch/query":
+            return self.send_json(web_search(p))
         if u == "/api/audio/engine/install":
             return self.send_json(audio_sep.install(ROOT))
         if u == "/api/audio/engine/uninstall":

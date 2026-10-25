@@ -17,9 +17,8 @@ const FB_C=['normal','karras','simple','sgm_uniform','exponential','beta'];
 const FX_DEF={sdxl:{rdenoise:0.3,cn_strength:0.7},flux:{rdenoise:0.3,cn_strength:0.7,fx_steps:20,fx_guidance:3.5,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
               chroma:{rdenoise:0.3,cn_strength:0.7,fx_steps:26,fx_guidance:0,fx_cfg:4,fx_sampler:'euler',fx_scheduler:'beta'},
               krea2:{rdenoise:0.3,cn_strength:1,fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
-              sd35:{fx_steps:28,fx_cfg:4.5,fx_sampler:'euler',fx_scheduler:'sgm_uniform'},hidream:{fx_steps:50,fx_cfg:5,fx_sampler:'uni_pc',fx_scheduler:'simple'},
-              lumina:{fx_steps:25,fx_cfg:4,fx_sampler:'res_multistep',fx_scheduler:'simple'},
-              qwenimg:{fx_steps:20,fx_cfg:2.5,fx_sampler:'euler',fx_scheduler:'simple'},
+              sd35:{fx_steps:28,fx_cfg:4.5,fx_sampler:'euler',fx_scheduler:'sgm_uniform'},
+              qwenimg:{fx_steps:25,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},moss:{fx_steps:50,fx_cfg:3,fx_sampler:'euler',fx_scheduler:'simple'},
               qwen:{rdenoise:0.45}};   // Krea 2 Turbo 기준(8단계, CFG 1)
 const LORA_NOTE='프롬프트에 &lt;lora:이름:0.8&gt; 태그를 쓰면 설치된 LoRA 중 이름이 맞는 파일을 자동으로 찾아 적용해요. 개수 제한은 없어요.';
 
@@ -29,7 +28,7 @@ const T={
  sdSampling:()=>`<div class="row"><label class="f">VAE<select name="vae"></select></label><label class="f">CLIP skip<input type="number" name="clip_skip" value="2" min="1" max="12"></label></div>
   <div class="row"><label class="f">샘플러<select name="sampler" data-def="euler_ancestral"></select></label><label class="f">스케줄러<select name="scheduler" data-def="normal"></select></label></div>
   <div class="row"><label class="f">단계 수<input type="number" name="steps" value="28" min="1" max="150"></label><label class="f">CFG<input type="number" name="cfg" value="5.5" step="0.1" min="0" max="30"></label></div>
-  <label class="chk"><input type="checkbox" name="vpred"> V-Prediction 모델 (NoobAI Vpred 등)</label>
+  <label class="chk"><input type="checkbox" name="vpred"> V-Pred 모델</label>
   <div class="row"><label class="f">CFG 재조정 (0=끔)<input type="number" name="rescale" value="0" step="0.01" min="0" max="1"></label><label class="f">PAG 강도 (0=끔)<input type="number" name="pag" value="0" step="0.1" min="0" max="10"></label></div>
 `,
  cnEasy:()=>`<div class="cn-easy"><b>쉬운 모드 — 사진에서 포즈·윤곽·깊이 뽑기</b>
@@ -41,11 +40,11 @@ const T={
  lora:()=>`<div class="loras"></div><div class="lora-acts"><button type="button" class="ghost lora-add">+ LoRA 추가</button><button type="button" class="link" data-open="loras">LoRA 폴더 열기</button></div><p class="hint">${LORA_NOTE}</p>`,
 };
 T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
-  <select name="rengine"><option value="sdxl">SD·SDXL 체크포인트 (일러스트 · 실사 SDXL 모두)</option><option value="flux">FLUX · Krea(FLUX.1)</option><option value="krea2">Krea 2</option><option value="chroma">Chroma</option><option value="qwen">Qwen-Image-Edit (이미지 편집에 쓰는 모델)</option></select></label>
+  <select name="rengine"><option value="sdxl">SD·SDXL 체크포인트 (일러스트 · 실사 SDXL 모두)</option><option value="flux">FLUX · Krea(FLUX.1)</option><option value="krea2">Krea 2</option><option value="chroma">Chroma</option><option value="qwen">Qwen-Image 2.1 (이미지 편집과 같은 모델)</option></select></label>
  <label class="f">프롬프트 (선택)<textarea name="prompt" rows="3" placeholder="비워 두면 일반적인 고화질 지시만 써요"></textarea></label>
  <label class="f re-noq">타일 프롬프트<select name="tileprompt"><option value="auto">일반 고화질 지시만 (추천 — 배경에 눈·얼굴이 새로 생기지 않아요)</option><option value="mine">내 프롬프트도 함께 사용</option></select></label>
  <label class="f re-noq">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 프로필 기본값을 써요"></textarea></label>
- <div class="re-q"><p class="hint plain">Qwen-Image-Edit 이 각 조각을 지시문대로 다시 그려요. 프롬프트는 <b>더 선명하고 자연스러운 질감으로</b>처럼 문장으로 적고, 비워 두면 '구도·얼굴은 그대로 두고 선명하게' 지시를 써요. 변화 강도는 0.3~0.5가 무난해요.</p>
+ <div class="re-q"><p class="hint plain">Qwen-Image 2.1 이 각 조각을 지시문대로 다시 그려요. 프롬프트는 <b>더 선명하고 자연스러운 질감으로</b>처럼 문장으로 적고, 비워 두면 '구도·얼굴은 그대로 두고 선명하게' 지시를 써요. 변화 강도는 0.3~0.5가 무난해요.</p>
   <label class="chk"><input type="checkbox" name="fast"> 빠른 모드 (Lightning 4단계 LoRA가 설치되어 있을 때)</label></div>
  <div class="re-fx">
   <label class="f">모델 파일<select name="fx_model"></select></label>
@@ -61,20 +60,20 @@ T.upRefine=()=>`<label class="f">다시 그릴 모델 종류
  <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
  <details><summary>LoRA</summary>${T.lora()}</details>
  <details><summary>프롬프트 옵션</summary>
-  <label class="chk"><input type="checkbox" name="translate" checked> 한국어 프롬프트를 영어로 자동 번역</label>
+  <label class="chk"><input type="checkbox" name="translate" checked> 한국어 → 영어 자동 번역</label>
   <label class="chk"><input type="checkbox" name="pneg" checked> 프로필의 기본 제외 요소도 함께 사용</label></details>`;
 $$('[data-blk]').forEach(e=>{e.innerHTML=T[e.dataset.blk.replace(/-(\w)/g,(_,c)=>c.toUpperCase())]()});
 
 /* ══════════ LoRA 줄 (개수 제한 없이 추가/삭제) ══════════ */
 const LKIND={character:['','캐릭터'],style:['','스타일'],background:['','배경·풍경'],other:['','기타'],unknown:['','미분류']};
 const lkIcon=n=>{const k=(LISTS.lora_kind||{})[n];return k&&k!=='unknown'&&LKIND[k]?'['+LKIND[k][1]+'] ':''};
-const LFAM={sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image-Edit',sd3:'SD3.5',hidream:'HiDream',lumina:'Lumina 2',unknown:'판별 불가'};
+const LFAM={sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image 2.1',moss:'MOSS-Image',sd3:'SD3.5',unknown:'판별 불가'};
 /* 지금 이 폼이 쓰려는 모델의 계열 (LoRA 가 맞는지 비교하는 기준) */
 function formFam(f){
   const e=f?.elements||{};
   if(e.engine&&e.engine.value==='flux'&&e.fengine)return e.fengine.value;
   const eng=(e.gengine&&e.gengine.value)||(e.rengine&&e.rengine.value)||(e.engine&&e.engine.value);
-  if(['flux','chroma','krea2','qwen','hidream','lumina'].includes(eng))return eng;
+  if(['flux','chroma','krea2','qwen','moss'].includes(eng))return eng;
   if(eng==='sd35')return 'sd3';
   if(eng==='qwenimg')return 'qwen';
   const ck=e.ckpt&&e.ckpt.value;
@@ -143,7 +142,6 @@ const TIPS={
  'f-edit:ctx':'칠한 곳 주변을 얼마나 함께 모델에 보여 줄지(%)예요. 배경과 자연스럽게 어울리게 하려면 높여요.',
  feather:'합성 경계를 몇 픽셀에 걸쳐 부드럽게 섞을지예요. 0이면 마스크 크기에 맞춰 자동으로 정해요.',
  q_mp:'Qwen이 한 번에 처리하는 크기(메가픽셀)예요. 클수록 정밀하지만 VRAM과 시간이 크게 늘어요.',
- q_shift:'Qwen의 노이즈 스케줄 보정값이에요. 기본값 3을 권장하고 건드릴 일은 거의 없어요.',
  q_steps:'그리는 횟수예요. Qwen 편집은 보통 20 안팎이에요. 빠른 모드에서는 4로 고정돼요.',
  q_cfg:'지시를 얼마나 엄격히 따를지예요. Qwen 편집은 보통 4 안팎이고, 빠른 모드에서는 1로 고정돼요.',
  q_sampler:'그림을 그려 나가는 방식이에요. 잘 모르겠으면 기본값(euler)을 쓰세요.',
@@ -177,9 +175,9 @@ const TIPS={
  k2_vae:'Krea 2 전용 VAE(qwen_image_vae)예요. 자동으로 못 찾을 때만 고르세요.',
  rengine:'다시 그릴 때 쓸 모델 종류예요. 실사 사진은 FLUX·Krea 계열이나 실사 SDXL 체크포인트가 잘 맞아요. FLUX 계열은 텍스트 인코더·VAE를 이미지 생성 탭과 같은 파일로 자동 선택해요.',
  fx_clip:'FLUX 전용 보조 텍스트 인코더(clip_l)예요.',
- q_te:'Qwen이 지시문을 이해하는 텍스트 인코더(qwen_2.5_vl)예요.',
- q_vae:'Qwen 전용 VAE(qwen_image_vae)예요.',
- q_unet:'Qwen-Image-Edit 본체 파일이에요.',
+ q_te:'Qwen-Image 2.1 이 글을 이해하는 텍스트 인코더(qwen3vl_8b, int8 또는 가벼운 w4a8)예요.',
+ q_vae:'Qwen-Image 2.1 전용 VAE(qwen_image_2.1_vae)예요.',
+ q_unet:'Qwen-Image 2.1 본체 파일이에요(생성·편집 겸용). Turbo 판은 8단계로 빠르게 그려요.',
  cn_model:'구도·포즈·윤곽선을 고정해 주는 보조 모델이에요. ControlNet 폴더에 넣거나 설치 탭에서 받을 수 있어요.',
  cn_prep:'제어 이미지를 그대로 쓸지, 사진에서 윤곽선(캐니)을 뽑아 쓸지 정해요. 이미 만든 포즈·깊이 지도라면 "없음"으로 두세요.',
  cn_strength:'제어 이미지를 얼마나 따를지예요. 0.5~0.8이 무난하고, 너무 높으면 그림이 딱딱해져요.',
@@ -194,7 +192,7 @@ const TIPS={
  upm:'확대에 쓸 모델이에요. Real-ESRGAN은 실사·일반 이미지, UltraSharp 계열은 선명한 그림에 잘 맞아요.',
  scale:'가로세로를 몇 배로 키울지예요. 소수도 돼요(1.5, 2.5). 1보다 작으면 줄여요(0.5 = 절반). 4배 이상은 결과 파일이 매우 커질 수 있어요.',
  tileprompt:'큰 이미지를 조각(타일)으로 나눠 다시 그리는데, 조각마다 "얼굴, 눈" 같은 프롬프트를 넣으면 배경 조각에도 눈·얼굴을 그려 넣어요. 추천 설정은 일반 고화질 지시만 쓰고, 내 프롬프트의 LoRA 태그만 살려요.',
- rdenoise:'확대 뒤 다시 그릴 정도예요. 0.25~0.35가 무난하고(실사는 0.15~0.25), 높이면 디테일이 늘지만 모양이 바뀌고 배경에 눈·얼굴이 생길 수 있어요. Qwen-Image-Edit 은 0.3~0.5가 무난해요.',
+ rdenoise:'확대 뒤 다시 그릴 정도예요. 0.25~0.35가 무난하고(실사는 0.15~0.25), 높이면 디테일이 늘지만 모양이 바뀌고 배경에 눈·얼굴이 생길 수 있어요. Qwen-Image 2.1 은 0.3~0.5가 무난해요.',
  tile:'큰 이미지를 이 크기의 조각으로 나눠 한 장씩 다시 그려요. VRAM이 부족하면 줄이세요.',
  overlap:'조각 사이를 얼마나 겹쳐서 이음새를 감출지예요. 128 정도면 대부분 충분해요.',
  lora:'LoRA는 특정 캐릭터·화풍·옷 등을 더해 주는 작은 추가 파일이에요. 체크포인트와 같은 계열의 것만 맞아요(SDXL용은 SDXL 모델에).',
@@ -211,7 +209,7 @@ const TIPS={
 };
 const SUMTIPS=[
  ['영역 처리','칠한 곳 주변을 잘라 다시 그린 뒤 원본에 합성하는 방식의 세부 설정이에요. 기본값으로 대부분 충분해요.'],
- ['Qwen 설정','말로 편집(Qwen-Image-Edit)의 세부 설정이에요. 기본값이 가장 안정적이에요.'],
+ ['Qwen 설정','말로 편집(Qwen-Image 2.1)의 세부 설정이에요. 기본값이 가장 안정적이에요.'],
  ['샘플링','그림을 그려 나가는 세부 방식이에요. 프로필을 고르면 모델에 맞게 자동으로 채워져요.'],
  ['FLUX·Krea 샘플링','FLUX·Krea·Krea 2·Chroma의 세부 방식이에요. 모델 종류를 바꾸면 추천값이 자동으로 채워져요.'],
   ['하이레스','작은 크기로 먼저 그린 뒤 확대해서 한 번 더 그려요.'],
@@ -393,7 +391,7 @@ function fillCaps(){
 }
 async function loadCaps(){try{CAPS=await api('/api/caps');fillCaps()}catch{}}
 /* FLUX 종류에 맞는 모델만 목록에 보여 줘요 (이름에 chroma 가 있으면 Chroma) */
-const OXF=['sd35','hidream','lumina','qwenimg'],OXN={sd35:'Stable Diffusion 3.5',hidream:'HiDream',lumina:'Lumina 2',qwenimg:'Qwen-Image'};
+const OXF=['sd35','qwenimg','moss'],OXN={sd35:'Stable Diffusion 3.5',qwenimg:'Qwen-Image 2.1',moss:'MOSS-Image'};
 const fxModels=g=>(OXF.includes(g)?(LISTS.oxmodels||{})[g]:g==='chroma'?LISTS.chromamodels:g==='krea2'?LISTS.krea2models:LISTS.fluxmodels)||[];
 const fxLabel=x=>x.startsWith('ckpt::')?x.slice(6)+' (올인원 체크포인트)':x;
 function fillFx(){
@@ -404,7 +402,7 @@ function fillFx(){
     if(arr.includes(cur))s.value=cur}
 }
 /* Krea 2: Turbo 는 8단계·CFG 1, Raw(증류 전)는 단계를 늘리고 CFG 를 올려요 */
-function k2tune(f){if((f.dataset.g||f.dataset.re||f.dataset.fe)==='hidream'){const v=f.elements.fx_model.value.toLowerCase(),t=/fast/.test(v)?[16,1,'lcm','normal']:/dev/.test(v)?[28,1,'lcm','normal']:[50,5,'uni_pc','simple'];setv(f,'fx_steps',t[0]);setv(f,'fx_cfg',t[1]);setv(f,'fx_sampler',t[2]);setv(f,'fx_scheduler',t[3]);return}
+function k2tune(f){if((f.dataset.g||f.dataset.re||f.dataset.fe)==='qwenimg'){const t=/turbo/i.test(f.elements.fx_model.value);setv(f,'fx_steps',t?8:25);setv(f,'fx_cfg',1);return}
   if((f.dataset.g||f.dataset.re||f.dataset.fe)!=='krea2')return;const raw=/raw/i.test(f.elements.fx_model.value);setv(f,'fx_steps',raw?30:8);setv(f,'fx_cfg',raw?4:1)}
 function warn(){
   const fe=$('#f-edit');$('#w-edit').hidden=fe.dataset.e==='qwen'?(LISTS.qwen||!!(fe.q_unet.value&&fe.q_te.value&&fe.q_vae.value)):fe.dataset.e==='flux'?fxModels(fe.elements.fengine.value).length>0:LISTS.checkpoints.length>0;
@@ -421,9 +419,9 @@ async function loadLists(force){
   try{LISTS=await api('/api/lists');listsAt=Date.now()}catch{return}
   fill('#llm',LISTS.llm);fill('select[name=ckpt]:not(#feat-form select)',LISTS.checkpoints);      /* 기타 기능 화면의 모델 칸은 FLUX·Krea 2 묶음이 있어서 따로 그려요 */ fill('select[name=vae]',LISTS.vaes,'체크포인트 내장');
   $$('select[name^=lora]').forEach(s=>loraOptions(s,s.value));fill('select[name=upm]',LISTS.upscalers);fill('select[name=hires_upm]',LISTS.upscalers,'부드럽게 늘리기 (Lanczos)');fill('select[name=cn_model]',LISTS.controlnets,'사용 안 함');$$('select[name=cn_model]').forEach(s=>s.form&&cnFilter(s.form));
-  fill('select[name=fx_vae],select[name=q_vae],select[name=k2_vae]',LISTS.vaes,'자동');fill('select[name=q_te],select[name=k2_te]',LISTS.text_encoders||[],'자동');
+  fill('select[name=fx_vae],select[name=k2_vae]',LISTS.vaes,'자동');fill('select[name=k2_te]',LISTS.text_encoders||[],'자동');
   {const te=LISTS.text_encoders||[],t5=n=>/(t5|xxl)/i.test(n)&&!/umt5/i.test(n);   // T5 칸엔 T5 만, CLIP-L 칸엔 T5·Qwen 이 아닌 것만
-  fill('select[name=fx_t5]',te.filter(n=>!/qwen|umt5|clip|llama|gemma|mistral|vl[_-]?\d|_vl|-vl/i.test(n)),'자동');fill('select[name=fx_clip]',te.filter(n=>!t5(n)&&!/qwen|umt5/i.test(n)),'자동')}fill('select[name=q_unet]',LISTS.diffusion||[],'자동');
+  fill('select[name=fx_t5]',te.filter(n=>!/qwen|umt5|clip|llama|gemma|mistral|vl[_-]?\d|_vl|-vl/i.test(n)),'자동');fill('select[name=fx_clip]',te.filter(n=>!t5(n)&&!/qwen|umt5/i.test(n)),'자동')}{const Q=LISTS.qwen_files||{};fill('select[name=q_unet]',Q.unet||[],'자동');fill('select[name=q_te]',Q.te||[],'자동');fill('select[name=q_vae]',Q.vae||[],'자동')}
   fillFx();
   if(LISTS.llm.includes(localStorage.llm))$('#llm').value=localStorage.llm;
   $('#wcs').textContent=LISTS.wildcards.length?'사용 가능한 와일드카드: '+LISTS.wildcards.map(n=>`__${n}__`).join(' '):'wildcards 폴더에 이름.txt 파일을 넣으면 __이름__ 으로 쓸 수 있어요(한 줄에 하나).';
@@ -661,8 +659,8 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-need
   $$(`.needdl[data-need="${CSS.escape(key)}"] .ndl`).forEach(l=>delete l.dataset.fixed);await needCat();NEED.watch.set(key,{ids:needExpand(r.ids||ids),skip:new Set(old.map(x=>x.id)),html:'받기를 시작했어요…'});needPaint();needPoll(key)});
 /* 화면의 '모델이 아직 없어요' 안내마다 받을 모델을 정해서 버튼을 붙여요 */
 const NEED_W={'w-chat':()=>['qwen35-9b'],'w-up':()=>['esrgan'],'w-i2p':()=>['qwen25vl-7b'],
-  'w-edit':()=>{const e=$('#f-edit')?.dataset.e;return e==='qwen'?['qwen-edit']:e==='flux'?['krea-dev']:['noobai','sdxl-vae-fix']},
-  'w-gen':()=>({sdxl:['noobai','sdxl-vae-fix'],flux:['krea-dev'],chroma:['chroma-hd'],krea2:['krea2-turbo'],sd35:['sd35-medium'],hidream:['hidream-fast'],lumina:['lumina2'],qwenimg:['qwen-image']})[$('#f-gen')?.dataset.g||'sdxl']||[],
+  'w-edit':()=>{const e=$('#f-edit')?.dataset.e;return e==='qwen'?['qwen-image']:e==='flux'?['krea-dev']:['noobai','sdxl-vae-fix']},
+  'w-gen':()=>({sdxl:['noobai','sdxl-vae-fix'],flux:['krea-dev'],chroma:['chroma-hd'],krea2:['krea2-turbo'],sd35:['sd35-medium'],qwenimg:['qwen-image'],moss:['moss-image']})[$('#f-gen')?.dataset.g||'sdxl']||[],
   'w-vid':()=>{const v=$('#f-vid')?.elements.wan_ver?.value;return {ltx:['ltx-video'],vace:['wan-vace'],s2v:['wan-s2v']}[v]||['wan22-ti2v-5b']},
   'w-vid14':()=>[typeof VID_IMG!=='undefined'&&VID_IMG?'wan22-14b-i2v':'wan22-14b-t2v'],
   'w-music':()=>[$('#f-music')?.elements.mengine?.value==='sfx'?'stable-audio-open':'ace-step-15-turbo']};

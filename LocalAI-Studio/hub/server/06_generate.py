@@ -309,18 +309,17 @@ def do_gen_flux(p, J):
     return out
 
 
-OX_FAMS = ("sd35", "hidream", "lumina", "qwenimg")
-OX_NAMES = {"sd35": "SD3.5", "hidream": "HiDream", "lumina": "Lumina 2", "qwenimg": "Qwen-Image"}
-# 계열별 기본값: (단계, CFG, 샘플러, 스케줄러, shift). HiDream 은 파일 이름(full/dev/fast)에 따라 달라요.
-OX_DEFAULTS = {"sd35": (28, 4.5, "euler", "sgm_uniform", None), "lumina": (25, 4.0, "res_multistep", "simple", 6.0),
-               "qwenimg": (20, 2.5, "euler", "simple", 3.1)}
-HIDREAM_DEFAULTS = {"full": (50, 5.0, "uni_pc", "simple", 3.0), "dev": (28, 1.0, "lcm", "normal", 3.0), "fast": (16, 1.0, "lcm", "normal", 3.0)}
+OX_FAMS = ("sd35", "qwenimg", "moss")
+OX_NAMES = {"sd35": "SD3.5", "qwenimg": "Qwen-Image 2.1", "moss": "MOSS-Image"}
+# 계열별 기본값: (단계, CFG, 샘플러, 스케줄러, shift)
+OX_DEFAULTS = {"sd35": (28, 4.5, "euler", "sgm_uniform", None), "qwenimg": (25, 1.0, "euler", "simple", None),
+               "moss": (50, 3.0, "euler", "simple", None)}
+MOSS_RX = re.compile(r"moss[_-]?image")
 
 
 def ox_defaults(fam, model):
-    if fam == "hidream":
-        n = (model or "").lower()
-        return HIDREAM_DEFAULTS["fast" if "fast" in n else "dev" if "dev" in n else "full"]
+    if fam == "qwenimg" and "turbo" in (model or "").lower():
+        return (8, 1.0, "euler", "simple", None)
     return OX_DEFAULTS[fam]
 
 
@@ -334,36 +333,40 @@ def _pick(lst, *prefs):
     return None
 
 
+def moss_te():
+    c = [n for n in files("text_encoders") if re.search(r"qwen3\.?5[_-]?9b", n.lower()) and "qwen_image" not in n.lower()]
+    return min(c, key=lambda n: (0 if "int8" in n.lower() else 1 if "w4a8" in n.lower() else 2, n), default=None)
+
+
+def moss_vae():
+    va = files("vae")
+    return _pick(va, ("flux2", "vae"), ("flux2",))
+
+
+def moss_ctype():
+    """MOSS-Image 텍스트 인코더의 CLIPLoader 종류 이름(ComfyUI 판에 따라 달라서 엔진에 물어봐요)."""
+    ct = caps().get("clip_types") or []
+    return next((t for t in ct if "moss" in t.lower()), None)
+
+
 def ox_parts(fam):
-    """SD3.5·HiDream·Lumina 2 가 쓸 텍스트 인코더·VAE 를 폴더에서 찾아요."""
-    te, va = files("text_encoders"), files("vae")
-    nohd = [n for n in te if "hidream" not in n.lower()]
-    r = {"vae": _pick(va, "ae.safetensors", "flux", "ae")}
-    if fam == "hidream":
-        r["te"] = {"clip_l": _pick(te, ("clip_l", "hidream"), "clip_l"), "clip_g": _pick(te, ("clip_g", "hidream"), "clip_g"),
-                   "t5": _pick(te, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl"), "llama": _pick(te, ("llama", "3.1"), "llama")}
-    elif fam == "lumina":
-        r["te"] = {"gemma": _pick(te, "gemma")}
-    elif fam == "qwenimg":      # Qwen-Image 생성: 편집 모델과 같은 Qwen2.5-VL 인코더·Qwen Image VAE 를 같이 써요
-        r["te"] = {"qwen": _pick(te, ("qwen_2.5_vl",), ("qwen2.5", "vl"), ("qwen", "2.5"))}
-        r["vae"] = _pick(va, "qwen_image_vae", ("qwen", "vae"))
-    else:
-        r["te"] = {"clip_l": _pick(nohd, "clip_l"), "clip_g": _pick(nohd, "clip_g"), "t5": _pick(nohd, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl")}
-    return r
+    """SD3.5·Qwen-Image 2.1·MOSS-Image 가 쓸 텍스트 인코더·VAE 를 폴더에서 찾아요."""
+    te = files("text_encoders")
+    if fam == "qwenimg":
+        return {"te": {"qwen": qwen21_te()}, "vae": qwen21_vae()}
+    if fam == "moss":
+        return {"te": {"qwen35": moss_te()}, "vae": moss_vae()}
+    return {"vae": None, "te": {"clip_l": _pick(te, "clip_l"), "clip_g": _pick(te, "clip_g"), "t5": _pick(te, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl")}}
 
 
 def other_models():
-    """{'sd35': [...], 'hidream': [...], 'lumina': [...]} — SD3.5 는 체크포인트 폴더, HiDream·Lumina 2 는 디퓨전 모델 폴더에서 찾아요."""
+    """{'sd35': [...], 'qwenimg': [...], 'moss': [...]} — SD3.5 는 체크포인트 폴더, 나머지는 디퓨전 모델 폴더에서 찾아요."""
     out = {k: [] for k in OX_FAMS}
     for n in files("checkpoints"):
         if model_family("checkpoints", n)[0] == "sd3":
             out["sd35"].append(n)
-    for n in files("diffusion_models"):
-        fam = model_family("diffusion_models", n)[0]
-        if fam in ("hidream", "lumina"):
-            out[fam].append(n)
-        elif fam == "qwen" and "edit" not in n.lower():
-            out["qwenimg"].append(n)
+    out["qwenimg"] = qwen21_unets()
+    out["moss"] = sorted((n for n in files("diffusion_models") if MOSS_RX.search(n.lower())), key=lambda n: ("base" in n.lower(), n))
     return out
 
 
@@ -383,30 +386,55 @@ def ox_setup(p, J, fam):
             te, vae = {}, None
         elif not all(te.values()):
             raise RuntimeError("SD3.5 텍스트 인코더가 없어요(" + ", ".join(k for k, v in te.items() if not v) + "). '설치와 모델' 탭의 'SD3.5 공용 파일'을 설치해 주세요.")
-    else:
-        names = {"clip_l": "CLIP-L", "clip_g": "CLIP-G", "t5": "T5", "llama": "Llama 3.1", "gemma": "Gemma 2", "qwen": "Qwen2.5-VL 텍스트 인코더"}
-        miss = [names[k] for k, v in te.items() if not v] + ([("Qwen Image VAE" if fam == "qwenimg" else "VAE(ae.safetensors)")] if not vae else [])
+        if te and not has_node("TripleCLIPLoader"):
+            raise RuntimeError("이 ComfyUI 에는 SD3.5 에 필요한 노드(TripleCLIPLoader)가 없어요. ComfyUI 를 업데이트해 주세요.")
+    elif fam == "moss":
+        miss = ([] if te["qwen35"] else ["텍스트 인코더(Qwen3.5 9B)"]) + ([] if vae else ["FLUX.2 VAE"])
         if miss:
-            raise RuntimeError("없는 파일: " + ", ".join(miss) + f". '설치와 모델' 탭에서 {OX_NAMES[fam]} 공용 파일을 설치해 주세요.")
-    if fam == "lumina":
-        ct = caps().get("clip_types") or []
-        if ct and "lumina2" not in ct:
-            raise RuntimeError("이 ComfyUI 는 Lumina 2 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
-    if fam == "qwenimg":
-        ct = caps().get("clip_types") or []
-        if ct and "qwen_image" not in ct:
-            raise RuntimeError("이 ComfyUI 는 Qwen-Image 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
-    need = {"sd35": [], "hidream": ["QuadrupleCLIPLoader", "ModelSamplingSD3"], "lumina": ["ModelSamplingAuraFlow"], "qwenimg": ["ModelSamplingAuraFlow"]}[fam]
-    if fam == "sd35" and te:
-        need = ["TripleCLIPLoader"]
-    gone = [n for n in need if not has_node(n)]
-    if gone:
-        raise RuntimeError(f"이 ComfyUI 에는 {OX_NAMES[fam]} 에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 를 업데이트해 주세요.")
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭에서 'MOSS-Image' 를 설치해 주세요.")
+        if not moss_ctype():
+            raise RuntimeError("이 ComfyUI 는 MOSS-Image 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
     return sel, te, vae
 
 
+def do_gen_qwen(p, J):
+    """Qwen-Image 2.1 로 새로 그리기(편집과 같은 모델·인코더). 단계 8 이하로 두면 Lightning LoRA 를 자동으로 써요."""
+    models = other_models()["qwenimg"]
+    sel = p.get("fx_model") if p.get("fx_model") in models else (models[0] if models else None)
+    base, n = seed_of(p), clamp(num(p, "n", 1, int), 1, 8)
+    w, h = (clamp(num(p, k, 1024, int) // 32 * 32, 256, 2048) for k in ("w", "h"))
+    dsteps, dcfg, dsamp, dsch, _ = ox_defaults("qwenimg", sel)
+    steps = clamp(num(p, "fx_steps", dsteps, int), 1, 100)
+    out = []
+    for i in range(n):
+        rng = random.Random(base + i)
+        text, tags = prep(p, J, "caption", rng)
+        qp = dict(p, q_unet=sel, q_steps=steps, q_cfg=num(p, "fx_cfg", dcfg), q_sampler=p.get("fx_sampler") or dsamp,
+                  q_scheduler=p.get("fx_scheduler") or dsch, seed=base + i, fast=steps <= 8 and "turbo" not in (sel or "").lower())
+        q = qwen_params(qp, text, tags, J, (p.get("negative") or "").strip())
+        if not q["fast"] and steps <= 8:
+            q["steps"] = steps
+        J["msg"] = f"생성 중 ({i + 1}/{n})"
+        J["pi"], J["pn"] = i, n
+        g = flows.wf_qwen21(q, (), (w, h))
+        try:
+            res = run_wf(g, J)[0]
+        except Cancelled:
+            if out:
+                warn(J, f"중단해서 완료된 {len(out)}장만 저장했어요.")
+                break
+            raise
+        info = dict(kind="gen-qwenimg", prompt=text, negative=q["negative"], steps=q["steps"], cfg=q["cfg"], sampler=q["sampler"], scheduler=q["scheduler"],
+                    seed=q["seed"], w=res.width, h=res.height, model=q["files"]["unet"], loras=[[a, b] for a, b in q["loras"]],
+                    extra={"Family": "qwenimg", "Engine": "Qwen-Image 2.1"})
+        out.append((res, info, g))
+    return out
+
+
 def do_gen_other(p, J):
-    """SD3.5 / HiDream / Lumina 2 생성(LoRA·다이나믹 프롬프트·번역 지원). 설정 칸은 FLUX 계열과 같은 fx_* 를 써요."""
+    if p["gengine"] == "qwenimg":
+        return do_gen_qwen(p, J)
+    """SD3.5 · MOSS-Image 생성(LoRA·다이나믹 프롬프트·번역 지원). 설정 칸은 FLUX 계열과 같은 fx_* 를 써요."""
     fam = p["gengine"]
     sel, te, vae = ox_setup(p, J, fam)
     dsteps, dcfg, dsamp, dsch, dshift = ox_defaults(fam, sel)
@@ -431,13 +459,14 @@ def do_gen_other(p, J):
         q = dict(family=fam, te=te, vae=vae, loras=collect_loras(p, tags, J), prompt=text, negative=neg, seed=base + i, w=w, h=h,
                  steps=clamp(num(p, "fx_steps", dsteps, int), 1, 150), cfg=clamp(num(p, "fx_cfg", dcfg), 0.0, 30.0),
                  sampler=sampler, scheduler=sch, shift=clamp(num(p, "ox_shift", dshift or 3.0), 0.1, 20.0))
-        if fam == "sd35":
-            q["ckpt"] = sel
-        else:
-            q["unet"] = sel
         J["msg"] = f"생성 중 ({i + 1}/{n})"
         J["pi"], J["pn"] = i, n
-        g = flows.wf_other(q)
+        if fam == "moss":
+            q.update(unet=sel, te=te["qwen35"], ctype=moss_ctype(), latent="EmptyFlux2LatentImage" if has_node("EmptyFlux2LatentImage") else "EmptySD3LatentImage")
+            g = flows.wf_moss(q)
+        else:
+            q["ckpt"] = sel
+            g = flows.wf_other(q)
         try:
             res = run_wf(g, J)[0]
         except Cancelled:
@@ -508,18 +537,17 @@ def do_up(p, J):
         return [(big, dict(kind="upscale", extra={**({"Upscaler": p.get("upm") or "auto"} if scale > 1 else {"Downscale": "Lanczos"}), "Scale": scale}), None)]
     rng = random.Random(num(p, "seed", -1, int))
     fam = p.get("rengine") if p.get("rengine") in ("flux", "chroma", "krea2", "qwen") else "sdxl"
-    if fam == "qwen":      # 이미지 편집에 쓰는 Qwen-Image-Edit 으로 타일을 다시 그려요
+    if fam == "qwen":      # 이미지 편집에 쓰는 Qwen-Image 2.1 로 타일을 다시 그려요
         raw = (p.get("prompt") or "").strip()
         text, tags = prep(p, J, "sentence", rng) if raw else (QWEN_REFINE, [])
         q = qwen_params(p, text, tags, J)
         den = clamp(num(p, "rdenoise", 0.45), 0.05, 0.9)
         if p.get("fast"):          # 4단계용 모델은 일부만 다시 그릴 때 단계가 모자라서 조금 늘려요
             q["steps"] = int(min(12, max(4, round(2.5 / den))))
-        q["denoise"] = den
-        plus = has_node("TextEncodeQwenImageEditPlus")
-        tile = clamp(num(p, "tile", 1024, int) // 16 * 16, 512, 1536)
+        q["denoise"], q["resolution"] = den, 0
+        tile = clamp(num(p, "tile", 1024, int) // 32 * 32, 512, 1536)
         out = refine_tiles(big, q, tile, clamp(num(p, "overlap", 128, int), 32, tile // 2), J,
-                           build=lambda n: flows.wf_qwen(q, n, [], plus), mult=16)
+                           build=lambda n: flows.wf_qwen21(q, [n], key=qwen21_img_key), mult=32)
         info = dict(kind="upscale-refine", prompt=text, negative="", steps=q["steps"], cfg=q["cfg"], sampler=q["sampler"],
                     scheduler=q["scheduler"], seed=q["seed"], w=out.width, h=out.height, model=q["files"]["unet"],
                     loras=[[n, w] for n, w in q["loras"]], extra={"Family": "qwen", "Denoising strength": den, "Tile": tile})

@@ -20,6 +20,9 @@ function loPaint(){const S=LO.S,has=!!S;$('#lo-data').hidden=$('#lo-train').hidd
   $('#lo-name').value=S.name;$('#lo-file').value=S.file;$('#lo-trig').value=S.trigger;$('#lo-kind').value=S.kind;$('#lo-n').textContent=`(${S.images.length}장)`;
   $('#lo-grid').innerHTML=S.images.map(x=>`<figure class="lo-c" data-f="${esc(x.file)}"><img src="${x.url}" alt="" loading="lazy"><button type="button" class="lo-x" title="이 사진 빼기" aria-label="빼기">×</button>
     <textarea rows="3" placeholder="캡션 (비어 있으면 트리거 단어만)">${esc(x.caption)}</textarea><small class="mute">${x.w}×${x.h}${Math.min(x.w,x.h)<512?' · 작아요':''}</small></figure>`).join('')||'<p class="mute">아직 사진이 없어요.</p>';
+  const C=S.cands||[];$('#lo-cands').innerHTML=C.length?`<div class="lo-cbar"><b>후보 ${C.length}장</b><button type="button" class="go sm" id="lo-ckeep">고른 후보 넣기</button><button type="button" class="ghost sm" id="lo-cdrop">모두 버리기</button></div>
+    <div class="lo-grid">${C.map(x=>`<figure class="lo-c lo-cand" data-f="${esc(x.file)}"><label><input type="checkbox" checked> <small>${esc(x.how)}</small></label><img src="${x.url}" alt="후보" loading="lazy"></figure>`).join('')}</div>`:'';
+  if(C.length)$('#lo-aug').open=true;
   $('#lo-samples').innerHTML=S.samples.length?`<b>미리보기</b><div>${S.samples.map(u=>`<img src="${u}" alt="학습 중 미리보기">`).join('')}</div>`:'';
   $('#lo-done').innerHTML=S.lora_file?`<p>✔ 만든 LoRA: <b>${esc(S.lora_file)}</b> (트리거 단어: <code>${esc(S.trigger)}</code>) <button type="button" class="go sm" id="lo-use">생성 화면에서 써 보기</button></p>`:'';
   LO.dirty.clear();loEst()}
@@ -66,5 +69,14 @@ document.addEventListener('click',async e=>{if(e.target.id!=='lo-use'||!LO.S?.lo
 $('#gal-lora')&&($('#gal-lora').onclick=async()=>{const urls=[...GPICK].filter(u=>/\.(png|jpe?g|webp)$/i.test(u));if(!urls.length)return;
   let id=LO.S?.id;if(!id){show('lora');await loSets();return toast('먼저 LoRA 만들기에서 세트를 만들거나 고른 뒤 다시 눌러 주세요.',6000)}
   const r=await api('/api/lora/set/from_gallery',{id,urls});if(r.error)return toast(r.error);toast(`'${LO.S.name}'에 ${r.added}장 넣었어요.${r.bad.length?` (못 넣은 사진 ${r.bad.length}장)`:''}`,6000);loOpen(id);loSets()});
+$('#lo-aug-go').onclick=async()=>{if(!LO.S?.images.length)return toast('먼저 사진을 한 장 이상 넣어 주세요.');
+  const ai=$('#lo-amode').value==='ai';const j=await loJob({kind:'lora',op:'augment',id:LO.S.id,mode:ai?'ai':'simple',count:+$('#lo-acount').value||12,fast:$('#lo-afast').checked?'on':''},ai?'비슷한 사진 만드는 중':'후보 만드는 중');
+  if(j)await loOpen(LO.S.id)};
+$('#lo-cands').addEventListener('click',async e=>{const t=e.target;
+  if(t.id==='lo-ckeep'||t.id==='lo-cdrop'){const keep=t.id==='lo-ckeep',files=keep?$$('#lo-cands .lo-cand').filter(c=>$('input',c).checked).map(c=>c.dataset.f):[];
+    if(keep&&!files.length)return toast('넣을 후보를 골라 주세요.');
+    if(keep){const drop=$$('#lo-cands .lo-cand').filter(c=>!$('input',c).checked).map(c=>c.dataset.f);if(drop.length)await api('/api/lora/set/cand',{id:LO.S.id,act:'drop',files:drop})}
+    const r=await api('/api/lora/set/cand',{id:LO.S.id,act:keep?'keep':'drop',files});if(r.error)toast(r.error);LO.S=r.id?r:LO.S;loPaint();loSets();if(keep)toast(`${r.moved||0}장을 학습 사진에 넣었어요.`);return}
+  const im=t.closest('.lo-cand img');if(im){const L=(LO.S.cands||[]).map(x=>({url:x.url,name:x.file}));lbOpen(L,L.findIndex(x=>x.url===im.getAttribute('src')))}});
 document.addEventListener('viewshow',e=>{if(e.detail==='lora'){loEngine();loSets();loCkpts();if(LO.S)loOpen(LO.S.id)}});
 if($('#v-lora.on')){loEngine();loSets();loCkpts()}

@@ -44,8 +44,8 @@ function selSummary(){const box=$('#sel-sum');if(!box)return;
 document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))selSummary()});
 $('#rec').onclick=()=>{
   const v=GPU?GPU.vram_gb:0;
-  const ids=v>=24?['qwen3-32b','qwen-edit','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
-    :v>=10?['qwen3-14b','qwen-edit','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
+  const ids=v>=24?['qwen3-32b','qwen-image','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
+    :v>=10?['qwen3-14b','qwen-image','qwen-te-small','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
     :['qwen3-8b','noobai','sdxl-vae-fix','esrgan'];
   $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.includes(i.value)});selSummary();
 };
@@ -69,7 +69,7 @@ const fmtSize=b=>b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(0)+' MB';
 const DIRN={checkpoints:'체크포인트',loras:'LoRA',embeddings:'임베딩',controlnet:'ControlNet',vae:'VAE',upscale_models:'업스케일',diffusion_models:'디퓨전 모델',text_encoders:'텍스트 인코더',clip_vision:'CLIP Vision',style_models:'스타일 모델',unet:'UNet',clip:'CLIP'};
 async function loadManage(){
   let m;try{m=await api('/api/manage')}catch{return}
-  const FAMN={auto:'자동',sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen',sd3:'SD3.5',hidream:'HiDream',lumina:'Lumina 2',hidden:'목록에서 숨김'};
+  const FAMN={auto:'자동',sd15:'SD 1.5',sdxl:'SDXL·Illustrious·Pony',flux:'FLUX·Krea(FLUX.1)',krea2:'Krea 2',chroma:'Chroma',qwen:'Qwen-Image 2.1',moss:'MOSS-Image',sd3:'SD3.5',hidden:'목록에서 숨김'};
   const HOW={header:'파일 내용으로 확인',name:'이름으로 추정',manual:'직접 지정'};
   const famSel=f=>f.family?`<label class="famsel">계열 <select class="fam" data-dir="${esc(f.dirname||'')}" data-name="${esc(f.name)}">${Object.entries(FAMN).map(([k,v])=>`<option value="${k}"${(f.override||'auto')===k?' selected':''}>${v}</option>`).join('')}</select></label><small>${f.override&&f.override!=='auto'?'직접 지정':'자동 판별'}: ${esc(FAMN[f.family]||f.family)} (${HOW[f.how]||''})${f.all_in_one?' · 올인원':''}</small>`:'';
   const card=(f,kind,d)=>`<div class="mcard"><b title="${esc(f.name)}">${esc(f.name)}</b><small>${f.name.endsWith('.part')?'받다 만 파일 · ':''}${fmtSize(f.size)}</small>${famSel({...f,dirname:d})}<button type="button" class="ghost del" data-kind="${kind}" data-dir="${esc(d||'')}" data-name="${esc(f.name)}">삭제</button></div>`;
@@ -219,7 +219,7 @@ let dlBusy=false;
     g.onpointermove=e=>{if(drag)set(e.clientX-off-view.getBoundingClientRect().left)};
     g.onpointerup=g.onpointercancel=()=>{drag=false;document.body.classList.remove('resizing')};
     g.onkeydown=e=>{if(e.key==='ArrowLeft'){set(cur()-24);e.preventDefault()}else if(e.key==='ArrowRight'){set(cur()+24);e.preventDefault()}};
-    g.ondblclick=()=>set(DEF);
+    g.ondblclick=()=>{root.style.removeProperty('--formw');ls.set('formw',null)};
   });
 }
 
@@ -229,14 +229,6 @@ let dlBusy=false;
   await Promise.all([loadLists(),loadProfiles(),loadCaps()]);
   restoreForms();
 })();
-if(!localStorage.ack){
-  /* 동의 기록은 브라우저가 아니라 이 컴퓨터(settings.json)에도 남겨요 — 다시 시작하면서 다른 브라우저가 열려도 또 묻지 않아요 */
-  (async()=>{let done=false;try{done=!!(await api('/api/prefs')).ack}catch{}
-   if(done){try{localStorage.ack='1'}catch{}return}
-   const d=$('#ack');d.showModal();d.oncancel=e=>e.preventDefault();
-   
-   $('#ackb').onclick=()=>{try{localStorage.ack='1'}catch{}api('/api/prefs',{ack:true}).catch(()=>{})}})();
-}
 
 
 /* 추천 모델: 설치된 항목 삭제(다른 모델이 같이 쓰는 공용 파일은 남겨요) */

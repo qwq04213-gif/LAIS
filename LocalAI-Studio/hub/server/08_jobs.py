@@ -140,7 +140,7 @@ def vmix_upload(h):
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
-        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")) or p["kind"] in ("lora", "audio") \
+        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")) or p["kind"] == "audio" or (p["kind"] == "lora" and not (p.get("op") == "augment" and p.get("mode") == "ai")) \
                 or (p["kind"] == "vrestore" and not (p.get("op") == "run" and (vr_opts(p)["upscale"] or vr_opts(p)["interp"]))):
             pass                                          # 음성 만들기·영상 소리/자막 넣기는 ComfyUI 를 쓰지 않아요
         elif (p["kind"] == "feat" and p.get("feature") in ("resize", "color", "rmbg")) or (p["kind"] == "vpost" and p.get("op") == "gif"):
@@ -240,8 +240,8 @@ NEED_RULES = [      # 작업 오류 글 → 바로 받을 추천 모델(models.j
     (r"Stable Audio|T5-base", ["stable-audio-open"]), (r"ACE-Step", ["ace-step-15-turbo"]), (r"4단계 가속 LoRA", ["wan22-lightning"]),
     (r"Hunyuan3D", ["hunyuan3d-2"]), (r"LTX-Video", ["ltx-video"]), (r"Wan VACE", ["wan-vace"]), (r"S2V", ["wan-s2v"]),
     (r"Wan 2\.2 14B 이미지", ["wan22-14b-i2v"]), (r"Wan 2\.2 14B 글", ["wan22-14b-t2v"]), (r"'Wan 2\.2 영상'", ["wan22-ti2v-5b"]),
-    (r"SD3\.5", ["sd35-medium"]), (r"HiDream", ["hidream-fast"]), (r"Lumina 2", ["lumina2"]), (r"Qwen-Image 모델|Qwen-Image 공용", ["qwen-image"]),
-    (r"Qwen 모델|Qwen-Image-Edit|편집 모델\(", ["qwen-edit"]), (r"Lightning LoRA", ["qwen-lightning"]),
+    (r"SD3\.5", ["sd35-medium"]), (r"MOSS-Image", ["moss-image"]), (r"Qwen-Image 2\.1", ["qwen-image"]),
+    (r"Lightning LoRA", ["qwen-lightning"]),
     (r"이미지를 볼 수 있는 대화 모델", ["qwen25vl-7b"]), (r"기반 모델\(체크포인트\)", ["noobai"]), (r"FLUX ControlNet Union", ["controlnet-flux-union"]), (r"ControlNet Union SDXL", ["controlnet-union"]), (r"도우미로 쓸 대화 모델|도구 호출", ["qwen35-9b"]),
 ]
 NEED_FAM = {"flux": ["krea-dev"], "chroma": ["chroma-hd"], "krea2": ["krea2-turbo"]}

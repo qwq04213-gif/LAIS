@@ -58,8 +58,82 @@ AGENT_TOOLS = {
                    "distance": {"type": "string", "enum": ["keep", "close", "medium", "wide"]},
                    "scene": {"type": "string", "maxLength": 800, "description": "the new scene for mode scene (English or Korean)"}},
         "required": ["image", "mode"], "act": True},
+    "ask_user": {
+        "desc": "Ask the user ONE short question before doing anything when the request is vague (e.g. just 'a pretty woman'). Offer 2-6 concrete choices.",
+        "params": {"question": {"type": "string", "maxLength": 400, "description": "short Korean question"},
+                   "options": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 6, "description": "short Korean choices the user can click"}},
+        "required": ["question"], "act": False, "title": "되묻기"},
+    "make_video": {
+        "desc": "Make a short video (Wan 2.2) from a description, optionally starting from an image.",
+        "params": {"prompt": {"type": "string", "maxLength": 2000, "description": "what moves and how, in English"},
+                   "seconds": {"type": "integer", "minimum": 2, "maximum": 8}, "orientation": {"type": "string", "enum": ["landscape", "portrait", "square"]},
+                   "image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}},
+        "required": ["prompt"], "act": True, "title": "영상 만들기"},
+    "make_music": {
+        "desc": "Make music or a song (ACE-Step) or a sound effect (Stable Audio).",
+        "params": {"kind": {"type": "string", "enum": ["music", "sfx"]}, "description": {"type": "string", "maxLength": 600, "description": "genre, mood, instruments in English"},
+                   "lyrics": {"type": "string", "maxLength": 3000, "description": "optional lyrics"}, "seconds": {"type": "integer", "minimum": 3, "maximum": 240},
+                   "instrumental": {"type": "boolean"}},
+        "required": ["description"], "act": True, "title": "음악 만들기"},
+    "make_speech": {
+        "desc": "Read a text aloud (text to speech) with the voice chosen on the speech screen.",
+        "params": {"text": {"type": "string", "maxLength": 4000}}, "required": ["text"], "act": True, "title": "음성 만들기"},
+    "upscale_image": {
+        "desc": "Make an image bigger and sharper with an upscale model.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "scale": {"type": "integer", "minimum": 2, "maximum": 4}}, "required": ["image"], "act": True, "title": "업스케일"},
+    "remove_background": {
+        "desc": "Remove the background of an image.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "background": {"type": "string", "enum": ["transparent", "white", "black"]}}, "required": ["image"], "act": True, "title": "배경 지우기"},
+    "swap_face": {
+        "desc": "Replace the face in 'image' with the face from 'face'.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "face": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}}, "required": ["image", "face"], "act": True, "title": "얼굴 교체"},
+    "fix_face_hands": {
+        "desc": "Redraw faces and/or hands in an image in more detail.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "target": {"type": "string", "enum": ["face", "hand", "both"]}}, "required": ["image"], "act": True, "title": "얼굴·손 보정"},
+    "extend_image": {
+        "desc": "Extend (outpaint) an image beyond its borders.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "direction": {"type": "string", "enum": ["left", "right", "top", "bottom", "all"]}, "pixels": {"type": "integer", "minimum": 64, "maximum": 1024},
+                   "prompt": {"type": "string", "maxLength": 1000, "description": "optional English description of the new area"}},
+        "required": ["image"], "act": True, "title": "이미지 확장"},
+    "depth_map": {
+        "desc": "Make a depth map of an image, or blur the background by depth.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "look": {"type": "string", "enum": ["gray", "color", "blur"]}}, "required": ["image"], "act": True, "title": "깊이 맵"},
+    "parallax_video": {
+        "desc": "Turn one photo into a short 3D-looking camera-move video (parallax).",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "motion": {"type": "string", "enum": ["orbit", "sway", "dolly", "rise"]}, "seconds": {"type": "integer", "minimum": 2, "maximum": 10}},
+        "required": ["image"], "act": True, "title": "패럴랙스 영상"},
+    "image_to_3d": {
+        "desc": "Make a 3D model (.glb) from one image.", "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}}, "required": ["image"], "act": True, "title": "사진 → 3D"},
+    "restore_video": {
+        "desc": "Restore an old/noisy/shaky video: denoise, stabilize, reduce flicker, upscale, make smoother. Keeps the original sound.",
+        "params": {"video": {"type": "string", "maxLength": 400, "description": "'previous' or an '/out/...' video address from recent_results(kind=video)"}, "denoise": {"type": "string", "enum": ["off", "light", "medium", "strong"]}, "stabilize": {"type": "boolean"},
+                   "deflicker": {"type": "boolean"}, "upscale": {"type": "integer", "minimum": 0, "maximum": 4, "description": "0 = no upscale"},
+                   "smoother": {"type": "boolean", "description": "double the frame rate (RIFE)"}},
+        "required": ["video"], "act": True, "title": "영상 복원"},
+    "separate_audio": {
+        "desc": "Split a song or a video's sound into vocals and instruments (Demucs).",
+        "params": {"source": {"type": "string", "maxLength": 400, "description": "'previous' or an '/out/...' audio or video address from recent_results"}, "two_stems": {"type": "boolean", "description": "only vocals + accompaniment"}}, "required": ["source"], "act": True, "title": "소리 나누기"},
+    "clean_audio": {
+        "desc": "Clean up a recording (noise, hum, clicks) and set the loudness.",
+        "params": {"source": {"type": "string", "maxLength": 400, "description": "'previous' or an '/out/...' audio or video address from recent_results"}, "loudness": {"type": "string", "enum": ["speech", "music", "broadcast", "off"]}, "denoise": {"type": "string", "enum": ["off", "light", "medium", "strong"]}},
+        "required": ["source"], "act": True, "title": "소리 고치기"},
+    "trim_video": {
+        "desc": "Cut a part of a video and save it as a new video.",
+        "params": {"video": {"type": "string", "maxLength": 400, "description": "'previous' or an '/out/...' video address from recent_results(kind=video)"}, "start": {"type": "number", "minimum": 0, "maximum": 7200}, "end": {"type": "number", "minimum": 0, "maximum": 7200}},
+        "required": ["video", "start", "end"], "act": True, "title": "영상 자르기"},
+    "join_videos": {
+        "desc": "Join several videos one after another.",
+        "params": {"videos": {"type": "array", "items": {"type": "string", "maxLength": 400}, "maxItems": 20, "description": "'/out/...' video addresses in order"}},
+        "required": ["videos"], "act": True, "title": "영상 이어 붙이기"},
+    "add_sound_subtitles": {
+        "desc": "Put a sound/music file and/or subtitles onto a video.",
+        "params": {"video": {"type": "string", "maxLength": 400, "description": "'previous' or an '/out/...' video address from recent_results(kind=video)"}, "audio": {"type": "string", "maxLength": 400, "description": "'previous' or an '/out/...' audio or video address from recent_results"}, "subtitles": {"type": "string", "maxLength": 6000, "description": "subtitle lines, one per line"}},
+        "required": ["video"], "act": True, "title": "영상 소리·자막"},
+    "train_lora": {
+        "desc": "Train a LoRA from a training set that the user already made on the LoRA screen.",
+        "params": {"set": {"type": "string", "maxLength": 120, "description": "name of the training set"}}, "required": ["set"], "act": True, "title": "LoRA 학습"},
     "edit_image": {
-        "desc": "Edit one image by an instruction (Qwen-Image-Edit or FLUX Kontext, as chosen on the image edit screen).",
+        "desc": "Edit one image by an instruction (Qwen-Image 2.1 or FLUX Kontext, as chosen on the image edit screen).",
         "params": {"instruction": {"type": "string", "maxLength": 1000, "description": "edit instruction in English, one imperative sentence"},
                    "image": {"type": "string", "maxLength": 400,
                              "description": "'attached' = the photo the user attached, 'previous' = the result of the previous step in this plan, "
@@ -69,7 +143,11 @@ AGENT_TOOLS = {
 }
 
 AGENT_SYS = """You are the task planner of a local AI studio app. The user writes in Korean.
-Decide whether the user wants something DONE in the app (make or edit an image, check the queue, find results) or just wants to talk.
+Decide whether the user wants something DONE in the app (images, videos, music, speech, sound, LoRA, queue, results) or just wants to talk.
+- Every feature of the app is a tool. Pick the tool that fits; chain tools with 'previous' when one result feeds the next.
+- If the request is too vague to make something good (e.g. only '예쁜 여성', '멋진 풍경', '노래 하나'), call ask_user FIRST with one short Korean question
+  and 3-6 concrete options (style, look/outfit, place, mood, composition, length...). Add an option like '알아서 해 줘'. Do not ask when the user already gave details or said to just do it.
+- When you write an image prompt, make it rich: subject details, clothing, pose, place, lighting, camera/lens, mood, quality words.
 - If they want something done, call the tools. Never claim a job ran: the app shows your plan and the user must press [실행].
 - To make an image, call generate_image once with an English prompt (comma-separated details are fine). Use count only when asked.
 - To change a photo the user attached, call edit_image with image='attached'. To change the newest result, call recent_results first.
@@ -150,13 +228,24 @@ def agent_check(name, args, ctx):
         elif spec["type"] == "boolean":
             if not isinstance(v, bool):
                 return None, f"{k} 는 참/거짓이어야 해요."
+        elif spec["type"] == "number":
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                return None, f"{k} 는 숫자여야 해요."
+            v = float(v)
+            if not spec["minimum"] <= v <= spec["maximum"]:
+                return None, f"{k} 는 {spec['minimum']}~{spec['maximum']} 사이여야 해요."
         elif spec["type"] == "array":
-            ok_ = spec["items"]["enum"]
-            if not isinstance(v, list) or len(v) > len(ok_) or any(x not in ok_ for x in v):
-                return None, f"{k} 는 {', '.join(ok_)} 중에서 골라야 해요."
-            v = list(dict.fromkeys(v))
+            ok_ = spec["items"].get("enum")
+            if ok_ is not None:
+                if not isinstance(v, list) or len(v) > len(ok_) or any(x not in ok_ for x in v):
+                    return None, f"{k} 는 {', '.join(ok_)} 중에서 골라야 해요."
+                v = list(dict.fromkeys(v))
+            else:
+                if not isinstance(v, list) or len(v) > spec.get("maxItems", 10) or any(not isinstance(x, str) or len(x) > spec["items"].get("maxLength", 400) for x in v):
+                    return None, f"{k} 는 글 목록이어야 해요."
+                v = [x.strip() for x in v if x.strip()]
         out[k] = v
-    for k in ("prompt", "negative", "instruction", "goal", "custom_light", "scene"):
+    for k in ("prompt", "negative", "instruction", "goal", "custom_light", "scene", "description", "lyrics", "text", "subtitles", "question"):
         if k in out and blocked(out[k]):
             return None, BLOCK_MSG
     if name == "analyze_video":
@@ -167,19 +256,54 @@ def agent_check(name, args, ctx):
         return None, "custom 조명이면 custom_light 가 필요해요."
     if name == "recompose_image" and out["mode"] == "scene" and not out.get("scene"):
         return None, "scene 모드에는 scene 이 필요해요."
-    if name in ("edit_image", "relight_image", "recompose_image"):
-        img = out["image"]
+    for key in ("image", "face"):
+        img = out.get(key)
+        if img is None:
+            continue
         if img == "attached":
             if not ctx.get("attached"):
                 return None, "붙인 사진이 없어요. 사진을 붙이거나 결과를 골라 주세요."
         elif img == "previous":
-            if not any(s["tool"] in ("generate_image", "edit_image", "explore_prompts", "relight_image", "recompose_image") for s in ctx.get("steps", [])):
+            if not any(s["tool"] in AGENT_MAKES["image"] for s in ctx.get("steps", [])):
                 return None, "앞 단계 결과가 없어요."
         else:
             f = agent_out_path(img)
             if not f or f.suffix.lower() not in GAL_IMG:
                 return None, f"결과 폴더에 있는 이미지 주소가 아니에요: {img[:80]}"
+    for key, kinds in (("video", ("video",)), ("audio", ("audio", "video")), ("source", ("audio", "video"))):
+        if name == "analyze_video" or key not in out:
+            continue
+        v = out[key]
+        if v == "previous":
+            if not any(s["tool"] in AGENT_MAKES[k] for k in kinds for s in ctx.get("steps", [])):
+                return None, "앞 단계 결과가 없어요."
+            continue
+        f = agent_out_path(v)
+        exts = set().union(*[{"video": GAL_VID, "audio": GAL_AUD}[k] for k in kinds])
+        if not f or f.suffix.lower() not in exts:
+            return None, f"결과 폴더에 있는 {'영상' if kinds == ('video',) else '소리·영상'} 주소가 아니에요: {v[:80]}"
+    if name == "join_videos":
+        if len(out.get("videos") or []) < 2:
+            return None, "이어 붙일 영상이 두 개 이상 필요해요."
+        for v in out["videos"]:
+            f = agent_out_path(v)
+            if not f or f.suffix.lower() not in GAL_VID:
+                return None, f"결과 폴더에 있는 영상 주소가 아니에요: {v[:80]}"
+    if name == "trim_video" and out["end"] <= out["start"]:
+        return None, "끝은 시작보다 뒤여야 해요."
+    if name == "train_lora":
+        sets = [s for s in lset_list()["items"] if s["name"].strip().lower() == out["set"].strip().lower()]
+        if not sets:
+            names = ", ".join(s["name"] for s in lset_list()["items"][:8]) or "없음"
+            return None, f"'{out['set']}' 학습 세트가 없어요. 있는 세트: {names}"
+        out["set_id"] = sets[0]["id"]
     return out, None
+
+
+AGENT_MAKES = {"image": ("generate_image", "edit_image", "explore_prompts", "relight_image", "recompose_image", "upscale_image", "remove_background",
+                         "swap_face", "fix_face_hands", "extend_image", "depth_map"),
+               "video": ("make_video", "parallax_video", "restore_video", "trim_video", "join_videos", "add_sound_subtitles"),
+               "audio": ("make_music", "make_speech", "separate_audio", "clean_audio")}
 
 
 def agent_recent(kind="image", count=4):
@@ -237,7 +361,19 @@ def agent_summary(name, a, base):
     if name == "edit_image":
         src = {"attached": "붙인 사진", "previous": "앞 단계 결과"}.get(a["image"], "결과 " + urllib.parse.unquote(a["image"]).rsplit("/", 1)[-1])
         return f"이미지 편집 · {src}" + (" · 빠른 모드" if a.get("fast") else "")
-    return name
+    t = AGENT_TOOLS.get(name) or {}
+    bits = []
+    for k in ("image", "video", "source", "audio", "face"):
+        if a.get(k):
+            bits.append({"attached": "붙인 사진", "previous": "앞 단계 결과"}.get(a[k], urllib.parse.unquote(a[k]).rsplit("/", 1)[-1]))
+    for k in ("prompt", "description", "text", "set"):
+        if a.get(k):
+            bits.append(a[k][:40] + ("…" if len(a[k]) > 40 else ""))
+    if a.get("seconds"):
+        bits.append(f'{a["seconds"]}초')
+    if name == "join_videos":
+        bits.append(f'{len(a["videos"])}개')
+    return " · ".join([t.get("title", name)] + bits)
 
 
 def agent_llm(model, msgs):
@@ -306,6 +442,9 @@ def agent_plan(p):
             if why:
                 problems.append(f"{name}: {why}")
                 msgs.append({"role": "tool", "tool_name": name, "content": json.dumps({"error": why}, ensure_ascii=False)})
+            elif name == "ask_user":      # 모호한 요청: 만들기 전에 한 번 되묻고, 고를 수 있는 보기를 보여 줘요
+                agent_log(ev="ask", q=a.get("question"), options=a.get("options"))
+                return {"reply": a["question"], "options": (a.get("options") or [])[:6], "info": info}
             elif AGENT_TOOLS[name]["act"]:
                 acts.append({"tool": name, "args": a, "summary": agent_summary(name, a, base)})
                 msgs.append({"role": "tool", "tool_name": name, "content": json.dumps({"status": "waiting for the user's approval"})})
@@ -373,9 +512,92 @@ def agent_src(P, i, img):
     return _agent_data_url(f)
 
 
+def agent_media(P, i, v, kinds):
+    """영상·소리 값('previous'·'/out/...') → 작업에 넣을 '/out/...' 주소."""
+    if v != "previous":
+        return v
+    exts = set().union(*[{"video": GAL_VID, "audio": GAL_AUD, "image": GAL_IMG}[k] for k in kinds])
+    for x in reversed(P["steps"][:i]):
+        for u in x["images"]:
+            if Path(urllib.parse.unquote(u)).suffix.lower() in exts:
+                return u
+    raise RuntimeError("앞 단계 결과를 찾지 못했어요.")
+
+
+def agent_job_more(P, i, s, a, base):
+    """새로 연결한 도구들(영상·음악·음성·소리·이미지 기능·LoRA) → 작업 값."""
+    t, g = s["tool"], base.get("gen") or {}
+    ck = g.get("ckpt") if g.get("gengine") in (None, "", "sdxl") else None
+    if t == "make_video":
+        v = dict(base.get("vid") or {})
+        v.update(kind="vid", prompt=a["prompt"], seed=-1)
+        if a.get("seconds"):
+            v["sec"] = a["seconds"]
+        v["size"] = {"landscape": "832x480", "portrait": "480x832", "square": "640x640"}.get(a.get("orientation"), v.get("size") or "832x480")
+        if a.get("image"):
+            v["image"], v["keep_ratio"] = agent_src(P, i, a["image"]), "on"
+        else:
+            v.pop("image", None)
+        return v
+    if t == "make_music":
+        m = dict(base.get("music") or {})
+        m.update(kind="music", mengine=a.get("kind") or "music", tags=a["description"], prompt=a["description"], lyrics=a.get("lyrics") or "", seed=-1)
+        if a.get("seconds"):
+            m["seconds"] = a["seconds"]
+        if a.get("instrumental"):
+            m["instrumental"] = "on"
+        return m
+    if t == "make_speech":
+        return {**(base.get("tts") or {}), "kind": "tts", "text": a["text"]}
+    if t == "upscale_image":
+        return {**(base.get("up") or {}), "kind": "up", "mode": "normal", "image": agent_src(P, i, a["image"]), "scale": a.get("scale", 2)}
+    if t == "remove_background":
+        return {"kind": "feat", "feature": "rmbg", "image": agent_src(P, i, a["image"]), "bg": a.get("background", "transparent"), "rmodel": "normal"}
+    if t == "swap_face":
+        return {"kind": "feat", "feature": "faceswap", "image": agent_src(P, i, a["image"]), "source": agent_src(P, i, a["face"]), "restore": "gfpgan",
+                "vis": 1.0, "cf": 0.5, "target_face": "0", "source_face": "0"}
+    if t == "fix_face_hands":
+        return {"kind": "feat", "feature": "detailer", "image": agent_src(P, i, a["image"]), "target": a.get("target", "face"), "prompt": "", "ckpt": ck,
+                "denoise": 0.5, "steps": 28, "cfg": 5.5, "seed": -1}
+    if t == "extend_image":
+        px, d = a.get("pixels", 256), a.get("direction", "right")
+        side = {k: (px if d in (k, "all") else 0) for k in ("left", "right", "top", "bottom")}
+        return {"kind": "feat", "feature": "outpaint", "image": agent_src(P, i, a["image"]), "prompt": a.get("prompt", ""), "ckpt": ck, **side,
+                "feather": 40, "steps": 28, "cfg": 5.5, "seed": -1}
+    if t == "depth_map":
+        return {"kind": "feat", "feature": "depth", "image": agent_src(P, i, a["image"]), "out": a.get("look", "gray"), "focus": "auto", "blur": 12}
+    if t == "parallax_video":
+        return {"kind": "feat", "feature": "parallax", "image": agent_src(P, i, a["image"]), "motion": a.get("motion", "orbit"), "sec": a.get("seconds", 4),
+                "strength": 5, "fps": "24"}
+    if t == "image_to_3d":
+        return {"kind": "feat", "feature": "img3d", "image": agent_src(P, i, a["image"]), "octree": "256", "steps": 30, "cfg": 5.0, "seed": -1}
+    if t == "restore_video":
+        return {"kind": "vrestore", "op": "run", "video": agent_media(P, i, a["video"], ("video",)), "denoise": a.get("denoise", "light"),
+                "stabilize": bool(a.get("stabilize")), "deflicker": bool(a.get("deflicker")), "upscale": a.get("upscale") or 0, "interp": bool(a.get("smoother"))}
+    if t == "separate_audio":
+        return {"kind": "audio", "op": "sep", "src": agent_media(P, i, a["source"], ("audio", "video")), "two": bool(a.get("two_stems")), "model": "htdemucs"}
+    if t == "clean_audio":
+        return {"kind": "audio", "op": "fix", "src": agent_media(P, i, a["source"], ("audio", "video")), "loud": a.get("loudness", "speech"),
+                "denoise": a.get("denoise", "medium"), "rumble": True, "declick": False}
+    if t == "trim_video":
+        return {"kind": "vedit", "op": "trim", "file": agent_media(P, i, a["video"], ("video",)), "start": a["start"], "end": a["end"]}
+    if t == "join_videos":
+        return {"kind": "vedit", "op": "concat", "files": a["videos"], "fade": 0}
+    if t == "add_sound_subtitles":
+        return {"kind": "vmix", "video": agent_media(P, i, a["video"], ("video",)), "audio": agent_media(P, i, a["audio"], ("audio", "video")) if a.get("audio") else "",
+                "subs": a.get("subtitles", ""), "amode": "replace", "vol": 100, "ovol": 100, "fit": "video", "fade": True, "sub_size": 5.5, "sub_pos": "bottom",
+                "sub_color": "#ffffff", "sub_outline": True}
+    if t == "train_lora":
+        return {"kind": "lora", "op": "train", "id": a["set_id"], "ckpt": ck or g.get("ckpt") or "", "preset": "normal"}
+    return None
+
+
 def agent_job_params(P, i):
     s, base = P["steps"][i], P["base"]
     a = s["args"]
+    more = agent_job_more(P, i, s, a, base)
+    if more is not None:
+        return more
     if s["tool"] == "generate_image":
         g = dict(base.get("gen") or {})
         if not g:

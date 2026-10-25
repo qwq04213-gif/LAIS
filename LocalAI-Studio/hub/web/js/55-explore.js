@@ -21,7 +21,8 @@ $('#xp-analyze').onclick=()=>xpBusy($('#xp-analyze'),async()=>{const goal=$('#xp
   const r=await api('/api/explore/analyze',{goal,model:xpLLM()});if(r.error)return xpErr(r.error,r.need);xpElsPaint(r.elements)});
 $('#xp-fromgen').onclick=()=>{const g=formBase('#f-gen');if(!g.prompt)return toast('이미지 생성 화면에 프롬프트가 없어요.');
   xpElsPaint({...Object.fromEntries(XP_KEYS.map(([k])=>[k,''])),subject:g.prompt,negative:g.negative||''})};
-$('#xp-new').onclick=()=>{XP.id=null;XP.S=null;clearTimeout(XP.timer);$('#xp-cands').innerHTML='';$('#xp-els').hidden=true;$('#xp-mode').hidden=true;$('#xp-goal').value='';$('#xp-sessions').value='';xpErr('')};
+const XP_EMPTY=$('#xp-cands').innerHTML;
+$('#xp-new').onclick=()=>{XP.id=null;XP.S=null;clearTimeout(XP.timer);$('#xp-cands').innerHTML=XP_EMPTY;$('#xp-els').hidden=true;$('#xp-mode').hidden=true;$('#xp-goal').value='';$('#xp-sessions').value='';xpErr('')};
 $('#xp-make').onclick=()=>xpBusy($('#xp-make'),async()=>{const m=$('#xp-mode input[name=xpm]:checked').value,
   b={mode:m,id:XP.id,goal:$('#xp-goal').value.trim(),model:xpLLM(),elements:xpEls(),base:XP.id?undefined:formBase('#f-gen')};
   if(m==='auto'){b.count=+$('#xp-count').value-1;b.vary=$$('#xp-vary input:checked').map(i=>i.value)}

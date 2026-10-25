@@ -53,8 +53,11 @@ def lset_view(sid):
         rows.append({"file": f.name, "url": f"/lora_data/{sid}/img/{urllib.parse.quote(f.name)}", "caption": cap.read_text(encoding="utf-8").strip() if cap.is_file() else "",
                      "w": w, "h": h})
     samples = sorted((lset_dir(sid) / "train" / "out" / "sample").glob("*.png")) if (lset_dir(sid) / "train" / "out" / "sample").is_dir() else []
+    cd = lset_dir(sid) / "cand"
+    cands = sorted((f for f in cd.iterdir() if f.suffix.lower() == ".png"), key=lambda f: f.name) if cd.is_dir() else []
     return {**m, "images": rows, "samples": [f"/lora_data/{sid}/train/out/sample/{urllib.parse.quote(f.name)}" for f in samples[-12:]],
-            "kinds": LORA_KINDS}
+            "kinds": LORA_KINDS, "cands": [{"file": f.name, "url": f"/lora_data/{sid}/cand/{urllib.parse.quote(f.name)}",
+                                             "how": (f.with_suffix(".how").read_text(encoding="utf-8") if f.with_suffix(".how").is_file() else "")} for f in cands]}
 
 
 def lset_list():
@@ -176,6 +179,110 @@ def lset_remove(p):
     return lset_view(sid)
 
 
+# ───────── 사진 불리기: 몇 장만 있어도 학습 사진을 늘려요(후보로 만들어 두고 고른 것만 넣어요) ─────────
+AUG_AI = {"character": [("다른 각도", "Show the same person from a different camera angle: {a}. Keep the face, identity, hairstyle and outfit exactly the same."),
+                        ("다른 배경", "Put the same person in a new place: {b}. Keep the face, identity, hairstyle and outfit exactly the same."),
+                        ("다른 옷", "Change only the clothes to {c}. Keep the face, identity, hairstyle and pose the same."),
+                        ("다른 표정", "Change only the facial expression to {e}. Keep the identity and everything else the same."),
+                        ("다른 구도", "Recompose as {s} of the same person. Keep the face, identity and outfit the same.")],
+          "style": [("다른 대상", "Draw {o} in exactly the same art style, colors, line work and rendering as this image."),
+                    ("다른 장면", "Draw a new scene, {b}, in exactly the same art style as this image.")],
+          "other": [("다른 각도", "Show the same object from a different angle: {a}. Keep its shape, colors, materials and details exactly the same."),
+                    ("다른 배경", "Place the same object in {b}. Keep the object exactly the same.")]}
+AUG_FILL = {"a": ["left side view", "right three-quarter view", "slightly from above", "slightly from below", "back three-quarter view", "front view, close-up"],
+            "b": ["a sunny park", "a cozy cafe interior", "a city street at night", "a plain studio background", "a beach at sunset", "a library"],
+            "c": ["a casual hoodie and jeans", "a formal suit", "a summer dress", "a winter coat and scarf", "sportswear"],
+            "e": ["a big smile", "a calm neutral face", "a surprised look", "a gentle laugh", "a serious look"],
+            "s": ["a full-body shot", "an upper-body portrait", "a head-and-shoulders close-up", "a wide shot"],
+            "o": ["a cat", "a mountain landscape", "a city skyline", "a bowl of fruit", "a girl reading a book", "an old car"]}
+
+
+def lset_cand_add(sid, im, how):
+    d = lset_dir(sid) / "cand"
+    d.mkdir(parents=True, exist_ok=True)
+    stem = f"{int(time.time() * 1000) % 10**9:09d}{uuid.uuid4().hex[:4]}"
+    k = 2048 / max(im.size)
+    if k < 1:
+        im = im.resize((round(im.width * k), round(im.height * k)), RS.LANCZOS)
+    im.convert("RGB").save(d / (stem + ".png"), "PNG")
+    (d / (stem + ".how")).write_text(how, encoding="utf-8")
+
+
+def aug_simple(im, rng):
+    """뒤집기·잘라 확대·밝기·색 살짝 — 원본과 모양이 같아 안전한 늘리기."""
+    out = [(ImageOps.mirror(im), "좌우 뒤집기")]
+    w, h = im.size
+    for _ in range(2):
+        s = rng.uniform(0.72, 0.88)
+        cw, ch = int(w * s), int(h * s)
+        x, y = rng.randint(0, w - cw), rng.randint(0, h - ch)
+        out.append((im.crop((x, y, x + cw, y + ch)).resize((w, h), RS.LANCZOS), "잘라 확대"))
+    from PIL import ImageEnhance
+    b = ImageEnhance.Color(ImageEnhance.Brightness(im).enhance(rng.uniform(0.85, 1.15))).enhance(rng.uniform(0.85, 1.15))
+    out.append((b, "밝기·색 살짝"))
+    return out
+
+
+def lora_augment(p, J):
+    """사진 불리기. mode=simple(바로) · ai(Qwen-Image 2.1 로 각도·배경·옷 등을 바꾼 비슷한 사진). 결과는 후보(cand)로 두고 화면에서 골라 넣어요."""
+    sid = p.get("id")
+    m = lset_meta(sid)
+    J["lset"] = sid
+    imgs = lset_imgs(sid)
+    if not imgs:
+        raise ValueError("먼저 사진을 한 장 이상 넣어 주세요.")
+    target = int(clamp(num(p, "count", 12, int), 1, 60))
+    rng = random.Random(num(p, "seed", -1, int) if num(p, "seed", -1, int) >= 0 else None)
+    made = 0
+    if p.get("mode") != "ai":
+        pool = []
+        for f in imgs:
+            pool += [(v, f"{how} · {f.name[:18]}") for v, how in aug_simple(Image.open(f).convert("RGB"), rng)]
+        rng.shuffle(pool)
+        for im, how in pool[:target]:
+            lset_cand_add(sid, im, how)
+            made += 1
+        J["msg"] = f"후보 {made}장을 만들었어요. 골라서 넣어 주세요."
+        return []
+    kind = m.get("kind") if m.get("kind") in AUG_AI else "character"
+    plans = AUG_AI[kind]
+    for i in range(target):
+        check_cancel(J)
+        f = imgs[i % len(imgs)]
+        label, tpl = plans[i % len(plans)]
+        text = tpl.format(**{k: rng.choice(v) for k, v in AUG_FILL.items()})
+        J["msg"], J["progress"] = f"비슷한 사진 만드는 중 {i + 1}/{target} — {label}", i / target
+        b64 = "data:image/png;base64," + base64.b64encode(f.read_bytes()).decode()
+        res = do_edit({"kind": "edit", "engine": "qwen", "image": b64, "prompt": text, "seed": rng.randint(0, 2**31 - 1),
+                       "fast": p.get("fast") or "", "translate": ""}, J)
+        lset_cand_add(sid, res[0][0], f"AI {label} · {f.name[:18]}")
+        made += 1
+    J["msg"] = f"비슷한 사진 후보 {made}장을 만들었어요. 얼굴·특징이 다른 건 빼고 골라 넣어 주세요."
+    return []
+
+
+def lset_cand(p):
+    """후보 넣기(keep)·버리기(drop). files 가 비면 전부."""
+    sid = p.get("id")
+    lset_meta(sid)
+    d = lset_dir(sid) / "cand"
+    names = [Path(str(x)).name for x in (p.get("files") or [])] or ([f.name for f in d.glob("*.png")] if d.is_dir() else [])
+    moved = 0
+    for n in names:
+        f = d / n
+        if f.suffix.lower() != ".png" or not f.is_file():
+            continue
+        if p.get("act") == "keep":
+            try:
+                lset_add_bytes(sid, "aug_" + f.stem, f.read_bytes())
+                moved += 1
+            except ValueError as e:
+                return {**lset_view(sid), "error": str(e)}
+        f.unlink(missing_ok=True)
+        f.with_suffix(".how").unlink(missing_ok=True)
+    return {**lset_view(sid), "moved": moved}
+
+
 def lset_delete(p):
     sid = p.get("id")
     lset_meta(sid)
@@ -189,7 +296,7 @@ def lset_file(sid, rel):
     """화면에 보여 줄 사진·미리보기(세트 폴더 안의 img/ 와 train/out/sample/ 만)."""
     d = lset_dir(sid)
     rel = urllib.parse.unquote(rel)
-    if not (rel.startswith("img/") or rel.startswith("train/out/sample/")) or ".." in rel:
+    if not (rel.startswith("img/") or rel.startswith("cand/") or rel.startswith("train/out/sample/")) or ".." in rel:
         return None
     f = (d / rel).resolve()
     try:
@@ -309,7 +416,7 @@ def lora_train_job(p, J):
 
 
 def do_lora(p, J):
-    fn = {"caption": lora_caption, "train": lora_train_job}.get(p.get("op"))
+    fn = {"caption": lora_caption, "train": lora_train_job, "augment": lora_augment}.get(p.get("op"))
     if not fn:
         raise ValueError("알 수 없는 작업이에요.")
     return fn(p, J)

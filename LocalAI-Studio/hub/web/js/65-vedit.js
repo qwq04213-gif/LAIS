@@ -15,7 +15,9 @@
  const sync=()=>{const o=op();$$('[data-ve]',f).forEach(e=>e.hidden=!e.dataset.ve.split(' ').includes(o));$('#ve-hint').textContent=HINT[o];$('.go',f).textContent=GO[o];
    $('#ve-novace').hidden=!(o==='extend'&&!((LISTS.vidmore||{}).vace))};
  window.veditLoad=async()=>{await vmixLoad();$('#ve-noff').hidden=$('#vm-noff').hidden;while(LIST.length<2)LIST.push('');draw();one();sync()};
- f.addEventListener('change',e=>{const s=e.target.closest('#ve-list select');if(s)LIST[+s.dataset.i]=s.value;if(e.target.id==='ve-one')prev();if(e.target.name==='op')sync();lenTxt()});
+ const lprev=v=>{const el=$('#ve-lprev'),u=url(v)||vPrevUrl(v);if(el.getAttribute('src')!==u){el.hidden=!u;if(u)el.src=u;else el.removeAttribute('src')}};
+ $('#ve-list').addEventListener('focusin',e=>{const s=e.target.closest('select');if(s)lprev(s.value)});
+ f.addEventListener('change',e=>{const s=e.target.closest('#ve-list select');if(s){LIST[+s.dataset.i]=s.value;lprev(s.value)}if(e.target.id==='ve-one')prev();if(e.target.name==='op')sync();lenTxt()});
  f.addEventListener('input',e=>{if(e.target.id==='ve-s'||e.target.id==='ve-e')lenTxt()});
  $('#ve-prev').addEventListener('loadedmetadata',lenTxt);
  $('#ve-list').addEventListener('click',e=>{const m=e.target.closest('[data-mv]'),r=e.target.closest('[data-rm]');

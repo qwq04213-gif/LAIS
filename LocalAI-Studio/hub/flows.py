@@ -356,32 +356,50 @@ def wf_kontext(q, img):
     return w.n
 
 
-# ───────────────────────── Qwen-Image-Edit ─────────────────────────
-def wf_qwen(q, img, refs, plus):
+# ───────────────────────── Qwen-Image 2.1 (생성·편집 하나로) ─────────────────────────
+def wf_qwen21(q, imgs=(), size=None, key=None):
+    """Qwen-Image 2.1: UNET(+LoRA·Lightning) + Qwen3-VL 8B(CLIPLoader type=qwen_image) + 2.1 VAE.
+    TextEncodeQwenImage21 이 프롬프트·부정 프롬프트·참고 사진(최대 16장)을 한 번에 조건으로 만들어요.
+    imgs 가 있으면 편집(잠재 = 첫 사진 크기, denoise<1 이면 첫 사진을 인코딩해 일부만 다시 그리기), 없으면 size(w, h) 로 새로 그려요."""
     f, w = q["files"], WF()
+    key = key or (lambda i: f"images.image_{i}")
     unet = w.add("UNETLoader", unet_name=f["unet"], weight_dtype="default")
     clip = w.add("CLIPLoader", clip_name=f["te"], type="qwen_image", device="default")
     vae = w.add("VAELoader", vae_name=f["vae"])
-    li = w.add("LoadImage", image=img)
     model = [unet, 0]
     for name, wt in q["loras"]:
         model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
-    model = [w.add("ModelSamplingAuraFlow", model=model, shift=q["shift"]), 0]
-    model = [w.add("CFGNorm", model=model, strength=1.0), 0]
-    extra = {f"image{i + 2}": [w.add("LoadImage", image=r), 0] for i, r in enumerate(refs)}
-
-    def enc(text):
-        if plus:
-            return w.add("TextEncodeQwenImageEditPlus", clip=[clip, 0], prompt=text, vae=[vae, 0], image1=[li, 0], **extra)
-        return w.add("TextEncodeQwenImageEdit", clip=[clip, 0], prompt=text, vae=[vae, 0], image=[li, 0])
-
-    pos, neg = [enc(q["prompt"]), 0], [enc(""), 0]
-    if q.get("ref_method"):      # 2511: 공식 워크플로처럼 양쪽 조건을 index_timestep_zero 로 묶어요
-        pos, neg = ([w.add("FluxKontextMultiReferenceLatentMethod", conditioning=c, **{q["ref_method"]: "index_timestep_zero"}), 0] for c in (pos, neg))
-    lat = w.add("VAEEncode", pixels=[li, 0], vae=[vae, 0])
+    lis = [w.add("LoadImage", image=x) for x in imgs]
+    enc = w.add("TextEncodeQwenImage21", clip=[clip, 0], prompt=q["prompt"], negative_prompt=q.get("negative") or "", vae=[vae, 0],
+                resolution=int(q.get("resolution", 1024)), **{key(i + 1): [li, 0] for i, li in enumerate(lis)})
+    den = float(q.get("denoise", 1.0))
+    if not lis:
+        lat = [w.add("EmptySD3LatentImage", width=size[0], height=size[1], batch_size=1), 0]
+    elif den < 1.0:
+        lat = [w.add("VAEEncode", pixels=[lis[0], 0], vae=[vae, 0]), 0]
+    else:
+        lat = [enc, 2]
     k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
-              scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=[lat, 0], denoise=q.get("denoise", 1.0))
+              scheduler=q["scheduler"], positive=[enc, 0], negative=[enc, 1], latent_image=lat, denoise=den)
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=[vae, 0]), 0])
+    return w.n
+
+
+# ───────────────────────── MOSS-Image (배치 지정·긴 글자) ─────────────────────────
+def wf_moss(q):
+    """MOSS-Image 5B: UNET + Qwen3.5-9B(CLIPLoader, type=q['ctype']) + FLUX.2 VAE. 프롬프트는 문장·태그·배치 JSON 모두 돼요."""
+    w = WF()
+    model = [w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default"), 0]
+    for name, wt in q.get("loras", []):
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    clip = [w.add("CLIPLoader", clip_name=q["te"], type=q["ctype"], device="default"), 0]
+    vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=clip), 0]
+    neg = [w.add("CLIPTextEncode", text=q["negative"], clip=clip), 0]
+    lat = [w.add(q.get("latent") or "EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
+              scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat, denoise=1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
     return w.n
 
 
@@ -390,50 +408,23 @@ WAN_NEG = ("色调艳丽，过曝，静态，细节模糊不清，字幕，风�
            "多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走")
 
 
-# ───────────────────────── SD3.5 · HiDream · Lumina 2 ─────────────────────────
-LUMINA_POS = "You are an assistant designed to generate superior images with the superior degree of image-text alignment based on textual prompts or user prompts. <Prompt Start> "
-LUMINA_NEG = "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> "
-
-
+# ───────────────────────── SD3.5 ─────────────────────────
 def wf_other(q):
-    """SD3.5 / HiDream / Lumina 2 텍스트→이미지. q: family, unet(또는 ckpt), te(파일 이름 목록 또는 dict), vae, loras, prompt, negative, seed, w, h, steps, cfg, sampler, scheduler, shift.
-    sd35   : 체크포인트(텍스트 인코더 내장이면 그대로, 아니면 TripleCLIPLoader) + ModelSamplingSD3 는 쓰지 않고 모델 기본 shift
-    hidream: UNETLoader + QuadrupleCLIPLoader + ModelSamplingSD3(shift)
-    lumina : UNETLoader + CLIPLoader(type=lumina2) + ModelSamplingAuraFlow(shift) + 시스템 프롬프트 접두어"""
+    """SD3.5 텍스트→이미지. q: family, ckpt, te(dict, 비면 체크포인트 내장), vae, loras, prompt, negative, seed, w, h, steps, cfg, sampler, scheduler."""
     w = WF()
-    fam, te = q["family"], q.get("te") or {}
-    if fam == "sd35":
-        ck = w.add("CheckpointLoaderSimple", ckpt_name=q["ckpt"])
-        model, vae = [ck, 0], [ck, 2]
-        if te:
-            clip = w.add("TripleCLIPLoader", clip_name1=te["clip_l"], clip_name2=te["clip_g"], clip_name3=te["t5"])
-            clip_ref = [clip, 0]
-        else:
-            clip_ref = [ck, 1]
-        if q.get("vae"):
-            vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    te = q.get("te") or {}
+    ck = w.add("CheckpointLoaderSimple", ckpt_name=q["ckpt"])
+    model, vae = [ck, 0], [ck, 2]
+    if te:
+        clip_ref = [w.add("TripleCLIPLoader", clip_name1=te["clip_l"], clip_name2=te["clip_g"], clip_name3=te["t5"]), 0]
     else:
-        un = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
-        model = [un, 0]
-        if fam == "hidream":
-            clip = w.add("QuadrupleCLIPLoader", clip_name1=te["clip_l"], clip_name2=te["clip_g"], clip_name3=te["t5"], clip_name4=te["llama"])
-        elif fam == "qwenimg":
-            clip = w.add("CLIPLoader", clip_name=te["qwen"], type="qwen_image", device="default")
-        else:
-            clip = w.add("CLIPLoader", clip_name=te["gemma"], type="lumina2", device="default")
-        clip_ref = [clip, 0]
+        clip_ref = [ck, 1]
+    if q.get("vae"):
         vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
     for name, wt in q.get("loras", []):
         model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
-    if fam == "hidream":
-        model = [w.add("ModelSamplingSD3", model=model, shift=q["shift"]), 0]
-    elif fam in ("lumina", "qwenimg"):
-        model = [w.add("ModelSamplingAuraFlow", model=model, shift=q["shift"]), 0]
-    pt, nt = q["prompt"], q["negative"]
-    if fam == "lumina":
-        pt, nt = LUMINA_POS + pt, LUMINA_NEG + nt
-    pos = [w.add("CLIPTextEncode", text=pt, clip=clip_ref), 0]
-    neg = [w.add("CLIPTextEncode", text=nt, clip=clip_ref), 0]
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=clip_ref), 0]
+    neg = [w.add("CLIPTextEncode", text=q["negative"], clip=clip_ref), 0]
     lat = [w.add("EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
     k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
               scheduler=q["scheduler"], positive=pos, negative=neg, latent_image=lat, denoise=1.0)

@@ -3,27 +3,42 @@
 # ruff: noqa: F821
 
 # ───────────────────────── 작업 (편집 / 생성 / 업스케일 / 워크플로) ─────────────────────────
-def qwen_ver(name):
-    """Qwen-Image-Edit 파일 이름의 판 번호(2509·2511 …). 번호가 없으면(첫 판) 0."""
-    m = re.search(r"(?<!\d)(2[5-9]\d\d)(?!\d)", name or "")
-    return int(m.group(1)) if m else 0
+QWEN21_RX = re.compile(r"qwen[_-]?image[_-]?2[._]1")
+QWEN_NC = "Qwen-Image 2.1 은 비상업(연구용) 라이선스예요."
 
 
-def qwen_edit_unet():
-    """설치된 Qwen-Image-Edit 중 가장 새 판(2511 > 2509 > 첫 판)."""
-    c = [n for n in files("diffusion_models") if "qwen_image_edit" in n.lower()]
-    return max(c, key=lambda n: (qwen_ver(n), "fp8" in n.lower()), default=None)
+def _qlow(n):
+    return (n or "").lower()
 
 
-def qwen_fast_lora(unet):
-    """편집 모델과 같은 판의 4단계 Lightning LoRA. 판이 다른 LoRA 만 있으면 None(판이 다르면 결과가 깨질 수 있어요)."""
-    want = qwen_ver(unet)
-    c = [n for n in files("loras") if "lightning" in n.lower() and "qwen" in n.lower() and "edit" in n.lower()] \
-        or [n for n in files("loras") if "lightning" in n.lower() and "qwen" in n.lower()]
-    same = [n for n in c if qwen_ver(n) == want]
-    if same:
-        return min(same, key=lambda n: ("4step" not in n.lower(), n))
-    return next((n for n in c if not qwen_ver(n)), None) if not want else None
+def qwen21_unets():
+    """설치된 Qwen-Image 2.1 본체(생성·편집 겸용). 보통판을 앞에, Turbo 판은 뒤에."""
+    c = [n for n in files("diffusion_models") if QWEN21_RX.search(_qlow(n))]
+    return sorted(c, key=lambda n: ("turbo" in _qlow(n), not re.search(r"int8|fp8", _qlow(n)), n))
+
+
+def qwen21_te():
+    """Qwen-Image 2.1 텍스트 인코더(Qwen3-VL 8B): int8 → w4a8(가벼움) → bf16 순서."""
+    c = [n for n in files("text_encoders") if re.search(r"qwen3[_-]?vl[_-]?8b", _qlow(n))]
+    return min(c, key=lambda n: (0 if "int8" in _qlow(n) else 1 if "w4a8" in _qlow(n) else 2, n), default=None)
+
+
+def qwen21_vae():
+    c = [n for n in files("vae") if QWEN21_RX.search(_qlow(n)) and "vae" in _qlow(n)]
+    return min(c, key=lambda n: ("texture" in _qlow(n), n), default=None)
+
+
+def qwen_fast_lora(unet=None):
+    """Qwen-Image 2.1 4단계 Lightning LoRA(없으면 Turbo LoRA). 둘 다 없으면 None."""
+    c = [n for n in files("loras") if QWEN21_RX.search(_qlow(n)) and re.search(r"lightning|turbo", _qlow(n))]
+    return min(c, key=lambda n: ("lightning" not in _qlow(n), n), default=None)
+
+
+def qwen21_img_key(i):
+    """TextEncodeQwenImage21 의 참고 이미지 칸 이름(ComfyUI 판에 따라 'images.image_1' 또는 'image_1')."""
+    spec = (caps()["info"].get("TextEncodeQwenImage21") or {}).get("input", {})
+    flat = {**(spec.get("required") or {}), **(spec.get("optional") or {})}
+    return f"image_{i}" if f"image_{i}" in flat else f"images.image_{i}"
 
 
 def ref_method_key():
@@ -32,39 +47,37 @@ def ref_method_key():
     return next((k for k, v in spec.items() if isinstance(v, list) and v and (v[0] == "COMBO" and "index_timestep_zero" in ((v[1] or {}).get("options") or []) or isinstance(v[0], list) and "index_timestep_zero" in v[0])), "reference_latents_method")
 
 
-def qwen_params(p, text, tags, J):
-    f = dict(unet=qwen_edit_unet(), te=find("text_encoders", "qwen_2.5_vl"),
-             vae=find("vae", "qwen_image_vae"))
+def qwen_params(p, text, tags, J, negative=""):
+    """Qwen-Image 2.1(생성·편집·타일 리파인·조명·구도 공용) 설정."""
+    f = dict(unet=(qwen21_unets() or [None])[0], te=qwen21_te(), vae=qwen21_vae())
     for key, field, sub in (("unet", "q_unet", "diffusion_models"), ("te", "q_te", "text_encoders"), ("vae", "q_vae", "vae")):
         if p.get(field) and p[field] in files(sub):   # 화면에서 직접 고른 파일이 우선
             f[key] = p[field]
     if not all(f.values()):
-        names = {"unet": "Qwen 모델", "te": "텍스트 인코더", "vae": "VAE"}
-        raise RuntimeError("없는 파일: " + ", ".join(names[k] for k, v in f.items() if not v) + ". '설치와 모델' 탭에서 설치하거나, Qwen 설정의 '모델 파일 직접 고르기'에서 골라 주세요.")
+        names = {"unet": "Qwen-Image 2.1 모델", "te": "텍스트 인코더(Qwen3-VL 8B)", "vae": "Qwen-Image 2.1 VAE"}
+        raise RuntimeError("없는 파일: " + ", ".join(names[k] for k, v in f.items() if not v) + ". '설치와 모델' 탭에서 'Qwen-Image 2.1' 을 설치해 주세요.")
     if blocked(text):
         raise ValueError(BLOCK_MSG)
-    ver = qwen_ver(f["unet"])
-    new_ok = has_node("FluxKontextMultiReferenceLatentMethod") and has_node("TextEncodeQwenImageEditPlus")
-    if ver >= 2511 and not new_ok and not p.get("q_unet"):      # 엔진이 옛 판이면 설치된 옛 모델(2509 등)로 대신 그려요
-        old = max((n for n in files("diffusion_models") if "qwen_image_edit" in n.lower() and qwen_ver(n) < 2511), key=qwen_ver, default=None)
-        if old:
-            warn(J, "이 ComfyUI 는 Qwen-Image-Edit 2511 을 아직 못 써서 " + old + " 로 편집했어요. ComfyUI 를 업데이트하면 2511 을 써요.")
-            f["unet"], ver = old, qwen_ver(old)
-    fast = qwen_fast_lora(f["unet"]) if p.get("fast") else None
-    if p.get("fast") and not fast:
-        warn(J, f"빠른 모드: 이 편집 모델({ver or '첫 판'})에 맞는 Lightning LoRA 가 없어 보통 속도로 그렸어요. "
-                "'설치와 모델'에서 같은 판의 4단계 LoRA 를 받아 주세요.")
-    method = None
-    if ver >= 2511:      # 2511 공식 워크플로: 조건을 FluxKontextMultiReferenceLatentMethod(index_timestep_zero)로 묶어요
-        if not new_ok:
-            raise RuntimeError("이 ComfyUI 에는 Qwen-Image-Edit 2511 에 필요한 노드가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트하거나, Qwen 설정의 '모델 파일 직접 고르기'에서 2509 모델을 골라 주세요.")
-        method = ref_method_key()
+    if not has_node("TextEncodeQwenImage21"):
+        raise RuntimeError("이 ComfyUI 에는 Qwen-Image 2.1 노드(TextEncodeQwenImage21)가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    turbo = "turbo" in _qlow(f["unet"])
+    fast = qwen_fast_lora() if p.get("fast") and not turbo else None
+    if p.get("fast") and not fast and not turbo:
+        warn(J, "빠른 모드: Qwen-Image 2.1 Lightning LoRA 가 없어 보통 속도로 그렸어요. '설치와 모델'에서 받으면 4단계로 그려요.")
     loras = ([(fast, 1.0)] if fast else []) + collect_loras(p, tags, J)
-    return dict(files=f, loras=loras, prompt=text, seed=seed_of(p), ref_method=method,
-                steps=4 if fast else clamp(num(p, "q_steps", 20, int), 1, 100),
-                cfg=1.0 if fast else clamp(num(p, "q_cfg", 4.0), 0.0, 20.0),
+    mp = clamp(num(p, "q_mp", 1.0), 0.3, 4.0)
+    return dict(files=f, loras=loras, prompt=text, negative=negative, seed=seed_of(p),
+                steps=4 if fast else 8 if turbo and not p.get("q_steps") else clamp(num(p, "q_steps", 25, int), 1, 100),
+                cfg=1.0 if fast or turbo else clamp(num(p, "q_cfg", 1.0), 0.0, 20.0),
                 sampler=p.get("q_sampler") or "euler", scheduler=p.get("q_scheduler") or "simple",
-                shift=clamp(num(p, "q_shift", 3.0), 0.1, 20.0))
+                resolution=int(round(1024 * mp ** 0.5 / 32) * 32), fast=bool(fast))
+
+
+def qsize32(size, mp=1.0):
+    """Qwen-Image 2.1 은 32 배수 크기로 다뤄요."""
+    w, h = size
+    s = (mp * 1e6 / (w * h)) ** 0.5
+    return max(256, round(w * s / 32) * 32), max(256, round(h * s / 32) * 32)
 
 
 SCALE_MIN, SCALE_MAX, SIDE_MAX = 0.1, 8.0, 8192
@@ -163,7 +176,7 @@ def edit_flux(p, J, img, mask, grow, feather, rng):
             res = Image.composite(res, img, grow_feather(mask, grow, feather))
         return [(res, flux_info(q, res, "edit-flux", Kontext=True), None)]
     if not mask:
-        raise ValueError("칠해서 고치는 방식이에요. 편집할 영역을 마스크로 칠하거나 [선택 도구]로 골라 주세요. (말로만 지시해서 고치려면 Qwen-Image-Edit 이나 FLUX Kontext 모델을 쓰세요.)")
+        raise ValueError("칠해서 고치는 방식이에요. 편집할 영역을 마스크로 칠하거나 [선택 도구]로 골라 주세요. (말로만 지시해서 고치려면 Qwen-Image 2.1 이나 FLUX Kontext 모델을 쓰세요.)")
     q["denoise"] = clamp(num(p, "fx_edn", num(p, "fx_denoise", 0.6)), 0.1, 1.0)     # 기본 0.6: 1.0 이면 칠한 곳을 원본과 상관없이 통째로 새로 그려요
     pos, crop, soft, size = plan(img, mask, grow, clamp(num(p, "ctx", 35.0), 5, 200) / 100,
                                  clamp(num(p, "res", 1024, int), 512, 2048), feather, mult=16)
@@ -208,12 +221,10 @@ def do_edit(p, J):
         return [(out, info_sd(q, out.size, "edit-sdxl", **extra), None)]
     text, tags = prep(p, J, "sentence", rng)
     q = qwen_params(p, text, tags, J)
-    plus = has_node("TextEncodeQwenImageEditPlus")
     refs = [load_img(p[k]) for k in ("ref1", "ref2") if p.get(k)]
-    if refs and not plus:
-        raise RuntimeError("참조 이미지는 TextEncodeQwenImageEditPlus 노드가 필요해요. ComfyUI 를 업데이트해 주세요.")
-    small = img.resize(qsize(img.size, clamp(num(p, "q_mp", 1.0), 0.3, 2.5)), RS.LANCZOS)
-    wf = flows.wf_qwen(q, put_input(small, J), [put_input(r.resize(qsize(r.size), RS.LANCZOS), J) for r in refs], plus)
+    small = img.resize(qsize32(img.size, clamp(num(p, "q_mp", 1.0), 0.3, 4.0)), RS.LANCZOS)
+    q["resolution"] = 0          # 미리 32 배수로 맞춰 둔 크기를 그대로 써요(결과 크기 = 첫 사진 크기)
+    wf = flows.wf_qwen21(q, [put_input(small, J)] + [put_input(r.resize(qsize32(r.size), RS.LANCZOS), J) for r in refs], key=qwen21_img_key)
     J["msg"] = "편집 중"
     res = run_wf(wf, J)[0]
     if mask:  # 칠한 영역만 바꾸고 나머지는 원본 100% 유지
@@ -223,5 +234,5 @@ def do_edit(p, J):
         res = upscale(res, J, None, 4).resize(img.size, RS.LANCZOS)
     info = dict(kind="edit-qwen", prompt=q["prompt"], negative="", steps=q["steps"], cfg=q["cfg"], sampler=q["sampler"],
                 scheduler=q["scheduler"], seed=q["seed"], w=res.width, h=res.height, model=q["files"]["unet"],
-                loras=[[n, w] for n, w in q["loras"]], extra={"Shift": q["shift"], "Refs": len(refs)})
+                loras=[[n, w] for n, w in q["loras"]], extra={"Refs": len(refs), "Engine": "Qwen-Image 2.1"})
     return [(res, info, None)]

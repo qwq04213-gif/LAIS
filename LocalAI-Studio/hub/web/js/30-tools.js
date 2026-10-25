@@ -51,7 +51,7 @@ $('#f-edit').onsubmit=e=>{e.preventDefault();const f=e.target,v=IV.edit;
   if(!v.img)return need(f,'먼저 이미지를 올려 주세요.');
   const m=v.hasMask()?v.maskData():null;
   if(f.engine.value==='sdxl'&&!m)return need(f,'칠해서 편집하려면 바꿀 영역을 이미지 위에 칠해 주세요.');
-  if(f.engine.value==='flux'&&!m&&!/kontext/i.test(f.fx_model.value))return need(f,'칠해서 편집하려면 바꿀 영역을 칠하거나 [선택 도구]로 골라 주세요. (칠하지 않고 말로 고치려면 FLUX Kontext 모델이나 Qwen-Image-Edit 을 쓰세요.)');
+  if(f.engine.value==='flux'&&!m&&!/kontext/i.test(f.fx_model.value))return need(f,'칠해서 편집하려면 바꿀 영역을 칠하거나 [선택 도구]로 골라 주세요. (칠하지 않고 말로 고치려면 FLUX Kontext 모델이나 Qwen-Image 2.1 을 쓰세요.)');
   run('edit',f,{image:v.img,mask:m})};
 $('#f-gen').onsubmit=e=>{e.preventDefault();run('gen',e.target,{})};
 $('#f-up').onsubmit=e=>{e.preventDefault();const v=IV.up;if(!v.img)return need(e.target,'먼저 이미지를 올려 주세요.');run('up',e.target,{image:v.img})};
@@ -166,7 +166,7 @@ const pickFile=(arr,name)=>{const m=stemN(name);if(!m)return null;
   return arr.find(c=>stemN(c)===m)||arr.find(c=>{const x=stemN(c);return x&&(x.includes(m)||m.includes(x))})||null};
 function sendToGen(){
   const g=INFO.r.gen,p=g.params,f=$('#f-gen'),X={...(g.raw||{}),...(p.extra||{})},miss=[],done=[];
-  const fam=['flux','chroma','krea2','hidream','lumina'].includes(p.family)?p.family:p.family==='sd3'||p.family==='sd35'?'sd35':'sdxl';
+  const fam=['flux','chroma','krea2'].includes(p.family)?p.family:p.family==='qwen'?'qwenimg':p.family==='moss'?'moss':p.family==='sd3'||p.family==='sd35'?'sd35':'sdxl';
   setv(f,'gengine',fam);sync(f);fillFx();
   const put=(k,v,label)=>{const el=f.elements[k];if(!el||v==null||v==='')return false;
     if(el.tagName==='SELECT'&&![...el.options].some(o=>o.value===String(v))){if(label)miss.push(`${label} ${v}`);return false}
@@ -331,8 +331,8 @@ function featForm(id,keep){
   featId=id;$('#feat-form').dataset.f=id;navMark($('#v-feat.on')?'feat':'');
   const keepVals=mem?mem.vals:{};
   const keepImgs=mem?mem.imgs:{}; // 창이 다시 활성화되며 목록을 새로 그려도 올린 이미지는 유지
-  const miss=[...(f.missing_nodes||[]).map(n=>`노드 ${n}`),...(f.missing_lists||[]).map(k=>({checkpoints:'체크포인트',anymodels:'이미지 모델',qwen:'Qwen-Image-Edit 편집 모델'}[k]||k))];
-  const needL=[...new Set((f.missing_lists||[]).flatMap(k=>({checkpoints:['noobai','sdxl-vae-fix'],anymodels:['noobai','sdxl-vae-fix'],qwen:['qwen-edit']})[k]||[]))];
+  const miss=[...(f.missing_nodes||[]).map(n=>`노드 ${n}`),...(f.missing_lists||[]).map(k=>({checkpoints:'체크포인트',anymodels:'이미지 모델',qwen:'Qwen-Image 2.1 모델'}[k]||k))];
+  const needL=[...new Set((f.missing_lists||[]).flatMap(k=>({checkpoints:['noobai','sdxl-vae-fix'],anymodels:['noobai','sdxl-vae-fix'],qwen:['qwen-image']})[k]||[]))];
   const main=f.fields.filter(x=>!x.advanced),adv=f.fields.filter(x=>x.advanced);
   $('#feat-form').innerHTML=`<h3>${esc(f.title)}</h3><p class="hint plain">${esc(f.summary)}</p>
     <ol class="steps">${f.steps.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>

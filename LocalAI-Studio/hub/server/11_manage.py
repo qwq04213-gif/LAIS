@@ -358,9 +358,12 @@ def _chat_msgs(raw):
             continue
         c = str(m.get("content") or "")[:200000]
         imgs = [i for i in (m.get("images") or []) if isinstance(i, str) and i.startswith("data:image/") and len(i) < 3_000_000][:4]
-        if not c.strip() and not imgs:
+        plan = m.get("plan") if isinstance(m.get("plan"), dict) and len(json.dumps(m.get("plan"), ensure_ascii=False)) < 300_000 else None
+        after = str(m.get("after") or "")[:4000]
+        srcs = [{k: str(x.get(k) or "")[:300] for k in ("title", "url", "date")} for x in (m.get("sources") or [])[:10] if isinstance(x, dict) and str(x.get("url", "")).startswith("http")]
+        if not c.strip() and not imgs and not plan:
             continue
-        out.append({"role": m["role"], "content": c, **({"images": imgs} if imgs else {})})
+        out.append({"role": m["role"], "content": c, **({"images": imgs} if imgs else {}), **({"plan": plan} if plan else {}), **({"after": after} if after else {}), **({"sources": srcs} if srcs else {})})
     return out
 
 

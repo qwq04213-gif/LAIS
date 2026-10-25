@@ -14,8 +14,8 @@ STRUCT_KINDS = ("pose", "depth", "canny", "lineart")
 
 
 def angle_lora():
-    """카메라 각도 LoRA(Qwen-Image-Edit 2511 Multiple Angles)가 있으면 그 파일 이름."""
-    return next((n for n in files("loras") if "multiple" in n.lower() and "angle" in n.lower()), None)
+    """Qwen-Image 2.1 용 카메라 각도 LoRA 가 있으면 그 파일 이름(2511 용은 2.1 에서 쓸 수 없어 고르지 않아요)."""
+    return next((n for n in files("loras") if "angle" in n.lower() and QWEN21_RX.search(n.lower())), None)
 
 
 def recompose_angle_prompt(p, use_lora):
@@ -49,11 +49,6 @@ def feat_recompose(p, J):
     note = {}
     if mode == "angle":
         lora = angle_lora() if p.get("use_lora", "on") not in ("", None, "off", False) else None
-        if lora and qwen_ver(qwen_edit_unet() or "") < 2511:
-            warn(J, "카메라 각도 LoRA 는 Qwen-Image-Edit 2511 용이라 쓰지 않았어요(지금 편집 모델이 옛 판이에요).")
-            lora = None
-        if not lora and p.get("use_lora", "on") not in ("", None, "off", False):
-            warn(J, "카메라 각도 LoRA 가 없어 말로만 지시했어요. '설치와 모델'에서 'Qwen-Edit 2511 카메라 각도 LoRA'를 받으면 각도가 더 정확해져요.")
         text = recompose_angle_prompt(p, bool(lora))
         if lora:
             text += f" <lora:{Path(lora).stem}:{clamp(num(p, 'lora_w', 0.9), 0.3, 1.5)}>"

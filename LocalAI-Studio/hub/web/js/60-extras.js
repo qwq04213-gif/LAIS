@@ -323,7 +323,13 @@ $('#diag-go').onclick=async()=>{const b=$('#diag-go');b.disabled=true;
  const pick=(id,key,def,fn)=>{const el=$('#'+id);el.value=String(ls.get(key,def));if(el.value!==String(ls.get(key,def)))el.value=String(def);
   el.onchange=()=>{const v=isNaN(+el.value)||el.value===''?el.value:+el.value;ls.set(key,v);fn&&fn(v)}};
  pick('opt-chatfs','opt:chatfs',1,v=>D.style.setProperty('--chatfs',v));
+ {const fs=$('#opt-font'),apply=v=>{if(v)D.style.setProperty('--font',v==='system-ui'?'system-ui':`"${v}","Pretendard Variable","Malgun Gothic",sans-serif`);else D.style.removeProperty('--font')};
+  const add=n=>{if(n&&![...fs.options].some(o=>o.value===n))fs.insertAdjacentHTML('beforeend',`<option value="${esc(n)}">${esc(n)}</option>`)};
+  add(ls.get('opt:font',''));fs.value=ls.get('opt:font','');fs.onchange=()=>{ls.set('opt:font',fs.value);apply(fs.value)};
+  $('#opt-font-more').onclick=async()=>{if(!window.queryLocalFonts)return toast('이 브라우저는 설치된 글꼴 목록을 알려 주지 않아요. 크롬·엣지에서 열어 보세요.');
+    try{const L=await queryLocalFonts(),names=[...new Set(L.map(f=>f.family))].sort((a,b)=>a.localeCompare(b,'ko'));names.forEach(add);toast(`글꼴 ${names.length}개를 목록에 더했어요.`)}catch{toast('글꼴 목록을 읽지 못했어요(허락하지 않았을 수 있어요).')}}}
  pick('opt-galsz','opt:galsz',190,v=>D.style.setProperty('--galmin',v));
+ if(+ls.get('opt:pagew',0)===1400)ls.set('opt:pagew',1240);if(+ls.get('opt:pagew',0)===1800)ls.set('opt:pagew',1560);
  pick('opt-pagew','opt:pagew','0',v=>{if(+v)D.style.setProperty('--pagew',(+v>=9999?'100%':v+'px'));else D.style.removeProperty('--pagew')});
  pick('opt-galprev','opt:galprev','on',v=>{D.dataset.galprev=v;if(GAL&&GAL.items&&GAL.items.length)galLoad()});
  pick('opt-ressz','opt:ressz',420,v=>D.style.setProperty('--resh',v));

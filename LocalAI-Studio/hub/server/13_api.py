@@ -25,7 +25,7 @@ def status(fresh=False):
     return {"boot": BOOT, "ollama": al(OLLAMA + "/api/version"), "comfy": al(CUI + "/system_stats"), "gpu": GPU, "gpu_live": gpu_live(), "version": VERSION}
 
 
-FAMILY_CHOICES = ("sd15", "sdxl", "sd3", "flux", "krea2", "chroma", "qwen", "hidream", "lumina", "hidden")
+FAMILY_CHOICES = ("sd15", "sdxl", "sd3", "flux", "krea2", "chroma", "qwen", "moss", "hidden")
 
 
 def model_family(folder, name):
@@ -73,7 +73,7 @@ def sorted_models():
         info["diffusion_models/" + n] = dict(family=fam, all_in_one=allin, how=how)
         if fam == "krea2":
             krea2.append(n)
-        elif fam in ("hidden", "qwen", "sd15", "sdxl", "sd3", "hidream", "lumina") or (fam == "unknown" and "qwen" in n.lower()):
+        elif fam in ("hidden", "qwen", "moss", "sd15", "sdxl", "sd3", "hidream", "lumina") or (fam == "unknown" and re.search(r"qwen|moss", n.lower())):
             continue
         else:
             (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)
@@ -131,8 +131,7 @@ def _lists_build():
             "musicmodels": music_models(), "music_nodes": all(has_node(n) for n in MUSIC_NODES), "k2control": k2_control_loras(), "vidmore": vid_more_state(), "sfx_ready": bool(sfx_models()), "k2c_nodes": all(has_node(n) for n in K2C_NODES),
             "wanmodels": wan_models(), "wan_ready": bool(wan_parts()["te"] and wan_parts()["vae"]), "wan14": wan14_state(),
             "wildcards": sorted(p.stem for p in wc.glob("*.txt")) if wc.is_dir() else [],
-            "qwen": bool(find("diffusion_models", "qwen_image_edit") and find("text_encoders", "qwen_2.5_vl")
-                         and find("vae", "qwen_image_vae"))}
+            "qwen": bool(qwen21_unets() and qwen21_te() and qwen21_vae()), "qwen_files": {"unet": qwen21_unets(), "te": [n for n in files("text_encoders") if re.search(r"qwen3[_-]?vl[_-]?8b", n.lower())], "vae": [n for n in files("vae") if QWEN21_RX.search(n.lower())]}}
 
 
 def catalog():
@@ -242,7 +241,7 @@ def selfcheck():
         prow("Krea 2 텍스트 인코더 (Qwen3-VL)", kp.get("te"), "Krea 2 를 쓸 때만 필요해요."),
         prow("Krea 2 VAE (Qwen Image VAE)", kp.get("vae"), "Krea 2 를 쓸 때만 필요해요.")],
         "FLUX 는 모델·T5·CLIP-L·VAE 가 모두 있어야 하고, Chroma 는 모델·T5·VAE, Krea 2 는 모델·Qwen3-VL·Qwen Image VAE 가 필요해요. 쓰지 않는 계열이 비어 있는 건 괜찮아요.")
-    grp("edit", "이미지 편집", "edit", [_row("Qwen 편집 모델 묶음", bool(L.get("qwen")), "" if L.get("qwen") else "편집 모델·텍스트 인코더·VAE 중 빠진 게 있어요.",
+    grp("edit", "이미지 편집", "edit", [_row("Qwen-Image 2.1 (생성·편집)", bool(L.get("qwen")), "" if L.get("qwen") else "모델·텍스트 인코더·VAE 중 빠진 게 있어요.",
                                             None if L.get("qwen") else {"a": "view", "v": "setup"}, "설치와 모델 열기", opt=True)])
     wan_ok = bool(L.get("wan_ready") and L.get("wanmodels"))
     wan14 = L.get("wan14") or {}

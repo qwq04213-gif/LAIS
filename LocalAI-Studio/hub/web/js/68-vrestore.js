@@ -6,13 +6,13 @@ const vrSrcUrl=v=>v.startsWith('up:')?'/upfile/'+v.slice(3):v;
 async function vrLists(keep){let r;try{r=await api('/api/vmix/list')}catch{return}
   const s=$('#vr-video'),cur=keep||s.value;const ups=[...s.options].filter(o=>o.value.startsWith('up:')).map(o=>`<option value="${esc(o.value)}">${esc(o.textContent)}</option>`).join('');
   s.innerHTML=ups+(r.videos||[]).map(v=>`<option value="${esc(v.url)}">${esc(v.name)}</option>`).join('')||'<option value="">(결과 폴더에 영상이 없어요 — 올려 주세요)</option>';
-  if(cur&&[...s.options].some(o=>o.value===cur))s.value=cur;
+  if(cur&&[...s.options].some(o=>o.value===cur))s.value=cur;vPrev(s);
   let L={};try{L=await api('/api/lists')}catch{}const um=$('#vr-upm'),uc=um.value;
   um.innerHTML=(L.upscalers||[]).length?L.upscalers.map(m=>`<option>${esc(m)}</option>`).join(''):'<option value="">(업스케일 모델 없음 — 설치와 모델에서 받아요)</option>';if(uc)um.value=uc}
 $('#vr-up').onclick=()=>$('#vr-file').click();
 $('#vr-file').onchange=async e=>{const fl=e.target.files[0];e.target.value='';if(!fl)return;vrSt('올리는 중…',null);
   try{const r=await fetch(`/api/vmix/upload?kind=video&name=${encodeURIComponent(fl.name)}`,{method:'POST',body:fl}),j=await r.json();if(j.error){vrSt(j.error,null,true);return}
-    const s=$('#vr-video');s.insertAdjacentHTML('afterbegin',`<option value="${esc(j.id)}">⬆ ${esc(j.name)}</option>`);s.value=j.id;vrSt('');$('#vr-report').innerHTML=''}catch{vrSt('올리지 못했어요.',null,true)}};
+    const s=$('#vr-video');s.insertAdjacentHTML('afterbegin',`<option value="${esc(j.id)}">⬆ ${esc(j.name)}</option>`);s.value=j.id;vPrev(s);vrSt('');$('#vr-report').innerHTML=''}catch{vrSt('올리지 못했어요.',null,true)}};
 $('#vr-video').onchange=()=>{$('#vr-report').innerHTML='';VR.rep=null};
 async function vrRun(p,label){if(VR.job)return toast('복원 작업이 진행 중이에요.');
   const r=await api('/api/job',p);if(r.error){vrSt(r.error,null,true);return null}VR.job=r.id;if(typeof qPoll==='function')qPoll();vrSt(label+'…',0);

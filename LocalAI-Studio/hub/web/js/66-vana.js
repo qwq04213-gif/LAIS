@@ -6,14 +6,14 @@ function vaSt(t,pc,bad){const s=$('#va-st'),g=$('#va-pg');s.hidden=!t;s.textCont
 async function vaLists(keep){let r;try{r=await api('/api/vmix/list')}catch{return}
   const s=$('#va-video'),cur=keep||s.value;const ups=[...s.options].filter(o=>o.value.startsWith('up:')).map(o=>`<option value="${esc(o.value)}">${esc(o.textContent)}</option>`).join('');
   s.innerHTML=ups+(r.videos||[]).map(v=>`<option value="${esc(v.url)}">${esc(v.name)}</option>`).join('')||'<option value="">(결과 폴더에 영상이 없어요 — 올려 주세요)</option>';
-  if(cur&&[...s.options].some(o=>o.value===cur))s.value=cur;
+  if(cur&&[...s.options].some(o=>o.value===cur))s.value=cur;vPrev(s);
   let vm=[];try{vm=(await api('/api/vision')).models||[]}catch{}
   $('#va-vision').innerHTML=vm.length?vm.map(m=>`<option>${esc(m)}</option>`).join(''):'<option value="">(이미지를 볼 수 있는 대화 모델 없음)</option>';$('#va-cap').disabled=!vm.length;
   vaAsr();vaHist()}
 async function vaAsr(){let a;try{a=await api('/api/asr')}catch{return}const st=$('#va-asr-st');
   if(a.installed){st.innerHTML='받아쓰기 엔진 준비됨';$('#va-asr').disabled=false;return}
   $('#va-asr').checked=false;$('#va-asr').disabled=true;
-  st.innerHTML=a.state==='running'?`엔진 설치 중… ${esc(a.msg||'')}`:`${a.state==='error'?`<span class="bad">${esc(a.msg)}</span> `:''}<button type="button" class="ghost sm" id="va-asr-inst">받아쓰기 엔진 설치 (${esc(a.size)}, ${esc(a.license)})</button>`;
+  st.innerHTML=a.state==='running'?`엔진 설치 중… ${esc(a.msg||'')}`:`${a.state==='error'?`<span class="bad">${esc(a.msg)}</span> `:''}<button type="button" class="ghost sm wide" id="va-asr-inst" title="${esc(a.size)} · ${esc(a.license)}">받아쓰기 엔진 설치 (약 5GB)</button>`;
   if(a.state==='running')setTimeout(vaAsr,3000)}
 document.addEventListener('click',async e=>{if(e.target.id!=='va-asr-inst')return;e.target.disabled=true;const r=await api('/api/asr/install',{});if(r.error)toast(r.error);vaAsr()});
 async function vaHist(){let r;try{r=await api('/api/vana')}catch{return}const s=$('#va-hist');
@@ -22,7 +22,7 @@ $('#va-hist').onchange=e=>{if(e.target.value)vaOpenA(e.target.value)};
 $('#va-up').onclick=()=>$('#va-file').click();
 $('#va-file').onchange=async e=>{const fl=e.target.files[0];e.target.value='';if(!fl)return;vaSt('올리는 중…',null);
   try{const r=await fetch(`/api/vmix/upload?kind=video&name=${encodeURIComponent(fl.name)}`,{method:'POST',body:fl}),j=await r.json();if(j.error){vaSt(j.error,null,true);return}
-    const s=$('#va-video');s.insertAdjacentHTML('afterbegin',`<option value="${esc(j.id)}">⬆ ${esc(j.name)}</option>`);s.value=j.id;vaSt('')}catch{vaSt('올리지 못했어요.',null,true)}};
+    const s=$('#va-video');s.insertAdjacentHTML('afterbegin',`<option value="${esc(j.id)}">⬆ ${esc(j.name)}</option>`);s.value=j.id;vPrev(s);vaSt('')}catch{vaSt('올리지 못했어요.',null,true)}};
 async function vaRun(p,label){if(VA.job)return toast('다른 분석이 진행 중이에요.');VA.stop=false;
   const r=await api('/api/job',p);if(r.error){vaSt(r.error,null,true);return null}VA.job=r.id;if(typeof qPoll==='function')qPoll();vaSt(label+'…',0);
   try{for(;;){await sleep(1000);const j=await api('/api/job/'+r.id);
@@ -100,6 +100,6 @@ $('#va-res').addEventListener('click',async e=>{const A=VA.A;if(!A)return;const 
         $('#va-out').innerHTML=`<video src="${u}" controls playsinline></video><div class="xpb"><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="vmix">소리·자막 더 넣기</button><button type="button" data-u="${u}" data-to="fs">전체 화면</button></div>`;break}
       if(j.state==='error'||j.state==='cancelled'){vaSt(j.error||'중단했어요.',null,true);break}
       vaSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||'만드는 중'),typeof j.progress==='number'?j.progress:0)}}finally{VA.job=null;$('#va-stop').hidden=true}}});
-window.vanaOpen=async u=>{show('vana');await vaLists(u);$('#va-video').value=u};
+window.vanaOpen=async u=>{show('vana');await vaLists(u);$('#va-video').value=u;vPrev($('#va-video'))};
 document.addEventListener('viewshow',e=>{if(e.detail==='vana')vaLists()});
 if($('#v-vana.on'))vaLists();
