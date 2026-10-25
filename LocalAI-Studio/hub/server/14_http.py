@@ -258,6 +258,18 @@ class Handler(BaseHTTPRequestHandler):
             if not fp:
                 return self.send_json({"error": "없어요"}, 404)
             return self.send_file(fp, "image/png" if fp.suffix.lower() == ".png" else "image/jpeg")
+        if u == "/api/audio/engine":
+            return self.send_json(audio_sep.status(ROOT))
+        if u.startswith("/upfile/"):
+            fp = up_file(u[8:])
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_media(fp, MEDIA.get(fp.suffix.lower(), "video/mp4" if fp.suffix.lower() in vmix.VIDEO_EXT else "application/octet-stream"))
+        if u.startswith("/aorig/"):
+            fp = au_orig_file(u[7:])
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_media(fp, "audio/wav")
         if u == "/api/asr":
             return self.send_json(asr_models.status(ROOT))
         if u.startswith("/vana/"):
@@ -285,7 +297,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss", "report", "verify", "tracks", "orig", "loud") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -333,6 +345,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(lora_train.install(ROOT))
         if u == "/api/lora/engine/uninstall":
             return self.send_json(lora_train.uninstall(ROOT))
+        if u == "/api/audio/engine/install":
+            return self.send_json(audio_sep.install(ROOT))
+        if u == "/api/audio/engine/uninstall":
+            return self.send_json(audio_sep.uninstall(ROOT))
         if u == "/api/asr/install":
             return self.send_json(asr_models.install(ROOT))
         if u == "/api/asr/uninstall":
@@ -356,7 +372,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/agent/cancel":
             return self.send_json(agent_cancel(str(p.get("id"))))
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora", "vrestore", "audio"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if p["kind"] == "batch":
                 try:

@@ -635,6 +635,25 @@ def wf_vpost(op, q):
     return w.n
 
 
+def wf_vrestore(q):
+    """영상 복원 조각 하나: 불러와 프레임으로 풀고 → (업스케일 모델 → 목표 크기로 맞추기) → (RIFE 로 프레임 2배) → 소리 없이 저장."""
+    w = WF()
+    vid = w.add("LoadVideo", file=q["file"])
+    comp = w.add("GetVideoComponents", video=[vid, 0])
+    img, fps = [comp, 0], q["fps"]
+    if q.get("model"):
+        m = w.add("UpscaleModelLoader", model_name=q["model"])
+        img = [w.add("ImageUpscaleWithModel", upscale_model=[m, 0], image=img), 0]
+        img = [w.add("ImageScale", image=img, upscale_method="lanczos", width=q["w"], height=q["h"], crop="disabled"), 0]
+    if q.get("interp"):
+        img = [w.add("RIFE VFI", ckpt_name=q.get("ckpt") or "rife47.pth", frames=img, clear_cache_after_n_frames=10, multiplier=2,
+                     fast_mode=True, ensemble=True, scale_factor=1.0), 0]
+        fps = fps * 2
+    out = w.add("CreateVideo", images=img, fps=fps)
+    w.add("SaveVideo", video=[out, 0], filename_prefix="video/restore", format="auto", codec="auto")
+    return w.n
+
+
 def wf_video14(q, start=None):
     """Wan 2.2 14B: 고노이즈 모델이 앞 단계(큰 구도·움직임)를, 저노이즈 모델이 뒷 단계(디테일)를 맡는 2단계 샘플링.
     start 가 있으면 이미지→영상(WanImageToVideo), 없으면 글→영상(EmptyHunyuanLatentVideo)."""
