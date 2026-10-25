@@ -681,3 +681,13 @@ details.more[open]>.menu:not([style]){visibility:hidden}
 #tagbox .tk{color:var(--acc);margin-left:6px}
 #tagbox{max-height:60vh;overscroll-behavior:contain}#tagbox .thd{position:sticky;top:-3px;background:var(--raised);padding:4px 9px;font-size:calc(11.5px*var(--ui,1));color:var(--mute);border-bottom:1px solid var(--line);z-index:1}
 #tagbox .tmore{padding:6px 9px;color:var(--mute);font-size:calc(12px*var(--ui,1))}
+/* LoRA 만들기 */
+.lo-eng{margin:8px 0}.lo-top{display:flex;gap:8px;align-items:center;margin:8px 0}.lo-top select{min-width:280px}
+.lo-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px 14px;align-items:end}.lo-mb{display:flex;gap:8px;align-items:center}
+.lo-drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;margin:8px 0}.lo-drop.on{border-color:var(--acc);background:var(--table)}
+.lo-capbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.lo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}.lo-c{position:relative;margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--chrome);display:flex;flex-direction:column}
+.lo-c img{width:100%;aspect-ratio:1;object-fit:cover;cursor:zoom-in;display:block}.lo-c textarea{width:100%;box-sizing:border-box;border:0;border-top:1px solid var(--line);border-radius:0;font-size:calc(12px*var(--ui,1));resize:vertical}
+.lo-c small{padding:2px 8px 6px}.lo-x{position:absolute;top:6px;right:6px;border-radius:50%;width:26px;height:26px;padding:0;background:rgba(0,0,0,.55);color:#fff;border:0;cursor:pointer}
+.lo-samples div{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}.lo-samples img{width:180px;border-radius:8px}#lo-pg{width:100%;max-width:520px;height:8px}
+.lo-top button{white-space:nowrap}

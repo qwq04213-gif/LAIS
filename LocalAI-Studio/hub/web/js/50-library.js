@@ -92,6 +92,7 @@ $('#gal-group').checked=!!ls.get('gal:group',false);$('#gal-group').onchange=()=
 let GSEL=false,GPICK=new Set();
 const galSelUi=()=>{GSEL=GPICK.size>0;$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?`선택 해제 (${GPICK.size})`:'모두 선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
   {const two=[...GPICK].filter(u=>/\.(png|jpe?g)$/i.test(u));$('#gal-cmp').hidden=!(GSEL&&GPICK.size===2&&two.length===2)}
+  {const im=[...GPICK].filter(u=>/\.(png|jpe?g|webp)$/i.test(u));const b=$('#gal-lora');if(b){b.hidden=!im.length;b.textContent=`LoRA 학습 사진으로 (${im.length})`}}
   $$('#gal-grid .gt').forEach(t=>{const on=GPICK.has(t.dataset.u);t.classList.toggle('picked',on);const c=$('[data-pick]',t);if(c)c.checked=on})};
 async function galDelete(urls){if(!urls.length)return;
   if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;

@@ -139,7 +139,7 @@ def vmix_upload(h):
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
-        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")):
+        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")) or p["kind"] == "lora":
             pass                                          # 음성 만들기·영상 소리/자막 넣기는 ComfyUI 를 쓰지 않아요
         elif (p["kind"] == "feat" and p.get("feature") in ("resize", "color", "rmbg")) or (p["kind"] == "vpost" and p.get("op") == "gif"):
             pass                                          # 크기·색 보정·배경 지우기는 ComfyUI 없이 바로 처리해요
@@ -148,7 +148,7 @@ def job_thread(J, p):
         else:
             wait_comfy()
             claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana}[p["kind"]](p, J)
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora}[p["kind"]](p, J)
         sub = OUT_SUB["vid"] if p["kind"] in ("vpost", "vmix", "vedit", "vana") else OUT_SUB.get(p["kind"], "기타")
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
@@ -210,7 +210,7 @@ def _clean_tmp(J):
 QUEUE, QP = [], {}
 _QCV = threading.Condition()
 _QW = {"t": None}
-KIND_NAME = {"vedit": "영상 편집", "edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "vmix": "영상 소리·자막", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리", "vana": "영상 분석"}
+KIND_NAME = {"vedit": "영상 편집", "edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "vmix": "영상 소리·자막", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리", "vana": "영상 분석", "lora": "LoRA 만들기"}
 DONE_STATES = ("done", "error", "cancelled")
 
 
@@ -233,7 +233,7 @@ NEED_RULES = [      # 작업 오류 글 → 바로 받을 추천 모델(models.j
     (r"Wan 2\.2 14B 이미지", ["wan22-14b-i2v"]), (r"Wan 2\.2 14B 글", ["wan22-14b-t2v"]), (r"'Wan 2\.2 영상'", ["wan22-ti2v-5b"]),
     (r"SD3\.5", ["sd35-medium"]), (r"HiDream", ["hidream-fast"]), (r"Lumina 2", ["lumina2"]), (r"Qwen-Image 모델|Qwen-Image 공용", ["qwen-image"]),
     (r"Qwen 모델|Qwen-Image-Edit|편집 모델\(", ["qwen-edit"]), (r"Lightning LoRA", ["qwen-lightning"]),
-    (r"이미지를 볼 수 있는 대화 모델", ["qwen25vl-7b"]), (r"FLUX ControlNet Union", ["controlnet-flux-union"]), (r"ControlNet Union SDXL", ["controlnet-union"]), (r"도우미로 쓸 대화 모델|도구 호출", ["qwen35-9b"]),
+    (r"이미지를 볼 수 있는 대화 모델", ["qwen25vl-7b"]), (r"기반 모델\(체크포인트\)", ["noobai"]), (r"FLUX ControlNet Union", ["controlnet-flux-union"]), (r"ControlNet Union SDXL", ["controlnet-union"]), (r"도우미로 쓸 대화 모델|도구 호출", ["qwen35-9b"]),
 ]
 NEED_FAM = {"flux": ["krea-dev"], "chroma": ["chroma-hd"], "krea2": ["krea2-turbo"]}
 

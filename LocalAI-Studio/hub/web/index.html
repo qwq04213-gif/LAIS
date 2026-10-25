@@ -26,6 +26,7 @@
     <div class="ngb">
       <button data-v="gal" title="기록 갤러리"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>기록 갤러리</span></button>
       <button data-v="lib" title="프롬프트"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>프롬프트</span></button>
+      <button data-v="lora" title="LoRA 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><path d="M17 13v8M13 17h8"/></svg><span>LoRA 만들기</span></button>
     </div></div>
     <div class="ng" data-g="img"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">이미지<i aria-hidden="true"></i></span>
     <div class="ngb">
@@ -824,6 +825,52 @@
   <div id="va-res"></div>
 </section>
 
+<section class="view" id="v-lora">
+  <h2>LoRA 만들기</h2>
+  <p class="hint plain">사진 15~40장으로 특정 인물·캐릭터, 그림체, 사물을 기억하는 LoRA 를 직접 만들어요. 사진 모으기 → 자동 캡션 → 학습 순서예요. 지금은 SD1.5 · SDXL 계열(Illustrious·Pony·NoobAI 포함) 체크포인트로 만들 수 있어요.</p>
+  <p class="warn">본인이거나 허락받은 사람의 사진, 직접 만든 그림처럼 쓸 권리가 있는 사진만 쓰세요. 미성년자 사진은 쓰지 마세요.</p>
+  <div id="lo-eng" class="lo-eng"></div>
+  <div class="lo-top"><select id="lo-sets"><option value="">+ 새 LoRA</option></select><button type="button" class="ghost sm" id="lo-del" hidden>이 세트 지우기</button></div>
+  <div class="lo-meta">
+    <label class="f">이름<input id="lo-name" placeholder="예: 우리 집 고양이 나비"></label>
+    <label class="f">파일 이름 (영문·숫자)<input id="lo-file" placeholder="예: nabi_cat"></label>
+    <label class="f">트리거 단어<input id="lo-trig" placeholder="예: nabicat (프롬프트에 넣으면 이 LoRA 가 떠올라요)"></label>
+    <label class="f">종류<select id="lo-kind"><option value="character">인물·캐릭터</option><option value="style">그림체·스타일</option><option value="other">사물·옷·기타</option></select></label>
+    <div class="lo-mb"><button type="button" class="go" id="lo-create">세트 만들기</button><button type="button" class="ghost" id="lo-save" hidden>이름·설정 저장</button></div>
+  </div>
+  <div id="lo-data" hidden>
+    <h3>1. 학습 사진 <span class="mute" id="lo-n"></span></h3>
+    <div class="lo-drop" id="lo-drop">사진을 여기로 끌어다 놓거나 <button type="button" class="ghost sm" id="lo-add">사진 고르기</button><input type="file" id="lo-in" accept="image/*" multiple hidden> · 기록 갤러리에서 골라 [LoRA 학습 사진으로]를 눌러도 돼요. <span class="mute">얼굴·대상이 잘 보이는 다양한 각도·배경·옷의 사진이 좋아요.</span></div>
+    <h3>2. 캡션 (사진마다 무엇이 보이는지)</h3>
+    <div class="lo-capbar"><select id="lo-cmethod"><option value="wd14">태그로 — 애니·일러스트 (WD14 태거, 처음 약 380MB)</option><option value="tags">태그로 — 이미지를 보는 대화 모델</option><option value="sentence">문장으로 — 실사 (이미지를 보는 대화 모델)</option></select>
+      <label class="chk"><input type="checkbox" id="lo-cover"> 이미 있는 캡션도 다시 달기</label>
+      <button type="button" class="ghost" id="lo-cap">자동 캡션 달기</button><button type="button" class="ghost" id="lo-capsave">고친 캡션 저장</button></div>
+    <p class="hint plain">트리거 단어는 학습할 때 캡션 맨 앞에 자동으로 붙어요. 인물 LoRA 는 머리색·눈 색처럼 '항상 같은 특징'을 캡션에서 빼면 트리거 단어가 그 특징을 기억해요.</p>
+    <div id="lo-grid" class="lo-grid"></div>
+  </div>
+  <div id="lo-train" hidden>
+    <h3>3. 학습</h3>
+    <div class="lo-meta">
+      <label class="f">기반 모델<select id="lo-ckpt"></select></label>
+      <label class="f">학습 정도<select id="lo-preset"><option value="fast">빠르게 (가볍게 맛보기)</option><option value="normal" selected>보통 (추천)</option><option value="careful">꼼꼼하게 (오래 걸려요)</option></select></label>
+      <label class="f">해상도<select id="lo-res"><option value="">모델에 맞게 (SDXL 1024 · SD1.5 512)</option><option value="1024">1024</option><option value="768">768 (메모리 아끼기)</option><option value="512">512</option></select></label>
+      <label class="f">미리보기 프롬프트<input id="lo-sprompt" placeholder="예: 1girl, smile, upper body — 학습 중간중간 이 그림을 그려 보여 줘요"></label>
+    </div>
+    <details><summary>고급 설정</summary><div class="lo-meta">
+      <label class="f">단계 수 (0 = 자동)<input type="number" id="lo-steps" value="0" min="0" max="20000"></label>
+      <label class="f">LoRA 크기 (dim)<input type="number" id="lo-dim" value="0" min="0" max="128" placeholder="0 = 자동"></label>
+      <label class="f">학습률<input type="number" id="lo-lr" value="0" step="0.00001" min="0"></label>
+      <label class="chk"><input type="checkbox" id="lo-te"> 텍스트 인코더도 학습 (메모리 더 씀)</label>
+      <label class="chk"><input type="checkbox" id="lo-flip"> 좌우 뒤집은 사진도 쓰기 (스타일용)</label>
+      <label class="chk"><input type="checkbox" id="lo-sample" checked> 학습 중 미리보기 그리기</label></div></details>
+    <p class="mute" id="lo-est"></p>
+    <div class="lo-mb"><button type="button" class="go" id="lo-go">학습 시작</button><button type="button" class="ghost" id="lo-stop" hidden>중단</button></div>
+    <p class="st" id="lo-st" hidden></p><progress id="lo-pg" max="100" hidden></progress>
+    <div id="lo-samples" class="lo-samples"></div>
+    <div id="lo-done"></div>
+  </div>
+</section>
+
 <section class="view" id="v-gal">
   <h2>기록 갤러리</h2>
   <p class="hint plain">지금까지 만든 이미지·영상·음악·음성·3D 모델을 한곳에서 봐요. 프롬프트로 검색하고, ★로 즐겨찾기를 해 두고, 마음에 드는 건 같은 설정으로 다시 만들 수 있어요.</p>
@@ -840,6 +887,7 @@
     <button type="button" class="ghost sm" data-open="outputs" title="결과 파일이 저장된 outputs 폴더를 탐색기로 열어요">outputs 폴더 열기</button>
     <button type="button" class="ghost sm" id="gal-sel" title="보이는 칸을 모두 고르거나, 고른 것을 모두 풀어요">모두 선택</button>
     <button type="button" class="ghost sm" id="gal-cmp" hidden title="선택한 이미지 두 장을 겹쳐서 슬라이더로 비교해요">두 장 비교</button>
+    <button type="button" class="ghost sm" id="gal-lora" hidden title="고른 사진을 LoRA 만들기의 학습 사진으로 넣어요">LoRA 학습 사진으로 (0)</button>
     <button type="button" class="ghost sm" id="gal-delsel" hidden>선택한 파일 삭제 (0)</button>
   </div>
   <details class="fold" id="fold-org"><summary>결과 폴더 날짜별로 정리</summary>

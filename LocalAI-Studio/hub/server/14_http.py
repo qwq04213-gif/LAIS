@@ -240,6 +240,24 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(explore_list())
         if u == "/api/vana":
             return self.send_json(vana_list())
+        if u == "/api/lora/sets":
+            return self.send_json(lset_list())
+        if u == "/api/lora/engine":
+            return self.send_json(lora_train.status(ROOT))
+        if u.startswith("/api/lora/set/"):
+            try:
+                return self.send_json(lset_view(u[14:]))
+            except ValueError as e:
+                return self.send_json({"error": str(e)})
+        if u.startswith("/lora_data/"):
+            parts = u.split("/", 3)
+            try:
+                fp = lset_file(parts[2], parts[3]) if len(parts) == 4 else None
+            except ValueError:
+                fp = None
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_file(fp, "image/png" if fp.suffix.lower() == ".png" else "image/jpeg")
         if u == "/api/asr":
             return self.send_json(asr_models.status(ROOT))
         if u.startswith("/vana/"):
@@ -267,7 +285,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -282,6 +300,8 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path).path
         if u == "/api/vmix/upload":
             return self.send_json(vmix_upload(self))
+        if u == "/api/lora/set/upload":
+            return self.send_json(lset_upload(self))
         try:
             p = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except ValueError:
@@ -303,6 +323,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json((vana_plan if u.endswith("plan") else vana_render)(p))
             except (ValueError, RuntimeError) as e:
                 return self.send_json({"error": str(e), **({"need": need_ids(e)} if need_ids(e) else {})})
+        if u in ("/api/lora/set/new", "/api/lora/set/update", "/api/lora/set/remove", "/api/lora/set/delete", "/api/lora/set/from_gallery"):
+            fn = {"new": lset_new, "update": lset_update, "remove": lset_remove, "delete": lset_delete, "from_gallery": lset_from_gallery}[u.rsplit("/", 1)[1]]
+            try:
+                return self.send_json(fn(p))
+            except ValueError as e:
+                return self.send_json({"error": str(e)})
+        if u == "/api/lora/engine/install":
+            return self.send_json(lora_train.install(ROOT))
+        if u == "/api/lora/engine/uninstall":
+            return self.send_json(lora_train.uninstall(ROOT))
         if u == "/api/asr/install":
             return self.send_json(asr_models.install(ROOT))
         if u == "/api/asr/uninstall":
@@ -326,7 +356,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/agent/cancel":
             return self.send_json(agent_cancel(str(p.get("id"))))
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if p["kind"] == "batch":
                 try:

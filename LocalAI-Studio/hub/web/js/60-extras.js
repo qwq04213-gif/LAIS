@@ -3,7 +3,7 @@ const QST={running:'진행 중',queued:'대기',done:'완료',error:'실패',can
 const qSound=()=>ls.get('q:sound',true),qDesk=()=>ls.get('q:desk',false);
 QSEEN=new Map();QINIT=false;QLAST=null;QUSER=null;     // QUSER: 사용자가 직접 연 'open' / 닫은 'closed' / 아직 안 건드림 null
 const qPin=()=>ls.get('q:pin',true);
-const QVIEW={gen:'gen',edit:'edit',up:'up',wf:'wf',feat:'feat',vid:'vid',vpost:'vid',vmix:'vmix',music:'music',tts:'tts',batch:'batch',vana:'vana'};
+const QVIEW={gen:'gen',edit:'edit',up:'up',wf:'wf',feat:'feat',vid:'vid',vpost:'vid',vmix:'vmix',music:'music',tts:'tts',batch:'batch',vana:'vana',lora:'lora'};
 function qBeep(){window.QBEEP=(window.QBEEP||0)+1;if(!qSound())return;
   try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=window.QCTX||(window.QCTX=new A());if(c.state==='suspended')c.resume();
     [[880,0],[1175,.16]].forEach(([f,t])=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);
