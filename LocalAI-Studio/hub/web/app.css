@@ -75,7 +75,7 @@ details details{border-top:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 [data-e=qwen] .sdxl,[data-e=qwen] .fxe,[data-e=qwen] .den,[data-e=sdxl] .qwen,[data-e=sdxl] .fxe,[data-e=flux] .qwen,[data-e=flux] .sdxl,[data-e=flux] .den,[data-m=esrgan] .refine{display:none!important}
 #f-edit[data-fe=flux] .fe-c,#f-edit[data-fe=krea2] .fe-g,#f-edit[data-fe=chroma] .fe-g{display:none}
-#f-gen[data-g=sdxl] [data-for]:not([data-for~=sdxl]),#f-gen[data-g=flux] [data-for]:not([data-for~=flux]),#f-gen[data-g=chroma] [data-for]:not([data-for~=chroma]),#f-gen[data-g=krea2] [data-for]:not([data-for~=krea2]),#f-gen[data-g=sd35] [data-for]:not([data-for~=sd35]),#f-gen[data-g=hidream] [data-for]:not([data-for~=hidream]),#f-gen[data-g=lumina] [data-for]:not([data-for~=lumina]){display:none!important}
+#f-gen[data-g=sdxl] [data-for]:not([data-for~=sdxl]),#f-gen[data-g=flux] [data-for]:not([data-for~=flux]),#f-gen[data-g=chroma] [data-for]:not([data-for~=chroma]),#f-gen[data-g=krea2] [data-for]:not([data-for~=krea2]),#f-gen[data-g=sd35] [data-for]:not([data-for~=sd35]),#f-gen[data-g=qwenimg] [data-for]:not([data-for~=qwenimg]),#f-gen[data-g=moss] [data-for]:not([data-for~=moss]){display:none!important}
 div[data-for]{display:grid;gap:14px}
 .presets{display:grid;grid-template-columns:1fr auto auto;gap:8px}
 .presets select{padding:7px 10px}
@@ -729,3 +729,4 @@ button:not(.go):not(.ico):not([class*="ico"]),.chip{max-width:100%;overflow:hidd
 .sp-i:not(:has(img)) b,.sp-i:not(:has(img)) small{grid-column:1/3}.sp-i.on,.sp-i:hover{background:var(--raised)}.sp-none{padding:18px 12px}.sp-hit{outline:2px solid var(--acc);border-radius:8px;transition:outline-color 1s}
 .csrc{margin-top:8px;font-size:calc(12.5px*var(--ui,1))}.csrc summary{cursor:pointer;color:var(--mute)}.csrc ol{margin:6px 0 0;padding-left:20px}.csrc li{margin:3px 0}
 .copts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.copts .chip{cursor:pointer}
+#rail .sp-btn{min-height:calc(36px*var(--ui,1)/1.25);height:auto;padding:8px 10px;line-height:1.2}
