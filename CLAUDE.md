@@ -56,11 +56,11 @@ echo "한 줄 요약" > release-tools/notes_<버전>.txt      # 커밋하지 않
 python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --notes release-tools/notes_<버전>.txt
 ```
 
-`outputs/LocalAI-Studio-update-<버전>.bat` 을 사용자에게 파일로 전달해요(`outputs/` 는 커밋하지 않음). 출시한 커밋에는 `v<버전>` 태그를 붙여요.
+`outputs/LocalAI-Studio-update-<버전>.bat` 을 사용자에게 파일로 전달해요(`outputs/` 는 커밋하지 않음). 출시한 판은 커밋 메시지를 `v<버전>` 으로 해요(세션에서 태그를 올릴 수 없는 경우가 있어 커밋 메시지로 판을 구분해요).
 
 ## 지금 상태
 
-마지막 출시: **4.0.1**(태그 `v4.0.1`). 다음 판 **4.1** 을 만드는 중이에요.
+마지막 출시: **4.0.1**(커밋 `v4.0.1`). 다음 판 **4.1** 을 만드는 중이에요.
 
 ### 4.1 할 일
 
