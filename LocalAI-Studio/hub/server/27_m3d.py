@@ -172,7 +172,7 @@ def m3d_view(sid):
     url = lambda f: f"/m3d/{sid}/{f}?t={int((d / f).stat().st_mtime)}"   # noqa: E731
     slots = {s: (url(f"view_{s}.png") if (d / f"view_{s}.png").is_file() else None) for s in ("front",) + M3D_SIDES}
     return {**m, "id": sid, "slots": slots, "ready": m3d_ready(), "blender": blender3d.status(ROOT),
-            "orig": url("orig.png") if (d / "orig.png").is_file() else None}
+            "orig": url("orig.png") if (d / "orig.png").is_file() else None, "front_orig": (d / "view_front_orig.png").is_file()}
 
 
 def m3d_list():
@@ -189,7 +189,7 @@ def m3d_list():
 
 
 def m3d_file(sid, name):
-    if not re.fullmatch(r"(orig|view_(front|left|back|right))\.png", name or ""):
+    if not re.fullmatch(r"(orig|view_(front|left|back|right|front_orig))\.png|rig_preview\.glb|scene_obj_\d{1,2}\.png", name or ""):
         return None
     try:
         f = m3d_dir(sid) / name
@@ -249,6 +249,36 @@ def m3d_views(p, J):
     return []
 
 
+M3D_TPOSE = ("Make the same character stand in a T-pose: both arms stretched straight out horizontally to the sides, palms facing down, "
+             "legs straight and slightly apart, body and face toward the camera. Keep exactly the same character design, face, hair, clothing, "
+             "colors, materials, proportions and details. Full body in frame, plain pure white background, soft even studio lighting, no shadow.")
+
+
+def m3d_tpose(p, J):
+    """앞 사진의 캐릭터를 T자 자세로 다시 그려요(Qwen-Image 2.1 편집) — 뼈대·가중치가 잘 맞게. 원래 앞 사진은 따로 둬요."""
+    sid = p.get("id")
+    m = m3d_meta(sid)
+    d = M3D_DIR / sid
+    front = Image.open(d / "view_front.png").convert("RGBA")
+    if not (d / "view_front_orig.png").is_file():
+        front.save(d / "view_front_orig.png")
+    bg = Image.new("RGB", front.size, (255, 255, 255))
+    bg.paste(front, mask=front.getchannel("A"))
+    b = io.BytesIO()
+    bg.save(b, "PNG")
+    J["msg"] = "T자 자세로 다시 그리는 중"
+    res = do_edit({"kind": "edit", "engine": "qwen", "image": "data:image/png;base64," + base64.b64encode(b.getvalue()).decode(),
+                   "prompt": M3D_TPOSE, "seed": seed_of(p), "fast": p.get("fast") or "", "translate": ""}, J)
+    cut = m3d_cut(res[0][0].convert("RGB"), J)
+    cut.save(d / "view_front.png")
+    m["checks"], m["stats"] = m3d_analyze(cut)
+    m3d_save_meta(sid, m)
+    J["m3d"] = m3d_view(sid)
+    made = [s for s in M3D_SIDES if (d / f"view_{s}.png").is_file()]
+    J["msg"] = "T자 자세로 바꿨어요." + (" 방향 그림은 예전 자세라서 다시 그리거나 체크를 풀어 주세요." if made else "")
+    return []
+
+
 def m3d_slot(p):
     """방향 칸에 내 사진 넣기(배경 자동 제거) · 비우기."""
     sid, s = p.get("id"), p.get("side")
@@ -256,6 +286,16 @@ def m3d_slot(p):
     if s not in ("front",) + M3D_SIDES:
         return {"error": "알 수 없는 방향이에요."}
     f = d / f"view_{s}.png"
+    if p.get("restore"):
+        o = d / "view_front_orig.png"
+        if s != "front" or not o.is_file():
+            return {"error": "되돌릴 원래 사진이 없어요."}
+        shutil.copyfile(o, f)
+        o.unlink()
+        m = m3d_meta(sid)
+        m["checks"], m["stats"] = m3d_analyze(Image.open(f).convert("RGBA"))
+        m3d_save_meta(sid, m)
+        return m3d_view(sid)
     if p.get("clear"):
         if s == "front":
             return {"error": "앞 사진은 비울 수 없어요."}
@@ -287,7 +327,8 @@ def m3d_opts(p, m):
     return {"res": res if res in M3D_RES else 1024, "faces": faces if faces in M3D_FACES else 20000, "tex": tex if tex in M3D_TEX else 2048,
             "remesh": 512 if flag(p, "remesh", True) else 0, "blender": flag(p, "blender", True), "height": clamp(num(p, "height", kind["height"]), 0.0, 500.0),
             "rotate": int(num(p, "rotate", 0, int)) % 360 // 90 * 90, "lods": flag(p, "lods", True),
-            "formats": [x for x in ("glb", "fbx", "obj") if flag(p, "fmt_" + x, x != "obj")] or ["glb"]}
+            "formats": [x for x in ("glb", "fbx", "obj") if flag(p, "fmt_" + x, x != "obj")] or ["glb"],
+            "rig": flag(p, "rig", m.get("kind") == "character")}
 
 
 def m3d_build(p, J):
@@ -332,7 +373,8 @@ def m3d_build(p, J):
         J["msg"], J["progress"] = "Blender 로 마무리하는 중 — 크기·LOD·내보내기", 0.95
         try:
             r = blender3d.finish(ROOT, work / "in.glb", work / "pack", {"name": m["name"], "height": o["height"], "rotate": o["rotate"],
-                                                                         "lods": [1.0, 0.5, 0.2] if o["lods"] else [1.0], "formats": o["formats"]},
+                                                                         "lods": [1.0, 0.5, 0.2] if o["lods"] else [1.0], "formats": o["formats"],
+                                                                         "rig": o["rig"]},
                                  lambda: J.get("cancel"))
             z = d / f"{m['name']}_game_{uuid.uuid4().hex[:4]}.zip"
             with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -342,6 +384,18 @@ def m3d_build(p, J):
             lod0 = work / "pack" / r["lods"][0].get("glb", "")
             info = {**base_info, "blender": r.get("blender"), "lods": r["lods"], "size_m": r["size_m"]}
             J["m3d_stats"] = {"lods": r["lods"], "size_m": r["size_m"]}
+            rg = r.get("rig")
+            if rg:
+                info["rig"] = {k: rg.get(k) for k in ("bones", "pose", "legs")}
+                pv = work / "pack" / str(rg.get("preview") or "")
+                if rg.get("preview") and pv.is_file():                     # 확인용 움직임은 작업 폴더에만(결과 폴더를 어지럽히지 않게)
+                    shutil.copyfile(pv, d / "rig_preview.glb")
+                    rg["preview"] = f"/m3d/{sid}/rig_preview.glb?t={int(time.time())}"
+                else:
+                    rg.pop("preview", None)
+                J["m3d_stats"]["rig"] = rg
+                for w in rg.get("warn") or []:
+                    warn(J, w)
             items.append((lod0.read_bytes() if lod0.is_file() and lod0.suffix == ".glb" else glb, info, ".glb"))
             items.append((z, {**info, "pack": True}, ".zip"))
             J["msg"] = f"3D 를 만들었어요 — LOD {len(r['lods'])}단계 · " + " / ".join(f"{x['tris']:,}면" for x in r["lods"])
@@ -372,7 +426,7 @@ def m3d_quick(img, p, J):
 
 
 def do_m3d(p, J):
-    fn = {"prep": m3d_prep, "views": m3d_views, "build": m3d_build}.get(p.get("op") or "")
+    fn = {"prep": m3d_prep, "views": m3d_views, "tpose": m3d_tpose, "build": m3d_build}.get(p.get("op") or "")
     if not fn:
         raise ValueError("알 수 없는 3D 작업이에요.")
     return fn(p, J)

@@ -270,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
             fp = m3d_file(parts[0], parts[1]) if len(parts) == 2 else None
             if not fp:
                 return self.send_json({"error": "없어요"}, 404)
-            return self.send_file(fp, "image/png")
+            return self.send_file(fp, "model/gltf-binary" if fp.suffix == ".glb" else "image/png")
         if u == "/api/blender":
             return self.send_json(blender3d.status(ROOT))
         if u == "/api/websearch":

@@ -9,7 +9,10 @@ import re
 import sys
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rig_fit  # noqa: E402  (numpy 만 쓰는 관절 어림 — 허브 테스트와 같은 코드)
 
 
 def args():
@@ -79,6 +82,9 @@ def lod_copy(objs, ratio, name):
         n.data = o.data.copy()
         n.name = f"{o.name}_{name}"
         coll.objects.link(n)
+        arms = [(md.name, md.object) for md in n.modifiers if md.type == "ARMATURE"]
+        for md in [md for md in n.modifiers if md.type == "ARMATURE"]:      # 자세가 굳지 않게 뼈대는 잠시 빼요
+            n.modifiers.remove(md)
         m = n.modifiers.new("hub_decimate", "DECIMATE")
         m.decimate_type = "COLLAPSE"
         m.ratio = max(0.01, min(1.0, ratio))
@@ -91,12 +97,89 @@ def lod_copy(objs, ratio, name):
         n.data = me
         if old.users == 0:
             bpy.data.meshes.remove(old)
+        for mname, aobj in arms:                                       # 가중치(정점 그룹)는 면을 줄여도 남아요 → 뼈대 다시 연결
+            md = n.modifiers.new(mname, "ARMATURE")
+            md.object = aobj
         out.append(n)
     return out
 
 
 def safe(s):
     return re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", s).strip("_") or "model"
+
+
+def join(objs, name):
+    if len(objs) == 1:
+        return objs[0]
+    select_only(objs)
+    bpy.ops.object.join()
+    o = bpy.context.view_layer.objects.active
+    o.name = name
+    return o
+
+
+def rig(mesh, name):
+    """사람형 뼈대(Mixamo 이름) → 자동 가중치(뼈 열 확산) → 못 받은 정점은 가장 가까운 뼈로."""
+    import numpy as np
+    n = len(mesh.data.vertices)
+    co = np.empty(n * 3)
+    mesh.data.vertices.foreach_get("co", co)
+    fit = rig_fit.fit(co.reshape(-1, 3))
+    J = {k: Vector(v) for k, v in fit["joints"].items()}
+    H = fit["height"]
+    data = bpy.data.armatures.new(f"{name}_Armature")
+    arm = bpy.data.objects.new("Armature", data)
+    bpy.context.scene.collection.objects.link(arm)
+    select_only([arm])
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = data.edit_bones
+    for bn, a, b, parent, conn in rig_fit.BONES:
+        e = eb.new(bn)
+        e.head, e.tail = J[a], J[b]
+        if (e.tail - e.head).length < 1e-3 * H:
+            e.tail = e.head + Vector((0, 0, 0.02 * H))
+        if parent:
+            e.parent = eb[parent]
+            e.use_connect = conn and (eb[parent].tail - e.head).length < 1e-6
+    bpy.ops.object.mode_set(mode="OBJECT")
+    select_only([mesh, arm])
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+    # 자동 가중치가 못 준 정점(뼈 열 확산 실패)은 가장 가까운 뼈로
+    names = [b[0] for b in rig_fit.BONES]
+    vgs = {g.index: g.name for g in mesh.vertex_groups}
+    bare = [v.index for v in mesh.data.vertices if sum(g.weight for g in v.groups if g.group in vgs) <= 1e-6]
+    if bare:
+        segs = [(tuple(data.bones[b].head_local), tuple(data.bones[b].tail_local)) for b in names]
+        pts = np.array([tuple(mesh.data.vertices[i].co) for i in bare])
+        near = rig_fit.nearest_bone(pts, segs)
+        for bi in set(near.tolist()):
+            g = mesh.vertex_groups.get(names[bi]) or mesh.vertex_groups.new(name=names[bi])
+            g.add([bare[k] for k in range(len(bare)) if near[k] == bi], 1.0, "REPLACE")
+    if not any(m.type == "ARMATURE" for m in mesh.modifiers):
+        md = mesh.modifiers.new("Armature", "ARMATURE")
+        md.object = arm
+    return arm, {"bones": len(names), "pose": fit["pose"], "legs": fit["legs"], "warn": fit["warn"], "fixed": len(bare)}
+
+
+def preview_motion(arm, frames=60):
+    """확인용 짧은 움직임(팔 들기·고개 끄덕임)을 넣어요. 뼈대 자세 공간 → 뼈 자기 공간으로 바꿔 줘요."""
+    scn = bpy.context.scene
+    scn.frame_start, scn.frame_end = 1, frames
+    arm.animation_data_create()
+    arm.animation_data.action = bpy.data.actions.new("확인용_움직임")
+    moves = {"LeftArm": ("Y", -40), "RightArm": ("Y", 40), "LeftForeArm": ("Y", -20), "RightForeArm": ("Y", 20), "Head": ("X", 12), "Spine1": ("Z", 8)}
+    for bn, (ax, deg) in moves.items():
+        pb = arm.pose.bones.get(bn)
+        if not pb:
+            continue
+        pb.rotation_mode = "QUATERNION"
+        rest = arm.data.bones[bn].matrix_local.to_quaternion()
+        for f, k in ((1, 0.0), (frames // 2, 1.0), (frames, 0.0)):
+            q = Quaternion(Vector({"X": (1, 0, 0), "Y": (0, 1, 0), "Z": (0, 0, 1)}[ax]), math.radians(deg) * k)
+            pb.rotation_quaternion = rest.inverted() @ q @ rest
+            pb.keyframe_insert("rotation_quaternion", frame=f)
+    scn.frame_set(1)
 
 
 def main(j):
@@ -130,6 +213,11 @@ def main(j):
     for i, o in enumerate(objs):
         o.name = name if len(objs) == 1 else f"{name}_{i}"
     lo, hi = bounds(objs)
+    arm, rinfo = None, None
+    if j.get("rig"):
+        mesh = join(objs, name)
+        objs = [mesh]
+        arm, rinfo = rig(mesh, name)
     # 텍스처는 .blend 옆 textures/ 로 풀어 둬요(FBX·OBJ 가 파일로 가져가게)
     blend = os.path.join(out, f"{name}.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend)
@@ -145,15 +233,15 @@ def main(j):
         tris, verts = tri_count(group)
         tag = f"{name}_LOD{i}"
         rec = {"lod": i, "ratio": round(float(r), 3), "tris": tris, "verts": verts}
-        select_only(group)
+        select_only(group + ([arm] if arm else []))
         if "glb" in fmts:
             p = os.path.join(out, tag + ".glb")
-            bpy.ops.export_scene.gltf(filepath=p, export_format="GLB", use_selection=True)
+            bpy.ops.export_scene.gltf(filepath=p, export_format="GLB", use_selection=True, export_animations=False)
             rec["glb"] = os.path.basename(p)
         if "fbx" in fmts:
             p = os.path.join(out, tag + ".fbx")
             bpy.ops.export_scene.fbx(filepath=p, use_selection=True, path_mode="COPY", embed_textures=True, axis_forward="-Z", axis_up="Y",
-                                     apply_scale_options="FBX_SCALE_UNITS", mesh_smooth_type="FACE")
+                                     apply_scale_options="FBX_SCALE_UNITS", mesh_smooth_type="FACE", add_leaf_bones=False, bake_anim=False)
             rec["fbx"] = os.path.basename(p)
         if "obj" in fmts:
             p = os.path.join(out, tag + ".obj")
@@ -161,11 +249,17 @@ def main(j):
                                   forward_axis="NEGATIVE_Z", up_axis="Y")
             rec["obj"] = os.path.basename(p)
         levels.append(rec)
+    if arm:                                            # 화면에서 돌려 볼 확인용 움직임(게임용 파일에는 안 넣어요)
+        preview_motion(arm)
+        select_only(objs + [arm])
+        p = os.path.join(out, f"{name}_rig_preview.glb")
+        bpy.ops.export_scene.gltf(filepath=p, export_format="GLB", use_selection=True, export_animations=True)
+        rinfo["preview"] = os.path.basename(p)
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     tex_dir = os.path.join(out, "textures")
     res = {"ok": True, "blender": bpy.app.version_string, "name": name, "lods": levels, "blend": os.path.basename(blend),
            "size_m": [round(hi.x - lo.x, 4), round(hi.y - lo.y, 4), round(hi.z - lo.z, 4)], "scale": round(s, 6),
-           "textures": sorted(os.listdir(tex_dir)) if os.path.isdir(tex_dir) else []}
+           "textures": sorted(os.listdir(tex_dir)) if os.path.isdir(tex_dir) else [], **({"rig": rinfo} if rinfo else {})}
     with open(os.path.join(out, "result.json"), "w", encoding="utf-8") as f:
         json.dump(res, f, ensure_ascii=False)
 
