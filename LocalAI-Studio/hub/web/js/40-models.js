@@ -31,7 +31,7 @@ async function loadSetup(){
   const by=k=>c.image.filter(m=>(m.cat||'image')===k).map(row).join('')||'<p class="mute">항목이 없어요.</p>';
   $('#cat-img').innerHTML=by('image');$('#cat-vid').innerHTML=by('video');$('#cat-aud').innerHTML=by('audio');$('#cat-3d').innerHTML=by('d3');catVoice();
   $$('#v-setup .item input').forEach(i=>{if(keep.has(i.value))i.checked=true});
-  CATALOG_NOW=c;selSummary();loadTasks();
+  CATALOG_NOW=c;selSummary();loadTasks();tierPaint();
 }
 /* 체크한 항목 요약: 무엇을 얼마나 받는지 */
 let CATALOG_NOW={llm:[],image:[]};
@@ -42,13 +42,33 @@ function selSummary(){const box=$('#sel-sum');if(!box)return;
   const todo=seen.map(i=>by[i]).filter(m=>!m.installed),gb=todo.reduce((a,m)=>a+(m.gb||0),0);
   box.innerHTML=ids.length?(todo.length?`<b>선택한 항목 ${ids.length}개</b> — ${todo.map(m=>esc(m.name)).join(' · ')}<br><small>함께 필요한 파일까지 합쳐 약 ${gb.toFixed(1)}GB를 받아요.</small>`:'<b>선택한 항목은 이미 모두 설치돼 있어요.</b>'):'<span class="mute">받을 모델을 체크하면 여기에 무엇을 얼마나 받는지 보여 줘요.</span>'}
 document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))selSummary()});
-$('#rec').onclick=()=>{
-  const v=GPU?GPU.vram_gb:0;
-  const ids=v>=24?['qwen3-32b','qwen-image','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
-    :v>=10?['qwen3-14b','qwen-image','qwen-te-small','qwen-lightning','noobai','sdxl-vae-fix','esrgan']
-    :['qwen3-8b','noobai','sdxl-vae-fix','esrgan'];
-  $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.includes(i.value)});selSummary();
-};
+/* 사양별 추천: 그래픽카드 메모리(VRAM) 8/12/16/24GB 에서 기능마다 어떤 모델·설정이 알맞은지. ids 는 '이 구성 고르기'로 체크할 항목 */
+const TIERS=[
+  {gb:8,rows:{chat:[['qwen3-8b'],'대화·번역은 8B 가 알맞아요'],gen:[['noobai','realvisxl5','sdxl-vae-fix'],'SDXL 계열(그림체 NoobAI · 실사 RealVis)'],
+    edit:[['qwen-image','qwen-te-small','qwen-lightning'],'작은 텍스트 인코더 + 빠르게(4단계). RAM 32GB 이상 필요, 느려요'],vid:[['ltx-video'],'LTX-Video 로 짧고 작게'],
+    aud:[['stable-audio-open'],'짧은 효과음·음악'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['esrgan','esrgan-anime'],'']}},
+  {gb:12,rows:{chat:[['qwen3-14b'],''],gen:[['noobai','krea-dev','sdxl-vae-fix'],'FLUX Krea 는 12GB 부터'],
+    edit:[['qwen-image','qwen-te-small','qwen-lightning'],'작은 텍스트 인코더로 여유 있게'],vid:[['wan22-ti2v-5b','ltx-video','wan-vace'],'Wan 2.2 5B 기본 길이'],
+    aud:[['ace-step-15-turbo'],'노래(가사) 만들기'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['esrgan','ultrasharp'],'']}},
+  {gb:16,rows:{chat:[['qwen3-14b','qwen25vl-7b'],'사진 보는 대화는 Qwen2.5-VL'],gen:[['krea2-turbo','noobai','sdxl-vae-fix'],'Krea 2 Turbo 가 빠르고 고와요'],
+    edit:[['qwen-image','qwen-lightning'],'기본 텍스트 인코더'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
+    aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['esrgan','ultrasharp'],'']}},
+  {gb:24,rows:{chat:[['qwen3-32b','qwen25vl-7b'],'32B 로 더 똑똑하게'],gen:[['krea2-turbo','chroma-hd','sd35-large'],'큰 모델 여러 개를 바꿔 가며'],
+    edit:[['qwen-image','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'14B 를 길게(가속 없이도)'],
+    aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['esrgan','ultrasharp'],'']}}];
+const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};
+const tierOf=v=>v>=22?24:v>=15?16:v>=11?12:8;
+function tierPaint(){const box=$('#tiers');if(!box)return;const all=[...CATALOG_NOW.llm,...CATALOG_NOW.image],by=Object.fromEntries(all.map(m=>[m.id,m]));
+  const mine=GPU&&GPU.vram_gb?tierOf(GPU.vram_gb):0,nm=id=>by[id]?esc(by[id].name.replace(/\s*[(—].*$/,'')):esc(id);
+  box.innerHTML=`<table class="tiers"><thead><tr><th>기능</th>${TIERS.map(t=>`<th class="${t.gb===mine?'mine':''}">${t.gb}GB${t.gb===mine?' <small>내 PC</small>':''}</th>`).join('')}</tr></thead><tbody>${
+    Object.entries(TIER_ROW).map(([k,lab])=>`<tr><th>${lab}</th>${TIERS.map(t=>{const[ids,tip]=t.rows[k];return `<td class="${t.gb===mine?'mine':''}">${ids.filter(i=>!/vae-fix|lightning|te-small/.test(i)||k==='edit').map(i=>`<span class="${by[i]?.installed?'have':''}" title="${by[i]?.installed?'설치됨':''}">${nm(i)}</span>`).join('<br>')}${tip?`<small>${esc(tip)}</small>`:''}</td>`}).join('')}</tr>`).join('')
+  }<tr><th></th>${TIERS.map(t=>`<td class="${t.gb===mine?'mine':''}"><button type="button" class="ghost sm" data-tier="${t.gb}">이 구성 고르기</button></td>`).join('')}</tr></tbody></table>
+  <p class="mute">이미지·영상·3D 는 한 번에 하나씩 돌아서, 표의 모델을 다 받아도 메모리를 나눠 쓰지 않아요(디스크 공간만 더 써요). 메모리 부족이 나면 한 칸 왼쪽 구성을 써 보세요.</p>`}
+function tierPick(gb){const t=TIERS.find(x=>x.gb===gb);if(!t)return;const ids=new Set(Object.values(t.rows).flatMap(r=>r[0]));
+  $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.has(i.value)});selSummary();
+  const n=$$('#v-setup .item input:checked').length;toast(n?`${gb}GB 구성에서 아직 없는 ${n}개를 골랐어요. [선택한 항목 설치]를 누르면 받아요.`:`${gb}GB 구성은 이미 모두 설치돼 있어요.`,6000)}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-tier]');if(b)tierPick(+b.dataset.tier)});
+$('#rec').onclick=()=>tierPick(tierOf(GPU?GPU.vram_gb:0));
 $('#inst').onclick=async()=>{
   const all=$$('#v-setup .item input:checked').map(i=>i.value);
   if(!all.length)return;

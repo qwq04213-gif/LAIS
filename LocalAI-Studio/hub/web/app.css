@@ -491,6 +491,12 @@ details.fold h4{margin:16px 0 6px;font-size:calc(13px*var(--ui,1))}
 
 .swapm:empty{display:none}.swapm{margin:10px 0}.swapm button{margin-left:8px}
 
+.tierbox{margin:4px 0 14px}.tierbox summary{cursor:pointer;font-weight:600;margin-bottom:8px}#tiers{overflow-x:auto}
+table.tiers{border-collapse:collapse;width:100%;min-width:640px;font-size:calc(12.5px*var(--ui,1))}
+table.tiers th,table.tiers td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+table.tiers thead th{color:var(--mute);font-weight:500}table.tiers tbody th{white-space:nowrap;font-weight:500}
+table.tiers small{display:block;color:var(--mute);margin-top:2px}table.tiers .have::after{content:' ✓';color:var(--okt)}
+table.tiers .mine{background:color-mix(in srgb,var(--acc) 10%,transparent)}table.tiers thead .mine{color:var(--tx,inherit);font-weight:700}
 .keepbox{margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:calc(13px*var(--ui,1))}
 .cachein{margin:12px 0}.cachelist li{display:block}.cachelist code,.cachein code{word-break:break-all}
 
