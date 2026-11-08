@@ -29,7 +29,6 @@
 - 빌드 전에 `__pycache__` 를 지워요.
 - 사용자의 결과물(outputs)·모델 파일은 **절대 자동으로 지우지 않아요**. 정리 기능은 확인을 받은 뒤에만.
 - `settings.json`(API 키 들어 있음)은 읽어서 보여 주거나 내보내지 않아요.
-- 미성년자 + 성적 내용 차단(`blocked()` / `BLOCK_MSG`)은 어떤 기능에서도 빼지 않아요.
 - 실제 엔진(ComfyUI·Blender·GPU)으로 확인 못 한 부분은 README 의 `미검증` 줄에 꼭 적어요.
 - **깃허브에는 코드만 올려요. 대화 내용·제작 메모·릴리즈 노트는 절대 올리지 않고 대화에만 적어요(사용자 요청).** 커밋 메시지는 짧게(예: `v4.1`, `3D 리깅 화면`), GitHub Releases 는 만들지 않아요.
   빌드용 메모(`release-tools/notes_*.txt`)·개인 작업 기록은 `.gitignore` 에 있어요 — 커밋하지 마세요.
@@ -61,21 +60,18 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.0.1**(커밋 `v4.0.1`). 다음 판 **4.1** 을 만드는 중이에요.
+마지막 출시: **4.1**(커밋 `v4.1`). 다음 판 **4.2**.
 
-### 4.1 할 일
+### 4.2 할 일
 
-1. **3D 리깅(사람형 캐릭터 뼈대·가중치)** — 일부 됨
-   - 됨: `hub/rig_fit.py`(numpy 만 쓰는 관절 어림, Mixamo 뼈 이름 → Unity·Unreal Humanoid 자동 매핑), `hub/blender_game.py` 의 `rig()`(뼈대 → 자동 가중치 → 빈 정점은 가장 가까운 뼈)·`preview_motion()`(확인용 움직임 GLB)·LOD 에 뼈대 다시 연결,
-     `hub/server/27_m3d.py` 의 `tpose` 작업(Qwen-Image 2.1 로 앞 사진을 T자 자세로, 원본은 `view_front_orig.png`)·`rig` 옵션·`rig_preview.glb` 제공·되돌리기(`/api/m3d/slot` restore)
-   - 남음: 화면(`web/js/70-m3d.js`·`index.html` — Blender 칸에 '뼈대 넣기', 방향 칸에 'T자 자세로 바꾸기'·'원래 자세로', 결과에 움직임 미리보기와 뼈대 정보), `test/fake_blender.py` 가 `rig` 를 흉내 내기,
-     테스트(`test/humanoid.py` 의 가짜 사람 정점으로 `rig_fit` 확인 + 3D 흐름), README
-2. **3D 장면 전체(사진 속 여러 물체)** — 계획: 원본 사진에서 물체를 눌러 고르기(기존 MobileSAM `/api/sam/segment`) → 물체마다 잘라 TRELLIS.2 → 깊이(`get_depth`) 로 위치·크기 어림 → Blender 로 한 장면(GLB·FBX·.blend), Blender 없으면 물체별 GLB + 배치 json. 가려진 물체는 선택적으로 Qwen 편집으로 채우기
-3. **다시 켜도 올려 둔 사진 이어서 쓰기** — 편집 창 등 각 화면에 올린 사진을 서버에 저장해 두고, 프로그램을 다시 켜면 그대로 불러오기(지우기 버튼 포함, 자동 삭제 없음)
-4. **기능별 엔진 점검·사양별 추천** — 기능마다 쓰는 엔진이 지금 기준으로 좋은지 확인하고, 그래픽카드 메모리 8/12/16/24GB 별 추천을 '설치와 모델'에 정리
+1. **3D 장면 전체(사진 속 여러 물체)** — 원본 사진에서 물체를 눌러 고르기(MobileSAM `/api/sam/segment`) → 물체마다 잘라 TRELLIS.2 → 깊이(`get_depth`)로 위치·크기 어림 →
+   Blender 로 한 장면(GLB·FBX·.blend), Blender 없으면 물체별 GLB + 배치 json. 가려진 물체는 선택적으로 Qwen 편집으로 채우기. (`m3d_file` 이 `scene_obj_N.png` 를 이미 허용)
+2. **기능별 엔진 최신 점검** — 기능마다 쓰는 엔진이 지금 기준으로 좋은지 조사(사양별 추천 표는 4.1 의 `web/js/40-models.js` `TIERS`)
 
 ### 미검증(실제 PC 에서 확인 필요)
 
-- TRELLIS.2·Pixal3D 실제 그래프(4.0.1 에서 RemeshMesh 의 DynamicCombo 하위 칸 `sign_mode.qef` 등 누락을 고침 — 다른 노드에서도 비슷한 오류가 나면 `wf_fit` 과 그래프를 함께 확인)
-- Blender 실제 실행(가져오기·LOD·FBX/OBJ 내보내기, 리깅)
-- ComfyUI 의 DynamicCombo 하위 칸은 API 형식에서 `부모.자식` 키로 넣어요(예: `"sign_mode.qef": false`)
+- TRELLIS.2·Pixal3D 실제 결과 — 4.1 에서 ComfyUI 공식 예시(workflow_templates `3d_pixal3d_trellis2_image_to_model`)와 같게 맞춤:
+  구조 CFGOverride(0.667)+RescaleCFG 0.7+shift 5, 모양 CFGOverride(0.769)+RescaleCFG 0.5·20단계, RemeshMesh `solid`. 멀티뷰 방향: 왼쪽 그림 = 얼굴이 그림 왼쪽
+- Blender 실제 실행(가져오기·LOD·FBX/OBJ 내보내기, 리깅·움직임 미리보기)
+- ComfyUI 의 DynamicCombo 하위 칸은 API 형식에서 `부모.자식` 키로 넣어요(예: `"sign_mode.fill": 20`)
+- 테스트 환경: `test_update` 는 지난판 설치 폴더·빌드 메모가 있어야 해요. `ui_test2/3/25` 는 예전 경로(`/tmp/claude-0/-home-claude/...`, `/tmp/tt/p1.png`)를 써요. `ui_test5` 는 scikit-image, `test_v313` 은 opencv 필요
