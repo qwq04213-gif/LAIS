@@ -76,9 +76,18 @@ assert j["state"] == "done" and len(j["images"]) == 1 and j["images"][0].endswit
 assert any("Pixal3D" in w for w in j["warn"]) and not any("Blender" in w for w in j["warn"]), j["warn"]
 assert cls("UNETLoader")[0]["unet_name"] == "trellis_2_int8_convrot.safetensors" and cls("Trellis2Conditioning") and not cls("Pixal3DMultiViewConditioning")
 assert [x["seed"] for x in cls("KSampler")] == [7, 8, 9, 10] and cls("Trellis2UpsampleStage")[0]["target_resolution"] == 1024
-assert cls("DecimateMesh")[0]["target_face_count"] == 50000 and cls("BakeTextureFromVoxel")[0]["texture_size"] == 4096 and cls("RemeshMesh")[0]["resolution"] == 512
+assert cls("DecimateMesh")[0]["target_face_count"] == 50000 and cls("BakeTextureFromVoxel")[0]["texture_size"] == 4096 and cls("RemeshMesh")[0]["resolution"] == 768
 assert cls("SaveGLB")[0]["filename_prefix"] == "3d/hub3d" and len(cls("LoadImage")) == 1 and cls("VAELoader")[0]["vae_name"].startswith("trellis_2_shape")
 assert urllib.request.urlopen(B + j["images"][0]).read()[:4] == b"glTF"
+# 4.1: 공식 예시와 같은 샘플링 — 구조/모양 단계는 앞쪽에만 cfg(CFGOverride)·RescaleCFG, 구조는 shift 5, 모양 512 는 20단계, 닫힌 몸체(solid)로 다시 짜기
+co = sorted((x["start_percent"], x["cfg"]) for x in cls("CFGOverride")); assert co == [(0.667, 1.0), (0.769, 1.0)], co
+assert sorted(x["multiplier"] for x in cls("RescaleCFG")) == [0.5, 0.7] and [x["shift"] for x in cls("ModelSamplingSD3")] == [5.0]
+ks = sorted(cls("KSampler"), key=lambda x: x["seed"]); assert [(x["steps"], x["cfg"], x["scheduler"]) for x in ks] == [(12, 7.5, "normal"), (20, 7.5, "normal"), (12, 7.5, "simple"), (12, 1.0, "normal")], ks
+node = lambda ref: SUBMITTED[-1][ref[0]]["class_type"]
+assert [node(x["model"]) for x in ks] == ["ModelSamplingSD3", "RescaleCFG", "RescaleCFG", "UNETLoader"]
+rm = cls("RemeshMesh")[0]; assert rm["sign_mode"] == "solid" and rm["sign_mode.fill"] == 20.0 and rm["smooth_iters"] == 20 and not any("drop_inverted" in k for k in rm), rm
+assert cls("ImageCropToMask")[0]["pad_factor"] == 1.0 and node(cls("BakeNormalMapFromMesh")[0]["high_poly"]) == "RemeshMesh"
+assert node(cls("Trellis2TextureStage")[0]["positive"]) == "Trellis2UpsampleStage" and len(cls("MeshSmoothNormals")) == 2
 side = json.loads(next((hub.OUT / "3D").glob("*.glb.json")).read_text(encoding="utf-8")); assert side["engine"] == "TRELLIS.2" and side["views"] == ["front"]
 ok("build (single view): TRELLIS.2 graph — seeds, upsample to 1024, remesh, faces, texture size; Pixal3D fallback warned; saved in 3D/")
 # 빠르게(512) + 다시 짜기 끔 → 올려 그리기·다시 짜기 없음, 이상한 값은 기본값
@@ -89,6 +98,7 @@ ok("build options: 512 skips upsample, remesh off, invalid faces/tex fall back")
 touch("diffusion_models/pixal3d_multiview_int8_convrot.safetensors", "clip_vision/dino_v3_L_naf_fp32.safetensors")
 j = job({"kind": "m3d", "op": "build", "id": sid, "sides": ["left", "back", "right"], "blender": False}); assert j["state"] == "done" and not j.get("warn"), j
 pc = cls("Pixal3DMultiViewConditioning"); assert pc and set(pc[0]) >= {"front", "left", "back"} and "right" not in pc[0] and len(cls("LoadImage")) == 3
+assert not cls("ImageCropToMask") and all(node(pc[0][k]) == "LoadImage" for k in ("front", "left", "back"))     # 허브가 같은 배율로 맞춰 넣어요
 assert cls("UNETLoader")[0]["unet_name"].startswith("pixal3d") and cls("CLIPVisionLoader")[0]["clip_name"] == "dino_v3_L_naf_fp32.safetensors"
 ok("build (multi-view): Pixal3D with front + the views that exist (empty right skipped)")
 # 노드 없음

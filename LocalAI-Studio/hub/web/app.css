@@ -744,4 +744,7 @@ button:not(.go):not(.ico):not([class*="ico"]),.chip{max-width:100%;overflow:hidd
 .m3-bar{margin:10px 0}.m3-bar a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .m3-stat{border-collapse:collapse;width:100%;max-width:640px;font-size:calc(13px*var(--ui,1))}
 .m3-stat th,.m3-stat td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;white-space:nowrap}.m3-stat th{color:var(--mute);font-weight:500}
+.m3-slot{position:relative}.m3-slot.sus img{outline:2px solid var(--warnt);outline-offset:-2px}
+.m3-sus{position:absolute;top:6px;left:6px;background:var(--warnt);color:var(--acc-tx);font-size:calc(11.5px*var(--ui,1));padding:1px 6px;border-radius:4px;cursor:help}
+.m3-dir{font-size:calc(12.5px*var(--ui,1))}.m3-rig{margin:8px 0;font-size:calc(13px*var(--ui,1))}
 #m3-bl{margin-bottom:8px;font-size:calc(13px*var(--ui,1))}#m3-bl .bad{color:var(--bad)}

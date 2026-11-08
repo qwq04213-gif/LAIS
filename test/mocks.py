@@ -85,7 +85,7 @@ REQ.update({"InvertMask": ["mask"], "ImageCropToMask": ["images", "masks"], "Tre
             "VaeDecodeStructureTrellis2": ["samples", "vae", "resolution"], "Trellis2ShapeStage": ["positive", "negative", "voxel"],
             "Trellis2UpsampleStage": ["positive", "negative", "shape_latent", "vae", "target_resolution"], "VaeDecodeShapeTrellis": ["samples", "vae"],
             "Trellis2TextureStage": ["positive", "negative", "shape_latent"], "VaeDecodeTextureTrellis": ["samples", "vae", "shape_subdivides"],
-            "RemeshMesh": ["mesh", "resolution", "sign_mode", "sign_mode.qef", "sign_mode.drop_inverted_components", "sign_mode.drop_enclosed_components"], "DecimateMesh": ["mesh", "target_face_count"], "MeshSmoothNormals": ["mesh"],
+            "RemeshMesh": ["mesh", "resolution", "sign_mode", "sign_mode.fill", "sign_mode.qef"], "CFGOverride": ["model", "cfg", "start_percent", "end_percent"], "DecimateMesh": ["mesh", "target_face_count"], "MeshSmoothNormals": ["mesh"],
             "UnwrapMesh": ["mesh"], "BakeTextureFromVoxel": ["mesh", "voxel_colors", "texture_size"], "BakeNormalMapFromMesh": ["low_poly", "high_poly"],
             "BakeAmbientOcclusion": ["low_poly", "high_poly"], "ApplyTextureToMesh": ["mesh", "base_color"]})
 SUBMITTED, HIST, STATE = [], {}, {"missing": set(), "freed": 0, "slow_from": None, "interrupts": 0, "deleted": [], "ws": False, "seen": [], "ollama_deleted": [], "ws_sent": 0}

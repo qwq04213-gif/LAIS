@@ -8,10 +8,18 @@ M3D_DIR = ROOT / "m3d_work"
 M3D_SUB = "3D"
 M3D_SIDES = ("left", "back", "right")
 M3D_SIDE_KO = {"front": "앞", "left": "왼쪽", "back": "뒤", "right": "오른쪽"}
-M3D_SIDE_EN = {"left": "the left side (the camera moved 90 degrees to the subject's right, showing its left side)",
-               "back": "the back (the camera moved 180 degrees around the subject)",
-               "right": "the right side (the camera moved 90 degrees to the subject's left, showing its right side)"}
+# Pixal3D 멀티뷰의 방향 약속: 카메라가 물체 둘레를 돌아요(앞 0° · 왼쪽 90° · 뒤 180° · 오른쪽 270°).
+# '왼쪽' = 물체 자신의 왼쪽 옆모습 → 물체의 앞(얼굴)이 그림의 왼쪽 끝을 향해요. '오른쪽' 은 그 반대.
+# (4.0 의 문장은 '오른쪽으로 돌아 왼쪽을 보여 줘' 처럼 서로 어긋나서 왼쪽·오른쪽이 뒤섞여 앞뒤가 섞인 3D 가 나왔어요)
+M3D_SIDE_EN = {"left": "the exact left side profile of the subject (the camera orbits 90 degrees around it). Seen strictly from its own left side: "
+                       "the subject's front and face point toward the LEFT edge of the image, its back toward the right edge, only its left arm and left side are visible",
+               "back": "the exact back of the subject (the camera orbits 180 degrees around it). Seen strictly from behind: the face and front are NOT visible, "
+                       "the back of the head and the back of the body face the camera, the subject's left side is on the left of the image",
+               "right": "the exact right side profile of the subject (the camera orbits 270 degrees around it). Seen strictly from its own right side: "
+                        "the subject's front and face point toward the RIGHT edge of the image, its back toward the left edge, only its right arm and right side are visible"}
 M3D_RES = (512, 1024, 1536)
+M3D_REMESH = 768                                     # 다시 짜기 해상도(공식 예시와 같게)
+M3D_VFIT = 0.6                                       # 실루엣 맞춤 기준(아래면 '의심' — 기본으로 체크를 풀어요)
 M3D_FACES = (5000, 20000, 50000, 200000)
 M3D_TEX = (1024, 2048, 4096)
 M3D_KIND = {"character": {"faces": 20000, "height": 1.7}, "object": {"faces": 20000, "height": 0}, "big": {"faces": 50000, "height": 0}}
@@ -26,7 +34,7 @@ def trellis_files(multiview=False):
         dino = next((n for n in cv if "dino_v3_l_naf" in low(n)), None)
     else:
         model = min((n for n in dm if re.search(r"trellis_?2", low(n))), key=lambda n: ("int8" not in low(n), n), default=None)
-        dino = next((n for n in cv if "dino_v3_vit_l" in low(n)), None)
+        dino = min((n for n in cv if "dino_v3_vit_l" in low(n) or "dino_v3_l_naf" in low(n)), key=lambda n: ("vit_l" not in low(n), n), default=None)
     return {"model": model, "dino": dino, "svae": next((n for n in va if "trellis_2_shape_vae" in low(n)), None),
             "tvae": next((n for n in va if "trellis_2_texture_vae" in low(n)), None)}
 
@@ -166,13 +174,86 @@ def m3d_analyze(rgba):
     return out, {"w": W, "h": H, "box": [int(x0), int(y0), int(x1), int(y1)], "area": round(float(area), 3), "sharp": round(sharp, 1), "pieces": pieces}
 
 
+def _sil(im, mirror=False, size=(48, 96)):
+    """실루엣(알파) → 물체 상자만 잘라 같은 크기로. 비교용."""
+    a = im.getchannel("A") if im.mode == "RGBA" else im.convert("L")
+    box = a.point(lambda x: 255 if x > 127 else 0).getbbox()
+    if not box:
+        return None, 0.0
+    a = a.crop(box)
+    if mirror:
+        a = ImageOps.mirror(a)
+    return np.asarray(a.resize(size, RS.BILINEAR), dtype=np.float32) / 255 > 0.5, (box[3] - box[1]) / max(1, box[2] - box[0])
+
+
+def _iou(a, b):
+    u = np.logical_or(a, b).sum()
+    return float(np.logical_and(a, b).sum() / u) if u else 0.0
+
+
+def m3d_vcheck(d):
+    """방향 그림이 앞 사진과 맞는지 실루엣으로 어림해요 → {방향: {"ok": bool, "score": 0~1, "text"}}.
+    뒤 = 앞을 좌우로 뒤집은 모양, 오른쪽 = 왼쪽을 좌우로 뒤집은 모양과 비슷해야 해요. 키(세로 길이) 비율도 봐요."""
+    out = {}
+    try:
+        ims = {s: Image.open(d / f"view_{s}.png").convert("RGBA") for s in ("front",) + M3D_SIDES if (d / f"view_{s}.png").is_file()}
+    except Exception:  # noqa: BLE001
+        return out
+    if "front" not in ims:
+        return out
+    f, fr = _sil(ims["front"], True)
+    if "back" in ims and f is not None:
+        b, br = _sil(ims["back"])
+        sc = _iou(f, b) if b is not None else 0.0
+        if b is not None and fr and br and not (0.7 < br / fr < 1.43):
+            sc = min(sc, 0.4)
+        out["back"] = {"score": round(sc, 2), "ok": sc >= M3D_VFIT,
+                       "text": "앞모습과 실루엣이 잘 맞아요." if sc >= M3D_VFIT else "앞모습과 실루엣(자세·비율)이 많이 달라요. 다시 그리거나 체크를 풀어 주세요."}
+    if "left" in ims and "right" in ims:
+        lft, lr = _sil(ims["left"], True)
+        rgt, rr = _sil(ims["right"])
+        sc = _iou(lft, rgt) if lft is not None and rgt is not None else 0.0
+        if lr and rr and not (0.7 < rr / lr < 1.43):
+            sc = min(sc, 0.4)
+        t = ("왼쪽·오른쪽 모습이 서로 거울처럼 잘 맞아요." if sc >= M3D_VFIT else
+             "왼쪽·오른쪽 모습이 서로 맞지 않아요(방향이 뒤바뀌었거나 자세가 달라요). 다시 그리거나 체크를 풀어 주세요.")
+        for s in ("left", "right"):
+            out[s] = {"score": round(sc, 2), "ok": sc >= M3D_VFIT, "text": t}
+    return out
+
+
+def m3d_frame(ims, size=1024, pad=1.1):
+    """멀티뷰 사진들을 같은 배율로 맞춰요: 모든 방향에서 키(세로)가 같다는 점을 이용해, 가장 넓은 방향이
+    틀의 1/1.1 을 채우게 하고 나머지도 같은 배율로 가운데에 놓아요(검은 배경, 정사각형).
+    방향마다 따로 꽉 채우면(앞은 좁고 옆은 긴 자동차처럼) 크기가 서로 달라져 모양이 일그러져요."""
+    boxes = {}
+    for k, im in ims.items():
+        bb = im.getchannel("A").point(lambda x: 255 if x > 127 else 0).getbbox() or (0, 0, im.width, im.height)
+        boxes[k] = bb
+    ext = max(max(1.0, (b[2] - b[0]) / max(1, b[3] - b[1])) for b in boxes.values())   # 키를 1 로 둔 가장 넓은 폭
+    hpx = size / pad / ext                                                             # 모든 방향의 키(px)
+    out = {}
+    for k, im in ims.items():
+        x0, y0, x1, y1 = boxes[k]
+        sc = hpx / max(1, y1 - y0)
+        crop = im.crop((x0, y0, x1, y1))
+        crop = crop.resize((max(1, round(crop.width * sc)), max(1, round(crop.height * sc))), RS.LANCZOS)
+        rgb = Image.new("RGB", crop.size, (0, 0, 0))
+        rgb.paste(crop.convert("RGB"), mask=crop.getchannel("A"))
+        can = Image.new("RGB", (size, size), (0, 0, 0))
+        can.paste(rgb, ((size - crop.width) // 2, (size - crop.height) // 2))
+        out[k] = can
+    return out
+
+
 def m3d_view(sid):
     m = m3d_meta(sid)
     d = M3D_DIR / sid
     url = lambda f: f"/m3d/{sid}/{f}?t={int((d / f).stat().st_mtime)}"   # noqa: E731
     slots = {s: (url(f"view_{s}.png") if (d / f"view_{s}.png").is_file() else None) for s in ("front",) + M3D_SIDES}
     return {**m, "id": sid, "slots": slots, "ready": m3d_ready(), "blender": blender3d.status(ROOT),
-            "orig": url("orig.png") if (d / "orig.png").is_file() else None, "front_orig": (d / "view_front_orig.png").is_file()}
+            "orig": url("orig.png") if (d / "orig.png").is_file() else None, "front_orig": (d / "view_front_orig.png").is_file(),
+            "vcheck": m3d_vcheck(d)}
 
 
 def m3d_list():
@@ -238,14 +319,17 @@ def m3d_views(p, J):
     for i, s in enumerate(sides):
         check_cancel(J)
         J["msg"], J["progress"] = f"{M3D_SIDE_KO[s]} 모습 그리는 중 ({i + 1}/{len(sides)})", i / len(sides)
-        text = (f"Show {M3D_SIDE_EN[s]} of the same {what}. Keep exactly the same design, shape, proportions, colors, materials and details. "
-                "Full body / whole object in frame, same scale, neutral standing pose kept, plain pure white background, soft even studio lighting, no shadow.")
+        text = (f"Turnaround view: show {M3D_SIDE_EN[s]}, of the same {what}. Orthographic-like eye-level view, no camera tilt. "
+                "Keep exactly the same design, shape, proportions, colors, materials and details, and exactly the same pose as the reference — do not move the arms, legs or head. "
+                "Full body / whole object in frame, same height and scale as the reference, plain pure white background, soft even studio lighting, no shadow.")
         res = do_edit({"kind": "edit", "engine": "qwen", "image": src, "prompt": text, "seed": seed_of(p) + i, "fast": p.get("fast") or "", "translate": ""}, J)
         m3d_cut(res[0][0].convert("RGB"), J).save(d / f"view_{s}.png")
     m["views_made"] = sorted(set(m.get("views_made", [])) | set(sides))
     m3d_save_meta(sid, m)
     J["m3d"] = m3d_view(sid)
-    J["msg"] = "여러 방향 그림을 만들었어요. 모양이 앞 사진과 다르면 빼고 3D 를 만들어 주세요."
+    bad = [M3D_SIDE_KO[k] for k, v in J["m3d"]["vcheck"].items() if not v["ok"]]
+    J["msg"] = ("여러 방향 그림을 만들었어요. " + (f"{'·'.join(bad)} 그림은 앞 사진과 잘 맞지 않아 체크를 풀어 뒀어요(다시 그리거나 내 사진으로 바꿀 수 있어요)."
+                                                 if bad else "모양이 앞 사진과 다르면 체크를 풀고 3D 를 만들어 주세요."))
     return []
 
 
@@ -325,7 +409,7 @@ def m3d_opts(p, m):
     faces = int(num(p, "faces", kind["faces"], int))
     tex = int(num(p, "tex", 2048, int))
     return {"res": res if res in M3D_RES else 1024, "faces": faces if faces in M3D_FACES else 20000, "tex": tex if tex in M3D_TEX else 2048,
-            "remesh": 512 if flag(p, "remesh", True) else 0, "blender": flag(p, "blender", True), "height": clamp(num(p, "height", kind["height"]), 0.0, 500.0),
+            "remesh": M3D_REMESH if flag(p, "remesh", True) else 0, "blender": flag(p, "blender", True), "height": clamp(num(p, "height", kind["height"]), 0.0, 500.0),
             "rotate": int(num(p, "rotate", 0, int)) % 360 // 90 * 90, "lods": flag(p, "lods", True),
             "formats": [x for x in ("glb", "fbx", "obj") if flag(p, "fmt_" + x, x != "obj")] or ["glb"],
             "rig": flag(p, "rig", m.get("kind") == "character")}
@@ -351,10 +435,13 @@ def m3d_build(p, J):
     miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
     if miss:
         raise RuntimeError("이 ComfyUI 에는 3D 노드(" + ", ".join(miss) + ")가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
-    views = {"front": put_input(Image.open(d / "view_front.png"), J)}
-    for s in use:
-        views[s] = put_input(Image.open(d / f"view_{s}.png"), J)
-    q = {"files": f, "views": views, "multiview": mv, "seed": seed_of(p), "steps": (12, 12, 12), "cfg": (7.5, 7.5, 1.0),
+    if mv:                                              # 멀티뷰: 모든 방향을 같은 배율로 맞춰서 넣어요
+        fr = m3d_frame({s: Image.open(d / f"view_{s}.png").convert("RGBA") for s in ["front"] + use})
+        views = {s: put_input(fr[s], J) for s in ["front"] + use}
+    else:
+        views = {"front": put_input(Image.open(d / "view_front.png"), J)}
+    # 단계 수(구조, 모양 512, 재질, 모양 올려 그리기)·cfg — 원본 TRELLIS.2 기본값
+    q = {"files": f, "views": views, "multiview": mv, "framed": mv, "seed": seed_of(p), "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
          "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"]}
     free_ollama()
     J["msg"] = f"3D 만드는 중 — 모양 {o['res']} · 면 {o['faces']:,}개 · 텍스처 {o['tex']}px (몇 분 걸려요)"
@@ -379,7 +466,7 @@ def m3d_build(p, J):
             z = d / f"{m['name']}_game_{uuid.uuid4().hex[:4]}.zip"
             with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
                 for x in sorted((work / "pack").rglob("*")):
-                    if x.is_file() and x.name != "result.json":
+                    if x.is_file() and x.name != "result.json" and not x.name.endswith("_rig_preview.glb"):   # 확인용 움직임은 묶음에 안 넣어요
                         zf.write(x, x.relative_to(work / "pack"))
             lod0 = work / "pack" / r["lods"][0].get("glb", "")
             info = {**base_info, "blender": r.get("blender"), "lods": r["lods"], "size_m": r["size_m"]}
