@@ -258,6 +258,13 @@ class Handler(BaseHTTPRequestHandler):
             if not fp:
                 return self.send_json({"error": "없어요"}, 404)
             return self.send_file(fp, "image/png" if fp.suffix.lower() == ".png" else "image/jpeg")
+        if u == "/api/keep":
+            return self.send_json({**keep_list(), **keep_size()})
+        if u.startswith("/kept/"):
+            fp = keep_file(u[6:])
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_file(fp, KEEP_TYPE[fp.suffix])
         if u == "/api/m3d":
             return self.send_json(m3d_list())
         if u.startswith("/api/m3d/"):
@@ -362,6 +369,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(lora_train.install(ROOT))
         if u == "/api/lora/engine/uninstall":
             return self.send_json(lora_train.uninstall(ROOT))
+        if u == "/api/keep":
+            return self.send_json(keep_post(p))
         if u in ("/api/m3d/slot", "/api/m3d/delete"):
             try:
                 return self.send_json((m3d_slot if u.endswith("slot") else m3d_delete)(p))

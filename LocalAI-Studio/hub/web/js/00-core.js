@@ -8,6 +8,12 @@ const ls={get:(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:JSON
 const debounce=(f,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>f(...a),ms)}};
 const toDataURL=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(blob)});
 const urlToDataURL=async u=>toDataURL(await (await fetch(u)).blob());
+/* 올린 사진 기억: 화면마다 올린 사진을 서버(kept_inputs 폴더)에 두고, 다시 켜면 그 자리에 불러와요(99-keep.js). 빼거나 지워야만 사라져요 */
+let KEPT={};const KEEP_T={};
+function keepPut(slot,url){if(!slot)return;clearTimeout(KEEP_T[slot]);
+  KEEP_T[slot]=setTimeout(async()=>{try{if(!url){delete KEPT[slot];await api('/api/keep',{slot,clear:1});return}
+    const r=await api('/api/keep',{slot,image:/^data:/.test(url)?url:await urlToDataURL(url)});if(r.url)KEPT[slot]=r.url}catch{}},250)}
+async function keepGet(slot){const u=KEPT[slot];if(!u)return null;try{return await urlToDataURL(u)}catch{return null}}
 let GPU=null,LISTS={llm:[],checkpoints:[],loras:[],vaes:[],upscalers:[],controlnets:[],wildcards:[],fluxmodels:[],flux_ready:false,chroma_ready:false,krea2models:[],krea2_ready:false,qwen:false},
     CAPS={samplers:[],schedulers:[],has:{}},PROFILES=[];
 const IV={},COMPARE={};
@@ -263,15 +269,15 @@ const MINI_LABEL={chref1:'대표 이미지 선택',chref2:'참고 이미지 선�
 function mini(box,label){
   box.innerHTML=`<button type="button" class="ghost">${esc(label||MINI_LABEL[box.dataset.img]||'이미지 선택')}</button><img alt="" hidden><button type="button" class="x" hidden title="제거">×</button><input type="file" accept="image/*" hidden>`;
   const[b,im,x,inp]=[$('.ghost',box),$('img',box),$('.x',box),$('input',box)];box.value=null;
-  box.set=url=>{box.value=url;im.src=url;im.hidden=x.hidden=false;b.hidden=true};
-  box.clear=()=>{box.value=null;im.hidden=x.hidden=true;b.hidden=false};
+  box.set=(url,quiet)=>{box.value=url;im.src=url;im.hidden=x.hidden=false;b.hidden=true;if(quiet!==true)keepPut(box.dataset.keep,url)};
+  box.clear=quiet=>{box.value=null;im.hidden=x.hidden=true;b.hidden=false;if(quiet!==true)keepPut(box.dataset.keep,null)};
   b.onclick=()=>inp.click();x.onclick=box.clear;
   im.title='누르면 크게 봐요';im.onclick=()=>box.value&&lbOpen([{url:box.value,name:'input.png'}],0);      // 작게 보이는 입력 그림도 눌러서 확대
   inp.onchange=async()=>{const f=inp.files[0];inp.value='';if(f)box.set(await toDataURL(f))};
   box.ondragover=e=>{e.preventDefault();box.classList.add('drop')};box.ondragleave=()=>box.classList.remove('drop');
   box.ondrop=async e=>{e.preventDefault();e.stopPropagation();box.classList.remove('drop');const f=[...e.dataTransfer.files].find(x=>/^image\//.test(x.type));if(f)box.set(await toDataURL(f))};
 }
-$$('.mini[data-img]').forEach(b=>mini(b));
+$$('.mini[data-img]').forEach(b=>{const f=b.closest('form');if(f&&f.id&&!/^ch/.test(b.dataset.img))b.dataset.keep=f.id+'.'+b.dataset.img;mini(b)});
 
 /* ══════════ 화면 전환 ══════════ */
 let QSEEN=new Map(),QINIT=false,QLAST=null,QUSER=null;   // 작업 대기열 상태(60-extras.js 에서 써요)

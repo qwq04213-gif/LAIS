@@ -1074,7 +1074,7 @@
 <div class="cpane" id="fold-i2p"><div class="card"><h3>이미지에서 프롬프트 뽑기</h3>
     <p class="hint plain">사진을 올리면 이미지를 볼 수 있는 대화 모델이 그림을 설명해서 프롬프트로 만들어 줘요. 마음에 드는 그림의 분위기를 따라 만들고 싶을 때 써요.</p>
     <p class="warn" id="w-i2p" hidden>이미지를 볼 수 있는 대화 모델이 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Qwen2.5-VL 7B'를 설치해 주세요.</p>
-    <div class="vdrop"><label class="ghost vpick">이미지 고르기<input type="file" accept="image/*" hidden id="i2p-file"></label><img id="i2p-thumb" alt="" hidden></div>
+    <div class="vdrop"><label class="ghost vpick">이미지 고르기<input type="file" accept="image/*" hidden id="i2p-file"></label><img id="i2p-thumb" alt="" hidden><button type="button" class="ghost" id="i2p-clear" hidden>지우기</button></div>
     <div class="row"><label class="f">만들 형식<select id="i2p-style"><option value="sentence">문장형 (FLUX·Krea·Qwen 계열)</option><option value="tags">태그형 (NoobAI·Illustrious 계열)</option><option value="video">영상용 (움직임 포함)</option></select></label>
     <label class="f">사용할 모델<select id="i2p-model"></select></label></div>
     <div class="actions"><button class="go" type="button" id="i2p-go">프롬프트 만들기</button><span class="mute" id="i2p-st"></span></div>
@@ -1367,6 +1367,7 @@
     <p class="hint plain">어디에서 용량을 쓰는지 폴더별로 보여 주고, 지워도 안전한 임시 파일만 골라서 정리해 줘요. 모델과 결과 이미지는 자동으로 지우지 않아요.</p>
     <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button> <button type="button" class="ghost" id="tidy-scan" title="받다 만 파일, 같은 파일이 두 곳에 있는 경우, 오래된 큰 모델을 찾아 줘요">정리할 모델 찾기</button><span class="mute" id="disk-st"></span></div>
     <div id="tidy"></div>
+    <div class="keepbox" id="keepbox"><span class="mute" id="keep-st">화면에 올려 둔 사진은 다시 켜도 그대로 불러와요.</span> <button type="button" class="ghost sm" id="keep-clr" hidden>올려 둔 사진 모두 지우기</button></div>
     <div id="cachein" class="cachein"></div>
     <div id="disk"></div>
   

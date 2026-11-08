@@ -43,7 +43,9 @@ $('#wc-form').onsubmit=async e=>{e.preventDefault();const f=e.target,n=f.name.va
 $('#wc-del').onclick=async()=>{const n=$('#wc-form').name.value.trim();if(!n||!confirm(`와일드카드 '${n}' 을(를) 지울까요?`))return;
   const r=await api('/api/wildcards',{action:'delete',name:n});if(r.error)return toast(r.error);$('#wc-form').reset();wcLoad();listsAt=0;loadLists(true)};
 let I2P=null;
-$('#i2p-file').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;I2P=await toDataURL(fl);$('#i2p-thumb').src=I2P;$('#i2p-thumb').hidden=false;e.target.value=''};
+function i2pSet(d,quiet){I2P=d;$('#i2p-thumb').hidden=$('#i2p-clear').hidden=!d;if(d)$('#i2p-thumb').src=d;if(quiet!==true)keepPut('i2p',d)}
+$('#i2p-file').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;i2pSet(await toDataURL(fl));e.target.value=''};
+$('#i2p-clear').onclick=()=>i2pSet(null);
 async function i2pInit(){let m=[];try{m=(await api('/api/vision')).models}catch{}
   $('#w-i2p').hidden=m.length>0;$('#i2p-model').innerHTML=m.map(x=>`<option>${esc(x)}</option>`).join('')}
 $('#i2p-go').onclick=async()=>{if(!I2P)return toast('먼저 이미지를 골라 주세요.');const b=$('#i2p-go'),st=$('#i2p-st');
