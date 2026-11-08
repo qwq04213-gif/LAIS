@@ -52,6 +52,24 @@ def wf_fit(g):
         for k, v in req.items():
             if k not in n["inputs"] and isinstance(v, (list, tuple)) and len(v) > 1 and isinstance(v[1], dict) and "default" in v[1]:
                 n["inputs"][k] = v[1]["default"]
+        for k, v in {**opt, **req}.items():                 # 고른 값에 따라 칸이 생기는 선택 칸(DynamicCombo): 하위 칸은 '부모.이름' 으로 채워요
+            try:
+                if not (isinstance(v, (list, tuple)) and len(v) > 1 and isinstance(v[1], dict) and isinstance(v[1].get("options"), list)):
+                    continue
+                opts = [o for o in v[1]["options"] if isinstance(o, dict) and "key" in o]
+                if not opts:
+                    continue
+                cur = n["inputs"].get(k, v[1].get("default", opts[0]["key"]))
+                if isinstance(cur, list):                   # 다른 노드에서 이어진 값이면 알 수 없어요
+                    continue
+                n["inputs"].setdefault(k, cur)
+                sel = next((o for o in opts if o["key"] == cur), None)
+                kids = (sel or {}).get("inputs") or {}
+                for c, cs in {**(kids.get("optional") or {}), **(kids.get("required") or {})}.items():
+                    if f"{k}.{c}" not in n["inputs"] and isinstance(cs, (list, tuple)) and len(cs) > 1 and isinstance(cs[1], dict) and "default" in cs[1]:
+                        n["inputs"][f"{k}.{c}"] = cs[1]["default"]
+            except Exception:  # noqa: BLE001
+                continue
     return g
 
 

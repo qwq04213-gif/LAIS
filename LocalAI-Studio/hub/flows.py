@@ -630,7 +630,8 @@ def wf_trellis(q):
     low = dense
     if q.get("remesh"):
         low = [w.add("RemeshMesh", mesh=low, resolution=int(q["remesh"]), sign_mode="udf", band=1.0, project_back=0.0, fix_poles=False,
-                     smooth_iters=2, drop_small_components=0.01, precluster_max_verts=20000000), 0]
+                     smooth_iters=2, drop_small_components=0.01, precluster_max_verts=20000000,
+                     **{"sign_mode.qef": False, "sign_mode.drop_inverted_components": False, "sign_mode.drop_enclosed_components": False}), 0]
     low = [w.add("DecimateMesh", mesh=low, target_face_count=int(q["faces"]), placement_mode="midpoint"), 0]
     low = [w.add("MeshSmoothNormals", mesh=low, crease_angle=180.0), 0]
     low = [w.add("UnwrapMesh", mesh=low, segmenter="pec", resolution=int(q["tex"]), padding=2, weld_distance=0.0), 0]
