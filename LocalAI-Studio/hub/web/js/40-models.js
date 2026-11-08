@@ -148,7 +148,7 @@ const fileBtn=(f,dir)=>f.installed?'<em>설치됨</em>':`<button type="button" c
 function civCard(m){
   const blur=$('#dl-blur').checked;
   const v0=m.versions[0];
-  const th=v0.thumb?`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(v0.thumb)}" alt="" class="${blur&&(v0.thumb_nsfw||m.nsfw)?'blur':''}">`:'<div class="noimg"></div>';
+  const th=v0.thumb?`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(v0.thumb)}" alt="" ${v0.thumb_nsfw||m.nsfw?'data-ns="1"':''} class="${blur&&(v0.thumb_nsfw||m.nsfw)?'blur':''}">`:'<div class="noimg"></div>';
   return `<article class="dlc">${th}<div><h4><a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a></h4><small>${esc(m.type)} · 다운로드 ${m.downloads.toLocaleString()} · 추천 ${m.likes.toLocaleString()}${m.nsfw?' · 성인':''}</small>
   ${m.versions.map(v=>`<div class="ver"><b>${esc(v.name||'')}</b> <small>${esc(v.base||'')}</small>${v.files.map(f=>`<div class="frow"><span>${esc(f.name)}</span>${fileBtn(f)}</div>`).join('')}</div>`).join('')}</div></article>`;
 }
@@ -173,7 +173,7 @@ async function dlSearch(more){
 }
 fdl.onsubmit=e=>{e.preventDefault();dlSearch(false)};
 $('#dl-more').onclick=()=>dlSearch(true);
-$('#dl-blur').onchange=()=>$$('#dl-res .dlc img').forEach(()=>{});
+$('#dl-blur').onchange=e=>$$('#dl-res .dlc img[data-ns]').forEach(i=>i.classList.toggle('blur',e.target.checked));
 $('#dl-res').onclick=async e=>{
   const one=e.target.closest('.dl-one');
   if(one){

@@ -103,7 +103,8 @@ AGENT_TOOLS = {
         "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "motion": {"type": "string", "enum": ["orbit", "sway", "dolly", "rise"]}, "seconds": {"type": "integer", "minimum": 2, "maximum": 10}},
         "required": ["image"], "act": True, "title": "패럴랙스 영상"},
     "image_to_3d": {
-        "desc": "Make a 3D model (.glb) from one image.", "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}}, "required": ["image"], "act": True, "title": "사진 → 3D"},
+        "desc": "Make a textured, game-ready 3D model (.glb, TRELLIS.2) from one image of a single object or character.",
+        "params": {"image": {"type": "string", "maxLength": 400, "description": "'attached', 'previous' or an '/out/...' image address"}, "quality": {"type": "string", "enum": ["fast", "normal", "high"]}}, "required": ["image"], "act": True, "title": "사진 → 3D"},
     "restore_video": {
         "desc": "Restore an old/noisy/shaky video: denoise, stabilize, reduce flicker, upscale, make smoother. Keeps the original sound.",
         "params": {"video": {"type": "string", "maxLength": 400, "description": "'previous' or an '/out/...' video address from recent_results(kind=video)"}, "denoise": {"type": "string", "enum": ["off", "light", "medium", "strong"]}, "stabilize": {"type": "boolean"},
@@ -570,7 +571,7 @@ def agent_job_more(P, i, s, a, base):
         return {"kind": "feat", "feature": "parallax", "image": agent_src(P, i, a["image"]), "motion": a.get("motion", "orbit"), "sec": a.get("seconds", 4),
                 "strength": 5, "fps": "24"}
     if t == "image_to_3d":
-        return {"kind": "feat", "feature": "img3d", "image": agent_src(P, i, a["image"]), "octree": "256", "steps": 30, "cfg": 5.0, "seed": -1}
+        return {"kind": "feat", "feature": "img3d", "image": agent_src(P, i, a["image"]), "quality": a.get("quality", "normal"), "faces": "20000", "seed": -1}
     if t == "restore_video":
         return {"kind": "vrestore", "op": "run", "video": agent_media(P, i, a["video"], ("video",)), "denoise": a.get("denoise", "light"),
                 "stabilize": bool(a.get("stabilize")), "deflicker": bool(a.get("deflicker")), "upscale": a.get("upscale") or 0, "interp": bool(a.get("smoother"))}

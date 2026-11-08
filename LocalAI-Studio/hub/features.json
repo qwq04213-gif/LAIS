@@ -1739,17 +1739,17 @@
   "id": "img3d",
   "title": "사진 → 3D 모델",
   "icon": "◆",
-  "summary": "사진 한 장으로 3D 모델(GLB)을 만들어요(Hunyuan3D 2). 배경이 단순하고 물체 하나가 가운데 있는 사진이 잘 돼요. 결과는 화면에서 돌려 보고 .glb 로 저장해 Blender·Windows 3D 뷰어 등에서 열 수 있어요. 색(텍스처)은 없고 모양만 만들어요.",
+  "summary": "사진 한 장으로 텍스처까지 입힌 3D 모델(GLB)을 바로 만들어요(TRELLIS.2). 여러 방향 그림·면 수·텍스처 크기·Blender 마무리(LOD·FBX)는 왼쪽 메뉴의 '3D 만들기' 화면에서 해요.",
   "steps": [
-   "물체 하나가 잘 보이는 사진을 올려요(배경을 지운 사진이면 더 좋아요)",
-   "[만들기]를 눌러요 — 1~3분 걸려요",
-   "결과를 마우스로 돌려 보고 [저장]으로 .glb 를 받아요"
+   "물체 하나가 잘 보이는 사진을 올려요(배경은 자동으로 지워요)",
+   "[만들기]를 눌러요 — 몇 분 걸려요",
+   "결과를 마우스로 돌려 보고 .glb 로 저장해요"
   ],
   "needs": {
    "nodes": [
-    "Hunyuan3Dv2Conditioning",
-    "VAEDecodeHunyuan3D",
-    "VoxelToMesh",
+    "Trellis2Conditioning",
+    "Trellis2ShapeStage",
+    "BakeTextureFromVoxel",
     "SaveGLB"
    ]
   },
@@ -1761,43 +1761,48 @@
     "required": true
    },
    {
-    "name": "octree",
+    "name": "quality",
     "type": "select",
     "label": "세밀함",
     "options": [
      [
-      "256",
-      "보통 (빠름)"
+      "fast",
+      "빠르게 (512)"
      ],
      [
-      "384",
-      "높게"
+      "normal",
+      "보통 (1024)"
      ],
      [
-      "512",
-      "아주 높게 (느리고 메모리 많이 씀)"
+      "high",
+      "아주 촘촘하게 (1536, 메모리 많이 씀)"
      ]
     ],
-    "default": "256"
+    "default": "normal"
    },
    {
-    "name": "steps",
-    "type": "number",
-    "label": "단계 수",
-    "default": 30,
-    "min": 5,
-    "max": 100,
-    "advanced": true
-   },
-   {
-    "name": "cfg",
-    "type": "number",
-    "label": "CFG",
-    "default": 5.0,
-    "min": 1,
-    "max": 15,
-    "step": 0.1,
-    "advanced": true
+    "name": "faces",
+    "type": "select",
+    "label": "면 수",
+    "options": [
+     [
+      "5000",
+      "5천 (모바일)"
+     ],
+     [
+      "20000",
+      "2만 (게임)"
+     ],
+     [
+      "50000",
+      "5만 (고품질)"
+     ],
+     [
+      "200000",
+      "20만 (원본에 가깝게)"
+     ]
+    ],
+    "default": "20000"
    },
    {
     "name": "seed",

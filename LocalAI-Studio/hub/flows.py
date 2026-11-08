@@ -587,20 +587,58 @@ def wf_s2v(q, ref, audio):
     return w.n
 
 
-def wf_3d(q, img):
-    """Hunyuan3D 2: 사진 한 장 → 3D 모델(GLB). q: ckpt, seed, steps, cfg, octree, threshold"""
-    w = WF()
-    ck = w.add("ImageOnlyCheckpointLoader", ckpt_name=q["ckpt"])
-    li = w.add("LoadImage", image=img)
-    cv = w.add("CLIPVisionEncode", clip_vision=[ck, 1], image=[li, 0], crop="none")
-    cond = w.add("Hunyuan3Dv2Conditioning", clip_vision_output=[cv, 0])
-    lat = w.add("EmptyLatentHunyuan3Dv2", resolution=3072, batch_size=1)
-    model = [w.add("ModelSamplingAuraFlow", model=[ck, 0], shift=1.0), 0]
-    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name="euler", scheduler="normal",
-              positive=[cond, 0], negative=[cond, 1], latent_image=[lat, 0], denoise=1.0)
-    vox = w.add("VAEDecodeHunyuan3D", samples=[k, 0], vae=[ck, 2], num_chunks=8000, octree_resolution=q.get("octree", 256))
-    mesh = w.add("VoxelToMesh", voxel=[vox, 0], algorithm="surface net", threshold=q.get("threshold", 0.6))
-    w.add("SaveGLB", mesh=[mesh, 0], filename_prefix="3d/hub")
+def wf_trellis(q):
+    """사진 → 게임용 3D(GLB). TRELLIS.2(사진 한 장) 또는 Pixal3D 멀티뷰(앞·왼쪽·뒤·오른쪽).
+    구조(희소 복셀) → 모양(512, 필요하면 1024~1536 으로 한 번 더) → 재질(PBR) → 다시 짜기·면 줄이기 → UV 펴기 →
+    색·금속·거칠기·노멀·AO 굽기 → 텍스처 입힌 GLB.
+    q: files{model, dino, svae, tvae}, views{front[, left, back, right]}(LoadImage 이름, 배경 지운 RGBA), multiview, seed,
+       steps(ss, shape, tex), cfg(ss, shape, tex), res(512·1024·1536), remesh(0=안 함), faces, tex"""
+    w, f = WF(), q["files"]
+    model = [w.add("UNETLoader", unet_name=f["model"], weight_dtype="default"), 0]
+    cv = [w.add("CLIPVisionLoader", clip_name=f["dino"]), 0]
+    sv = [w.add("VAELoader", vae_name=f["svae"]), 0]
+    tv = [w.add("VAELoader", vae_name=f["tvae"]), 0]
+
+    def prep(name):                                   # 배경을 지운 사진 → 물체만 가운데로 잘라 정사각형(검은 배경)
+        li = w.add("LoadImage", image=name)
+        m = w.add("InvertMask", mask=[li, 1])         # LoadImage 마스크는 투명한 곳이 1 이라 뒤집어요
+        return [w.add("ImageCropToMask", images=[li, 0], masks=[m, 0], width=1024, height=1024, pad_factor=1.0, grow_mask=0,
+                      background="#000000"), 0]
+    v = q["views"]
+    if q.get("multiview"):
+        cond = w.add("Pixal3DMultiViewConditioning", clip_vision_model=cv, fov=20.0, **{k: prep(n) for k, n in v.items() if n})
+    else:
+        cond = w.add("Trellis2Conditioning", clip_vision_model=cv, image=prep(v["front"]))
+    pos, neg = [cond, 0], [cond, 1]
+    st, cf = q["steps"], q["cfg"]
+
+    def ks(p_, n_, lat, steps, cfg, i):
+        return [w.add("KSampler", model=model, seed=q["seed"] + i, steps=steps, cfg=cfg, sampler_name="euler", scheduler="simple",
+                      positive=p_, negative=n_, latent_image=lat, denoise=1.0), 0]
+    ss = ks(pos, neg, [w.add("EmptyTrellis2LatentStructure", batch_size=1), 0], st[0], cf[0], 0)
+    vox = [w.add("VaeDecodeStructureTrellis2", samples=ss, vae=sv, resolution="32"), 0]
+    sh = w.add("Trellis2ShapeStage", positive=pos, negative=neg, voxel=vox)
+    shape = ks([sh, 0], [sh, 1], [sh, 2], st[1], cf[1], 1)
+    if int(q.get("res", 1024)) > 512:
+        up = w.add("Trellis2UpsampleStage", positive=pos, negative=neg, shape_latent=shape, vae=sv, target_resolution=int(q["res"]))
+        shape = ks([up, 0], [up, 1], [up, 2], st[1], cf[1], 2)
+    dec = w.add("VaeDecodeShapeTrellis", samples=shape, vae=sv)
+    dense = [dec, 0]
+    tx = w.add("Trellis2TextureStage", positive=pos, negative=neg, shape_latent=shape)
+    tex = ks([tx, 0], [tx, 1], [tx, 2], st[2], cf[2], 3)
+    col = [w.add("VaeDecodeTextureTrellis", samples=tex, vae=tv, shape_subdivides=[dec, 1]), 0]
+    low = dense
+    if q.get("remesh"):
+        low = [w.add("RemeshMesh", mesh=low, resolution=int(q["remesh"]), sign_mode="udf", band=1.0, project_back=0.0, fix_poles=False,
+                     smooth_iters=2, drop_small_components=0.01, precluster_max_verts=20000000), 0]
+    low = [w.add("DecimateMesh", mesh=low, target_face_count=int(q["faces"]), placement_mode="midpoint"), 0]
+    low = [w.add("MeshSmoothNormals", mesh=low, crease_angle=180.0), 0]
+    low = [w.add("UnwrapMesh", mesh=low, segmenter="pec", resolution=int(q["tex"]), padding=2, weld_distance=0.0), 0]
+    bt = w.add("BakeTextureFromVoxel", mesh=low, voxel_colors=col, texture_size=int(q["tex"]), reference_mesh=dense)
+    nm = w.add("BakeNormalMapFromMesh", low_poly=low, high_poly=dense, resolution=int(q["tex"]), cage_distance=0.05, ignore_backfaces=True)
+    ao = w.add("BakeAmbientOcclusion", low_poly=low, high_poly=dense, resolution=int(q["tex"]), samples=64, max_distance=0.5, strength=1.0, bias=0.01)
+    fin = w.add("ApplyTextureToMesh", mesh=low, base_color=[bt, 0], metallic=[bt, 1], roughness=[bt, 2], occlusion=[ao, 0], normal_map=[nm, 0])
+    w.add("SaveGLB", mesh=[fin, 0], filename_prefix="3d/hub3d")
     return w.n
 
 

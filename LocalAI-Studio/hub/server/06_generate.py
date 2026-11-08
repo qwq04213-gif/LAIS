@@ -161,8 +161,10 @@ def flux_parts(p=None):
 def krea2_parts(p=None):
     """Krea 2 공용 파일: Qwen3-VL 텍스트 인코더 + Qwen Image VAE. 화면에서 직접 고른 파일(k2_te/k2_vae)이 우선이에요."""
     te, va = files("text_encoders"), files("vae")
-    r = dict(te=next((n for n in te if "qwen3" in n.lower() and "vl" in n.lower()), None) or next((n for n in te if "qwen3" in n.lower()), None),
-             vae=next((n for n in va if "qwen_image_vae" in n.lower()), None) or next((n for n in va if "qwen" in n.lower()), None))
+    tq = [n for n in te if "qwen3" in n.lower() and not re.search(r"8b|qwen3\.?5", n.lower())]      # Qwen-Image 2.1(8B)·MOSS(3.5 9B) 인코더는 Krea 2 와 맞지 않아요
+    vq = [n for n in va if "qwen" in n.lower() and "2.1" not in n and "2_1" not in n]                # Qwen-Image 2.1 VAE 도 달라요
+    r = dict(te=next((n for n in tq if "vl" in n.lower() and "4b" in n.lower()), None) or next((n for n in tq if "vl" in n.lower()), None) or next(iter(tq), None),
+             vae=next((n for n in vq if "qwen_image_vae" in n.lower()), None) or next(iter(vq), None))
     if p:
         for key, field, lst in (("te", "k2_te", te), ("vae", "k2_vae", va)):
             if p.get(field) and p[field] in lst:

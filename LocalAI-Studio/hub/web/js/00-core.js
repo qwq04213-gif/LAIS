@@ -496,7 +496,10 @@ FORMS().forEach(f=>{
     if(n==='engine'||n==='mode'||n==='gengine'||n==='fengine')sync(f);
     if(n==='engine'&&e.target.value==='flux'){fillFx();const d=FX_DEF[f.elements.fengine.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}
     if(n==='fengine'){fillFx();const d=FX_DEF[e.target.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}
-    if(n==='engine'&&f.elements.translate)f.elements.translate.checked=e.target.value!=='qwen';
+    /* 자동 번역: 모델 종류마다 켜고 끈 걸 기억해요. 처음엔 Qwen-Image 2.1·MOSS(한국어를 바로 알아들음)는 꺼짐, 나머지는 켜짐 */
+    const ek=f.elements.gengine?'gengine':f.elements.engine?'engine':null,trk='tr:'+f.id;
+    if(ek&&n===ek&&f.elements.translate){const m=ls.get(trk,{})||{},v=e.target.value;f.elements.translate.checked=v in m?!!m[v]:!['qwen','qwenimg','moss'].includes(v)}
+    if(ek&&n==='translate'){const m=ls.get(trk,{})||{};m[f.elements[ek].value]=e.target.checked;ls.set(trk,m)}
     if(n==='gengine'){fillFx();const d=FX_DEF[e.target.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}
     if(n==='fx_model')k2tune(f);
     if(n==='rengine'){f.dataset.re=e.target.value;fillFx();const d=FX_DEF[e.target.value];if(d)for(const[k,v]of Object.entries(d))setv(f,k,v);k2tune(f)}

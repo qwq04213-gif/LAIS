@@ -10,7 +10,7 @@ def folder_map():
     return m
 
 
-MEDIA = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".glb": "model/gltf-binary", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif"}
+MEDIA = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac", ".opus": "audio/ogg", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".glb": "model/gltf-binary", ".mp4": "video/mp4", ".webm": "video/webm", ".webp": "image/webp", ".gif": "image/gif", ".zip": "application/zip"}
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.css": ("app.css", "text/css; charset=utf-8")}
 _JSB = {"key": None, "data": b"", "gz": b"", "etag": ""}
 
@@ -258,6 +258,21 @@ class Handler(BaseHTTPRequestHandler):
             if not fp:
                 return self.send_json({"error": "없어요"}, 404)
             return self.send_file(fp, "image/png" if fp.suffix.lower() == ".png" else "image/jpeg")
+        if u == "/api/m3d":
+            return self.send_json(m3d_list())
+        if u.startswith("/api/m3d/"):
+            try:
+                return self.send_json(m3d_view(u[9:]))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
+        if u.startswith("/m3d/"):
+            parts = u[5:].split("/")
+            fp = m3d_file(parts[0], parts[1]) if len(parts) == 2 else None
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_file(fp, "image/png")
+        if u == "/api/blender":
+            return self.send_json(blender3d.status(ROOT))
         if u == "/api/websearch":
             return self.send_json(srx_status())
         if u == "/api/audio/engine":
@@ -299,7 +314,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss", "report", "verify", "tracks", "orig", "loud") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss", "report", "verify", "tracks", "orig", "loud", "m3d", "m3d_stats") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -347,6 +362,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(lora_train.install(ROOT))
         if u == "/api/lora/engine/uninstall":
             return self.send_json(lora_train.uninstall(ROOT))
+        if u in ("/api/m3d/slot", "/api/m3d/delete"):
+            try:
+                return self.send_json((m3d_slot if u.endswith("slot") else m3d_delete)(p))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
+        if u == "/api/blender/install":
+            return self.send_json(blender3d.install(ROOT))
+        if u == "/api/blender/uninstall":
+            return self.send_json(blender3d.uninstall(ROOT))
+        if u == "/api/blender/check":
+            return self.send_json(blender3d.check(ROOT) if blender3d.exe(ROOT) else {"error": "Blender 가 아직 없어요."})
         if u == "/api/websearch/setup":
             return self.send_json(srx_setup())
         if u == "/api/websearch/save":
@@ -380,7 +406,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/agent/cancel":
             return self.send_json(agent_cancel(str(p.get("id"))))
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora", "vrestore", "audio"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora", "vrestore", "audio", "m3d"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if p["kind"] == "batch":
                 try:

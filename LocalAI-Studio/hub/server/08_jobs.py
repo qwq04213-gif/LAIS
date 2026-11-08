@@ -140,7 +140,7 @@ def vmix_upload(h):
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
-        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")) or p["kind"] == "audio" or (p["kind"] == "lora" and not (p.get("op") == "augment" and p.get("mode") == "ai")) \
+        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")) or p["kind"] == "audio" or (p["kind"] == "m3d" and p.get("op") == "prep") or (p["kind"] == "lora" and not (p.get("op") == "augment" and p.get("mode") == "ai")) \
                 or (p["kind"] == "vrestore" and not (p.get("op") == "run" and (vr_opts(p)["upscale"] or vr_opts(p)["interp"]))):
             pass                                          # 음성 만들기·영상 소리/자막 넣기는 ComfyUI 를 쓰지 않아요
         elif (p["kind"] == "feat" and p.get("feature") in ("resize", "color", "rmbg")) or (p["kind"] == "vpost" and p.get("op") == "gif"):
@@ -150,7 +150,7 @@ def job_thread(J, p):
         else:
             wait_comfy()
             claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora, "vrestore": do_vrestore, "audio": do_audio}[p["kind"]](p, J)
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora, "vrestore": do_vrestore, "audio": do_audio, "m3d": do_m3d}[p["kind"]](p, J)
         sub = OUT_SUB["vid"] if p["kind"] in ("vpost", "vmix", "vedit", "vana") else OUT_SUB.get(p["kind"], "기타")
         (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
@@ -158,7 +158,7 @@ def job_thread(J, p):
             dsub = info.pop("_sub", None) or sub if isinstance(info, dict) else sub      # 깊이 맵처럼 따로 모아 두는 결과는 자기 폴더로
             (OUT / dsub).mkdir(parents=True, exist_ok=True)
             if p["kind"] in ("vid", "vpost", "vmix", "vedit", "music", "tts") or isinstance(im, (bytes, bytearray, Path)):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
-                name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts", "audio") else "vid"}-{i}{graph}'
+                name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts", "audio", "m3d") else "m3d" if graph in (".glb", ".zip") else "vid"}-{i}{graph}'
                 if isinstance(im, Path):                      # 큰 결과(복원한 영상 등)는 메모리에 올리지 않고 파일을 옮겨요
                     shutil.move(str(im), OUT / dsub / name)
                     try:
@@ -219,7 +219,7 @@ def _clean_tmp(J):
 QUEUE, QP = [], {}
 _QCV = threading.Condition()
 _QW = {"t": None}
-KIND_NAME = {"vedit": "영상 편집", "edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "vmix": "영상 소리·자막", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리", "vana": "영상 분석", "lora": "LoRA 만들기", "vrestore": "영상 복원", "audio": "소리 분리·복원"}
+KIND_NAME = {"vedit": "영상 편집", "edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "vmix": "영상 소리·자막", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리", "vana": "영상 분석", "lora": "LoRA 만들기", "vrestore": "영상 복원", "audio": "소리 분리·복원", "m3d": "3D 만들기"}
 DONE_STATES = ("done", "error", "cancelled")
 
 
@@ -238,7 +238,7 @@ NEED_RULES = [      # 작업 오류 글 → 바로 받을 추천 모델(models.j
     (r"체크포인트가 없", ["noobai", "sdxl-vae-fix"]), (r"업스케일 모델이 없", ["esrgan"]), (r"감지 모델이 없", ["adetailer"]),
     (r"Krea 2 스타일 참조", ["krea2-style-reference"]), (r"Krea 2 깊이 컨트롤", ["krea2-depth-control"]),
     (r"Stable Audio|T5-base", ["stable-audio-open"]), (r"ACE-Step", ["ace-step-15-turbo"]), (r"4단계 가속 LoRA", ["wan22-lightning"]),
-    (r"Hunyuan3D", ["hunyuan3d-2"]), (r"LTX-Video", ["ltx-video"]), (r"Wan VACE", ["wan-vace"]), (r"S2V", ["wan-s2v"]),
+    (r"TRELLIS\.2", ["trellis2"]), (r"Pixal3D", ["pixal3d-mv"]), (r"LTX-Video", ["ltx-video"]), (r"Wan VACE", ["wan-vace"]), (r"S2V", ["wan-s2v"]),
     (r"Wan 2\.2 14B 이미지", ["wan22-14b-i2v"]), (r"Wan 2\.2 14B 글", ["wan22-14b-t2v"]), (r"'Wan 2\.2 영상'", ["wan22-ti2v-5b"]),
     (r"SD3\.5", ["sd35-medium"]), (r"MOSS-Image", ["moss-image"]), (r"Qwen-Image 2\.1", ["qwen-image"]),
     (r"Lightning LoRA", ["qwen-lightning"]),

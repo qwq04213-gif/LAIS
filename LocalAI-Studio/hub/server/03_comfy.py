@@ -167,8 +167,36 @@ def prep(p, J, style, rng):
     t = re.sub(r"[ \t]{2,}", " ", t).strip(" ,\n")
     if p.get("translate") and re.search("[가-힣]", t):
         J["msg"] = "프롬프트 번역 중"
-        t = translate(t, style)
+        t = translate_keep_quotes(t, style)
     return t, tags
+
+
+QUOTE_RX = re.compile(r"\"[^\"\n]{1,200}\"|“[^”\n]{1,200}”|‘[^’\n]{1,200}’|「[^」\n]{1,200}」|(?<![A-Za-z])'[^'\n]{1,200}'(?![A-Za-z])")
+
+
+def translate_keep_quotes(t, style):
+    """따옴표 안 글자(그림에 그대로 넣을 글자)는 번역하지 않고 그대로 둬요. 예: '오늘 영업' 이라고 쓴 간판 → … sign that says "오늘 영업"."""
+    keep = []
+
+    def hold(m):
+        keep.append(m.group(0)[1:-1])
+        return f" QTXT{len(keep) - 1} "
+    body = QUOTE_RX.sub(hold, t)
+    if not keep:
+        return translate(t, style)
+    if not re.search("[가-힣]", body):          # 따옴표 밖에는 번역할 한글이 없어요
+        return t
+    out = translate(body, style)
+    lost = []
+    for i, s in enumerate(keep):
+        tok = f"QTXT{i}"
+        if re.search(rf"\b{tok}\b", out):
+            out = re.sub(rf"[\"“‘']?\b{tok}\b[\"”’']?", lambda _m, s=s: f'"{s}"', out, count=1)
+        else:
+            lost.append(s)
+    if lost:                                        # 번역하면서 자리표시가 사라졌으면 끝에 붙여요
+        out = out.rstrip(" .,") + ", with the text " + ", ".join(f'"{s}"' for s in lost)
+    return re.sub(r"[ \t]{2,}", " ", out).strip()
 
 
 def pick_profile(p):

@@ -3,7 +3,7 @@
 # ruff: noqa: F821
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악", "tts": "음성", "photo": "사진 편집", "etc": "기타", "depth": "깊이 맵", "vrestore": "영상 복원", "audio": "소리 분리·복원"}
+OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악", "tts": "음성", "photo": "사진 편집", "etc": "기타", "depth": "깊이 맵", "vrestore": "영상 복원", "audio": "소리 분리·복원", "m3d": "3D"}
 
 
 def out_path(rel):
@@ -463,21 +463,9 @@ def do_vid_more(p, J):
 
 
 def feat_3d(p, J):
-    """사진 한 장 → 3D 모델(GLB, Hunyuan3D 2). 결과: [(바이트, 정보, '.glb')]"""
-    ck = next((n for n in files("checkpoints") if "hunyuan3d" in n.lower() or "hy3d" in n.lower()), None)
-    if not ck:
-        raise RuntimeError("Hunyuan3D 모델이 없어요. '설치와 모델' 탭의 3D 분류에서 'Hunyuan3D 2'를 설치해 주세요.")
-    img = load_img(p["image"])
-    if max(img.size) > 1024:
-        k = 1024 / max(img.size)
-        img = img.resize((round(img.width * k), round(img.height * k)), RS.LANCZOS)
-    q = dict(ckpt=ck, seed=seed_of(p), steps=clamp(num(p, "steps", 30, int), 5, 100), cfg=clamp(num(p, "cfg", 5.0), 1.0, 15.0),
-             octree=int(p.get("octree") or 256) if str(p.get("octree") or "256") in ("128", "256", "384", "512") else 256)
-    J["msg"] = "3D 모델 만드는 중 — 1~3분 걸릴 수 있어요"
-    res = run_wf(flows.wf_3d(q, put_input(img, J)), J, raw=True)
-    glb = [(n, d) for n, d in res if n.lower().endswith(".glb")] or res
-    info = dict(kind="3d", seed=q["seed"], steps=q["steps"], cfg=q["cfg"], model=ck, octree=q["octree"])
-    return [(glb[0][1], info, ".glb")]
+    """사진 한 장 → 텍스처 입힌 3D 모델(GLB, TRELLIS.2). 자세한 설정·여러 방향·Blender 마무리는 '3D 만들기' 화면에서 해요."""
+    return m3d_quick(p["image"], {"res": {"fast": 512, "high": 1536}.get(p.get("quality"), 1024), "faces": p.get("faces") or 20000,
+                                  "seed": p.get("seed", -1)}, J)
 
 
 VPOST = {"interp": ("RIFE VFI", "ComfyUI-Frame-Interpolation", "프레임 늘리기"), "upscale": ("ImageUpscaleWithModel", "", "업스케일"),

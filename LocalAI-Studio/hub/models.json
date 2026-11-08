@@ -577,15 +577,47 @@
    ]
   },
   {
-   "id": "hunyuan3d-2",
-   "name": "Hunyuan3D 2 (사진 → 3D 모델)",
-   "gb": 4.9,
-   "desc": "기타 기능 > 사진 → 3D. 사진 한 장으로 3D 모양(GLB)을 만들어요. 색(텍스처)은 없어요. VRAM 8GB 이상. Tencent Hunyuan Community 라이선스(일부 지역 제외)를 모델 페이지에서 확인하세요.",
+   "id": "trellis2",
+   "name": "TRELLIS.2 (사진 → 게임용 3D, int8)",
+   "gb": 8.5,
+   "desc": "3D 만들기 화면. 사진 한 장으로 텍스처(색·금속·거칠기·노멀)까지 입힌 3D 모델을 만들고, 면 수를 줄여 게임에 바로 쓰게 다듬어요. Microsoft, MIT 라이선스. VRAM 16GB 이상 권장(12GB 이하는 품질을 '빠르게'로).",
+   "license": "MIT",
    "files": [
     {
-     "dir": "checkpoints",
-     "url": "https://huggingface.co/tencent/Hunyuan3D-2/resolve/main/hunyuan3d-dit-v2-0/model.fp16.safetensors",
-     "name": "hunyuan3d-dit-v2_fp16.safetensors"
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/diffusion_models/trellis_2_int8_convrot.safetensors"
+    },
+    {
+     "dir": "clip_vision",
+     "url": "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/clip_vision/dino_v3_vit_l.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/vae/trellis_2_shape_vae_bf16.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/vae/trellis_2_texture_vae_bf16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "pixal3d-mv",
+   "name": "Pixal3D 멀티뷰 (여러 방향 사진 → 3D, int8)",
+   "gb": 6.8,
+   "requires": [
+    "trellis2"
+   ],
+   "desc": "3D 만들기에서 앞·왼쪽·뒤·오른쪽 그림을 함께 쓰면 뒷모습까지 더 정확해져요. Tencent ARC·칭화대, MIT 라이선스.",
+   "license": "MIT",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Pixal3D/resolve/main/diffusion_models/pixal3d_multiview_int8_convrot.safetensors"
+    },
+    {
+     "dir": "clip_vision",
+     "url": "https://huggingface.co/Comfy-Org/Pixal3D/resolve/main/clip_vision/dino_v3_L_naf_fp32.safetensors"
     }
    ]
   },

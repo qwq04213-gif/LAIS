@@ -60,7 +60,7 @@ def sorted_models():
     for n in files("checkpoints"):
         fam, allin, how = model_family("checkpoints", n)
         info["checkpoints/" + n] = dict(family=fam, all_in_one=allin, how=how)
-        if fam == "hidden" or n in non_image or "hunyuan3d" in n.lower():      # 소리·영상·3D 모델은 그림 모델 목록에 섞지 않아요      # 음악 모델은 그림 모델 목록에 섞지 않아요
+        if fam == "hidden" or n in non_image or re.search(r"hunyuan3d|trellis|pixal3d", n.lower()):      # 소리·영상·3D 모델은 그림 모델 목록에 섞지 않아요      # 음악 모델은 그림 모델 목록에 섞지 않아요
             continue
         if fam == "flux":
             flux.append("ckpt::" + n)
@@ -73,7 +73,7 @@ def sorted_models():
         info["diffusion_models/" + n] = dict(family=fam, all_in_one=allin, how=how)
         if fam == "krea2":
             krea2.append(n)
-        elif fam in ("hidden", "qwen", "moss", "sd15", "sdxl", "sd3", "hidream", "lumina") or (fam == "unknown" and re.search(r"qwen|moss", n.lower())):
+        elif fam in ("hidden", "qwen", "moss", "sd15", "sdxl", "sd3", "hidream", "lumina") or re.search(r"trellis|pixal3d", n.lower()) or (fam == "unknown" and re.search(r"qwen|moss", n.lower())):
             continue
         else:
             (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)
@@ -158,7 +158,7 @@ def cat_of(m):
         return "video"
     if re.search(r"ace-step|stable-audio|audio", i):
         return "audio"
-    if "3d" in i:
+    if "3d" in i or "trellis" in i:
         return "d3"
     return "image"
 
