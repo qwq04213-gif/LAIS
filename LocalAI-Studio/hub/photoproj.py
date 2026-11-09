@@ -22,6 +22,7 @@ MIN_IOU = 0.85          # 사진·3D 실루엣이 이만큼 겹쳐야 붙여요
 MIN_IOU_PAT = (0.75, 0.4)   # 또는: 겹침이 이만큼이고 무늬(밝기)가 이만큼 맞으면 — 머리카락이 많아 실루엣이 덜 겹치는 캐릭터
 AO_KEEP = 0.15          # 사진을 붙인 곳의 그늘 굽기는 이만큼만 남겨요(사진에 이미 진짜 그늘이 있어서 겹치면 두 배로 어두워져요)
 SKIN_ROUGH = 0.5        # 사진을 붙인 피부의 거칠기(업계 시작값 0.4~0.6) — 3D 엔진은 피부를 매우 거칠게 칠해 찰흙처럼 보여요
+CLOTH_ROUGH = 0.75      # 사진을 붙인 피부 아닌 곳(옷·신발)의 최소 거칠기 — 엔진이 0.2~0.6 으로 칠하면 검은 옷이 비닐처럼 번들거리고 신발이 비쳐 보여요(천 0.7~0.95)
 FACING = (0.3, 0.65)    # 면이 사진 쪽을 보는 정도(cos) — 아래쪽은 원래 색, 위쪽은 사진 색, 사이는 섞어요
 _CT = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8, 5122: np.int16, 5120: np.int8}
 _NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
@@ -411,6 +412,7 @@ def _adjust_orm(M, wmap, skin):
             A[..., 0] += (255 - A[..., 0]) * wm * (1 - AO_KEEP)
         if "mr" in what:
             sk = np.asarray(Image.fromarray((skin * 255).astype(np.uint8)).resize(size, Image.BILINEAR)).astype(np.float32) / 255 * wm
+            A[..., 1] += (np.maximum(A[..., 1], CLOTH_ROUGH * 255) - A[..., 1]) * (wm - sk).clip(0, 1)
             A[..., 1] += (SKIN_ROUGH * 255 - A[..., 1]) * sk
             A[..., 2] *= 1 - sk
         buf = io.BytesIO()

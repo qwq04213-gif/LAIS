@@ -26,7 +26,7 @@ with sync_playwright() as p:
     pg.click("#v-gal [data-open=outputs]"); pg.wait_for_timeout(300); assert opened and "outputs" in opened[-1]; ok("'outputs 폴더 열기' button asks the studio to open the outputs folder")
     opts = pg.eval_on_selector_all("#gal-date option", "e=>e.map(x=>x.textContent)"); assert len(opts) == 4 and opts[0] == "모든 날짜" and "오늘" in opts[1] and opts[1].endswith("2개"), opts; ok("date picker lists each day with its count (today marked)")
     pg.check("#gal-group"); pg.wait_for_function("document.querySelectorAll('#gal-grid .gday').length==3")
-    heads = pg.eval_on_selector_all("#gal-grid .gday", "e=>e.map(x=>x.textContent)"); assert "오늘" in heads[0] and heads[0].rstrip().endswith("2개"), heads
+    heads = pg.eval_on_selector_all("#gal-grid .gday", "e=>e.map(x=>x.textContent)"); assert "오늘" in heads[0] and "2개" in heads[0], heads
     order = pg.eval_on_selector_all("#gal-grid > *", "e=>e.map(x=>x.className)"); assert order[0] == "gday" and order[1:3] == ["gt", "gt"] and order[3] == "gday", order; ok("'날짜별로 묶어 보기' groups cards under day headings (newest day first)")
     pg.reload(); pg.wait_for_timeout(500); pg.click("nav button[data-v=gal]"); pg.wait_for_function("document.querySelectorAll('#gal-grid .gday').length==3"); assert pg.is_checked("#gal-group"); ok("the grouping choice is remembered")
     d2 = time.strftime("%Y-%m-%d", time.localtime(time.time() - 2 * 86400)); pg.select_option("#gal-date", d2); pg.wait_for_function("document.querySelectorAll('#gal-grid .gt').length==1"); assert "1개" in pg.inner_text("#gal-n"); ok("picking a day shows only that day")

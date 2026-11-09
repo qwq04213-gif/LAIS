@@ -405,7 +405,7 @@ def gal_favs():
 def gal_fav(p):
     rel = str(p.get("file") or "")
     parts = [x for x in urllib.parse.unquote(rel[5:] if rel.startswith("/out/") else rel).split("/") if x]
-    if len(parts) not in (2, 3) or parts[0] not in OUT_SUB.values() or (len(parts) == 3 and not DATE_RX.match(parts[1])):
+    if len(parts) not in (2, 3) or parts[0] not in OUT_SUB.values() or (len(parts) == 3 and not (DATE_RX.match(parts[1]) or JOB_RX.match(parts[1]))):
         return {"error": "알 수 없는 파일"}
     key = parts[0] + "/" + Path(parts[-1]).name
     with _PLOCK:

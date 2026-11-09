@@ -22,7 +22,7 @@ with sync_playwright() as p:
     pg.click("nav button[data-v=batch]"); pg.wait_for_selector("#v-batch.on"); pg.wait_for_selector("#f-batch")
     pg.fill("#f-batch input[name=folder]", str(SRC)); pg.click("#bt-scan"); pg.wait_for_function("document.querySelector('#bt-info').textContent.includes('3장')"); ok("folder scan shows the photo count")
     pg.fill("#f-batch input[name=long_side]", "300"); pg.click("#f-batch .go"); pg.wait_for_selector("#bt-res .bt-done", timeout=30000)
-    assert "3장 완료" in pg.inner_text("#bt-res") and pg.locator("#bt-res .bt-grid img").count() == 3 and len(list((hub.OUT / "일괄").glob("s*_크기변경.png"))) == 3; ok("resize batch from the screen: summary + thumbnails, files saved")
+    assert "3장 완료" in pg.inner_text("#bt-res") and pg.locator("#bt-res .bt-grid img").count() == 3 and len(list((hub.OUT / "일괄").rglob("s*_크기변경.png"))) == 3; ok("resize batch from the screen: summary + thumbnails, files saved")
     pg.wait_for_function("window.QBEEP>=1", timeout=8000); assert "끝났어요" in pg.inner_text("#toast"); ok("finishing a job beeps and shows a toast (sound on by default)")
     # 아무것도 안 고르면 안내
     for k, v in (("long_side", "0"),): pg.fill(f"#f-batch input[name={k}]", v)
@@ -33,7 +33,7 @@ with sync_playwright() as p:
     shutil.copy(BASE + "/rmbg-test/u2netp.onnx", RMDIR / "u2netp.onnx"); pg.select_option("#f-batch select[name=rmodel]", "fast"); pg.wait_for_function("document.querySelector('#bt-rm-install').hidden && document.querySelector('#bt-rm-note').textContent.includes('설치됨')"); ok("once the model file exists the note turns to ✔ installed")
     pg.check("#f-batch input[name=srcm][value=files]"); pg.set_input_files("#bt-files", [TMPD + "/subj.png", TMPD + "/subj.png"], ); pg.wait_for_function("document.querySelector('#bt-drop').textContent.includes('2장 선택됨')")
     pg.select_option("#f-batch select[name=bg]", "white"); pg.select_option("#f-batch select[name=fmt]", "jpg"); pg.click("#f-batch .go"); pg.wait_for_function("document.querySelectorAll('#bt-res .bt-done').length==2", timeout=60000)
-    assert "2장 완료" in pg.locator("#bt-res .bt-done").first.inner_text(); assert len(list((hub.OUT / "일괄").glob("subj*_배경없음*.jpg"))) == 2 and not list(hub.BATCH_IN.glob("*")); ok("pick files → uploaded → background removal (real model) → JPEG with white bg; temp uploads removed")
+    assert "2장 완료" in pg.locator("#bt-res .bt-done").first.inner_text(); assert len(list((hub.OUT / "일괄").rglob("subj*_배경없음*.jpg"))) == 2 and not list(hub.BATCH_IN.glob("*")); ok("pick files → uploaded → background removal (real model) → JPEG with white bg; temp uploads removed")
     pg.check("#f-batch input[name=srcm][value=out]"); pg.select_option("#f-batch select[name=outsub]", "일괄"); pg.click("#bt-scan"); pg.wait_for_function("/사진 \\d+장/.test(document.querySelector('#bt-info').textContent)"); ok("'program result folder' source")
     # 대기열 창
     gate = threading.Event(); orig = hub.do_batch

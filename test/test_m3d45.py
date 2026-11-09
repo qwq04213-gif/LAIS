@@ -91,6 +91,14 @@ assert "/3D/" in j["images"][0] and hub.JOB_RX.match(j["images"][0].split("/")[3
 ok("output saved in its own job folder; gallery thumbnail of the 3D model is drawn automatically")
 ok("photo-covered area: baked AO mostly removed (photo has real shading), skin gets roughness 0.5/metal 0, cloth material kept, back untouched")
 
+# 4-2) 엔진이 옷을 반들반들(거칠기 0.24)하게 칠했으면 사진 붙인 옷은 0.75 이상으로(검은 바지 번들거림·신발 비침), 피부는 0.5
+STATE["glb"] = with_orm(uv_glb(0.75, 1.0, 0.5, TX, n=16), rough=60)
+j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); assert j["state"] == "done", j
+G, BIN = glbscene.read(urllib.request.urlopen(B + j["images"][0]).read()); orm = pic(G, BIN, G["materials"][0]["occlusionTexture"]["index"])
+skin, cloth, back = orm[fy(600), fx(450)], orm[fy(600), fx(750)], orm[192, 128]
+assert cloth[1] >= 188 and abs(skin[1] - 128) <= 6 and back[1] == 60, (skin, cloth, back)
+ok("glossy engine roughness on photo-covered cloth raised to fabric level; skin 0.5; back untouched")
+
 # 5) 건너뛰면 결과 화면에 이유
 STATE["glb"] = uv_glb(2.0, 0.3, 0.5, TX, n=8)
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); ph = j["m3d_stats"]["photo"]
