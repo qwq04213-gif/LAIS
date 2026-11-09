@@ -62,14 +62,14 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.6.1**(커밋 `v4.6.1`). 다음 판 **4.7**.
+마지막 출시: **4.7**(커밋 `v4.7`). 다음 판 **4.8**.
 
 ### 다음 할 일
 
 0. 사용자가 4.5 로 실제 3D(전신 사진)를 만들어 결과 zip 을 보내 주면, 앞·45°·옆·뒤와 옷·손·머리카락·이음새를 그려서 점검하기(시험 도구: 가짜 3D 대신 실제 GLB 를 `photoproj`·렌더러로)
 1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
 
-4.7(만드는 중, 아직 출시 전): 3D '만드는 방식'(`m3d_opts` mode: single 기본 / multi — 예전 API 는 sides 가 있으면 multi), 멀티뷰 일관성(`m3d_mv_check` = `m3d_vcheck` 실루엣, 안 맞는 방향 빼기·다 빠지면 한 장), 사진 붙이기 카메라 방향 고정(`photoproj.PIXAL_CAM`, `fit(cam_hint)` — 겹침이 낮을 때만 다시 찾기), 얼굴 휘기 기본 꺼짐(`project(align=False)`), 업스케일 `m3d_upscaler(redraw_ok)` Real-ESRGAN 먼저·얼굴은 SeedVR2 안 씀·SeedVR2 뒤 `m3d_keep_face`, 원본 고밀도 메시 `SaveGLB 3d/hub3d_hi`(VaeDecodeShapeTrellis 출력), 4방향 캡처 `photoproj.capture/sheet`·검사 `mesh_report`(+머리 부분 면 수 `m3d_check_mesh`), 비교 모드 단계 A~E(`M3D_STAGE`, 결과 이름 `-엔진원본` 등 `_tag`)·`engine_match`(실루엣·얼굴 자리 NCC), 장면 전체 칸 접기·맨 아래. 시험 `test/test_m3d47.py`
+4.7: 3D '만드는 방식'(`m3d_opts` mode: single 기본 / multi — 예전 API 는 sides 가 있으면 multi), 멀티뷰 일관성(`m3d_mv_check` = `m3d_vcheck` 실루엣, 안 맞는 방향 빼기·다 빠지면 한 장), 사진 붙이기 카메라 방향 고정(`photoproj.PIXAL_CAM`, `fit(cam_hint)` — 겹침이 낮을 때만 다시 찾기), 얼굴 휘기 기본 꺼짐(`project(align=False)`), 업스케일 `m3d_upscaler(redraw_ok)` Real-ESRGAN 먼저·얼굴은 SeedVR2 안 씀·SeedVR2 뒤 `m3d_keep_face`, 원본 고밀도 메시 `SaveGLB 3d/hub3d_hi`(VaeDecodeShapeTrellis 출력), 4방향 캡처 `photoproj.capture/sheet`·검사 `mesh_report`(+머리 부분 면 수 `m3d_check_mesh`), 비교 모드 단계 A~E(`M3D_STAGE`, 결과 이름 `-엔진원본` 등 `_tag`)·`engine_match`(실루엣·얼굴 자리 NCC), 장면 전체 칸 접기·맨 아래. 시험 `test/test_m3d47.py`
 
 4.6.1: 얼굴 맞추기 `photoproj._align_face` — 엔진 텍스처를 사진 카메라로 그려 사진과 LK 아핀 정합(흐림 3가지·시작 각도 3가지), 닮은 정도 +0.08 이상 · 3° 또는 3% 이상 어긋날 때만 사진 얼굴 부분을 휨(실제 결과: 고개 돌린 사진인데 엔진은 정면 얼굴 → 코가 볼에 칠해짐). 노멀맵은 엔진 TANGENT 로 읽고(우리 계산과 반대 손잡이였음 — 화면에 검은 얼룩·흰 반점) 머리에도 TANGENT 를 적음. 머리 범위 = 보이는 얼굴 점까지 거리×1.1. 3D 결과창 [크게 보기] = 갤러리 lbOpen. 엔진 원본 3D 를 m3d 작업 폴더 engine_last.glb 로 남김. 시험 `test/test_m3d_align.py`
 
