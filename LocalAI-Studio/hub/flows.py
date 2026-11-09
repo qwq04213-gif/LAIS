@@ -729,6 +729,8 @@ def wf_vpost(op, q):
         img = [w.add("RIFE VFI", ckpt_name=q.get("ckpt") or "rife47.pth", frames=img, clear_cache_after_n_frames=10, multiplier=2,
                      fast_mode=True, ensemble=True, scale_factor=1.0), 0]
         fps = q["fps"] * 2
+    elif op == "upscale" and q.get("seedvr"):          # SeedVR2: 2배로 늘린 뒤 복원
+        img = _seedvr(w, [w.add("ImageScaleBy", image=img, upscale_method="lanczos", scale_by=2.0), 0], q["seedvr"], 64)
     elif op == "upscale":
         m = w.add("UpscaleModelLoader", model_name=q["model"])
         img = [w.add("ImageUpscaleWithModel", upscale_model=[m, 0], image=img), 0]
@@ -746,7 +748,9 @@ def wf_vrestore(q):
     vid = w.add("LoadVideo", file=q["file"])
     comp = w.add("GetVideoComponents", video=[vid, 0])
     img, fps = [comp, 0], q["fps"]
-    if q.get("model"):
+    if q.get("seedvr"):                                 # SeedVR2: 목표 크기로 늘린 뒤 복원
+        img = _seedvr(w, [w.add("ImageScale", image=img, upscale_method="lanczos", width=q["w"], height=q["h"], crop="disabled"), 0], q["seedvr"], 64)
+    elif q.get("model"):
         m = w.add("UpscaleModelLoader", model_name=q["model"])
         img = [w.add("ImageUpscaleWithModel", upscale_model=[m, 0], image=img), 0]
         img = [w.add("ImageScale", image=img, upscale_method="lanczos", width=q["w"], height=q["h"], crop="disabled"), 0]
@@ -787,6 +791,31 @@ def wf_video14(q, start=None):
     img = w.add("VAEDecode", samples=[k2, 0], vae=[vae, 0])
     vid = w.add("CreateVideo", images=[img, 0], fps=q["fps"])
     w.add("SaveVideo", video=[vid, 0], filename_prefix="video/hub", format="auto", codec="auto")
+    return w.n
+
+
+SEEDVR_NODES = ("SeedVR2Preprocess", "SeedVR2Conditioning", "SeedVR2PostProcessing", "VAEEncodeTiled", "VAEDecodeTiled")
+
+
+def _seedvr(w, img, sv, tsize=4096):
+    """SeedVR2 복원(ComfyUI 공식 예시와 같은 짜임): 목표 크기로 늘린 그림 → 다듬기 → 타일 인코드 → 1단계 샘플링 → 타일 디코드 → 색 맞추기.
+    sv: {unet, vae, seed}. 영상은 tsize(시간 타일)를 64로."""
+    unet = [w.add("UNETLoader", unet_name=sv["unet"], weight_dtype="default"), 0]
+    vae = [w.add("VAELoader", vae_name=sv["vae"]), 0]
+    pre = [w.add("SeedVR2Preprocess", resized_images=img), 0]
+    lat = [w.add("VAEEncodeTiled", pixels=pre, vae=vae, tile_size=512, overlap=128, temporal_size=tsize, temporal_overlap=8), 0]
+    c = w.add("SeedVR2Conditioning", model=unet, vae_conditioning=lat)
+    k = w.add("KSampler", model=unet, seed=sv.get("seed", 0), steps=1, cfg=1.0, sampler_name="euler", scheduler="simple",
+              positive=[c, 0], negative=[c, 1], latent_image=lat, denoise=1.0)
+    dec = [w.add("VAEDecodeTiled", samples=[k, 0], vae=vae, tile_size=512, overlap=128, temporal_size=tsize, temporal_overlap=8), 0]
+    return [w.add("SeedVR2PostProcessing", images=dec, original_resized_images=img, color_correction_method="lab"), 0]
+
+
+def wf_seedvr2_image(sv, img, width, height):
+    """사진 AI 복원 업스케일(SeedVR2): 원하는 크기로 늘려 놓고 복원해요."""
+    w = WF()
+    big = [w.add("ImageScale", image=[w.add("LoadImage", image=img), 0], upscale_method="lanczos", width=width, height=height, crop="disabled"), 0]
+    w.add("PreviewImage", images=_seedvr(w, big, sv))
     return w.n
 
 

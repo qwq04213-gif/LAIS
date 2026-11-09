@@ -72,6 +72,12 @@ V = j["verify"]; assert V["out_audio"] and not V["ok"] and "길이" in V["msg"],
 assert any("확인 필요" in w for w in j["warn"])
 assert not list((hub.COMFY / "input").glob("hub_*.mp4"))
 ok("AI chunks: upscale model → ImageScale to 2x → RIFE x2 per chunk, resume skips finished chunks, length check catches mismatch")
+for f in ("diffusion_models/seedvr2_3b_int8_convrot.safetensors", "vae/seedvr2_ema_vae_fp16.safetensors"):
+    (hub.MODELS / f).parent.mkdir(parents=True, exist_ok=True); (hub.MODELS / f).write_bytes(b"x")
+j = job2({**P, "interp": False, "upm": "SeedVR2 3B (AI 복원)"}); assert j["state"] == "done", j
+g = SUBMITTED[-1]; assert not nodes(g, "UpscaleModelLoader") and nodes(g, "SeedVR2Conditioning") and nodes(g, "VAEEncodeTiled")[0]["temporal_size"] == 64
+sc = nodes(g, "ImageScale")[0]; assert (sc["width"], sc["height"]) == (640, 480), sc
+ok("AI chunks with SeedVR2: scale to 2x then restore per chunk (video tiles)")
 # 4) 검사
 STATE["missing"].add("RIFE VFI"); hub.caps(force=True)
 j = job2({"kind": "vrestore", "op": "run", "video": url, "interp": True}); assert j["state"] == "error" and "ComfyUI-Frame-Interpolation" in j["error"]

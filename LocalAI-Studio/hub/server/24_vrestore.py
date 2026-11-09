@@ -48,7 +48,7 @@ def vr_analyze(p, J):
 def vr_need_nodes(o):
     need = ["LoadVideo", "GetVideoComponents", "CreateVideo", "SaveVideo"]
     if o["upscale"]:
-        need += ["UpscaleModelLoader", "ImageUpscaleWithModel", "ImageScale"]
+        need += ["ImageScale"] + (list(flows.SEEDVR_NODES) if str(o.get("upm") or "").startswith("SeedVR2") else ["UpscaleModelLoader", "ImageUpscaleWithModel"])
     if o["interp"]:
         need.append("RIFE VFI")
     miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
@@ -69,7 +69,14 @@ def vr_run(p, J):
     if not ai and not any(o[k] and o[k] != "off" for k in ("deint", "denoise", "deflicker", "color", "stabilize", "sharpen")):
         raise ValueError("고칠 항목을 하나 이상 골라 주세요.")
     q = {"fps": round(fps, 3), "interp": o["interp"]}
-    if o["upscale"]:
+    if o["upscale"] and seedvr_of(o["upm"]):          # SeedVR2 로 복원하며 키우기
+        q["seedvr"] = seedvr_of(o["upm"])
+        q["model"] = o["upm"]
+        k = min(o["upscale"], VR_MAX_SIDE / max(W, H))
+        if k < o["upscale"]:
+            warn(J, f"결과가 너무 커지지 않게 긴 쪽 {VR_MAX_SIDE}px 까지만 키웠어요.")
+        q["w"], q["h"] = vrestore.even(W * k), vrestore.even(H * k)
+    elif o["upscale"]:
         ups = files("upscale_models")
         q["model"] = o["upm"] if o["upm"] in ups else (ups or [None])[0]
         if not q["model"]:
@@ -82,7 +89,7 @@ def vr_run(p, J):
         vr_need_nodes(o)
         if o["interp"] and fps > 30:
             warn(J, f"이미 초당 {fps:.0f}장이라 프레임을 늘려도 차이가 작아요.")
-        frames = vrestore.chunk_frames(W, H, vrestore.model_scale(q.get("model")) if o["upscale"] else 1, o["interp"])
+        frames = vrestore.chunk_frames(W, H, (8 if q.get("seedvr") else vrestore.model_scale(q.get("model"))) if o["upscale"] else 1, o["interp"])
         o["seg"] = round(max(0.5, frames / max(fps, 1)), 3)
     key = vrestore.opts_key(src, {**o, "model": q.get("model"), "w": q.get("w")})
     work = VR_WORK / key

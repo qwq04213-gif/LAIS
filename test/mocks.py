@@ -103,6 +103,9 @@ REQ = {"CheckpointLoaderSimple": ["ckpt_name"], "LoraLoader": ["model", "clip", 
        "IPAdapter": ["model", "ipadapter", "image", "weight", "weight_type", "start_at", "end_at"],
        "FaceDetailer": ["image", "model", "clip", "vae", "positive", "negative", "bbox_detector", "seed", "steps", "cfg", "sampler_name", "scheduler",
                         "denoise", "guide_size", "max_size", "feather", "bbox_threshold", "bbox_dilation", "bbox_crop_factor", "sam_detection_hint", "wildcard", "cycle"]}
+REQ.update({"SeedVR2Preprocess": ["resized_images"], "SeedVR2Conditioning": ["model", "vae_conditioning"],
+            "SeedVR2PostProcessing": ["images", "original_resized_images", "color_correction_method"],
+            "VAEEncodeTiled": ["pixels", "vae", "tile_size", "overlap", "temporal_size", "temporal_overlap"]})
 REQ.update({"LTXVDualCFGGuider": ["model", "positive", "negative", "video_cfg", "audio_cfg"], "LTXVImgToVideoInplace": ["vae", "image", "latent", "strength"],
             "LTXVPreprocess": ["image", "img_compression"], "LTXVEmptyLatentAudio": ["audio_vae", "frames_number", "frame_rate", "batch_size"],
             "LTXVConcatAVLatent": ["video_latent", "audio_latent"], "LTXVSeparateAVLatent": ["av_latent"], "LTXVLatentUpsampler": ["samples", "upscale_model", "vae"],

@@ -531,7 +531,7 @@ def do_vpost(p, J):
     if op == "gif":
         return vpost_gif(src, p, J)
     node, pack, title = VPOST[op]
-    need = ["LoadVideo", "GetVideoComponents", node] + (["CreateVideo", "SaveVideo"] if op != "webp" else []) + (["UpscaleModelLoader"] if op == "upscale" else [])
+    need = ["LoadVideo", "GetVideoComponents", node] + (["CreateVideo", "SaveVideo"] if op != "webp" else []) + (["UpscaleModelLoader"] if op == "upscale" and not str(p.get("upm") or "").startswith("SeedVR2") else [])
     miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
     if miss:
         raise RuntimeError("이 ComfyUI 에는 필요한 노드가 없어요: " + ", ".join(miss) + ". " +
@@ -541,7 +541,10 @@ def do_vpost(p, J):
     except (OSError, ValueError):
         base = {}
     q = dict(fps=clamp(int(num(base, "fps", 24, int)), 1, 60))
-    if op == "upscale":
+    if op == "upscale" and seedvr_of(p.get("upm")):
+        q["seedvr"] = seedvr_of(p.get("upm"))
+        warn(J, "SeedVR2 로 2배 키우며 복원해요. 영상이 길면 오래 걸리고 메모리가 많이 들어요(길면 '영상 복원'에서 조각으로 나눠 처리하는 게 좋아요).")
+    elif op == "upscale":
         q["model"] = p.get("upm") or (files("upscale_models") or [None])[0]
         if not q["model"]:
             raise RuntimeError("업스케일 모델이 없어요. '설치와 모델' 탭에서 업스케일 모델을 설치해 주세요.")

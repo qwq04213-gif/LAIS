@@ -38,4 +38,20 @@ STATE["missing"].add("LTXVDualCFGGuider"); hub._CAPS["t"] = 0
 j = job({"kind": "vid", "wan_ver": "ltx25", "prompt": "x"}); assert j["state"] == "error" and "LTXVDualCFGGuider" in j["error"], j
 STATE["missing"].discard("LTXVDualCFGGuider"); hub._CAPS["t"] = 0
 ok("LTX-2.5: missing files → install hint; official 2-stage graph (half size → latent x2 → refine), sound decoded into the video, start image path")
+# ── SeedVR2 ──
+assert not any("SeedVR2" in x for x in json.load(urllib.request.urlopen(B + "/api/lists"))["upscalers"])
+touch(*[f["dir"] + "/" + f["url"].rsplit("/", 1)[1] for f in CAT["seedvr2"]["files"]], "upscale_models/RealESRGAN_x4plus.pth")
+ups = json.load(urllib.request.urlopen(B + "/api/lists"))["upscalers"]; assert "SeedVR2 3B (AI 복원)" in ups and "SeedVR2 7B (AI 복원)" not in ups, ups
+j = job({"kind": "up", "image": png(400, 300), "upm": "SeedVR2 3B (AI 복원)", "scale": "2"}); assert j["state"] == "done", j
+g = SUBMITTED[-1]; sc = cls("ImageScale")[0]; assert (sc["width"], sc["height"]) == (800, 600) and cls("KSampler")[0]["steps"] == 1 and cls("KSampler")[0]["cfg"] == 1.0
+assert node(cls("SeedVR2PostProcessing")[0]["original_resized_images"]) == "ImageScale" and cls("VAEEncodeTiled")[0]["temporal_size"] == 4096
+assert cls("UNETLoader")[0]["unet_name"] == "seedvr2_3b_int8_convrot.safetensors" and not cls("UpscaleModelLoader")
+j = job({"kind": "up", "image": png(1500, 1000), "upm": "SeedVR2 3B (AI 복원)", "scale": "4"}); assert j["state"] == "done" and any("4096" in w for w in j["warn"]), j
+sc = cls("ImageScale")[0]; assert max(sc["width"], sc["height"]) <= 4096
+j = job({"kind": "up", "image": png(400, 300), "upm": "SeedVR2 7B (AI 복원)", "scale": "2"}); assert j["state"] == "error" and "SeedVR2 7B" in j["error"] and j.get("need") == ["seedvr2"], j
+j = job({"kind": "up", "image": png(400, 300), "upm": "RealESRGAN_x4plus.pth", "scale": "2"}); assert j["state"] == "done" and cls("UpscaleModelLoader")
+STATE["missing"].add("SeedVR2Conditioning"); hub._CAPS["t"] = 0
+j = job({"kind": "up", "image": png(400, 300), "upm": "SeedVR2 3B (AI 복원)", "scale": "2"}); assert j["state"] == "error" and "SeedVR2Conditioning" in j["error"], j
+STATE["missing"].discard("SeedVR2Conditioning"); hub._CAPS["t"] = 0
+ok("SeedVR2: listed with the upscale models once installed, official 1-step graph at the target size, 4096px cap, missing 7B/nodes explained, ESRGAN still works")
 print("ALL OK")

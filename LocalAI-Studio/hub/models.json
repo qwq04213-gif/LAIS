@@ -271,6 +271,40 @@
    ]
   },
   {
+   "id": "seedvr2",
+   "name": "SeedVR2 3B (AI 복원 업스케일, int8)",
+   "gb": 4.0,
+   "desc": "업스케일·일괄 처리·영상 다듬기·영상 복원의 업스케일 모델 목록에 'SeedVR2 3B (AI 복원)'로 나와요. 흐림·노이즈·압축 깨짐까지 복원하며 키워요(사진·영상 둘 다, 1단계라 빨라요). ByteDance, Apache-2.0. VRAM 8GB 이상(결과가 클수록 메모리가 많이 들어요).",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_3b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "seedvr2-7b",
+   "name": "SeedVR2 7B (AI 복원 업스케일 · 고화질, int8)",
+   "gb": 8.8,
+   "desc": "SeedVR2 의 큰 판 — 3B 보다 세밀하게 복원해요. 목록에 'SeedVR2 7B (AI 복원)'로 나와요. VRAM 12GB 이상 권장. Apache-2.0.",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_7b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors"
+    }
+   ]
+  },
+  {
    "id": "flux-common",
    "name": "FLUX 공용 파일 (텍스트 인코더 + VAE)",
    "gb": 5.5,

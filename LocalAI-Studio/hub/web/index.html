@@ -430,7 +430,7 @@
     <button class="go">업스케일 실행</button>
     <p class="warn" id="w-up" hidden>업스케일 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 Real-ESRGAN을 설치해 주세요.</p>
     <label class="f">방식
-      <select name="mode"><option value="esrgan">빠른 업스케일 (Real-ESRGAN)</option><option value="refine">디테일 재생성 (업스케일 + 타일 리파인)</option></select></label>
+      <select name="mode"><option value="esrgan">빠른 업스케일 (업스케일 모델 — SeedVR2 를 고르면 AI 복원)</option><option value="refine">디테일 재생성 (업스케일 + 타일 리파인)</option></select></label>
     <div class="row">
       <label class="f">업스케일 모델<select name="upm"></select></label>
       <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.01" inputmode="decimal"></label>

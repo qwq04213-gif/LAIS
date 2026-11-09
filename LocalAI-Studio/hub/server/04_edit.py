@@ -105,12 +105,48 @@ def scale_check(size, scale):
     return out
 
 
+SEEDVR_NAME = {"3b": "SeedVR2 3B (AI 복원)", "7b": "SeedVR2 7B (AI 복원)"}
+SEEDVR_MAX = 4096                                    # SeedVR2 결과 긴 변 상한(메모리)
+
+
+def seedvr_names():
+    """업스케일 모델 목록에 함께 보여 줄 SeedVR2 이름(설치된 것만)."""
+    dm, va = files("diffusion_models"), files("vae")
+    if not any("seedvr2" in n.lower() and "vae" in n.lower() for n in va):
+        return []
+    return [SEEDVR_NAME[k] for k in ("3b", "7b") if any("seedvr2" in n.lower() and f"_{k}" in n.lower() for n in dm)]
+
+
+def seedvr_of(name, seed=0):
+    """업스케일 모델 이름이 SeedVR2 면 {unet, vae, seed}, 아니면 None. 파일이 없으면 안내 오류."""
+    k = next((k for k, v in SEEDVR_NAME.items() if v == name), None) or (("7b" if "7b" in str(name).lower() else "3b") if str(name or "").lower().startswith("seedvr2") else None)
+    if not k:
+        return None
+    unet = next((n for n in files("diffusion_models") if "seedvr2" in n.lower() and f"_{k}" in n.lower()), None)
+    vae = next((n for n in files("vae") if "seedvr2" in n.lower()), None)
+    if not unet or not vae:
+        raise RuntimeError(f"SeedVR2 {k.upper()} 파일이 없어요. '설치와 모델' 탭의 이미지 분류에서 'SeedVR2'를 설치해 주세요.")
+    miss = [n for n in flows.SEEDVR_NODES if caps()["nodes"] and n not in caps()["nodes"]]
+    if miss:
+        raise RuntimeError("이 ComfyUI 에는 SeedVR2 노드(" + ", ".join(miss) + ")가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트해 주세요.")
+    return {"unet": unet, "vae": vae, "seed": int(seed) if seed and int(seed) >= 0 else 0}
+
+
 def upscale(img, J, model, scale):
     """scale > 1: 업스케일 모델로 키운 뒤 원하는 배율에 맞춰요(모델이 4배라면 2배·1.5배·6배도 가능). scale <= 1: 모델 없이 줄이기(Lanczos)."""
     scale = float(scale)
     target = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
     if scale <= 1.0:
         return img if target == img.size else img.resize(target, RS.LANCZOS)
+    sv = seedvr_of(model)
+    if sv:                                            # AI 복원 업스케일(SeedVR2): 원하는 크기로 바로 만들어요
+        k = min(1.0, SEEDVR_MAX / max(target))
+        if k < 1.0:
+            warn(J, f"SeedVR2 는 메모리 때문에 결과 긴 변을 {SEEDVR_MAX}px 까지만 만들어요. 더 크게는 Real-ESRGAN 으로 한 번 더 키워 주세요.")
+        tw, th = (max(16, int(round(v * k / 2)) * 2) for v in target)
+        J["msg"] = f"AI 복원 업스케일 중 (SeedVR2, {tw}×{th})"
+        res = run_wf(flows.wf_seedvr2_image(sv, put_input(img, J), tw, th), J)[0]
+        return res if res.size == (tw, th) else res.resize((tw, th), RS.LANCZOS)
     model = model or (files("upscale_models") or [None])[0]
     if not model:
         raise RuntimeError("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.")

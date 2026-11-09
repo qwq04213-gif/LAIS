@@ -33,6 +33,11 @@ ok("interpolation: LoadVideo → GetVideoComponents → RIFE x2 → CreateVideo 
 j = job({"kind": "vpost", "op": "upscale", "video": url}); assert j["state"] == "done", j; g = SUBMITTED[-1]
 assert nodes(g, "UpscaleModelLoader")[0]["model_name"] == "RealESRGAN_x2.pth" and nodes(g, "ImageUpscaleWithModel") and nodes(g, "CreateVideo")[0]["fps"][1] == 2
 ok("upscale: model loader + ImageUpscaleWithModel on the frames, fps link kept")
+for f in ("diffusion_models/seedvr2_7b_int8_convrot.safetensors", "vae/seedvr2_ema_vae_fp16.safetensors"):
+    (hub.MODELS / f).parent.mkdir(parents=True, exist_ok=True); (hub.MODELS / f).write_bytes(b"x")
+j = job({"kind": "vpost", "op": "upscale", "video": url, "upm": "SeedVR2 7B (AI 복원)"}); assert j["state"] == "done", j; g = SUBMITTED[-1]
+assert not nodes(g, "UpscaleModelLoader") and nodes(g, "ImageScaleBy")[0]["scale_by"] == 2.0 and nodes(g, "UNETLoader")[0]["unet_name"].startswith("seedvr2_7b") and any("SeedVR2" in w for w in j["warn"])
+ok("upscale with SeedVR2 7B: frames doubled then restored")
 j = job({"kind": "vpost", "op": "webp", "video": url}); assert j["state"] == "done", j; g = SUBMITTED[-1]
 assert nodes(g, "SaveAnimatedWEBP")[0]["fps"][1] == 2 and not nodes(g, "SaveVideo") and j["images"][0].endswith(".webp"); ok("webp: SaveAnimatedWEBP, saved as .webp in the video folder")
 STATE["missing"].add("RIFE VFI"); hub.caps(force=True)
