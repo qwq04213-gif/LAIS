@@ -218,7 +218,7 @@ def _clean_tmp(J):
 # ───────────────────────── 작업 대기열 ─────────────────────────
 QUEUE, QP = [], {}
 _QCV = threading.Condition()
-_QW = {"t": None}
+_QW = {"t": None, "eta": None}
 KIND_NAME = {"vedit": "영상 편집", "edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "vmix": "영상 소리·자막", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리", "vana": "영상 분석", "lora": "LoRA 만들기", "vrestore": "영상 복원", "audio": "소리 분리·복원", "m3d": "3D 만들기"}
 DONE_STATES = ("done", "error", "cancelled")
 
@@ -302,6 +302,146 @@ def enqueue(J, p):
         if not (_QW["t"] and _QW["t"].is_alive()):
             _QW["t"] = threading.Thread(target=job_worker, daemon=True)
             _QW["t"].start()
+        if not (_QW["eta"] and _QW["eta"].is_alive()):
+            _QW["eta"] = threading.Thread(target=eta_loop, daemon=True)
+            _QW["eta"].start()
+
+
+# ───────────────────────── 남은 시간 (모든 작업을 한 곳에서 같은 방법으로) ─────────────────────────
+# 예전에는 그리는 단계(그래프) 하나만 보고 어림해서, 여러 장·여러 단계 작업이나 화면마다 값이 제각각이었어요.
+# 이제는 작업 전체 진행률(0~1)이 늘어나는 속도로만 어림해요: 처음부터의 평균 속도와 최근 속도를 반씩 섞고,
+# 표시 값은 1초마다 줄어들면서 새 어림값 쪽으로 조금씩 따라가서 튀지 않아요. 진행이 멈추면 최근 속도가 느려져 남은 시간이 늘어나요.
+ETA_MIN_T = 8          # 진행이 시작되고 이만큼(초) 지나야
+ETA_MIN_P = 0.02       # 그리고 진행률이 이만큼 늘어야 보여 줘요(그 전엔 어림이 부정확해요)
+
+
+ETA_FILE = ROOT / "eta_history.json"     # 작업 종류별 '진행률 → 걸린 시간 비율' 곡선(최근 5번) — 남은 시간 어림에 써요
+ETA_CK = [round(0.05 * i, 2) for i in range(1, 20)]      # 0.05, 0.10, … 0.95
+_ETA_H = {"d": None}
+
+
+def eta_key(p):
+    """작업 진행 모양이 비슷한 것끼리 묶는 이름(크기·단계 수는 빼요 — 곡선의 '모양'만 쓰니까요)."""
+    k = [str(p.get("kind") or "")]
+    for n in ("op", "feature", "mode", "engine", "gengine", "fengine", "wan_ver"):
+        if p.get(n):
+            k.append(f"{n}={p.get(n)}")
+    for n in ("hires", "refine", "blender", "photo", "upscale", "interp", "fill"):
+        if p.get(n) not in (None, "", False, 0, "0"):
+            k.append(n)
+    return "|".join(k)[:200]
+
+
+def _eta_hist():
+    if _ETA_H["d"] is None:
+        try:
+            d = json.loads(ETA_FILE.read_text(encoding="utf-8"))
+            _ETA_H["d"] = d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            _ETA_H["d"] = {}
+    return _ETA_H["d"]
+
+
+def eta_learn(J):
+    """끝난 작업의 진행 곡선을 기억해요(진행률 0.05 칸마다 '그때까지 걸린 시간 ÷ 전체 시간')."""
+    try:
+        key, pts, t0, t1 = J.get("_eta_key"), (J.get("_eta") or {}).get("all") or [], J.get("t_start"), J.get("t_end")
+        if not key or J.get("state") != "done" or t0 is None or t1 is None or t1 - t0 < 10 or len(pts) < 3:
+            return
+        T = t1 - t0
+        curve = []
+        for c in ETA_CK:
+            t = next((q[0] for q in pts if q[1] >= c), None)
+            if t is None:
+                return
+            curve.append(round(min(1.0, (t - t0) / T), 4))
+        d = _eta_hist()
+        d[key] = ([curve] + [x for x in d.get(key, []) if isinstance(x, list) and len(x) == len(ETA_CK)])[:5]
+        if len(d) > 300:
+            for k in list(d)[:len(d) - 300]:
+                d.pop(k, None)
+        ETA_FILE.write_text(json.dumps(d, separators=(",", ":")), encoding="utf-8")
+    except Exception:  # noqa: BLE001 — 남은 시간은 덤이라 실패해도 작업에는 영향 없어요
+        pass
+
+
+def eta_from_hist(J, p, now, t_reach=None):
+    """지난번 같은 종류 작업의 곡선으로 남은 시간 어림 → 초 또는 None.
+    t_reach: 지금 진행률에 처음 닿은 때 — 진행률이 한동안 멈춰 있어도(마무리 단계) 그때 기준으로 전체 시간을 어림해요."""
+    cs = _eta_hist().get(J.get("_eta_key") or "")
+    if not cs or J.get("t_start") is None or p < ETA_CK[0] * 0.5:
+        return None
+    f_ck = [sum(c[i] for c in cs) / len(cs) for i in range(len(ETA_CK))]
+    xs, ys = [0.0] + ETA_CK + [1.0], [0.0] + f_ck + [1.0]
+    i = next(k for k in range(1, len(xs)) if p <= xs[k])
+    f = ys[i - 1] + (ys[i] - ys[i - 1]) * (p - xs[i - 1]) / max(1e-9, xs[i] - xs[i - 1])
+    e = (t_reach or now) - J["t_start"]
+    if f < 0.03 or e < 3:
+        return None
+    return max(0.0, e / f - (now - J["t_start"]))
+
+
+def eta_update(J, now=None):
+    """J["eta"](초, 모르면 None)·J["elapsed"](작업 시작부터 초)를 새로 정해요."""
+    now = now or time.time()
+    if J.get("t_start") is not None:
+        J["elapsed"] = int(now - J["t_start"])
+    E = J.setdefault("_eta", {"pts": []})
+    pts, p = E["pts"], J.get("progress")
+    if J.get("state") != "running" or not isinstance(p, (int, float)) or J.get("pest") or p >= 1:
+        J["eta"] = None
+        return None
+    if not pts and (p <= 0 or J.get("phase") in ("load", "wait")):     # 첫 모델 불러오기는 빼고 재요
+        J["eta"] = None
+        return None
+    al = E.setdefault("all", [])                       # 작업 전체 곡선(끝나면 eta_learn 이 기억해요)
+    if not al or p > al[-1][1]:
+        al.append((now, p))
+    if pts and p < pts[-1][1] - 1e-6:                  # 진행률이 뒤로 가면 처음부터 다시 재요
+        pts.clear()
+        E.pop("v", None)
+    if not pts or p != pts[-1][1] or now - pts[-1][0] >= 5:
+        pts.append((now, p))
+        if len(pts) > 800:
+            del pts[1:200]
+    t0, p0 = pts[0]
+    rate = None
+    if now - t0 >= ETA_MIN_T and p - p0 >= ETA_MIN_P:
+        r_all = (p - p0) / (now - t0)                  # 처음부터 평균 속도
+        win = max(20.0, 0.3 * (now - t0))
+        ref = next((q for q in pts if q[0] >= now - win), pts[-1])
+        r_win = (p - ref[1]) / (now - ref[0]) if now - ref[0] >= 5 else r_all     # 최근 속도
+        r = 0.5 * r_all + 0.5 * r_win
+        rate = (1 - p) / r if r > 1e-9 else None
+    hist = eta_from_hist(J, p, now, al[-1][0]) if p - p0 >= 0.01 or now - t0 >= ETA_MIN_T else None
+    if hist is not None and rate is not None:          # 지난번 같은 작업의 진행 모양을 더 믿어요(속도가 바뀌는 단계·마무리 시간을 알아서)
+        w = 0.85 if len(_eta_hist().get(J.get("_eta_key") or "", [])) >= 2 else 0.75
+        raw = w * hist + (1 - w) * rate
+    else:
+        raw = hist if hist is not None else rate
+    if raw is None:
+        J["eta"] = None
+        return None
+    prev = E.get("v")
+    if prev:
+        pred = max(0.0, prev[0] - (now - prev[1]))      # 지난번 값에서 흐른 시간만큼 빼고
+        a = 0.5 if abs(raw - pred) > 0.5 * max(pred, 20) else 0.15
+        raw = pred + a * (raw - pred)                   # 새 어림값 쪽으로 조금씩
+    E["v"] = (raw, now)
+    J["eta"] = int(round(raw))
+    return J["eta"]
+
+
+def eta_loop():
+    while True:
+        time.sleep(1)
+        try:
+            now = time.time()
+            for J in list(JOBS.values()):
+                if J.get("state") == "running":
+                    eta_update(J, now)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 LAST_MODEL = {"key": None}      # 방금 돌린 작업이 쓴 모델(다음 작업이 같은 모델이면 다시 안 불러도 돼요)
@@ -359,6 +499,7 @@ def job_worker():
             continue
         try:
             J["t_start"] = time.time()
+            J["_eta_key"] = eta_key(p)
             mk = model_key(p)
             J["model_desc"] = " · ".join(mk[1]) if mk else ""
             job_thread(J, p)
@@ -368,6 +509,9 @@ def job_worker():
             J["state"], J["error"] = "error", repr(e)
             log("[대기열 오류]", repr(e))
         J["t_end"] = time.time()
+        J["eta"] = None
+        eta_learn(J)
+        J.pop("_eta", None)
         job_history_add(J)
         STATE["idle_since"] = time.time()
 

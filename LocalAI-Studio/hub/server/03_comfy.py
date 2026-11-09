@@ -411,11 +411,6 @@ def phase_of(wf, pid):
     return "load" if c in LOAD_CLS or c.startswith("KSampler") else "gen"
 
 
-def fmt_eta(s):
-    s = int(s)
-    return f"{s // 3600}시간 {s % 3600 // 60}분" if s >= 3600 else f"{max(1, round(s / 60))}분" if s >= 90 else f"{s}초"
-
-
 def set_progress(J, frac, est=False):
     """작업 전체 진행률. 여러 번 나눠 실행하는 작업(여러 장, 타일)은 pi/pn 으로 몫을 나눠요."""
     pi, pn = J.get("pi", 0), max(1, J.get("pn", 1))
@@ -501,7 +496,6 @@ def run_wf(wf, J, raw=False):
     # 그리는 단계(KSampler 등)가 여러 개인 작업(긴 말하는 영상, 하이레스 픽스 …)은 단계마다 0→100% 가 반복돼 보이지 않게 전체 몫으로 나눠요
     samp = sorted((k for k, n in wf.items() if "Sampler" in n.get("class_type", "") and "Select" not in n.get("class_type", "")), key=lambda k: [int(x) if x.isdigit() else 0 for x in str(k).split(":")])
     base_msg = J.get("msg", "")
-    tg = None      # 실제로 그리기 시작한 때(남은 시간 계산용)
     while True:
         if J.get("cancel"):
             comfy_cancel(pid)
@@ -510,16 +504,11 @@ def run_wf(wf, J, raw=False):
         J["phase"] = phase_of(wf, pid) if not h else "gen"
         if pid in WSP:
             v, m, nd = (WSP[pid] + ("",))[:3]
-            tg = tg or time.time()
             multi = len(samp) > 1 and nd in samp
             fr = ((samp.index(nd) + v / m) / len(samp)) if multi else v / m
-            set_progress(J, fr * 0.97)
-            el = time.time() - tg
-            eta = el / fr * (1 - fr) if fr > 0.03 and el > 20 else None      # 지금까지 걸린 속도로 남은 시간을 어림해요
-            J["eta"] = round(eta) if eta else None
-            tail = (f" · {samp.index(nd) + 1}/{len(samp)}단계" if multi else "") + (f" · 남은 시간 약 {fmt_eta(eta)}" if eta and (multi or eta > 60) else "")
-            if tail or multi:
-                J["msg"] = base_msg + tail
+            set_progress(J, fr * 0.97)                    # 남은 시간은 작업 전체 진행률로 한 곳에서 어림해요(eta_update)
+            if multi:
+                J["msg"] = base_msg + f" · {samp.index(nd) + 1}/{len(samp)}단계"
         elif not h:   # 웹소켓 신호가 없으면 시간 기반 추정(실제보다 부정확해요)
             set_progress(J, 0.95 * (1 - 2.718 ** (-(time.time() - t0) / 40)), est=True)
         if h:
@@ -547,5 +536,4 @@ def run_wf(wf, J, raw=False):
             if not imgs:
                 raise RuntimeError("결과 파일이 없습니다." if raw else "결과 이미지가 없습니다.")
             return imgs
-        J["elapsed"] = int(time.time() - t0)
         time.sleep(0.3)

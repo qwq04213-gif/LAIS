@@ -255,7 +255,7 @@ async function run(kind,form,extra={}){
         setBar(view,'완료'+(j.warn&&j.warn.length?'. 참고: '+j.warn.join(' '):''),'ok');break}
       const idle=j.phase==='load'||j.phase==='wait',pc=!idle&&typeof j.progress==='number'?Math.round(j.progress*100)+'%'+(j.pest?' 쯤':'')+'  ':'';
       const label=j.phase==='load'?'모델 불러오는 중… (처음 한 번은 오래 걸려요)':j.phase==='wait'?'준비 중…':(j.msg||'처리 중');
-      setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');
+      setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${idle?'':etaTxt(j)}${elTxt(j)}`,'run');
       if(!wantStop)setProg(view,j);
     }
   }catch(e){setBar(view,e.message,'bad');if(e.pymod)pymodHelp($('.jobbar .st',view),e.pymod);if(e.oom)oomHelp(view,e.oom);if(e.need?.length)$('.jobbar .st',view).insertAdjacentHTML('afterend',needBox(e.need))}

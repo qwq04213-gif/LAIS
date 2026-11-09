@@ -391,9 +391,7 @@ def lora_train_job(p, J):
     def say(pc, st, tot, loss, msg):
         J["msg"] = msg
         if pc is not None:
-            J["progress"] = min(0.99, pc)
-            el = time.time() - t0
-            J["eta"] = round(el / pc * (1 - pc)) if pc > 0.03 else None
+            J["progress"] = min(0.99, pc)          # 남은 시간은 eta_update 가 다른 작업과 같은 방법으로 어림해요
         J["step"], J["loss"] = st, loss
         if samp_dir.is_dir():
             J["samples"] = [f"/lora_data/{sid}/train/out/sample/{urllib.parse.quote(f.name)}" for f in sorted(samp_dir.glob("*.png"))[-8:]]

@@ -18,6 +18,12 @@ let GPU=null,LISTS={llm:[],checkpoints:[],loras:[],vaes:[],upscalers:[],controln
     CAPS={samplers:[],schedulers:[],has:{}},PROFILES=[];
 const IV={},COMPARE={};
 const FB_S=['euler','euler_ancestral','dpmpp_2m','dpmpp_2m_sde','dpmpp_3m_sde','uni_pc','heun','lms'];
+/* 남은 시간·걸린 시간: 모든 화면이 같은 모양으로 보여요(값은 서버가 작업 전체 기준으로 한 곳에서 어림해요 — eta_update) */
+function fmtEta(t){if(t==null)return'';if(t<15)return'곧 끝나요';if(t<90)return`약 ${Math.max(20,Math.round(t/10)*10)}초`;
+  const m=Math.round(t/60);return m<60?`약 ${m}분`:`약 ${Math.floor(m/60)}시간${m%60?' '+(m%60)+'분':''}`}
+const fmtEl=s=>s<60?`${s}초`:s<3600?`${Math.floor(s/60)}분 ${s%60}초`:`${Math.floor(s/3600)}시간 ${Math.floor(s%3600/60)}분`;
+const etaTxt=j=>j&&j.eta!=null&&j.state!=='queued'?' · 남은 시간 '+fmtEta(j.eta):'';
+const elTxt=j=>j&&j.elapsed?' · '+fmtEl(j.elapsed)+' 지남':'';
 const FB_C=['normal','karras','simple','sgm_uniform','exponential','beta'];
 /* FLUX 계열 기본값: FLUX/Krea는 가이던스 방식(CFG 1), Chroma는 일반 CFG와 beta 스케줄러 */
 const FX_DEF={sdxl:{rdenoise:0.3,cn_strength:0.7},flux:{rdenoise:0.3,cn_strength:0.7,fx_steps:20,fx_guidance:3.5,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},

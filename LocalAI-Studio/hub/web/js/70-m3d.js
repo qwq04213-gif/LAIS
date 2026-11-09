@@ -9,7 +9,7 @@ async function m3Job(p,label){if(M3.job){toast('3D 작업이 진행 중이에요
   try{for(;;){await sleep(1000);const j=await api('/api/job/'+r.id);
     if(j.state==='done'){m3St(j.msg||'끝났어요.',null);(j.warn||[]).forEach(w=>toast(w,8000));return j}
     if(j.state==='error'||j.state==='cancelled'){m3St(j.error||'중단했어요.',null,j.state==='error');if(j.need)$('#m3-st').insertAdjacentHTML('beforeend',needBox(j.need));return null}
-    m3St(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label),typeof j.progress==='number'?j.progress:0)}}
+    m3St(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label)+etaTxt(j),typeof j.progress==='number'?j.progress:0)}}
   finally{M3.job=null;$('#m3-stop').hidden=true}}
 $('#m3-stop').onclick=async()=>{if(M3.job)await api('/api/job/cancel',{id:M3.job})};
 async function m3Bl(){let b;try{b=await api('/api/blender')}catch{return}const E=$('#m3-bl');

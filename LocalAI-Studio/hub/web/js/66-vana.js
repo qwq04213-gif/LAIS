@@ -28,7 +28,7 @@ async function vaRun(p,label){if(VA.job)return toast('다른 분석이 진행 �
   try{for(;;){await sleep(1000);const j=await api('/api/job/'+r.id);
     if(j.state==='done'){vaSt(j.msg&&!/중$/.test(j.msg)?j.msg:'끝났어요.',null);(j.warn||[]).forEach(w=>toast(w,6000));return j}
     if(j.state==='error'||j.state==='cancelled'){vaSt(j.error||'중단했어요.',null,j.state==='error');if(j.need)$('#va-st').insertAdjacentHTML('beforeend',needBox(j.need));return null}
-    vaSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label),typeof j.progress==='number'?j.progress:0)}}
+    vaSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label)+etaTxt(j),typeof j.progress==='number'?j.progress:0)}}
   finally{VA.job=null;$('#va-stop').hidden=true}}
 $('#va-stop').onclick=async()=>{if(VA.job)await api('/api/job/cancel',{id:VA.job})};
 $('#va-go').onclick=async()=>{const v=$('#va-video').value;if(!v)return vaSt('영상을 골라 주세요.',null,true);
@@ -99,7 +99,7 @@ $('#va-res').addEventListener('click',async e=>{const A=VA.A;if(!A)return;const 
       if(j.state==='done'){vaSt('새 영상을 만들었어요. 원본은 그대로예요.',null);const u=j.images[0];
         $('#va-out').innerHTML=`<video src="${u}" controls playsinline></video><div class="xpb"><a href="${u}" download>저장</a><button type="button" data-u="${u}" data-to="vmix">소리·자막 더 넣기</button><button type="button" data-u="${u}" data-to="fs">전체 화면</button></div>`;break}
       if(j.state==='error'||j.state==='cancelled'){vaSt(j.error||'중단했어요.',null,true);break}
-      vaSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||'만드는 중'),typeof j.progress==='number'?j.progress:0)}}finally{VA.job=null;$('#va-stop').hidden=true}}});
+      vaSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||'만드는 중')+etaTxt(j),typeof j.progress==='number'?j.progress:0)}}finally{VA.job=null;$('#va-stop').hidden=true}}});
 window.vanaOpen=async u=>{show('vana');await vaLists(u);$('#va-video').value=u;vPrev($('#va-video'))};
 document.addEventListener('viewshow',e=>{if(e.detail==='vana')vaLists()});
 if($('#v-vana.on'))vaLists();

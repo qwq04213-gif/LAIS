@@ -22,7 +22,7 @@ async function auRun(p,label){if(AU.job)return toast('소리 작업이 진행 �
   try{for(;;){await sleep(1000);const j=await api('/api/job/'+r.id);
     if(j.state==='done'){auSt(j.msg||'끝났어요.',null);(j.warn||[]).forEach(w=>toast(w,6000));return j}
     if(j.state==='error'||j.state==='cancelled'){auSt(j.error||'중단했어요.',null,j.state==='error');return null}
-    auSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label),typeof j.progress==='number'?j.progress:0)}}
+    auSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label)+etaTxt(j),typeof j.progress==='number'?j.progress:0)}}
   finally{AU.job=null;$('#au-stop').hidden=true}}
 $('#au-stop').onclick=async()=>{if(AU.job)await api('/api/job/cancel',{id:AU.job})};
 function auCur(){const o=$('#au-src').selectedOptions[0];return o&&o.value?{v:o.value,video:!!o.dataset.video,name:o.textContent.replace(/^⬆ /,'')}:null}
