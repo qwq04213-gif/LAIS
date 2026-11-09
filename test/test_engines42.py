@@ -82,4 +82,27 @@ STATE["missing"].add("DA3Inference"); hub._CAPS["t"] = 0
 r = post("/api/control/prep", {"type": "depth", "image": png()}); assert r.get("node") != "Depth Anything 3", r          # 노드가 없으면 예전 방식(확장 전처리기)
 STATE["missing"].discard("DA3Inference"); hub._CAPS["t"] = 0
 ok("depth maps prefer Depth Anything 3 (ComfyUI core nodes, mono, v2_style) and fall back to the old preprocessor")
+# ── Stable Audio 3 ──
+touch("checkpoints/stable_audio_open_1.0.safetensors", "text_encoders/t5_base.safetensors")
+j = job({"kind": "music", "mengine": "sfx", "tags": "rain", "sfx_seconds": "90"}); assert j["state"] == "done" and cls("ConditioningStableAudio") and any("47초" in w for w in j["warn"]), j
+touch(*[f["dir"] + "/" + f["url"].rsplit("/", 1)[1] for f in CAT["stable-audio-3"]["files"]])
+j = job({"kind": "music", "mengine": "sfx", "tags": "rain", "sfx_seconds": "90"}); assert j["state"] == "done", j
+k = cls("KSampler")[0]; assert (k["steps"], k["cfg"], k["sampler_name"]) == (8, 1.0, "lcm") and cls("EmptyLatentAudio")[0]["seconds"] == 90.0 and not cls("ConditioningStableAudio")
+assert cls("CheckpointLoaderSimple")[0]["ckpt_name"] == "stable_audio_3_medium.safetensors" and cls("CLIPLoader")[0]["clip_name"] == "t5gemma_b_b_ul2.safetensors"
+ok("Stable Audio 3: preferred when installed (8 steps lcm, up to 180s), Open 1.0 still works and explains its 47s limit")
+# ── Qwen-Image 2.1 Turbo · MOSS 편집 ──
+touch(*[f["dir"] + "/" + f["url"].rsplit("/", 1)[1] for f in CAT["qwen-image-turbo"]["files"]])
+j = job({"kind": "edit", "engine": "qwen", "image": png(), "prompt": "make it night", "q_unet": "qwen_image_2.1_turbo_int8_convrot.safetensors"}); assert j["state"] == "done", j
+assert cls("ManualSigmas")[0]["sigmas"].startswith("1.0, 0.978453") and cls("CFGGuider")[0]["cfg"] == 1.0 and not cls("KSampler")
+j = job({"kind": "edit", "engine": "qwen", "image": png(), "prompt": "make it night"}); assert j["state"] == "done" and cls("KSampler") and not cls("ManualSigmas"), j
+ok("Qwen-Image 2.1 Turbo edit: official 8-step sigma curve with CFGGuider; the regular model keeps KSampler")
+j = job({"kind": "edit", "engine": "moss", "image": png(), "prompt": "black coat"}); assert j["state"] == "error" and "MOSS-Image 편집" in j["error"] and j.get("need")[0] == "moss-image-edit", j
+touch(*[f["dir"] + "/" + f["url"].rsplit("/", 1)[1] for f in CAT["moss-image-edit"]["files"]])
+j = job({"kind": "edit", "engine": "moss", "image": png(500, 300), "prompt": "black coat"}); assert j["state"] == "done", j
+k = cls("KSampler")[0]; assert (k["steps"], k["cfg"], k["scheduler"]) == (30, 4.0, "normal")
+te = cls("TextEncodeMOSSImageEdit"); assert len(te) == 2 and te[0]["edit_format"] == "Moss-Image-Edit" and node(te[0]["images.image_0"]) == "LoadImage"
+assert cls("SkipLayerGuidanceDiTSimple")[0]["single_layers"] == "22" and cls("LoraLoaderModelOnly")[0]["lora_name"] == "moss_image_edit_lora_rank_64_bf16.safetensors"
+lat = cls("EmptyFlux2LatentImage")[0]; assert lat["width"] % 16 == 0 and lat["height"] % 16 == 0 and abs(lat["width"] / lat["height"] - 5 / 3) < 0.05
+assert cls("UNETLoader")[0]["unet_name"] == "moss_image_sft_int8_convrot.safetensors" and cls("VAELoader")[0]["vae_name"] == "flux2-vae_small.safetensors"
+ok("MOSS-Image edit: official graph (SFT + edit LoRA + SLG 22, 30 steps CFG 4), aspect kept, missing files → install")
 print("ALL OK")

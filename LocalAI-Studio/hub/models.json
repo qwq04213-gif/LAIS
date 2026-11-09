@@ -80,6 +80,27 @@
    ]
   },
   {
+   "id": "qwen-image-turbo",
+   "name": "Qwen-Image 2.1 Turbo (빠른 생성·편집, int8)",
+   "gb": 17.3,
+   "desc": "Qwen-Image 2.1 의 빠른 판(8단계). 이미지 편집·생성에서 모델 칸에 'turbo' 파일을 고르면 공식 Turbo 설정(정해진 8단계 곡선, CFG 1)으로 그려요. Lightning LoRA 없이도 빨라요. 텍스트 인코더·VAE 는 보통판과 같이 써요. 비상업(Qwen Research License).",
+   "license": "비상업(Qwen Research License)",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
+    }
+   ]
+  },
+  {
    "id": "qwen-te-small",
    "name": "Qwen-Image 2.1 가벼운 텍스트 인코더 (w4a8)",
    "gb": 6.3,
@@ -127,6 +148,31 @@
     {
      "dir": "vae",
      "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "moss-image-edit",
+   "name": "MOSS-Image 편집 (말로 편집, int8)",
+   "gb": 13.3,
+   "desc": "이미지 편집 > 방법 '말로 편집 (MOSS-Image)'. Qwen-Image 와 다른 시각으로 옷·소품·배경을 문장으로 바꿔요(공식 편집 LoRA 포함, 30단계). 2026년 10월 공개, 시험 중. VRAM 12GB 이상 권장. Apache-2.0.",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/diffusion_models/moss_image_sft_int8_convrot.safetensors"
+    },
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/loras/moss_image_edit_lora_rank_64_bf16.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae_small.safetensors"
     }
    ]
   },
@@ -190,6 +236,23 @@
     {
      "dir": "vae",
      "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "stable-audio-3",
+   "name": "Stable Audio 3 Medium (효과음·연주곡, 최대 3분)",
+   "gb": 11,
+   "desc": "음악 만들기 > 만들 것 '효과음'에서 Stable Audio Open 대신 먼저 써요. 효과음·악기 소리·가사 없는 연주곡을 8단계로 빠르게, 최대 180초까지 만들어요. Stability AI(커뮤니티 라이선스: 연 매출 100만 달러 이하 무료). VRAM 8GB 이상.",
+   "license": "Stability AI Community License",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Comfy-Org/stable-audio-3/resolve/main/checkpoints/stable_audio_3_medium.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/stable-audio-3/resolve/main/text_encoders/t5gemma_b_b_ul2.safetensors"
     }
    ]
   },

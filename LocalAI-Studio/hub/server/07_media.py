@@ -130,8 +130,8 @@ def music_models():
 
 
 def sfx_models():
-    """checkpoints 폴더의 Stable Audio Open 파일."""
-    return [n for n in files("checkpoints") if re.search(r"stable[_-]?audio", n.lower())]
+    """checkpoints 폴더의 Stable Audio 파일 — Stable Audio 3 가 있으면 앞에(먼저 써요)."""
+    return sorted((n for n in files("checkpoints") if re.search(r"stable[_-]?audio", n.lower())), key=lambda n: (not re.search(r"audio[_-]?3", n.lower()), n))
 
 
 SFX_NODES = ("EmptyLatentAudio", "ConditioningStableAudio", "VAEDecodeAudio")
@@ -144,15 +144,26 @@ def do_sfx(p, J):
         raise RuntimeError(f"이 ComfyUI 에는 효과음에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 를 업데이트해 주세요.")
     models = sfx_models()
     if not models:
-        raise RuntimeError("Stable Audio 모델이 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 설치해 주세요.")
-    te = _pick(files("text_encoders"), "t5_base", "t5-base", ("t5", "base"))
+        raise RuntimeError("Stable Audio 모델이 없어요. '설치와 모델' 탭에서 'Stable Audio 3'(또는 가벼운 Stable Audio Open 1.0)을 설치해 주세요.")
+    sa3 = bool(re.search(r"audio[_-]?3", models[0].lower()))
+    te = _pick(files("text_encoders"), "t5gemma") if sa3 else _pick(files("text_encoders"), "t5_base", "t5-base", ("t5", "base"))
     if not te:
-        raise RuntimeError("T5-base 텍스트 인코더가 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 다시 설치해 주세요.")
+        raise RuntimeError("T5Gemma 텍스트 인코더가 없어요. '설치와 모델' 탭에서 'Stable Audio 3'을 다시 설치해 주세요." if sa3 else
+                           "T5-base 텍스트 인코더가 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 다시 설치해 주세요.")
     text = (p.get("tags") or "").strip()
     if not text:
         raise ValueError("어떤 소리인지 적어 주세요. 예: heavy rain on a tin roof")
     if blocked(text):
         raise ValueError(BLOCK_MSG)
+    if sa3:
+        sec = clamp(num(p, "sfx_seconds", 10.0), 1.0, 180.0)
+        q = dict(ckpt=models[0], te=te, prompt=text, seed=seed_of(p), seconds=sec, steps=8, fmt=p.get("format") if p.get("format") in ("mp3", "flac") else "mp3")
+        J["msg"] = f"효과음 만드는 중 (Stable Audio 3, {sec:.0f}초)"
+        res = run_wf(flows.wf_sa3(q), J, raw=True)
+        info = dict(kind="sfx", prompt=text, seed=q["seed"], seconds=sec, steps=8, model=q["ckpt"])
+        return [(data, info, Path(name).suffix.lower() or ".mp3") for name, data in res[:1]]
+    if num(p, "sfx_seconds", 10.0) > 47:
+        warn(J, "Stable Audio Open 은 47초까지라 47초로 만들었어요. 더 길게는 'Stable Audio 3'을 설치해 주세요.")
     sec = clamp(num(p, "sfx_seconds", 10.0), 1.0, 47.0)
     q = dict(ckpt=models[0], te=te, prompt=text, negative="low quality, distorted, noise", seed=seed_of(p), seconds=sec,
              steps=clamp(num(p, "sfx_steps", 50, int), 10, 150), cfg=7.0,

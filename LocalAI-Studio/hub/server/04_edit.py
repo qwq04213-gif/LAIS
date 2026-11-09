@@ -223,6 +223,45 @@ def edit_flux(p, J, img, mask, grow, feather, rng):
     return [(out, flux_info(q, out, "edit-flux", **{"Denoising strength": q["denoise"], "Mask grow": grow}), None)]
 
 
+MOSS_EDIT_NODES = ("TextEncodeMOSSImageEdit", "EmptyFlux2LatentImage")
+
+
+def moss_edit_files():
+    """MOSS-Image 편집에 쓸 파일: SFT 모델(없으면 다른 MOSS 모델)·편집 LoRA·텍스트 인코더·FLUX.2 VAE(small 우선)."""
+    dm = [n for n in files("diffusion_models") if MOSS_RX.search(n.lower())]
+    return {"unet": next((n for n in dm if "sft" in n.lower()), dm[0] if dm else None),
+            "lora": next((n for n in files("loras") if "moss" in n.lower() and "edit" in n.lower()), None),
+            "te": moss_te(), "vae": _pick(files("vae"), ("flux2", "small"), ("flux2", "vae"), ("flux2",))}
+
+
+def edit_moss(p, J, img, mask, grow, feather, rng):
+    """말로 편집 (MOSS-Image): 사진 전체를 다시 그리고, 칠한 영역이 있으면 그 부분만 바꿔요."""
+    f = moss_edit_files()
+    if not all(f.values()):
+        names = {"unet": "MOSS-Image 모델", "lora": "MOSS-Image 편집 LoRA", "te": "텍스트 인코더(Qwen3.5 9B)", "vae": "FLUX.2 VAE"}
+        raise RuntimeError("없는 파일: " + ", ".join(names[k] for k, v in f.items() if not v) + ". '설치와 모델' 탭에서 'MOSS-Image 편집'을 설치해 주세요.")
+    miss = [n for n in MOSS_EDIT_NODES if not has_node(n)]
+    if miss or not moss_ctype():
+        raise RuntimeError("이 ComfyUI 는 MOSS-Image 편집을 아직 지원하지 않아요" + (f"({', '.join(miss)})" if miss else "") +
+                           ". ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    text, tags = prep(p, J, "sentence", rng)
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    mp = clamp(num(p, "q_mp", 1.0), 0.3, 4.0)
+    s = (mp * 1e6 / (img.width * img.height)) ** 0.5
+    w, h = max(256, round(img.width * s / 16) * 16), max(256, round(img.height * s / 16) * 16)
+    q = dict(unet=f["unet"], lora=f["lora"], te=f["te"], vae=f["vae"], ctype=moss_ctype(), loras=collect_loras(p, tags, J),
+             prompt=text, negative="", seed=seed_of(p), steps=clamp(num(p, "moss_steps", 30, int), 1, 100), cfg=clamp(num(p, "moss_cfg", 4.0), 0.0, 20.0),
+             w=w, h=h, slg=has_node("SkipLayerGuidanceDiTSimple"))
+    J["msg"] = "편집 중 (MOSS-Image)"
+    res = run_wf(flows.wf_moss_edit(q, put_input(img.resize((w, h), RS.LANCZOS), J)), J)[0]
+    if mask:
+        res = Image.composite(res.resize(img.size, RS.LANCZOS), img, grow_feather(mask, grow, feather))
+    info = dict(kind="edit-moss", prompt=text, negative="", steps=q["steps"], cfg=q["cfg"], sampler="euler", scheduler="normal", seed=q["seed"],
+                w=res.width, h=res.height, model=f["unet"], loras=[[f["lora"], 1.0]] + [[n, w_] for n, w_ in q["loras"]], extra={"Engine": "MOSS-Image"})
+    return [(res, info, None)]
+
+
 def do_edit(p, J):
     img = load_img(p["image"])
     mask = load_mask(p.get("mask"), img.size)
@@ -255,6 +294,8 @@ def do_edit(p, J):
         J["msg"] = "인페인트 생성 중"
         out = finish(img, pos, crop, soft, run_wf(flows.wf_inpaint(q, a, b), J)[0])
         return [(out, info_sd(q, out.size, "edit-sdxl", **extra), None)]
+    if p.get("engine") == "moss":
+        return edit_moss(p, J, img, mask, grow, feather, rng)
     text, tags = prep(p, J, "sentence", rng)
     q = qwen_params(p, text, tags, J)
     refs = [load_img(p[k]) for k in ("ref1", "ref2") if p.get(k)]

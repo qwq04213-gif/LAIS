@@ -237,10 +237,10 @@ def job_label(p):
 NEED_RULES = [      # 작업 오류 글 → 바로 받을 추천 모델(models.json 의 id). 함께 필요한 공용 파일은 받을 때 같이 받아요.
     (r"체크포인트가 없", ["noobai", "sdxl-vae-fix"]), (r"업스케일 모델이 없", ["esrgan"]), (r"감지 모델이 없", ["adetailer"]),
     (r"Krea 2 스타일 참조", ["krea2-style-reference"]), (r"Krea 2 깊이 컨트롤", ["krea2-depth-control"]),
-    (r"Stable Audio|T5-base", ["stable-audio-open"]), (r"ACE-Step", ["ace-step-15-turbo"]), (r"4단계 가속 LoRA", ["wan22-lightning"]),
+    (r"Stable Audio 3|T5Gemma", ["stable-audio-3"]), (r"Stable Audio|T5-base", ["stable-audio-open"]), (r"ACE-Step", ["ace-step-15-turbo"]), (r"4단계 가속 LoRA", ["wan22-lightning"]),
     (r"TRELLIS\.2", ["trellis2"]), (r"Pixal3D", ["pixal3d-mv"]), (r"LTX-2\.5", ["ltx25"]), (r"SeedVR2", ["seedvr2"]), (r"Z-Image-Turbo", ["z-image-turbo"]), (r"Depth Anything 3", ["depth-anything-3"]), (r"FLUX 3 Klein", ["flux3-klein"]), (r"LTX-Video", ["ltx-video"]), (r"Wan VACE", ["wan-vace"]), (r"S2V", ["wan-s2v"]),
     (r"Wan 2\.2 14B 이미지", ["wan22-14b-i2v"]), (r"Wan 2\.2 14B 글", ["wan22-14b-t2v"]), (r"'Wan 2\.2 영상'", ["wan22-ti2v-5b"]),
-    (r"SD3\.5", ["sd35-medium"]), (r"MOSS-Image", ["moss-image"]), (r"Qwen-Image 2\.1", ["qwen-image"]),
+    (r"SD3\.5", ["sd35-medium"]), (r"MOSS-Image 편집", ["moss-image-edit"]), (r"MOSS-Image", ["moss-image"]), (r"Qwen-Image 2\.1", ["qwen-image"]),
     (r"Lightning LoRA", ["qwen-lightning"]),
     (r"이미지를 볼 수 있는 대화 모델", ["qwen25vl-7b"]), (r"기반 모델\(체크포인트\)", ["noobai"]), (r"FLUX ControlNet Union", ["controlnet-flux-union"]), (r"ControlNet Union SDXL", ["controlnet-union"]), (r"도우미로 쓸 대화 모델|도구 호출", ["qwen35-9b"]),
 ]

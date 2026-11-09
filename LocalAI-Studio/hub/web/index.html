@@ -166,10 +166,12 @@
     <label class="f">편집 방식
       <select name="engine">
         <option value="qwen">말로 편집 (Qwen-Image 2.1)</option>
+        <option value="moss">말로 편집 (MOSS-Image, 시험 중)</option>
         <option value="sdxl">칠해서 편집 (SDXL 인페인트)</option>
         <option value="flux">칠해서 편집 (FLUX · Krea · Krea 2 · Chroma)</option>
       </select></label>
     <label class="f">원하는 변화<textarea name="prompt" rows="4"></textarea></label>
+    <p class="hint moss">문장으로 지시하세요. 예: <b>분홍 재킷만 검은 울 코트로 바꾸고 얼굴·배경은 그대로</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 바꿀 것과 그대로 둘 것을 함께 적으면 잘 돼요.</p>
     <p class="hint qwen">문장으로 지시하세요. 예: <b>재킷을 붉은 가죽으로 바꿔줘</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 참조 이미지는 <b>이미지 2의 옷을 입혀줘</b>처럼 번호로 불러요.</p>
     <p class="hint sdxl">칠한 영역에 그릴 내용만 영어 태그로 적어요. 예: <b>black silk robe, natural skin texture</b></p>
     <p class="hint fxe">칠한 영역에 그릴 내용을 문장으로 적어요. 예: <b>black silk robe, natural skin texture</b><br>모델 파일에 <b>FLUX Kontext</b>를 고르면 칠하지 않아도 <b>재킷을 붉은 가죽으로 바꿔줘</b>처럼 말로 지시해서 고칠 수 있어요.</p>
@@ -529,7 +531,7 @@
     <label class="chk mu-ace"><input type="checkbox" name="instrumental"> 가사 없이 연주곡으로</label>
     <label class="f mu-ace" id="mu-lyr">가사 (선택)<textarea name="lyrics" rows="6" placeholder="[verse]&#10;첫 줄 가사&#10;&#10;[chorus]&#10;후렴 가사"></textarea></label>
     <div class="row">
-      <label class="f mu-sfx" hidden>길이(초, 최대 47)<input type="number" name="sfx_seconds" value="10" min="1" max="47" step="0.1"></label>
+      <label class="f mu-sfx" hidden title="Stable Audio Open 은 47초, Stable Audio 3 는 180초까지">길이(초, 최대 180)<input type="number" name="sfx_seconds" value="10" min="1" max="180" step="0.1"></label>
       <label class="f mu-ace">길이<select name="seconds"><option value="30">30초</option><option value="60" selected>1분</option><option value="120">2분</option><option value="180">3분</option><option value="240">4분</option></select></label>
       <label class="f">파일 형식<select name="format"><option value="mp3">MP3 (작아요)</option><option value="flac">FLAC (무손실)</option></select></label>
     </div>

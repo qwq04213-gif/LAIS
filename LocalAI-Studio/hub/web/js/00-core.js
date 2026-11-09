@@ -669,7 +669,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-need
   $$(`.needdl[data-need="${CSS.escape(key)}"] .ndl`).forEach(l=>delete l.dataset.fixed);await needCat();NEED.watch.set(key,{ids:needExpand(r.ids||ids),skip:new Set(old.map(x=>x.id)),html:'받기를 시작했어요…'});needPaint();needPoll(key)});
 /* 화면의 '모델이 아직 없어요' 안내마다 받을 모델을 정해서 버튼을 붙여요 */
 const NEED_W={'w-chat':()=>['qwen35-9b'],'w-up':()=>['esrgan'],'w-i2p':()=>['qwen25vl-7b'],
-  'w-edit':()=>{const e=$('#f-edit')?.dataset.e;return e==='qwen'?['qwen-image']:e==='flux'?['krea-dev']:['noobai','sdxl-vae-fix']},
+  'w-edit':()=>{const e=$('#f-edit')?.dataset.e;return e==='qwen'?['qwen-image']:e==='moss'?['moss-image-edit']:e==='flux'?['krea-dev']:['noobai','sdxl-vae-fix']},
   'w-gen':()=>({sdxl:['noobai','sdxl-vae-fix'],flux:['krea-dev'],chroma:['chroma-hd'],krea2:['krea2-turbo'],sd35:['sd35-medium'],qwenimg:['qwen-image'],moss:['moss-image']})[$('#f-gen')?.dataset.g||'sdxl']||[],
   'w-vid':()=>{const v=$('#f-vid')?.elements.wan_ver?.value;return {ltx25:['ltx25'],ltx:['ltx-video'],vace:['wan-vace'],s2v:['wan-s2v']}[v]||['wan22-ti2v-5b']},
   'w-vid14':()=>[typeof VID_IMG!=='undefined'&&VID_IMG?'wan22-14b-i2v':'wan22-14b-t2v'],

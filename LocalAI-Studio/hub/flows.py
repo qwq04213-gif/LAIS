@@ -379,10 +379,46 @@ def wf_qwen21(q, imgs=(), size=None, key=None):
         lat = [w.add("VAEEncode", pixels=[lis[0], 0], vae=[vae, 0]), 0]
     else:
         lat = [enc, 2]
-    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
-              scheduler=q["scheduler"], positive=[enc, 0], negative=[enc, 1], latent_image=lat, denoise=den)
+    if "turbo" in f["unet"].lower() and den >= 1.0 and q["steps"] == 8:     # Turbo: 공식 예시의 8단계 곡선(ManualSigmas) + CFGGuider
+        k = w.add("SamplerCustomAdvanced", noise=[w.add("RandomNoise", noise_seed=q["seed"]), 0],
+                  guider=[w.add("CFGGuider", model=model, positive=[enc, 0], negative=[enc, 1], cfg=q["cfg"]), 0],
+                  sampler=[w.add("KSamplerSelect", sampler_name="euler"), 0],
+                  sigmas=[w.add("ManualSigmas", sigmas=QWEN_TURBO_SIGMAS), 0], latent_image=lat)
+    else:
+        k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"],
+                  scheduler=q["scheduler"], positive=[enc, 0], negative=[enc, 1], latent_image=lat, denoise=den)
     w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=[vae, 0]), 0])
     return w.n
+
+
+MOSS_EDIT_NEG = "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
+
+
+def wf_moss_edit(q, img):
+    """MOSS-Image 편집(공식 예시와 같게): SFT 모델 + 편집 LoRA → SLG(single 22) + Qwen3.5 9B(moss) + FLUX.2 VAE(small),
+    TextEncodeMOSSImageEdit(사진을 참고 잠재로) → 30단계 CFG 4 euler/normal. img = 미리 크기를 맞춘(16 배수) 입력 파일명."""
+    w = WF()
+    model = [w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default"), 0]
+    model = [w.add("LoraLoaderModelOnly", model=model, lora_name=q["lora"], strength_model=1.0), 0]
+    for name, wt in q.get("loras", []):
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    if q.get("slg", True):
+        model = [w.add("SkipLayerGuidanceDiTSimple", model=model, double_layers="", single_layers="22", start_percent=0.0, end_percent=1.0), 0]
+    clip = [w.add("CLIPLoader", clip_name=q["te"], type=q["ctype"], device="default"), 0]
+    vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    li = [w.add("LoadImage", image=img), 0]
+
+    def enc(text):
+        return [w.add("TextEncodeMOSSImageEdit", clip=clip, prompt=text, vae=vae, edit_format="Moss-Image-Edit", image_strength=1.0,
+                      **{"images.image_0": li}), 0]
+    lat = [w.add("EmptyFlux2LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name="euler", scheduler="normal",
+              positive=enc(q["prompt"]), negative=enc(q.get("negative") or MOSS_EDIT_NEG), latent_image=lat, denoise=1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
+QWEN_TURBO_SIGMAS = "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
 
 
 # ───────────────────────── MOSS-Image (배치 지정·긴 글자) ─────────────────────────
@@ -496,6 +532,22 @@ def wf_sfx(q):
     lat = w.add("EmptyLatentAudio", seconds=q["seconds"], batch_size=1)
     k = w.add("KSampler", model=[ck, 0], seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
               positive=[cond, 0], negative=[cond, 1], latent_image=[lat, 0], denoise=1.0)
+    dec = w.add("VAEDecodeAudio", samples=[k, 0], vae=[ck, 2])
+    fmt = {"format": "flac"} if q.get("fmt") == "flac" else {"format": "mp3", "format.quality": "V0"}
+    w.add("SaveAudioAdvanced", audio=[dec, 0], filename_prefix="audio/hub", **fmt)
+    return w.n
+
+
+def wf_sa3(q):
+    """Stable Audio 3 Medium(공식 예시와 같게): 체크포인트 + T5Gemma(stable_audio) → 8단계 lcm, CFG 1 → 소리. q: ckpt, te, prompt, seed, seconds, fmt"""
+    w = WF()
+    ck = w.add("CheckpointLoaderSimple", ckpt_name=q["ckpt"])
+    clip = [w.add("CLIPLoader", clip_name=q["te"], type="stable_audio", device="default"), 0]
+    pos = w.add("CLIPTextEncode", text=q["prompt"], clip=clip)
+    neg = w.add("CLIPTextEncode", text="", clip=clip)
+    lat = w.add("EmptyLatentAudio", seconds=q["seconds"], batch_size=1)
+    k = w.add("KSampler", model=[ck, 0], seed=q["seed"], steps=q.get("steps", 8), cfg=1.0, sampler_name="lcm", scheduler="simple",
+              positive=[pos, 0], negative=[neg, 0], latent_image=[lat, 0], denoise=1.0)
     dec = w.add("VAEDecodeAudio", samples=[k, 0], vae=[ck, 2])
     fmt = {"format": "flac"} if q.get("fmt") == "flac" else {"format": "mp3", "format.quality": "V0"}
     w.add("SaveAudioAdvanced", audio=[dec, 0], filename_prefix="audio/hub", **fmt)
