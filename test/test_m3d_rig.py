@@ -97,7 +97,7 @@ j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "on", "rig": True, 
 rg = j["m3d_stats"]["rig"]; assert rg["bones"] == 22 and rg["pose"] == "T" and rg["legs"] and rg["fixed"] == 12, rg
 assert rg["preview"].startswith(f"/m3d/{sid}/rig_preview.glb") and urllib.request.urlopen(B + rg["preview"]).read().endswith(b"RIGPREVIEW")
 z = [u for u in j["images"] if u.endswith(".zip")][0]
-info = json.loads((hub.OUT / "3D" / (z.rsplit("/", 1)[1] + ".json")).read_text(encoding="utf-8")); assert info["rig"] == {"bones": 22, "pose": "T", "legs": True}, info
+info = json.loads((Path(str(hub.out_path(z[5:])) + ".json")).read_text(encoding="utf-8")); assert info["rig"] == {"bones": 22, "pose": "T", "legs": True}, info
 import zipfile; names = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(B + z).read())).namelist(); assert not any("rig_preview" in n for n in names), names
 os.environ["FAKE_BLENDER_POSE"] = "down"
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "on", "rig": True}); assert j["state"] == "done" and any("T자" in w for w in j["warn"]), j

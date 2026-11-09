@@ -123,7 +123,7 @@ names = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(B + z).read())).nameli
 assert {"기사_캐릭터_LOD0.glb", "기사_캐릭터_LOD1.fbx", "기사_캐릭터_LOD2.obj", "기사_캐릭터.blend", "textures/base.png"} <= set(names) and "result.json" not in names, names
 s = j["m3d_stats"]; assert [x["ratio"] for x in s["lods"]] == [1.0, 0.5, 0.2] and s["size_m"][2] == 1.8 and s["lods"][1]["tris"] == 10000
 assert "LOD 3단계" in j["msg"] and not list((hub.M3D_DIR / sid).glob("build_*")) and not list((hub.M3D_DIR / sid).glob("*.zip"))
-info = json.loads((hub.OUT / "3D" / (z.rsplit("/", 1)[1] + ".json")).read_text(encoding="utf-8")); assert info["pack"] and info["blender"] == "4.5.15"
+info = json.loads((Path(str(hub.out_path(z[5:])) + ".json")).read_text(encoding="utf-8")); assert info["pack"] and info["blender"] == "4.5.15"
 ok("Blender finish: LOD 1/0.5/0.2, GLB+FBX+OBJ+.blend+textures in a zip, LOD0 shown, stats, temp folder cleaned")
 j = job({"kind": "m3d", "op": "build", "id": sid, "lods": "", "fmt_fbx": "", "rotate": "90"}); assert j["state"] == "done", j
 assert len(j["m3d_stats"]["lods"]) == 1 and j["m3d_stats"]["size_m"][2] == 1.7      # 캐릭터 기본 키 1.7m
@@ -140,7 +140,7 @@ assert cls("Trellis2UpsampleStage")[0]["target_resolution"] == 1536 and cls("Dec
 ok("feature menu photo → 3D: one-shot TRELLIS.2, no Blender")
 # 지우기
 r = post("/api/m3d/delete", {"id": sid}); assert all(x["id"] != sid for x in r["items"]) and not (hub.M3D_DIR / sid).exists()
-assert list((hub.OUT / "3D").glob("*.glb"))
+assert list(hub.out_files(hub.OUT / "3D", {".glb"}))
 ok("delete work folder; made 3D files stay")
 # wf_fit
 real = hub.caps

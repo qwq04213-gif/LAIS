@@ -25,7 +25,7 @@ j = job({"kind": "vpost", "op": "bogus", "video": url}); assert j["state"] == "e
 j = job({"kind": "vpost", "op": "webp", "video": "/out/영상/nope.mp4"}); assert j["state"] == "error" and "찾을 수 없" in j["error"]; ok("bad op / missing video -> clear errors")
 j = job({"kind": "vpost", "op": "interp", "video": url}); assert j["state"] == "done", j; g = SUBMITTED[-1]
 r = nodes(g, "RIFE VFI")[0]; assert r["multiplier"] == 2 and r["ckpt_name"] == "rife47.pth"; assert nodes(g, "CreateVideo")[0]["fps"] == 32, nodes(g, "CreateVideo")
-assert j["images"][0].endswith(".mp4") and "/영상/" in urllib.parse.unquote(j["images"][0]); sv = hub.OUT / "영상" / urllib.parse.unquote(j["images"][0]).split("/")[-1]
+assert j["images"][0].endswith(".mp4") and "/영상/" in urllib.parse.unquote(j["images"][0]); sv = hub.out_path(j["images"][0][5:])
 meta = json.loads(open(str(sv) + ".json", encoding="utf-8").read()); assert meta["fps"] == 32 and meta["post"] == "프레임 늘리기" and meta["prompt"] == "cat" and meta["source"] == v.name, meta
 assert not list((hub.COMFY / "input").glob("hub_*.mp4")), "temp video copied into ComfyUI input must be removed"
 ok("interpolation: LoadVideo → GetVideoComponents → RIFE x2 → CreateVideo at double fps; settings json carries over; temp copy cleaned")

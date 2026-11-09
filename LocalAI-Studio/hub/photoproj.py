@@ -842,3 +842,61 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     if log:
         log(f"[머리 텍스처] 삼각형 {len(hf):,}개 · {TS}px · 이음새 {int(seam.sum())}")
     return glbscene.write(g2, b2), {"head": True, "head_tris": int(len(hf)), "head_tex": TS}
+
+
+# ───────────────────────── 갤러리 미리보기 그림 ─────────────────────────
+def preview(glb, size=640, bg=(30, 30, 36)):
+    """GLB → 앞(+z 쪽, y 위 — glTF 기본)에서 본 그림(PIL). 텍스처 색 + 약한 음영. 실패하면 ValueError."""
+    g, b = glbscene.read(glb)
+    nodes, meshes = g.get("nodes") or [], g.get("meshes") or []
+    Ps, Fs, cols, off = [], [], [], 0
+    texs = {}
+    for ni, nd in enumerate(nodes):
+        if "mesh" not in nd:
+            continue
+        m = _world(g, ni)
+        for pr in meshes[nd["mesh"]].get("primitives") or []:
+            at = pr.get("attributes") or {}
+            if "POSITION" not in at or pr.get("mode", 4) != 4:
+                continue
+            P = _acc(g, b, at["POSITION"])[:, :3] @ m[:3, :3].T + m[:3, 3]
+            F = (_acc(g, b, pr["indices"]).astype(np.int64).reshape(-1, 3) if "indices" in pr else np.arange(len(P)).reshape(-1, 3))
+            mat = (g.get("materials") or [{}])[pr.get("material", 0)] if g.get("materials") else {}
+            pbr = mat.get("pbrMetallicRoughness") or {}
+            fac = np.array((pbr.get("baseColorFactor") or [1, 1, 1, 1])[:3], np.float32) * 255
+            bt = pbr.get("baseColorTexture")
+            vc = np.tile(fac, (len(P), 1))
+            if bt and "TEXCOORD_0" in at:
+                ti = bt["index"]
+                if ti not in texs:
+                    try:
+                        im = _img_of(g, b, ti).convert("RGB")
+                        im.thumbnail((1024, 1024))
+                        texs[ti] = np.asarray(im).astype(np.float32)
+                    except Exception:  # noqa: BLE001
+                        texs[ti] = None
+                if texs[ti] is not None:
+                    UV = _acc(g, b, at["TEXCOORD_0"])[:, :2]
+                    T = texs[ti]
+                    vc = _sample(T, (UV[:, 0] % 1.0) * T.shape[1], np.clip(UV[:, 1], 0, 1) * T.shape[0]) * (fac / 255)
+            Ps.append(P); Fs.append(F + off); cols.append((F + off, vc, at.get("TEXCOORD_0"), pr)); off += len(P)
+    if not Ps:
+        raise ValueError("그릴 3D 가 없어요")
+    P, F = np.concatenate(Ps), np.concatenate(Fs)
+    VC = np.concatenate([c[1] for c in cols])
+    lo, hi = P.min(0), P.max(0)
+    ext = max(hi[0] - lo[0], hi[1] - lo[1], 1e-9)
+    k = size * 0.9 / ext
+    xy = np.stack([size / 2 + k * (P[:, 0] - (lo[0] + hi[0]) / 2), size / 2 - k * (P[:, 1] - (lo[1] + hi[1]) / 2)], 1)
+    pix, fid, b0, b1 = raster(xy, F, size, size, -P[:, 2])
+    out = np.zeros((size * size, 3), np.float32)
+    out[:] = bg
+    if len(pix):
+        c = np.stack([b0, b1, 1 - b0 - b1], 1)
+        col = (VC[F[fid]] * c[..., None]).sum(1)
+        n = np.cross(P[F[fid, 1]] - P[F[fid, 0]], P[F[fid, 2]] - P[F[fid, 0]])
+        n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+        light = np.array([0.3, 0.4, 0.87]) / np.linalg.norm([0.3, 0.4, 0.87])
+        sh = 0.6 + 0.4 * np.abs(n @ light)
+        out[pix] = col * sh[:, None]
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8).reshape(size, size, 3))

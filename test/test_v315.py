@@ -38,9 +38,9 @@ mp4 = [u for u in j["images"] if u.endswith(".mp4")]; png = [u for u in j["image
 assert len(mp4) == 1 and len(png) == 1 and "/영상 복원/" in urllib.parse.unquote(mp4[0]), j["images"]
 V = j["verify"]; assert V["ok"] and V["src_audio"] and V["out_audio"] and abs(V["out_dur"] - 12) < 0.3, V
 assert "소리 그대로" in j["msg"] and "흔들림 보정" in j["msg"] and "노이즈 줄이기" in j["msg"], j["msg"]
-outf = hub.OUT / "영상 복원" / urllib.parse.unquote(mp4[0]).split("/")[-1]
+outf = hub.out_path(mp4[0][5:])
 meta = json.loads(Path(str(outf) + ".json").read_text(encoding="utf-8")); assert meta["kind"] == "vrestore" and meta["verify"]["ok"]
-cmp = Image.open(hub.OUT / "영상 복원" / urllib.parse.unquote(png[0]).split("/")[-1]); assert cmp.size == (320 * 2 + 8, 240)
+cmp = Image.open(hub.out_path(png[0][5:])); assert cmp.size == (320 * 2 + 8, 240)
 assert not list(hub.VR_WORK.glob("*/pre.mp4")), "work folder removed after success"
 assert any("old.mp4" in x["name"] or x["url"] == mp4[0] for x in get("/api/vmix/list")["videos"])
 ok("ffmpeg pass: deinterlace/denoise/deflicker/brightness/vidstab/sharpen, original audio kept & verified, comparison image, own folder")

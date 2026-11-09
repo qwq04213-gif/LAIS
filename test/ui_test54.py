@@ -50,7 +50,13 @@ with sync_playwright() as p:
     n = pg.locator("#gal-grid .gt").count(); pg.locator("#gal-grid .gt").first.hover(); pg.locator("#gal-grid .gt [data-pick]").nth(0).check(); pg.locator("#gal-grid .gt").nth(1).hover(); pg.locator("#gal-grid .gt [data-pick]").nth(1).check()
     assert pg.locator("#gal-grid .gt.picked").count() == 2 and pg.is_visible("#gal-delsel") and "2" in pg.inner_text("#gal-delsel")
     pg.locator("#gal-grid .gt").nth(2).click(position={"x": 60, "y": 60}); assert pg.locator("#gal-grid .gt.picked").count() == 3; ok("checkbox multi-select; card click adds while selecting")
-    pg.click("#gal-sel"); assert pg.locator("#gal-grid .gt.picked").count() == 0
+    pg.click("#gal-unsel"); assert pg.locator("#gal-grid .gt.picked").count() == 0
+    pg.click("#gal-sel"); assert pg.locator("#gal-grid .gt.picked").count() == n                       # 보이는 것 전체 선택
+    pg.click("#gal-unsel"); h = pg.locator("#gal-grid .gday .gday-all").first
+    if h.count():
+        h.click(); k = pg.locator("#gal-grid .gt.picked").count(); assert 0 < k <= n and "풀기" in h.inner_text()
+        h.click(); assert pg.locator("#gal-grid .gt.picked").count() == 0
+    ok("select all shown / per-date select all / unselect")
     img = pg.locator("#gal-grid .gt[data-type=image]").first; img.locator(".gmore summary").click(); assert img.locator(".gmore .menu [data-to='feat:color']").count() == 1 and img.locator(".gmore .menu [data-to=photol]").count() == 1; ok("card send menu lists every destination")
     pg.locator("#gal-grid .gt[data-type='3d'] [data-gview]").click(); pg.wait_for_selector("#lb:not([hidden]) #lb-media model-viewer"); pg.click("#lb-cont summary"); assert pg.locator("#lb-cont .menu [data-to=fs]").count() == 1; pg.keyboard.press("Escape")
     pg.locator("#gal-grid .gt[data-type='3d'] [data-g3d]").click(); assert pg.locator("#gal-grid model-viewer.gmv").count() == 1; ok("3D preview in card and big view")

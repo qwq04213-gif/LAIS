@@ -48,7 +48,7 @@ assert not [w for w in j.get("warn", []) if "사진" in w and "얼굴" not in w]
 t = tex_of(j)
 assert np.abs(at(t, 450, 600) - (200, 40, 40)).max() <= 12 and np.abs(at(t, 750, 600) - (40, 200, 40)).max() <= 12, (at(t, 450, 600), at(t, 750, 600))
 bk = t[384, 256]; assert bk[2] > bk[0] + 60 and bk[2] > bk[1] + 60, bk                       # 뒤 칸은 사진 색이 아니라 원래 파랑(색감만 사진에 맞춰요)
-side = json.loads((hub.OUT / "3D" / (j["images"][0].rsplit("/", 1)[1] + ".json")).read_text(encoding="utf-8")); assert side["photo"] is True and side["face"] is False
+side = json.loads((Path(str(hub.out_path(j["images"][0][5:])) + ".json")).read_text(encoding="utf-8")); assert side["photo"] is True and side["face"] is False
 ok("photo projection: front-visible texels take the photo colours exactly (camera found automatically), back keeps its own colour")
 
 # 2) 끄기

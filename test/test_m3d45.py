@@ -86,6 +86,9 @@ skin, cloth, back = orm[fy(600), fx(450)], orm[fy(600), fx(750)], orm[192, 128]
 assert skin[0] > 230 and abs(skin[1] - 128) <= 6 and skin[2] <= 6, skin                   # 그늘 거의 없음 · 거칠기 0.5 · 금속 0
 assert cloth[0] > 230 and cloth[1] > 245 and abs(cloth[2] - 128) <= 3, cloth              # 옷: 그늘만 줄이고 재질은 그대로
 assert back.tolist() == [100, 255, 128], back                                             # 사진이 안 닿는 뒤는 그대로
+th = urllib.request.urlopen(B + j["images"][0].replace("/out/", "/thumb/")).read(); assert th[:3] == b"\xff\xd8\xff" and Image.open(io.BytesIO(th)).size == (320, 320)
+assert "/3D/" in j["images"][0] and hub.JOB_RX.match(j["images"][0].split("/")[3]) and j["images"][0].split("/")[3].endswith("-hero")   # 작업 한 번 = 폴더 하나(3D 이름 붙임)
+ok("output saved in its own job folder; gallery thumbnail of the 3D model is drawn automatically")
 ok("photo-covered area: baked AO mostly removed (photo has real shading), skin gets roughness 0.5/metal 0, cloth material kept, back untouched")
 
 # 5) 건너뛰면 결과 화면에 이유

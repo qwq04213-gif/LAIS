@@ -30,7 +30,7 @@ for n in ("clip_g.safetensors",): mk("text_encoders", n)
 SUBMITTED.clear(); j = wait(post("/api/job", {"kind": "gen", "gengine": "sd35", "fx_model": "sd3.5_large_fp8_scaled.safetensors", "prompt": "a cat", "w": 512, "h": 512})["id"]); assert j["state"] == "done", j
 t = cls(SUBMITTED[-1], "TripleCLIPLoader")[0]; assert t == {"clip_name1": "clip_l.safetensors", "clip_name2": "clip_g.safetensors", "clip_name3": "t5xxl_fp8_e4m3fn_scaled.safetensors"}, t; ok("SD3.5 Large: TripleCLIPLoader with clip_l + clip_g + T5")
 # ── 저장된 메타데이터 · 계열 이름
-img = sorted((hub.OUT / "생성").glob("*.png"))[-1]
+img = sorted(hub.out_files(hub.OUT / "생성", {".png"}))[-1]
 from PIL import Image as I
 assert "gen-" in str(I.open(img).text.get("parameters", I.open(img).info)) or True
 import modelinfo

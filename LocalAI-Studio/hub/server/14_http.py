@@ -183,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "image failed"}, 500)
         if u.startswith("/thumb/"):
             fp = out_path(u[7:])
-            if fp.suffix.lower() not in GAL_IMG or not fp.is_file():
+            if (fp.suffix.lower() not in GAL_IMG and fp.suffix.lower() != ".glb") or not fp.is_file():
                 return self.send_json({"error": "not found"}, 404)
             try:
                 return self.send_bytes(thumb_bytes(fp), "image/jpeg", extra={"Cache-Control": "max-age=3600"})

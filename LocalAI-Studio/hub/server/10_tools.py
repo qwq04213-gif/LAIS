@@ -362,11 +362,18 @@ def thumb_bytes(path, w=320):
             return cp.read_bytes()
         except OSError:
             pass
-    with Image.open(path) as im:
-        im = ImageOps.exif_transpose(im).convert("RGB")
-        im.thumbnail((w, w))
+    if path.suffix.lower() == ".glb":                  # 3D: 앞에서 본 그림을 그려서 미리보기로(갤러리에서 저절로 보이게)
+        import photoproj
+        im = photoproj.preview(path.read_bytes(), w * 2)
+        im = im.resize((w, w), Image.LANCZOS)
         b = io.BytesIO()
-        im.save(b, "JPEG", quality=80)
+        im.save(b, "JPEG", quality=85)
+    else:
+        with Image.open(path) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            im.thumbnail((w, w))
+            b = io.BytesIO()
+            im.save(b, "JPEG", quality=80)
     try:
         d.mkdir(parents=True, exist_ok=True)
         for old in list(_thumb_files(d, name)):            # 이 파일의 예전(원본이 바뀌기 전) 미리보기

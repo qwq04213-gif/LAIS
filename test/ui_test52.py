@@ -31,7 +31,7 @@ with sync_playwright() as p:
     pg.click(".pe-tools [data-tool=crop]"); pg.mouse.move(X(10), Y(10)); pg.mouse.down(); pg.mouse.move(X(210), Y(160), steps=4); pg.mouse.up(); pg.click("#pe-cropok")
     w, h = pg.evaluate("[document.querySelector('#pe-cv').width,document.querySelector('#pe-cv').height]"); assert abs(w - 200) <= 2 and abs(h - 150) <= 2, (w, h); ok(f"crop → {w}×{h}")
     pg.click("#pe-rotr"); assert pg.evaluate("document.querySelector('#pe-cv').width") == h; ok("rotate 90°")
-    pg.click("#pe-save"); pg.wait_for_timeout(800); saved = list((hub.OUT / "사진 편집").glob("*.png")); assert saved and Image.open(saved[0]).size == (h, w), saved; ok("saved into outputs/사진 편집")
+    pg.click("#pe-save"); pg.wait_for_timeout(800); saved = list(hub.out_files(hub.OUT / "사진 편집", {".png"})); assert saved and Image.open(saved[0]).size == (h, w), saved; ok("saved into outputs/사진 편집")
     pg.locator("#v-photo details.more summary").click(); pg.click("[data-pto=up]"); pg.wait_for_selector("#v-up.on"); ok("send the edit to another screen")
     # 영상 편집
     pg.click("nav button[data-v=vedit]"); pg.wait_for_selector("#ve-list .verow"); assert pg.locator("#ve-list .verow").count() == 2

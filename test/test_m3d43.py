@@ -42,7 +42,7 @@ ok("object size vs recommended 1024px shown; [enlarge] upscales the cut-out (alp
 # 방향 하나만 그리기 + 결과 폴더 저장
 j = job({"kind": "m3d", "op": "views", "id": sid, "sides": ["back"]}); assert j["state"] == "done", j
 assert j["m3d"]["slots"]["back"] and not j["m3d"]["slots"]["left"] and len(j["images"]) == 1 and "/3D/" in j["images"][0]
-meta = json.loads((hub.OUT / "3D" / (j["images"][0].rsplit("/", 1)[1] + ".json")).read_text(encoding="utf-8")) if (hub.OUT / "3D" / (j["images"][0].rsplit("/", 1)[1] + ".json")).is_file() else None
+meta = json.loads((Path(str(hub.out_path(j["images"][0][5:])) + ".json")).read_text(encoding="utf-8")) if (Path(str(hub.out_path(j["images"][0][5:])) + ".json")).is_file() else None
 assert Image.open(io.BytesIO(urllib.request.urlopen(B + j["images"][0]).read())).mode == "RGBA"
 j = job({"kind": "m3d", "op": "tpose", "id": sid}); assert j["state"] == "done" and len(j["images"]) == 1 and "/3D/" in j["images"][0], j
 ok("drawing a single side only; side and T-pose drawings are also saved in outputs/3D")
@@ -59,7 +59,7 @@ assert node(cls("PreviewAny")[0]["source"]) == "MoGeGeometryToFOV"              
 assert cls("ImageCropToMask")[0]["pad_factor"] == 1.1 and cls("MoGeGeometryToFOV")[0]["axis"] == "horizontal" and cls("LoadMoGeModel")[0]["model_name"].startswith("moge")
 assert cls("UNETLoader")[0]["unet_name"] == "pixal3d_int8_convrot.safetensors" and cls("CLIPVisionLoader")[0]["clip_name"] == "dino_v3_L_naf_fp32.safetensors"
 assert cls("Trellis2UpsampleStage")[0]["target_resolution"] == 1536 and cls("BakeTextureFromVoxel")[0]["texture_size"] == 4096 and not cls("Trellis2Conditioning")
-side = json.loads((hub.OUT / "3D" / (j["images"][0].rsplit("/", 1)[1] + ".json")).read_text(encoding="utf-8")); assert side["engine"] == "Pixal3D"
+side = json.loads((Path(str(hub.out_path(j["images"][0][5:])) + ".json")).read_text(encoding="utf-8")); assert side["engine"] == "Pixal3D"
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "", "engine3": "trellis"}); assert j["state"] == "done" and cls("Trellis2Conditioning") and not cls("Pixal3DConditioning"), j
 (M / files_of("pixal3d")[-1]).unlink()                                                       # MoGe 없음 → 기본 화각
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); assert j["state"] == "done" and any("MoGe" in w for w in j["warn"]), j

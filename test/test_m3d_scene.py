@@ -83,7 +83,7 @@ names = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(B + z).read())).nameli
 lay = json.loads(zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(B + z).read())).read("layout.json")); assert "AI 추정값" in lay["note"] and len(lay["objects"]) == 2
 st = j["m3d_stats"]["scene"]; assert len(st) == 2 and all(x["height"] > 0 and x["dist"] >= 2 for x in st) and "AI 어림값" in j["msg"]
 assert any("Blender" not in w for w in j.get("warn") or [""]) and not list(d.glob("scene_*/")) and not list(d.glob("*.zip"))
-side = json.loads((hub.OUT / "3D" / (glb.rsplit("/", 1)[1] + ".json")).read_text(encoding="utf-8")); assert side["engine"] == "TRELLIS.2 장면" and side["objects"] == 2
+side = json.loads((Path(str(hub.out_path(glb[5:])) + ".json")).read_text(encoding="utf-8")); assert side["engine"] == "TRELLIS.2 장면" and side["objects"] == 2
 ok("scene build: one TRELLIS.2 run per object, merged scene GLB shown, zip has scene + per-object GLBs + layout.json, AI-estimate note")
 n0 = len(SUBMITTED)
 j = job({"kind": "m3d", "op": "scene", "id": sid, "blender": "", "fill": True, "fast": "on"}); assert j["state"] == "done", j

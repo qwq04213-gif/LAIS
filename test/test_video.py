@@ -32,8 +32,8 @@ assert by["CLIPLoader"]["type"] == "wan" and by["ModelSamplingSD3"]["shift"] == 
 assert by["KSampler"]["sampler_name"] == "uni_pc" and by["KSampler"]["cfg"] == 5.0 and by["KSampler"]["seed"] == 7
 assert "色调艳丽" in [n["inputs"]["text"] for n in g.values() if n["class_type"] == "CLIPTextEncode"][1]
 url = j["images"][0]; assert url.endswith(".mp4") and "/%EC%98%81%EC%83%81/" in url, url
-f = OUT_FILE = hub.OUT / "영상" / url.split("/")[-1]; assert f.is_file() and f.read_bytes()[4:8] == b"ftyp"
-side = json.loads((hub.OUT / "영상" / (url.split("/")[-1] + ".json")).read_text(encoding="utf-8")); assert side["frames"] == 73 and side["seed"] == 7 and side["prompt"].split()[0] in ("red", "blue")
+f = OUT_FILE = hub.out_path(url[5:]); assert f.is_file() and f.read_bytes()[4:8] == b"ftyp"
+side = json.loads((Path(str(hub.out_path(url[5:])) + ".json")).read_text(encoding="utf-8")); assert side["frames"] == 73 and side["seed"] == 7 and side["prompt"].split()[0] in ("red", "blue")
 ok("text-to-video: Wan graph (latent 832x480x73, wan clip, SD3 shift, CreateVideo->SaveVideo), mp4 + settings sidecar saved to outputs/영상")
 # 서버: 재생(Range)
 r = urllib.request.urlopen(B + url); assert r.headers["Content-Type"] == "video/mp4" and r.headers["Accept-Ranges"] == "bytes"; full = r.read()
