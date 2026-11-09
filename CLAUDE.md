@@ -62,12 +62,14 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.4.1**(커밋 `v4.4.1`). 다음 판 **4.5**.
+마지막 출시: **4.5**(커밋 `v4.5`). 다음 판 **4.6**.
 
 ### 다음 할 일
 
-0. 출시 전(4.5 에 함께): 3D 밉맵(`photoproj.fix_samplers`)·사진 점검 얼굴 크기(`m3d_face_stats`)·가장자리 손질(`m3d_defringe`)·사진 붙인 곳 그늘 줄이기·피부 거칠기·색감 맞추기(`_adjust_orm`·`_color_match`)·붙이기 결과 표시(`m3d_photo_res`)·머리 전용 텍스처(`photoproj.head_split`, 옵션 `head`). README 는 출시 때(미검증: 실제 Pixal3D 결과에서 머리 고르기·노멀맵 방향·피부 판정)
+0. 사용자가 4.5 로 실제 3D(전신 사진)를 만들어 결과 zip 을 보내 주면, 앞·45°·옆·뒤와 옷·손·머리카락·이음새를 그려서 점검하기(시험 도구: 가짜 3D 대신 실제 GLB 를 `photoproj`·렌더러로)
 1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
+
+4.5: 3D 얼굴 고해상도(`photoproj.head_split` — 공처럼 펼침, 중심=얼굴 앞면에서 머리 두께 절반 뒤, 반경 0.8×얼굴, 겹침·외딴 조각은 몸으로), 밉맵(`fix_samplers`), 가장자리 손질(`m3d_defringe`), 그늘 줄이기·피부 거칠기·색감 맞추기, 사진 위치(줄 단위 범위)·원근(Pixal3D 화각 `PreviewAny` → `dist_e`), 결과 표시(`m3d_photo_res`). 실제 사진 시험 `test/test_m3d_real.py`
 
 4.4.1: 남은 시간을 작업 전체 진행률로 한 곳에서 어림(`08_jobs.py` `eta_update`·`eta_loop` 1초마다, 같은 종류 작업의 진행 곡선 `eta_history.json` — `eta_key`/`eta_learn`), 화면 표시는 `00-core.js` 의 `fmtEta`·`fmtEl`·`etaTxt` 하나로
 
@@ -82,6 +84,7 @@ Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양�
 ### 미검증(실제 PC 에서 확인 필요)
 
 - 남은 시간: 실제 ComfyUI 작업(영상·3D·하이레스)에서의 정확도
+- 3D 머리 전용 텍스처: 실제 Pixal3D 결과에서 머리 범위(목·어깨 경계)·노멀맵 방향·피부 판정
 - 3D 사진 붙이기: 실제 Pixal3D·TRELLIS.2 GLB 의 좌표·원근에서 붙는 위치, MediaPipe 얼굴 찾기. 윈도우에서 모델 지운 뒤 실제 용량 감소
 - TRELLIS.2·Pixal3D 실제 결과 — 4.1 에서 ComfyUI 공식 예시(workflow_templates `3d_pixal3d_trellis2_image_to_model`)와 같게 맞춤:
   구조 CFGOverride(0.667)+RescaleCFG 0.7+shift 5, 모양 CFGOverride(0.769)+RescaleCFG 0.5·20단계, RemeshMesh `solid`. 멀티뷰 방향: 왼쪽 그림 = 얼굴이 그림 왼쪽
