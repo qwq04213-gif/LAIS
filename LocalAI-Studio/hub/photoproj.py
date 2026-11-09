@@ -555,18 +555,21 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
 # 게임 회사들은 머리를 따로 떼어 자기 텍스처를 줘요(카메라에 가까이 잡히는 얼굴에 해상도를 몰아줘요).
 # 몸 전체가 텍스처 한 장을 나눠 쓰면 얼굴 몫은 5% 남짓이라, 사진을 아무리 키워 붙여도 그 크기로 줄어들어요.
 # 머리 둘레를 원통처럼 펼치되 앞쪽 반(±90°)에 가로 70% 를 줘요 → 얼굴이 텍스처의 절반 가까이를 써요.
-HEAD_BOX = (1.05, 0.95, 0.3)     # 얼굴 크기 기준 머리 상자: 좌우 반폭, 위로(머리카락), 아래로(턱·목)
+HEAD_BOX = (1.05, 0.95, 0.15)    # 얼굴 크기 기준 머리 상자: 좌우 반폭, 위로(머리카락), 아래로(턱 밑 조금)
+HEAD_R = 0.8                     # 머리 가운데에서 얼굴 크기의 이만큼 안쪽만 머리로(어깨·목둘레 링은 몸 텍스처 그대로)
 HEAD_DEPTH = (0.6, 1.7)          # 얼굴 앞면 깊이 기준 앞쪽·뒤쪽 범위(얼굴 크기 배수)
 
 
-def _head_uv(Q, cam, hmin, hmax):
-    """머리 가운데 기준 좌표 → (u, v). 앞(카메라 쪽)이 u=0.5, 뒤가 u=0/1(이음새)."""
+def _head_uv(Q, cam, pmin, pmax):
+    """머리 가운데 기준 좌표 → (u, v): 공처럼 펼쳐요. u 는 둘레(앞이 0.5, 뒤가 0/1 이음새, 앞쪽 반에 가로 70%),
+    v 는 정수리에서 아래로 내려간 각도 — 정수리·어깨처럼 위아래를 향한 면도 눌리지 않고 자리를 받아요."""
     a, bb, h = Q @ cam.r, Q @ cam.b, Q @ cam.u
     th = np.arctan2(a, bb)
     hp = np.pi / 2
     u = np.where(np.abs(th) <= hp, 0.5 + 0.35 * th / hp, np.where(th > 0, 0.85 + 0.15 * (th - hp) / hp, 0.15 + 0.15 * (th + hp) / hp))
-    v = (hmax - h) / max(1e-9, hmax - hmin)
-    return u, np.clip(v, 0.002, 0.998)
+    ph = np.arctan2(np.hypot(a, bb), h)               # 0 = 정수리, π = 바로 아래
+    v = (ph - pmin) / max(1e-9, pmax - pmin)
+    return u, np.clip(v, 0.002, 0.998), ph
 
 
 def _frames(P3, UV3, N):
@@ -619,21 +622,60 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     fw = max(np.ptp(Qf @ cam.r), np.ptp(Qf @ cam.u))
     zf = float(np.percentile(pd[inf], 10))
     zr = fw
+    cf = P[inf].mean(0)                                 # 펼치는 중심 = 얼굴 앞면에서 이 3D 의 머리 두께 절반만큼 뒤
+    inb = (px > x0) & (px < x1) & (py > y0) & (py < y1)
+    thick = float(np.percentile(pd[inb], 95) - np.percentile(pd[inf], 5)) if inb.sum() > 20 else fw
+    ctr = cf - cam.view(cf[None])[0] * 0.5 * min(max(thick, 0.2 * fw), 2.0 * fw)
     cen = P[F].mean(1)
     cx, cy, cd = cam.px(cen)
     sel = (cx > hx0) & (cx < hx1) & (cy > hy0) & (cy < hy1) & (cd > zf - HEAD_DEPTH[0] * zr) & (cd < zf + HEAD_DEPTH[1] * zr)
+    sel &= np.linalg.norm(cen - ctr, axis=1) < HEAD_R * fw     # 머리 가운데에서 머리 크기 안쪽만(어깨·목둘레는 빼요)
     if sel.sum() < 50 or sel.mean() > 0.85:
         raise ValueError("머리 부분을 고르지 못했어요")
     hf = np.nonzero(sel)[0]
     FH = F[hf]
     P3 = P[FH]                                         # (Mh, 3, 3) 머리 삼각형 모서리
-    ctr = P3.reshape(-1, 3).mean(0)
-    hh = (P3.reshape(-1, 3) - ctr) @ cam.u
-    hmin, hmax = hh.min(), hh.max()
-    u, v = _head_uv(P3.reshape(-1, 3) - ctr, cam, hmin, hmax)
-    U3, V3 = u.reshape(-1, 3), v.reshape(-1, 3)
+    Qh = P3.reshape(-1, 3) - ctr
+    phs = np.arctan2(np.hypot(Qh @ cam.r, Qh @ cam.b), Qh @ cam.u)
+    u, v, ph = _head_uv(Qh, cam, phs.min(), phs.max())
+    U3, V3, PH3 = u.reshape(-1, 3), v.reshape(-1, 3), ph.reshape(-1, 3)
+    pole = (PH3.min(1) < 0.08) & (U3.max(1) - U3.min(1) > 0.2)   # 정수리 꼭짓점을 둘러싼 몇 개: 둘레 방향이 정해지지 않아
+    if pole.any():                                     # 작은 삼각형으로 모아 붙여요(색은 3D 위치로 가져와서 제대로 나와요)
+        mu = U3[pole][:, 0:1]
+        U3[pole] = mu + np.array([[-0.004, 0.0, 0.004]])
     seam = U3.max(1) - U3.min(1) > 0.5                 # 뒤쪽 이음새를 넘는 삼각형: 작은 쪽을 +1(텍스처는 가로로 되풀이)
     U3 = np.where(seam[:, None] & (U3 < 0.5), U3 + 1, U3)
+    # 공처럼 펼치면 머리 둘레 밖의 것(목둘레 링·어깨)이 머리와 같은 자리에 겹치거나 실처럼 늘어나요 → 그런 조각은 머리에서 빼요(원래 몸 텍스처 그대로)
+    a3 = np.linalg.norm(np.cross(P3[:, 1] - P3[:, 0], P3[:, 2] - P3[:, 0]), axis=1) / 2
+    auv = np.abs((U3[:, 1] - U3[:, 0]) * (V3[:, 2] - V3[:, 0]) - (U3[:, 2] - U3[:, 0]) * (V3[:, 1] - V3[:, 0])) / 2
+    ratio = auv / np.maximum(a3, 1e-15)
+    keep_h = ratio > np.median(ratio[a3 > 0]) / 25 if (a3 > 0).any() else np.ones(len(hf), bool)
+    LS = 2048
+    pxy = np.stack([U3, V3], -1) * LS
+    dupe = np.nonzero(seam)[0]
+    oxy = np.concatenate([pxy.reshape(-1, 2), (pxy[dupe] - [LS, 0]).reshape(-1, 2)])
+    own = np.concatenate([np.arange(len(hf)), dupe])
+    dz = np.linalg.norm(P3 - ctr, axis=2)
+    oz = np.concatenate([dz.reshape(-1), dz[dupe].reshape(-1)])
+    OF = np.arange(len(oxy)).reshape(-1, 3)
+    _, tall, _, _ = raster(oxy, OF, LS, LS)
+    _, twin, _, _ = raster(oxy, OF, LS, LS, oz)          # 같은 자리면 머리 가운데에 더 가까운 면이 차지해요
+    tot = np.bincount(own[tall], minlength=len(hf))
+    won = np.bincount(own[twin], minlength=len(hf))
+    keep_h &= (tot == 0) | (won >= 0.98 * tot)
+    # 외따로 떨어진 머리 조각은 몸으로 돌려보내요(이웃 없이 혼자 펼쳐지면 둘레가 빈칸 색으로 칠해져 점박이가 돼요)
+    inH = np.zeros(len(F), bool)
+    inH[hf[keep_h]] = True
+    vt = np.bincount(F.ravel(), minlength=len(P)).astype(np.float32)
+    for _ in range(3):
+        vh = np.bincount(F[inH].ravel(), minlength=len(P)).astype(np.float32)
+        fr = vh / np.maximum(vt, 1)
+        inH &= fr[F].mean(1) >= 0.6
+    keep_h &= inH[hf]
+    if keep_h.sum() < 50:
+        raise ValueError("머리 부분을 펼치지 못했어요")
+    if not keep_h.all():
+        hf, FH, P3, U3, V3, seam = hf[keep_h], FH[keep_h], P3[keep_h], U3[keep_h], V3[keep_h], seam[keep_h]
     NUV3 = np.stack([U3, V3], -1)                      # (Mh, 3, 2)
     OUV3 = UV[FH]
     N3 = N[FH] if N is not None else np.repeat(n_face[hf][:, None], 3, 1)
@@ -658,11 +700,13 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     tex = np.zeros((TS, TS, 3), np.float32)
     done = np.zeros((TS, TS), bool)
     CH = 20000                                         # 삼각형을 나눠 처리해요(4096 텍스처도 메모리를 적게)
+    hit = np.zeros(len(hf), bool)                      # 텍스처 칸을 하나라도 받은 삼각형
     for k0 in range(0, len(FF), CH):
         tp, tf, c0, c1 = raster(xy, FF[k0:k0 + CH], TS, TS)
         if not len(tp):
             continue
         t = owner[tf + k0]
+        hit[t] = True
         c = np.stack([c0, c1, 1 - c0 - c1], 1)
         X = (P3[t] * c[..., None]).sum(1)
         ouv = (OUV3[t] * c[..., None]).sum(1)
@@ -697,7 +741,22 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
             nn = np.stack([(wv * T2).sum(1), (wv * B2).sum(1), (wv * Nn).sum(1)], 1)
             nn /= np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-12)
             nt[ty, tx] = (nn + 1) * 127.5
+    miss = np.nonzero(~hit)[0]                         # 1칸보다 작은 삼각형: 가운데 칸에 제 색을 찍어요(안 그러면 빈칸 채움색이 점처럼 보여요)
+    if len(miss):
+        cuv = NUV3[miss].mean(1)
+        mx = np.mod(cuv[:, 0] * TS, TS).astype(np.int64)
+        my = np.clip(cuv[:, 1] * TS, 0, TS - 1).astype(np.int64)
+        ou = OUV3[miss].mean(1)
+        free = ~done[my, mx]
+        tex[my[free], mx[free]] = _sample(base, ou[free, 0] * BW, ou[free, 1] * BH)
+        if has_nm:
+            nt[my[free], mx[free]] = (127.5, 127.5, 255)
+        done[my[free], mx[free]] = True
     del base
+    tex, done2 = _spread(tex, done.copy(), 6)          # 빈칸은 이웃 색으로 넉넉히
+    done = done2 if done2.sum() > done.sum() else done
+    if done.any():                                     # 그래도 남은 빈칸은 머리 평균색으로(검게 비지 않게)
+        tex[~done] = tex[done].mean(0)
     tex, dn = _spread(tex, done.copy(), 3)
     imgs = [("base", tex)]
     if has_nm:
