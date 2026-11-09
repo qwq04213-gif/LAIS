@@ -43,19 +43,19 @@ function selSummary(){const box=$('#sel-sum');if(!box)return;
   box.innerHTML=ids.length?(todo.length?`<b>선택한 항목 ${ids.length}개</b> — ${todo.map(m=>esc(m.name)).join(' · ')}<br><small>함께 필요한 파일까지 합쳐 약 ${gb.toFixed(1)}GB를 받아요.</small>`:'<b>선택한 항목은 이미 모두 설치돼 있어요.</b>'):'<span class="mute">받을 모델을 체크하면 여기에 무엇을 얼마나 받는지 보여 줘요.</span>'}
 document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))selSummary()});
 /* 사양별 추천: 그래픽카드 메모리(VRAM) 8/12/16/24GB 에서 기능마다 어떤 모델·설정이 알맞은지. ids 는 '이 구성 고르기'로 체크할 항목 */
-const TIERS=[
-  {gb:8,rows:{chat:[['qwen3-8b'],'대화·번역은 8B 가 알맞아요'],gen:[['noobai','realvisxl5','sdxl-vae-fix'],'SDXL 계열(그림체 NoobAI · 실사 RealVis)'],
-    edit:[['qwen-image','qwen-te-small','qwen-lightning'],'작은 텍스트 인코더 + 빠르게(4단계). RAM 32GB 이상 필요, 느려요'],vid:[['ltx-video'],'LTX-Video 로 짧고 작게'],
-    aud:[['stable-audio-open'],'짧은 효과음·음악'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['esrgan','esrgan-anime','seedvr2'],'흐린 사진은 SeedVR2 3B(AI 복원)']}},
-  {gb:12,rows:{chat:[['qwen3-14b'],''],gen:[['noobai','z-image-turbo','krea-dev','sdxl-vae-fix'],'Z-Image-Turbo(빠른 실사) · FLUX Krea 는 12GB 부터'],
-    edit:[['qwen-image','qwen-te-small','qwen-lightning'],'작은 텍스트 인코더로 여유 있게'],vid:[['wan22-ti2v-5b','ltx-video','wan-vace'],'Wan 2.2 5B 기본 길이'],
-    aud:[['ace-step-15-turbo'],'노래(가사) 만들기'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan','ultrasharp'],'SeedVR2 3B(AI 복원)']}},
-  {gb:16,rows:{chat:[['qwen3-14b','qwen25vl-7b'],'사진 보는 대화는 Qwen2.5-VL'],gen:[['krea2-turbo','z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Krea 2 Turbo · Z-Image-Turbo · FLUX 3 Klein'],
-    edit:[['qwen-image','qwen-lightning'],'기본 텍스트 인코더'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v','ltx25'],'Wan 2.2 14B + 4단계 가속, 말하는 영상, LTX-2.5(소리까지)'],
-    aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['seedvr2-7b','esrgan','ultrasharp'],'SeedVR2 7B(AI 복원 · 고화질)']}},
-  {gb:24,rows:{chat:[['qwen3-32b','qwen25vl-7b'],'32B 로 더 똑똑하게'],gen:[['krea2-turbo','z-image-turbo','flux3-klein-base','chroma-hd'],'큰 모델 여러 개를 바꿔 가며'],
-    edit:[['qwen-image','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['ltx25','wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'LTX-2.5(소리까지) · 14B 를 길게'],
-    aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['seedvr2-7b','esrgan','ultrasharp'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
+const TIERS=[      // 그 메모리에서 실제로 돌아가는 가장 최신 모델(2026년 11월 기준, 공식 자료·사용자 측정 참고)
+  {gb:8,rows:{chat:[['qwen35-9b','gemma4-e4b'],'Qwen3.5 9B · Gemma 4 E4B(사진도 봐요)'],gen:[['flux3-klein','z-image-turbo','noobai','sdxl-vae-fix'],'FLUX 3 Klein(공식 8GB) · Z-Image-Turbo(느림) · 그림체는 NoobAI'],
+    edit:[['flux3-klein'],"'말로 편집 (FLUX 3 Klein)' — Qwen-Image 는 8GB 에 버거워요"],vid:[['wan22-ti2v-5b','ltx-video'],'Wan 2.2 5B 를 짧고 작게 · 빠른 미리보기는 LTX-Video'],
+    aud:[['stable-audio-3'],'효과음·연주곡'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원) · Real-ESRGAN']}},
+  {gb:12,rows:{chat:[['qwen35-9b','gemma4-e4b'],'Qwen3.5 9B'],gen:[['z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Z-Image-Turbo · FLUX 3 Klein'],
+    edit:[['qwen-image-turbo','qwen-image','qwen-te-small','flux3-klein'],'Qwen-Image 2.1 Turbo(작은 텍스트 인코더) · FLUX 3 Klein'],vid:[['wan22-ti2v-5b','wan-vace'],'Wan 2.2 5B 기본 길이 · VACE'],
+    aud:[['ace-step-15-turbo','stable-audio-3'],'노래는 ACE-Step 1.5'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원)']}},
+  {gb:16,rows:{chat:[['gemma4-26b','qwen35-9b'],'Gemma 4 26B(MoE, 빠름)'],gen:[['krea2-turbo','z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Krea 2 Turbo · Z-Image-Turbo · FLUX 3 Klein'],
+    edit:[['qwen-image','qwen-image-turbo','qwen-lightning','moss-image-edit'],'Qwen-Image 2.1(+Turbo) · MOSS 편집'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
+    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}},
+  {gb:24,rows:{chat:[['qwen35-27b','gemma4-26b'],'Qwen3.5 27B — 가장 똑똑해요'],gen:[['krea2-turbo','flux3-klein-base','z-image-turbo','chroma-hd'],'큰 모델 여러 개를 바꿔 가며'],
+    edit:[['qwen-image','qwen-image-turbo','qwen-lightning','moss-image-edit'],'여러 장 합치기도 넉넉해요'],vid:[['ltx25','wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'LTX-2.5(소리까지, RAM 64GB) · Wan 2.2 14B'],
+    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
 const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};
 const tierOf=v=>v>=22?24:v>=15?16:v>=11?12:8;
 function tierPaint(){const box=$('#tiers');if(!box)return;const all=[...CATALOG_NOW.llm,...CATALOG_NOW.image],by=Object.fromEntries(all.map(m=>[m.id,m]));

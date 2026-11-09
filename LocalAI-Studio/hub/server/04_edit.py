@@ -262,6 +262,27 @@ def edit_moss(p, J, img, mask, grow, feather, rng):
     return [(res, info, None)]
 
 
+def edit_flux3k(p, J, img, mask, grow, feather, rng):
+    """말로 편집 (FLUX 3 Klein): 생성용 모델을 그대로 써요. INT8 이면 VRAM 8GB 에서도 돌아요."""
+    p2 = dict(p, fx_model=p.get("k_model") or "")
+    sel, te, vae = ox_setup(p2, J, "flux3k")
+    if not has_node("ReferenceMultiLatent"):
+        raise RuntimeError("이 ComfyUI 는 FLUX 3 Klein 편집(ReferenceMultiLatent)을 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    text, tags = prep(p, J, "sentence", rng)
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    base = "base" in sel.lower()
+    q = dict(unet=sel, te=te["qwen3vl"], vae=vae, loras=collect_loras(p, tags, J), prompt=text, seed=seed_of(p),
+             steps=50 if base else 16, cfg=3.5 if base else 1.0, mp=clamp(num(p, "q_mp", 1.0), 0.3, 4.0))
+    J["msg"] = "편집 중 (FLUX 3 Klein)"
+    res = run_wf(flows.wf_flux3k_edit(q, put_input(img, J)), J)[0]
+    if mask:
+        res = Image.composite(res.resize(img.size, RS.LANCZOS), img, grow_feather(mask, grow, feather))
+    info = dict(kind="edit-flux3k", prompt=text, negative="", steps=q["steps"], cfg=q["cfg"], sampler="euler", scheduler="simple", seed=q["seed"],
+                w=res.width, h=res.height, model=sel, loras=[[n, w_] for n, w_ in q["loras"]], extra={"Engine": "FLUX 3 Klein"})
+    return [(res, info, None)]
+
+
 def do_edit(p, J):
     img = load_img(p["image"])
     mask = load_mask(p.get("mask"), img.size)
@@ -296,6 +317,8 @@ def do_edit(p, J):
         return [(out, info_sd(q, out.size, "edit-sdxl", **extra), None)]
     if p.get("engine") == "moss":
         return edit_moss(p, J, img, mask, grow, feather, rng)
+    if p.get("engine") == "flux3k":
+        return edit_flux3k(p, J, img, mask, grow, feather, rng)
     text, tags = prep(p, J, "sentence", rng)
     q = qwen_params(p, text, tags, J)
     refs = [load_img(p[k]) for k in ("ref1", "ref2") if p.get(k)]

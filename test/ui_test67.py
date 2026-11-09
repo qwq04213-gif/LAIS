@@ -20,9 +20,9 @@ with sync_playwright() as p:
     assert all(set(t["rows"]) == set(tiers[0]["rows"]) for t in tiers)
     ok("VRAM table: 8/12/16/24GB columns, my PC (12GB) marked, every function row, every model exists in the catalog")
     pg.click("[data-tier='24']"); ch = pg.eval_on_selector_all("#v-setup .item input:checked", "e=>e.map(x=>x.value)")
-    assert "qwen3-32b" in ch and "wan22-14b-i2v" in ch and "noobai" not in ch and "선택한 항목" in pg.inner_text("#sel-sum"), ch
+    assert "qwen35-27b" in ch and "ltx25" in ch and "wan22-14b-i2v" in ch and "noobai" not in ch and "선택한 항목" in pg.inner_text("#sel-sum"), ch
     pg.click("#rec"); ch = pg.eval_on_selector_all("#v-setup .item input:checked", "e=>e.map(x=>x.value)")
-    assert "qwen3-14b" in ch and "wan22-ti2v-5b" in ch and "qwen3-32b" not in ch and "wan22-14b-i2v" not in ch, ch
+    assert "gemma4-e4b" in ch and "wan22-ti2v-5b" in ch and "ltx25" not in ch and "wan22-14b-i2v" not in ch, ch
     ok("'이 구성 고르기' checks that tier's models; '내 GPU에 맞춰 고르기' uses my tier")
     for v, want in ((6, 8), (8, 8), (12, 12), (16, 16), (24, 24), (32, 24)): assert pg.evaluate(f"tierOf({v})") == want, v
     pg.set_viewport_size({"width": 900, "height": 800}); pg.wait_for_timeout(200)

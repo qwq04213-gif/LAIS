@@ -167,10 +167,12 @@
       <select name="engine">
         <option value="qwen">말로 편집 (Qwen-Image 2.1)</option>
         <option value="moss">말로 편집 (MOSS-Image, 시험 중)</option>
+        <option value="flux3k">말로 편집 (FLUX 3 Klein · 가벼움, 8GB)</option>
         <option value="sdxl">칠해서 편집 (SDXL 인페인트)</option>
         <option value="flux">칠해서 편집 (FLUX · Krea · Krea 2 · Chroma)</option>
       </select></label>
     <label class="f">원하는 변화<textarea name="prompt" rows="4"></textarea></label>
+    <p class="hint fk">문장으로 지시하세요. 예: <b>귀걸이를 큰 금속 장식 귀걸이로 바꾸고 나머지는 그대로</b><br>이미지 생성에서 받은 FLUX 3 Klein 모델을 그대로 써요(그래픽카드 8GB 에서도 돼요). 칠한 영역이 있으면 그 부분만 바뀌어요.</p>
     <p class="hint moss">문장으로 지시하세요. 예: <b>분홍 재킷만 검은 울 코트로 바꾸고 얼굴·배경은 그대로</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 바꿀 것과 그대로 둘 것을 함께 적으면 잘 돼요.</p>
     <p class="hint qwen">문장으로 지시하세요. 예: <b>재킷을 붉은 가죽으로 바꿔줘</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 참조 이미지는 <b>이미지 2의 옷을 입혀줘</b>처럼 번호로 불러요.</p>
     <p class="hint sdxl">칠한 영역에 그릴 내용만 영어 태그로 적어요. 예: <b>black silk robe, natural skin texture</b></p>
@@ -477,7 +479,7 @@
 <section class="view split" id="v-vid">
   <form id="f-vid" autocomplete="off" novalidate>
     <button class="go">영상 만들기</button>
-    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx25">LTX-2.5 — 최신 · 소리까지 (VRAM 16GB+)</option><option value="ltx">LTX-Video 0.9.8 — 아주 빠름 · 가벼움</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
+    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx25">LTX-2.5 — 최신 · 소리까지 (VRAM 24GB)</option><option value="ltx">LTX-Video 0.9.8 — 아주 빠름 · 가벼움</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
     <p class="hint plain" id="vid-more-note" hidden></p>
     <div class="f" id="vid-audio-row" hidden><span>목소리 (소리 파일 — 고른 길이만큼, 최대 30초)</span><span class="seedrow"><label class="ghost vpick">소리 파일 고르기<input type="file" id="vid-audio" accept="audio/*" hidden></label><button type="button" class="ghost sm" id="vid-audio-clear" hidden>빼기</button></span><audio id="vid-audio-pv" controls hidden></audio></div>
     <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. 안 되면 5B 를 쓰세요.</p>

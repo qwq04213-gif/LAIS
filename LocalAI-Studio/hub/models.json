@@ -15,6 +15,27 @@
    "ollama": "qwen3.5:4b"
   },
   {
+   "id": "qwen35-27b",
+   "name": "Qwen3.5 27B (똑똑한 대화·번역)",
+   "gb": 17,
+   "ollama": "qwen3.5:27b",
+   "desc": "Qwen3.5 의 큰 판 — 대화·번역·실행 모드가 9B 보다 훨씬 정확해요. 사진도 볼 수 있어요. VRAM 24GB 권장(16GB 는 일부를 RAM 으로 돌려 느려요). Apache-2.0."
+  },
+  {
+   "id": "gemma4-e4b",
+   "name": "Gemma 4 E4B (가벼운 대화·사진 보기)",
+   "gb": 9.6,
+   "ollama": "gemma4:e4b",
+   "desc": "Google 의 2026년 경량 모델. 한국어 대화·사진 설명이 자연스럽고 가벼워요. VRAM 8GB 이상. Gemma 라이선스."
+  },
+  {
+   "id": "gemma4-26b",
+   "name": "Gemma 4 26B MoE (빠른 큰 대화 모델)",
+   "gb": 18,
+   "ollama": "gemma4:26b",
+   "desc": "전체 26B 중 한 번에 4B 만 쓰는 구조라 크기에 비해 빨라요. 긴 글·번역·실행 모드에 좋아요. VRAM 16GB 이상(24GB 권장). Gemma 라이선스."
+  },
+  {
    "id": "qwen3-8b",
    "name": "Qwen3 8B Abliterated",
    "gb": 5.2,
@@ -180,7 +201,7 @@
    "id": "z-image-turbo",
    "name": "Z-Image-Turbo (빠른 실사·글자, int8)",
    "gb": 12.1,
-   "desc": "이미지 생성 > 모델 종류 'Z-Image-Turbo'. 8단계로 빠르게 고품질 실사·인물·글자(한자·영어)를 그려요. 요즘 ComfyUI 에서 가장 많이 쓰는 생성 모델 중 하나예요. Alibaba Tongyi, Apache-2.0. VRAM 12GB 이상 권장(8GB 는 느려요).",
+   "desc": "이미지 생성 > 모델 종류 'Z-Image-Turbo'. 6B 모델로 8단계에 고품질 실사·인물·글자(한자·영어)를 그려요. 요즘 ComfyUI 에서 가장 많이 쓰는 생성 모델 중 하나예요. Alibaba Tongyi, Apache-2.0. int8 이라 VRAM 8GB 에서도 돌지만 느려요(12GB 이상 권장).",
    "license": "Apache-2.0",
    "files": [
     {
@@ -200,9 +221,9 @@
   {
    "id": "flux3-klein",
    "name": "FLUX 3 Klein (빠른 증류판, int8)",
-   "gb": 15,
-   "desc": "이미지 생성 > 모델 종류 'FLUX 3 Klein'. 2026년 10월 Black Forest Labs 의 새 모델로, 16단계로 사실적인 사진과 긴 문장 이해에 강해요. VRAM 12GB 이상 권장. 라이선스는 Black Forest Labs 의 모델 페이지에서 확인해 주세요(상업 이용 조건이 있을 수 있어요).",
-   "license": "FLUX 3 Klein License",
+   "gb": 11,
+   "desc": "이미지 생성 > 모델 종류 'FLUX 3 Klein', 이미지 편집 > '말로 편집 (FLUX 3 Klein)'. 2026년 10월 Black Forest Labs 의 5.6B 모델로, 16단계로 사실적인 사진과 긴 문장 이해에 강하고 사진 편집도 돼요. int8 이라 VRAM 8GB 에서도 돌아요(공식). FLUX Kommunity 라이선스: 개인·연 매출 500만 달러 미만은 상업 이용 무료.",
+   "license": "FLUX Kommunity License",
    "files": [
     {
      "dir": "diffusion_models",
@@ -221,9 +242,9 @@
   {
    "id": "flux3-klein-base",
    "name": "FLUX 3 Klein Base (원본판 · 고품질·느림, int8)",
-   "gb": 15,
-   "desc": "FLUX 3 Klein 의 원본판 — 50단계·CFG 3.5 로 더 세밀하지만 3배쯤 느려요. LoRA 학습 기반으로도 좋아요. VRAM 12GB 이상. 라이선스는 모델 페이지에서 확인해 주세요.",
-   "license": "FLUX 3 Klein License",
+   "gb": 11,
+   "desc": "FLUX 3 Klein 의 원본판 — 50단계·CFG 3.5 로 더 세밀하지만 3배쯤 느려요. LoRA 학습 기반으로도 좋아요. int8, VRAM 8GB 부터(12GB 이상 권장). FLUX Kommunity 라이선스.",
+   "license": "FLUX Kommunity License",
    "files": [
     {
      "dir": "diffusion_models",
@@ -243,7 +264,7 @@
    "id": "stable-audio-3",
    "name": "Stable Audio 3 Medium (효과음·연주곡, 최대 3분)",
    "gb": 11,
-   "desc": "음악 만들기 > 만들 것 '효과음'에서 Stable Audio Open 대신 먼저 써요. 효과음·악기 소리·가사 없는 연주곡을 8단계로 빠르게, 최대 180초까지 만들어요. Stability AI(커뮤니티 라이선스: 연 매출 100만 달러 이하 무료). VRAM 8GB 이상.",
+   "desc": "음악 만들기 > 만들 것 '효과음'에서 Stable Audio Open 대신 먼저 써요. 효과음·악기 소리·가사 없는 연주곡을 8단계로 빠르게, 최대 180초까지 만들어요. Stability AI(커뮤니티 라이선스: 연 매출 100만 달러 이하 무료). VRAM 8GB 이상(길게 만들수록 메모리가 더 들어요).",
    "license": "Stability AI Community License",
    "files": [
     {
@@ -713,9 +734,9 @@
   },
   {
    "id": "ltx25",
-   "name": "LTX-2.5 22B (영상 + 소리, int8)",
+   "name": "LTX-2.5 22B (영상 + 소리, int8 · VRAM 24GB)",
    "gb": 52,
-   "desc": "영상 만들기 > 영상 모델 'LTX-2.5'. 2026년 Lightricks 의 최신 영상 모델로, 영상과 어울리는 소리까지 함께 만들어요. 절반 크기로 그린 뒤 2배로 키워 다듬어 선명해요(빠른 증류판, 11단계). VRAM 16GB 이상 + RAM 64GB 권장(24GB 면 넉넉). 가벼운 영상은 LTX-Video 0.9.8 이나 Wan 2.2 5B 를 쓰세요. LTX-2 커뮤니티 라이선스(연 매출 1천만 달러 이하 무료).",
+   "desc": "영상 만들기 > 영상 모델 'LTX-2.5'. 2026년 Lightricks 의 최신 영상 모델로, 영상과 어울리는 소리까지 함께 만들어요. 절반 크기로 그린 뒤 2배로 키워 다듬어 선명해요(빠른 증류판, 11단계). 모델(약 22GB)과 텍스트 인코더(약 15GB)가 커서 VRAM 24GB + RAM 64GB 이상이 현실적이에요(16GB 이하는 어려워요 — Wan 2.2 를 쓰세요). LTX-2 커뮤니티 라이선스(연 매출 1천만 달러 이하 무료).",
    "license": "LTX-2 Community License",
    "files": [
     {
@@ -747,7 +768,7 @@
    "requires": [
     "flux-common"
    ],
-   "desc": "영상 만들기 > 영상 모델 'LTX-Video 0.9.8'. 예전 판이지만 가벼워서 VRAM 8GB 에서도 돌아요(최신은 LTX-2.5). 글이나 사진으로 몇십 초 만에 짧은 영상을 만들어요(8단계). 화질은 Wan 보다 낮지만 훨씬 빨라요. T5 텍스트 인코더는 FLUX 공용 파일을 같이 써요. VRAM 8GB 이상.",
+   "desc": "영상 만들기 > 영상 모델 'LTX-Video 0.9.8'. 예전 판(2025)이지만 가벼워서 VRAM 8GB 에서도 몇십 초 만에 돌아요. 최신 LTX-2.5 는 24GB 가 필요해서, 8~16GB 에서 화질은 Wan 2.2 5B 가 더 좋아요. 글이나 사진으로 몇십 초 만에 짧은 영상을 만들어요(8단계). 화질은 Wan 보다 낮지만 훨씬 빨라요. T5 텍스트 인코더는 FLUX 공용 파일을 같이 써요. VRAM 8GB 이상.",
    "files": [
     {
      "dir": "checkpoints",

@@ -103,7 +103,7 @@ REQ = {"CheckpointLoaderSimple": ["ckpt_name"], "LoraLoader": ["model", "clip", 
        "IPAdapter": ["model", "ipadapter", "image", "weight", "weight_type", "start_at", "end_at"],
        "FaceDetailer": ["image", "model", "clip", "vae", "positive", "negative", "bbox_detector", "seed", "steps", "cfg", "sampler_name", "scheduler",
                         "denoise", "guide_size", "max_size", "feather", "bbox_threshold", "bbox_dilation", "bbox_crop_factor", "sam_detection_hint", "wildcard", "cycle"]}
-REQ.update({"CFGGuider": ["model", "positive", "negative", "cfg"], "TextEncodeMOSSImageEdit": ["clip", "prompt", "edit_format", "images.image_0"], "SkipLayerGuidanceDiTSimple": ["model"]})
+REQ.update({"CFGGuider": ["model", "positive", "negative", "cfg"], "TextEncodeMOSSImageEdit": ["clip", "prompt", "edit_format", "images.image_0"], "SkipLayerGuidanceDiTSimple": ["model"], "ReferenceMultiLatent": ["positive", "resolution"]})
 REQ.update({"LoadDA3Model": ["model_name", "weight_dtype"], "DA3Inference": ["da3_model", "image", "resolution", "mode"], "DA3Render": ["da3_geometry", "output"]})
 REQ.update({"SeedVR2Preprocess": ["resized_images"], "SeedVR2Conditioning": ["model", "vae_conditioning"],
             "SeedVR2PostProcessing": ["images", "original_resized_images", "color_correction_method"],

@@ -105,4 +105,9 @@ assert cls("SkipLayerGuidanceDiTSimple")[0]["single_layers"] == "22" and cls("Lo
 lat = cls("EmptyFlux2LatentImage")[0]; assert lat["width"] % 16 == 0 and lat["height"] % 16 == 0 and abs(lat["width"] / lat["height"] - 5 / 3) < 0.05
 assert cls("UNETLoader")[0]["unet_name"] == "moss_image_sft_int8_convrot.safetensors" and cls("VAELoader")[0]["vae_name"] == "flux2-vae_small.safetensors"
 ok("MOSS-Image edit: official graph (SFT + edit LoRA + SLG 22, 30 steps CFG 4), aspect kept, missing files → install")
+j = job({"kind": "edit", "engine": "flux3k", "image": png(), "prompt": "bigger earring"}); assert j["state"] == "done", j      # 생성용으로 받은 FLUX 3 Klein 을 그대로
+r = cls("ReferenceMultiLatent")[0]; assert r["resolution"] == "resize" and r["resolution.megapixels"] == 1.0 and node(r["images.image0"]) == "LoadImage" and node(r["negative"]) == "ConditioningZeroOut"
+k = cls("KSampler")[0]; assert (k["steps"], k["cfg"]) == (16, 1.0) and node(k["latent_image"]) == "ReferenceMultiLatent"
+j = job({"kind": "edit", "engine": "flux3k", "k_model": "flux3-image-klein-base-int8-convrot.safetensors", "image": png(), "prompt": "x"}); assert j["state"] == "done" and (cls("KSampler")[0]["steps"], cls("KSampler")[0]["cfg"]) == (50, 3.5), j
+ok("FLUX 3 Klein edit: reuses the generation model, official ReferenceMultiLatent graph (16 steps · base 50 steps CFG 3.5)")
 print("ALL OK")

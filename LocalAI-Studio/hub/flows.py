@@ -418,6 +418,25 @@ def wf_moss_edit(q, img):
     return w.n
 
 
+def wf_flux3k_edit(q, img):
+    """FLUX 3 Klein 편집(공식 예시와 같게): 프롬프트 + 0으로 만든 음성 조건 → ReferenceMultiLatent(사진을 참고 잠재로, 크기 맞추기)
+    → KSampler(증류판 16단계 CFG 1 · 원본판 50단계 CFG 3.5)."""
+    w = WF()
+    model = [w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default"), 0]
+    for name, wt in q.get("loras", []):
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    clip = [w.add("CLIPLoader", clip_name=q["te"], type="flux3", device="default"), 0]
+    vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=clip), 0]
+    neg = [w.add("ConditioningZeroOut", conditioning=pos), 0]
+    ref = w.add("ReferenceMultiLatent", positive=pos, negative=neg, vae=vae, resolution="resize",
+                **{"resolution.megapixels": q.get("mp", 1.0), "images.image0": [w.add("LoadImage", image=img), 0]})
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name="euler", scheduler="simple",
+              positive=[ref, 0], negative=[ref, 1], latent_image=[ref, 2], denoise=1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
 QWEN_TURBO_SIGMAS = "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
 
 

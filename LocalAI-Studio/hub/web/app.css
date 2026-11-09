@@ -73,7 +73,8 @@ details details{border-top:0}
 .jobbar .stop{padding:6px 14px}
 .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--acc);animation:spin .9s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
-.hint.moss,[data-e=moss] .sdxl,[data-e=moss] .fxe,[data-e=moss] .qwen{display:none!important}[data-e=moss] .hint.moss{display:block!important}
+.hint.moss,.hint.fk,[data-e=moss] .sdxl,[data-e=moss] .fxe,[data-e=moss] .qwen,[data-e=flux3k] .sdxl,[data-e=flux3k] .fxe,[data-e=flux3k] .qwen{display:none!important}
+[data-e=moss] .hint.moss,[data-e=flux3k] .hint.fk{display:block!important}
 [data-e=qwen] .sdxl,[data-e=qwen] .fxe,[data-e=qwen] .den,[data-e=sdxl] .qwen,[data-e=sdxl] .fxe,[data-e=flux] .qwen,[data-e=flux] .sdxl,[data-e=flux] .den,[data-m=esrgan] .refine{display:none!important}
 #f-edit[data-fe=flux] .fe-c,#f-edit[data-fe=krea2] .fe-g,#f-edit[data-fe=chroma] .fe-g{display:none}
 #f-gen[data-g=sdxl] [data-for]:not([data-for~=sdxl]),#f-gen[data-g=flux] [data-for]:not([data-for~=flux]),#f-gen[data-g=chroma] [data-for]:not([data-for~=chroma]),#f-gen[data-g=krea2] [data-for]:not([data-for~=krea2]),#f-gen[data-g=sd35] [data-for]:not([data-for~=sd35]),#f-gen[data-g=qwenimg] [data-for]:not([data-for~=qwenimg]),#f-gen[data-g=moss] [data-for]:not([data-for~=moss]){display:none!important}
