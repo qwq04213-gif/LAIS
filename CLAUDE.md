@@ -60,7 +60,7 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.1**(커밋 `v4.1`). 다음 판 **4.2**.
+마지막 출시: **4.1.1**(커밋 `v4.1.1`). 다음 판 **4.2**.
 
 ### 4.2 할 일
 
@@ -74,4 +74,6 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
   구조 CFGOverride(0.667)+RescaleCFG 0.7+shift 5, 모양 CFGOverride(0.769)+RescaleCFG 0.5·20단계, RemeshMesh `solid`. 멀티뷰 방향: 왼쪽 그림 = 얼굴이 그림 왼쪽
 - Blender 실제 실행(가져오기·LOD·FBX/OBJ 내보내기, 리깅·움직임 미리보기)
 - ComfyUI 의 DynamicCombo 하위 칸은 API 형식에서 `부모.자식` 키로 넣어요(예: `"sign_mode.fill": 20`)
+  — 그 판에 없는 선택지를 넣으면 ComfyUI 가 칸을 통째로 빼서 `missing ... sign_mode` 오류가 나요. `wf_fit` 이 노드의 `_alt` → 그 판 기본값으로 바꿔요(4.1.1).
+  4.1 에서 새로 쓴 노드(CFGOverride, RemeshMesh `solid`)는 예전 ComfyUI 에 없을 수 있어요 — 새 노드를 쓸 땐 없을 때의 대안도 만들어요
 - 테스트 환경: `test_update` 는 지난판 설치 폴더·빌드 메모가 있어야 해요. `ui_test2/3/25` 는 예전 경로(`/tmp/claude-0/-home-claude/...`, `/tmp/tt/p1.png`)를 써요. `ui_test5` 는 scikit-image, `test_v313` 은 opencv 필요

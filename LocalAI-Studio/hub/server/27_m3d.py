@@ -43,11 +43,14 @@ def m3d_ready():
     return {"trellis": all(trellis_files().values()), "multiview": all(trellis_files(True).values())}
 
 
-def wf_fit(g):
+def wf_fit(g, notes=None):
     """엔진(ComfyUI)이 알려 준 노드 설명에 맞춰 그래프를 다듬어요: 모르는 칸은 빼고, 빠진 필수 칸은 기본값으로 채워요.
-    ComfyUI 판마다 칸 이름이 조금씩 달라도 그래프가 깨지지 않게 하려는 안전장치예요."""
+    ComfyUI 판마다 칸 이름이 조금씩 달라도 그래프가 깨지지 않게 하려는 안전장치예요.
+    선택 칸(DynamicCombo)에 그 판에 없는 값을 넣으면 ComfyUI 가 칸을 통째로 빼 버려서(→ 'missing ... sign_mode')
+    노드의 '_alt'(대신 쓸 값과 하위 칸) → 그 판의 기본값 순서로 바꿔요. 바꾼 내용은 notes 에 적어요."""
     info = caps().get("info") or {}
     for n in g.values():
+        alt = n.pop("_alt", None) or {}
         spec = (info.get(n["class_type"]) or {}).get("input")
         if not spec:
             continue
@@ -70,8 +73,22 @@ def wf_fit(g):
                 cur = n["inputs"].get(k, v[1].get("default", opts[0]["key"]))
                 if isinstance(cur, list):                   # 다른 노드에서 이어진 값이면 알 수 없어요
                     continue
-                n["inputs"].setdefault(k, cur)
+                keys = [o["key"] for o in opts]
+                if cur not in keys:                         # 이 ComfyUI 판에 없는 선택지
+                    pick = next(((a, kids) for a, kids in alt.get(k, []) if a in keys), None)
+                    new = pick[0] if pick else (v[1].get("default") if v[1].get("default") in keys else keys[0])
+                    for x in [x for x in n["inputs"] if x.startswith(k + ".")]:
+                        del n["inputs"][x]
+                    n["inputs"].update((pick or (None, {}))[1])
+                    if notes is not None:
+                        notes.append(f"{n['class_type']}.{k}: {cur} → {new}")
+                    cur = new
+                n["inputs"][k] = cur
                 sel = next((o for o in opts if o["key"] == cur), None)
+                kids = (sel or {}).get("inputs") or {}
+                names = set(kids.get("optional") or {}) | set(kids.get("required") or {})
+                for x in [x for x in n["inputs"] if x.startswith(k + ".") and x.split(".", 1)[1] not in names]:
+                    del n["inputs"][x]                      # 고른 값에 없는 하위 칸은 빼요
                 kids = (sel or {}).get("inputs") or {}
                 for c, cs in {**(kids.get("optional") or {}), **(kids.get("required") or {})}.items():
                     if f"{k}.{c}" not in n["inputs"] and isinstance(cs, (list, tuple)) and len(cs) > 1 and isinstance(cs[1], dict) and "default" in cs[1]:
@@ -441,11 +458,20 @@ def m3d_build(p, J):
     else:
         views = {"front": put_input(Image.open(d / "view_front.png"), J)}
     # 단계 수(구조, 모양 512, 재질, 모양 올려 그리기)·cfg — 원본 TRELLIS.2 기본값
+    nodes = caps()["nodes"]
+    co = not nodes or "CFGOverride" in nodes
     q = {"files": f, "views": views, "multiview": mv, "framed": mv, "seed": seed_of(p), "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
-         "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"]}
+         "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"], "cfg_override": co}
+    if not co:
+        warn(J, "이 ComfyUI 에는 CFGOverride 노드가 없어서 원본 설정 일부(앞쪽 단계에만 가이드 걸기) 없이 만들었어요. "
+                "ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 모양이 더 좋아져요.")
     free_ollama()
     J["msg"] = f"3D 만드는 중 — 모양 {o['res']} · 면 {o['faces']:,}개 · 텍스처 {o['tex']}px (몇 분 걸려요)"
-    res = run_wf(wf_fit(flows.wf_trellis(q)), J, raw=True)
+    fixed = []
+    res = run_wf(wf_fit(flows.wf_trellis(q), fixed), J, raw=True)
+    if any(x.startswith("RemeshMesh.") for x in fixed):
+        warn(J, "이 ComfyUI 는 '닫힌 몸체로 다시 짜기(solid)'를 몰라서 예전 방식(udf + 안쪽 껍질 지우기)으로 만들었어요. "
+                "ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 더 고르게 나와요.")
     glb = next((dat for n, dat in res if n.lower().endswith(".glb")), None)
     if not glb:
         raise RuntimeError("3D 결과(GLB)를 받지 못했어요.")

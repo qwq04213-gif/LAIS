@@ -155,6 +155,30 @@ hub.caps = real
 assert g["1"]["inputs"] == {"mesh": ["2", 0], "sign_mode": "udf", "sign_mode.qef": False, "sign_mode.drop_enclosed_components": False}, g["1"]
 assert g["2"]["inputs"] == {"mesh": ["1", 0], "sign_mode": "solid", "sign_mode.fill": 5}, g["2"]
 ok("wf_fit: drops unknown inputs, fills missing required defaults, fills DynamicCombo children (parent.child), leaves unknown nodes alone")
+# 4.1.1: 예전 ComfyUI — RemeshMesh 선택지에 solid 가 없으면 ComfyUI 가 칸을 통째로 빼서 'missing sign_mode' 로 멈췄어요 → udf + 안쪽 껍질 지우기로 바꿔요
+OLD = {"options": [{"key": "udf", "inputs": {"optional": {"qef": ["BOOLEAN", {"default": False}], "drop_inverted_components": ["BOOLEAN", {"default": False}],
+                                                       "drop_enclosed_components": ["BOOLEAN", {"default": False}]}}},
+                   {"key": "sdf", "inputs": {"required": {"qef": ["BOOLEAN", {"default": True}]}}}], "default": "udf"}
+RM = {"input": {"required": {"mesh": ["MESH"], "resolution": ["INT", {"default": 512}], "sign_mode": ["COMFY_DYNAMICCOMBO_V3", OLD]},
+                "optional": {"band": ["FLOAT", {}], "project_back": ["FLOAT", {}], "fix_poles": ["BOOLEAN", {}], "smooth_iters": ["INT", {}],
+                             "drop_small_components": ["FLOAT", {}], "precluster_max_verts": ["INT", {}]}}}
+q0 = {"files": {"model": "m", "dino": "d", "svae": "s", "tvae": "t"}, "views": {"front": "f.png"}, "seed": 1, "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
+      "res": 1024, "remesh": 768, "faces": 20000, "tex": 2048}
+notes = []
+hub.caps = lambda *a, **k: {"nodes": ["RemeshMesh"], "info": {"RemeshMesh": RM}}
+g = hub.wf_fit(hub.flows.wf_trellis(q0), notes)
+hub.caps = real
+rm = next(v["inputs"] for v in g.values() if v["class_type"] == "RemeshMesh")
+assert rm["sign_mode"] == "udf" and rm["sign_mode.drop_inverted_components"] is True and "sign_mode.fill" not in rm and rm["sign_mode.qef"] is False, rm
+assert notes == ["RemeshMesh.sign_mode: solid → udf"] and not any("_alt" in v for v in g.values())
+g = hub.wf_fit(hub.flows.wf_trellis(q0))                                           # 설명이 없는 노드여도 '_alt' 는 빠져요(그대로 보내면 ComfyUI 가 거부)
+assert not any("_alt" in v for v in g.values()) and next(v["inputs"] for v in g.values() if v["class_type"] == "RemeshMesh")["sign_mode"] == "solid"
+NEW = {"options": OLD["options"] + [{"key": "solid", "inputs": {"required": {"fill": ["FLOAT", {"default": 20.0}]}, "optional": {"qef": ["BOOLEAN", {"default": False}]}}}], "default": "udf"}
+notes = []; hub.caps = lambda *a, **k: {"nodes": ["RemeshMesh"], "info": {"RemeshMesh": {"input": {**RM["input"], "required": {**RM["input"]["required"], "sign_mode": ["COMFY_DYNAMICCOMBO_V3", NEW]}}}}}
+g = hub.wf_fit(hub.flows.wf_trellis(q0), notes); hub.caps = real
+rm = next(v["inputs"] for v in g.values() if v["class_type"] == "RemeshMesh"); assert rm["sign_mode"] == "solid" and rm["sign_mode.fill"] == 20.0 and not notes, rm
+assert "sign_mode.drop_inverted_components" not in rm
+ok("wf_fit: an option this ComfyUI doesn't know (solid) falls back to udf + drop inner shell, stray children removed, '_alt' never sent")
 # 따옴표 글자 지키기
 seen = []
 def tr(t, style): seen.append(t); return t.replace("간판", "a sign that says").replace("고양이", "a cat")

@@ -602,10 +602,11 @@ def wf_trellis(q):
     sv = [w.add("VAELoader", vae_name=f["svae"]), 0]
     tv = [w.add("VAELoader", vae_name=f["tvae"]), 0]
     # 원본 TRELLIS.2 의 guidance_interval·guidance_rescale·rescale_t 와 같게
-    m_ss = [w.add("CFGOverride", model=model, cfg=1.0, start_percent=0.667, end_percent=1.0), 0]
+    co = q.get("cfg_override", True)                  # 예전 ComfyUI 에는 CFGOverride 가 없어요(그때는 빼고 만들어요)
+    m_ss = [w.add("CFGOverride", model=model, cfg=1.0, start_percent=0.667, end_percent=1.0), 0] if co else model
     m_ss = [w.add("RescaleCFG", model=m_ss, multiplier=0.7), 0]
     m_ss = [w.add("ModelSamplingSD3", model=m_ss, shift=5.0), 0]
-    m_sh = [w.add("CFGOverride", model=model, cfg=1.0, start_percent=0.769, end_percent=1.0), 0]
+    m_sh = [w.add("CFGOverride", model=model, cfg=1.0, start_percent=0.769, end_percent=1.0), 0] if co else model
     m_sh = [w.add("RescaleCFG", model=m_sh, multiplier=0.5), 0]
     pad = 1.1 if q.get("multiview") else 1.0         # 노드 설명: TRELLIS.2 는 1.0, Pixal3D 는 1.1
 
@@ -646,6 +647,10 @@ def wf_trellis(q):
         hi = [w.add("RemeshMesh", mesh=dense, resolution=int(q["remesh"]), sign_mode="solid", band=1.0, project_back=0.0, fix_poles=False,
                     smooth_iters=20, drop_small_components=0.01, precluster_max_verts=20000000,
                     **{"sign_mode.fill": 20.0, "sign_mode.qef": False}), 0]
+        # 예전 ComfyUI(선택지에 solid 가 없음)용 대신 값 — udf 는 안팎 두 겹이 생겨서 안쪽 껍질을 지워요(hub 의 wf_fit 이 골라요)
+        g = w.n[hi[0]]
+        g["_alt"] = {"sign_mode": [("udf", {"sign_mode.qef": False, "sign_mode.drop_inverted_components": True,
+                                            "sign_mode.drop_enclosed_components": False})]}
     low = [w.add("DecimateMesh", mesh=hi, target_face_count=int(q["faces"]), placement_mode="midpoint"), 0]
     low = [w.add("MeshSmoothNormals", mesh=low, crease_angle=180.0), 0]
     low = [w.add("UnwrapMesh", mesh=low, segmenter="pec", resolution=int(q["tex"]), padding=1, weld_distance=0.0002), 0]

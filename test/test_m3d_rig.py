@@ -103,4 +103,20 @@ os.environ["FAKE_BLENDER_POSE"] = "down"
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "on", "rig": True}); assert j["state"] == "done" and any("T자" in w for w in j["warn"]), j
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "on", "rig": ""}); assert j["state"] == "done" and "rig" not in j["m3d_stats"], j
 ok("rig build: bones/pose/fix count shown, motion preview served from the work folder only, arms-down warns, rig off → no rig")
+# 4.1.1: 선택지에 solid 가 없는 예전 ComfyUI → 멈추지 않고 udf 로 만들고 업데이트 안내
+OLD = {"options": [{"key": "udf", "inputs": {"optional": {"qef": ["BOOLEAN", {"default": False}], "drop_inverted_components": ["BOOLEAN", {"default": False}]}}}], "default": "udf"}
+real = hub.caps
+def old_caps(*a, **k):
+    c = real(*a, **k); return {**c, "info": {**(c.get("info") or {}), "RemeshMesh": {"input": {"required": {"mesh": ["MESH"], "resolution": ["INT", {}], "sign_mode": ["COMFY_DYNAMICCOMBO_V3", OLD]},
+        "optional": {k: ["FLOAT", {}] for k in ("band", "project_back", "fix_poles", "smooth_iters", "drop_small_components", "precluster_max_verts")}}}}}
+hub.caps = old_caps
+j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); hub.caps = real
+assert j["state"] == "done" and any("update_comfyui" in w and "solid" in w for w in j["warn"]), j
+rm = [v["inputs"] for v in SUBMITTED[-1].values() if v["class_type"] == "RemeshMesh"][0]; assert rm["sign_mode"] == "udf" and rm["sign_mode.drop_inverted_components"] is True, rm
+j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); assert j["state"] == "done" and not any("update_comfyui" in w for w in j.get("warn") or []), j
+STATE["missing"].add("CFGOverride"); hub._CAPS["t"] = 0
+j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); STATE["missing"].discard("CFGOverride"); hub._CAPS["t"] = 0
+assert j["state"] == "done" and any("CFGOverride" in w for w in j["warn"]), j
+assert not [v for v in SUBMITTED[-1].values() if v["class_type"] == "CFGOverride"] and len([v for v in SUBMITTED[-1].values() if v["class_type"] == "RescaleCFG"]) == 2
+ok("old ComfyUI without 'solid' remesh or CFGOverride: builds with udf + inner-shell removal and suggests updating ComfyUI")
 print("ALL OK")
