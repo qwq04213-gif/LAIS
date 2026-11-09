@@ -342,7 +342,6 @@ function navMark(v){let hit=null;$$('#rail nav button').forEach(b=>{const on=b.d
 /* 사이드바 묶음 접기: 제목을 누르면 접고 펴요. 묶음마다 상태를 기억하고, 지금 화면이 든 묶음은 저절로 펴요 */
 function grpOpen(g,on,save){const h=$('.ngt.tog',g),b=$('.ngb',g);if(!h||!b)return;b.hidden=!on;h.setAttribute('aria-expanded',on?'true':'false');h.classList.toggle('open',!!on);
   if(save)try{localStorage.setItem('nav:g:'+g.dataset.g,on?'1':'0')}catch{}}
-function moreOpen(on,save){const g=$('#rail nav .ng[data-g=more]');if(g)grpOpen(g,on,save)}
 $$('#rail nav .ng[data-g]').forEach(g=>{const h=$('.ngt.tog',g);if(!h)return;let o=h.dataset.def==='1';
   try{const s=localStorage.getItem('nav:g:'+g.dataset.g)??(g.dataset.g==='more'?localStorage.getItem('nav:more'):null);if(s!==null)o=s==='1'}catch{}
   if($('button.on',g))o=true;grpOpen(g,o);

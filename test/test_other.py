@@ -15,7 +15,7 @@ def mk(d, n): (M / d).mkdir(parents=True, exist_ok=True); (M / d / n).write_byte
 def cls(wf, c): return [v["inputs"] for v in wf.values() if v["class_type"] == c]
 lst = lambda: json.load(urllib.request.urlopen(B + "/api/lists"))
 # ── 모델이 없을 때
-L = lst(); assert L["oxmodels"]["sd35"] == [] and set(L["oxmodels"]) == {"sd35", "qwenimg", "moss"} and L["oxmodels"]["moss"] == []; ok("no SD3.5/MOSS models → empty lists (HiDream·Lumina removed)")
+L = lst(); assert L["oxmodels"]["sd35"] == [] and set(L["oxmodels"]) == {"sd35", "qwenimg", "moss", "zimage", "flux3k"} and L["oxmodels"]["moss"] == []; ok("no SD3.5/MOSS models → empty lists (HiDream·Lumina removed)")
 j = wait(post("/api/job", {"kind": "gen", "gengine": "moss", "prompt": "a cat", "w": 512, "h": 512})["id"]); assert j["state"] == "error" and "MOSS-Image" in j["error"] and "설치" in j["error"], j; ok("missing model → explains where to install")
 # ── SD3.5 Medium (인코더 내장)
 mk("checkpoints", "sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors")

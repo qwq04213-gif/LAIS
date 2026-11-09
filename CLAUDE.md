@@ -60,17 +60,17 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.1.1**(커밋 `v4.1.1`). 다음 판 **4.2**.
+마지막 출시: **4.2**(커밋 `v4.2`). 다음 판 **4.3**.
 
-### 4.2 할 일
+### 4.3 할 일
 
-1. **3D 장면 전체(사진 속 여러 물체)** — 됨: `/api/m3d/scene`(물체 넣기·빼기), 작업 `op=scene`, `hub/glbscene.py`(파이썬만으로 GLB 합치기·자리 어림),
-   Blender 는 `blender_game.scene_export`(.blend·FBX·OBJ). 화면은 3D 만들기의 '장면 전체' 칸. 미검증: 실제 깊이·배치가 그럴듯한지, Blender 장면 내보내기
-2. **엔진 최신화** — 됨: 배경 지우기 경계 다듬기(`bgremove.refine` 컬러 가이드 필터 + 색 번짐 제거)·BiRefNet(`rmodel=best`, ComfyUI),
-   LTX-2.5(`wan_ver=ltx25`, 영상+소리, 24GB), SeedVR2(업스케일 목록에 'SeedVR2 3B/7B (AI 복원)' — 사진·영상 다듬기·영상 복원), Z-Image-Turbo·FLUX 3 Klein(생성, `OX_FAMS`),
-   FLUX 3 Klein·MOSS 편집(`engine=flux3k|moss`), Qwen 2.1 Turbo(공식 시그마), Depth Anything 3(`control_prep` 깊이 우선), Stable Audio 3(효과음 우선, 180초),
-   대화 Qwen3.5 27B·Gemma 4. 사양별 추천 표(`TIERS`)는 2026-11 조사 기준. 넣지 않음: MiniMax H3(실측 32GB·RAM 128GB), HunyuanVideo 1.5, ACE-Step XL(따로 나뉜 파일 구조)
-3. 출시 전: README `[4.2]` 변경 내역, 전체 회귀
+1. 코드 정리(안 쓰는 코드·비효율), 용량 정리 개선(작업 폴더·캐시가 저장 공간 화면에 다 보이고 정리되게)
+2. **3D 품질(얼굴·디테일)** — 사진 한 장일 때 Pixal3D(픽셀 정렬, 공식 예시 기본: MoGe 로 화각 → Pixal3DConditioning)를 기본으로, 해상도·텍스처 기본값 올리기, 작은 사진 자동 키우기
+3. 3D 결과 전체화면 보기, 권장 해상도 표기 + 업스케일 연동, 방향 칸마다 그 방향만 그리기
+4. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
+
+4.2 에서 넣은 것: 3D 장면 전체(`glbscene.py`), 배경 지우기 경계 다듬기·BiRefNet, LTX-2.5·SeedVR2·Z-Image-Turbo·FLUX 3 Klein(생성·편집)·MOSS 편집·
+Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양별 추천(`TIERS`, 2026-11 조사), 예전 엔진 정리(`SUPERSEDED` — 제한 해제판 대화 모델은 넣지 않음)
 
 ### 미검증(실제 PC 에서 확인 필요)
 

@@ -14,7 +14,7 @@ def mk(n, d):
     p = G / n; Image.new("RGB", (30, 30), (5, 5, 5)).save(p); t = time.time() - d * 86400; os.utime(p, (t, t))
 for n, d in (("a.png", 0), ("b.png", 0), ("c.png", 2), ("d.png", 5)): mk(n, d)
 (hub.MODELS / "controlnet").mkdir(exist_ok=True); (hub.MODELS / "controlnet" / "controlnet-union-sdxl-promax.safetensors").write_bytes(b"x")
-hub.VERSION = "4.0.1"; errs = []
+hub.VERSION = (Path(BASE) / "LocalAI-Studio/VERSION.txt").read_text(encoding="utf-8").strip(); errs = []
 with sync_playwright() as p:
     b = p.chromium.launch(); ctx = b.new_context(viewport={"width": 1500, "height": 1000}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
@@ -35,7 +35,7 @@ with sync_playwright() as p:
     assert pg.locator("#gal-grid .gday").count() == 2; ok("deleting the last card of a day also removes its heading")
     # ── 변경 사항
     pg.click("#ver"); pg.wait_for_selector("#v-log.on .logv"); n = pg.locator("#log-list .logv").count(); assert n >= 13, n
-    first = pg.locator("#log-list .logv").first; assert "4.0.1" in first.inner_text() and "지금 쓰는 버전" in first.inner_text() and first.evaluate("e=>e.open") and not pg.locator("#log-list .logv").nth(1).evaluate("e=>e.open"); ok("clicking the version label opens the change log: newest first, current version badged and expanded")
+    first = pg.locator("#log-list .logv").first; assert (Path(BASE) / "LocalAI-Studio/VERSION.txt").read_text(encoding="utf-8").strip() in first.inner_text() and "지금 쓰는 버전" in first.inner_text() and first.evaluate("e=>e.open") and not pg.locator("#log-list .logv").nth(1).evaluate("e=>e.open"); ok("clicking the version label opens the change log: newest first, current version badged and expanded")
     pg.click("#log-open"); assert pg.locator("#log-list .logv[open]").count() == n; pg.click("#log-close"); assert pg.locator("#log-list .logv[open]").count() == 0
     pg.fill("#log-q", "RealVisXL"); pg.wait_for_function("document.querySelectorAll('#log-list .logv').length>=1 && document.querySelectorAll('#log-list .logv').length<document.querySelectorAll('#log-list .logv[open]').length+1"); assert pg.locator("#log-list .logv").count() < n and "RealVisXL" in pg.inner_text("#log-list"); ok("expand/collapse all and search filter the versions")
     pg.fill("#log-q", ""); pg.click("nav button[data-v=conf]"); pg.wait_for_timeout(400); pg.click("#cs-nav button[data-pane=app]"); pg.click("#fold-app [data-go=log]"); pg.wait_for_selector("#v-log.on"); ok("also reachable from 설치와 모델 → 프로그램 관리")

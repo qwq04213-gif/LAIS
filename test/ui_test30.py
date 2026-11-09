@@ -17,7 +17,7 @@ with sync_playwright() as p:
     pg.goto(B + "/"); pg.wait_for_timeout(700)
     if pg.locator("#ackb").is_visible(): None
     pg.click('nav button[data-v="gen"]')
-    opts = pg.eval_on_selector_all("#f-gen select[name=gengine] option", "e=>e.map(x=>x.value)"); assert opts == ["sdxl", "flux", "chroma", "krea2", "sd35", "qwenimg", "moss"], opts; ok("model kinds (HiDream·Lumina removed in 3.17)")
+    opts = pg.eval_on_selector_all("#f-gen select[name=gengine] option", "e=>e.map(x=>x.value)"); assert opts == ["sdxl", "flux", "chroma", "krea2", "sd35", "qwenimg", "moss", "zimage", "flux3k"], opts; ok("model kinds (HiDream·Lumina removed in 3.17)")
     pg.select_option("#f-gen select[name=gengine]", "sd35"); pg.wait_for_timeout(300)
     assert pg.input_value("#f-gen input[name=fx_steps]") == "28" and pg.locator("#f-gen select[name=fx_model] option").count() == 1; ok("SD3.5 lists its checkpoint and defaults 28 steps")
     pg.select_option("#f-gen select[name=gengine]", "sdxl"); pg.wait_for_timeout(300); assert pg.is_visible("#f-gen [data-blk=sd-main]"); ok("switching back to SDXL restores its form")
