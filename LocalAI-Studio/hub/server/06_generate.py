@@ -311,17 +311,22 @@ def do_gen_flux(p, J):
     return out
 
 
-OX_FAMS = ("sd35", "qwenimg", "moss")
-OX_NAMES = {"sd35": "SD3.5", "qwenimg": "Qwen-Image 2.1", "moss": "MOSS-Image"}
+OX_FAMS = ("sd35", "qwenimg", "moss", "zimage", "flux3k")
+OX_NAMES = {"sd35": "SD3.5", "qwenimg": "Qwen-Image 2.1", "moss": "MOSS-Image", "zimage": "Z-Image-Turbo", "flux3k": "FLUX 3 Klein"}
 # 계열별 기본값: (단계, CFG, 샘플러, 스케줄러, shift)
 OX_DEFAULTS = {"sd35": (28, 4.5, "euler", "sgm_uniform", None), "qwenimg": (25, 1.0, "euler", "simple", None),
-               "moss": (50, 3.0, "euler", "simple", None)}
+               "moss": (50, 3.0, "euler", "simple", None), "zimage": (8, 1.0, "res_multistep", "simple", 3.0),
+               "flux3k": (16, 1.0, "euler", "simple", None)}
 MOSS_RX = re.compile(r"moss[_-]?image")
+ZIMAGE_RX = re.compile(r"z[_-]?image")
+FLUX3K_RX = re.compile(r"flux[_-]?3.*klein")
 
 
 def ox_defaults(fam, model):
     if fam == "qwenimg" and "turbo" in (model or "").lower():
         return (8, 1.0, "euler", "simple", None)
+    if fam == "flux3k" and "base" in (model or "").lower():       # 원본판: 공식 예시 50단계·CFG 3.5
+        return (50, 3.5, "euler", "simple", None)
     return OX_DEFAULTS[fam]
 
 
@@ -351,6 +356,12 @@ def moss_ctype():
     return next((t for t in ct if "moss" in t.lower()), None)
 
 
+def ctype_of(word):
+    """CLIPLoader 종류 이름(ComfyUI 판에 따라 없을 수 있어요)."""
+    ct = caps().get("clip_types") or []
+    return word if not ct or word in ct else None
+
+
 def ox_parts(fam):
     """SD3.5·Qwen-Image 2.1·MOSS-Image 가 쓸 텍스트 인코더·VAE 를 폴더에서 찾아요."""
     te = files("text_encoders")
@@ -358,6 +369,10 @@ def ox_parts(fam):
         return {"te": {"qwen": qwen21_te()}, "vae": qwen21_vae()}
     if fam == "moss":
         return {"te": {"qwen35": moss_te()}, "vae": moss_vae()}
+    if fam == "zimage":
+        return {"te": {"qwen3": _pick(te, ("qwen_3_4b", "fp8"), "qwen_3_4b", ("qwen3", "4b"))}, "vae": _pick(files("vae"), "ae.safetensors", ("flux", "ae"))}
+    if fam == "flux3k":
+        return {"te": {"qwen3vl": _pick(te, ("qwen3vl", "4b"), ("qwen3-vl", "4b"))}, "vae": moss_vae()}
     return {"vae": None, "te": {"clip_l": _pick(te, "clip_l"), "clip_g": _pick(te, "clip_g"), "t5": _pick(te, ("t5xxl", "fp8_e4m3fn_scaled"), "t5xxl")}}
 
 
@@ -369,6 +384,8 @@ def other_models():
             out["sd35"].append(n)
     out["qwenimg"] = qwen21_unets()
     out["moss"] = sorted((n for n in files("diffusion_models") if MOSS_RX.search(n.lower())), key=lambda n: ("base" in n.lower(), n))
+    out["zimage"] = sorted((n for n in files("diffusion_models") if ZIMAGE_RX.search(n.lower())), key=lambda n: ("turbo" not in n.lower(), n))
+    out["flux3k"] = sorted((n for n in files("diffusion_models") if FLUX3K_RX.search(n.lower())), key=lambda n: ("base" in n.lower(), n))
     return out
 
 
@@ -396,6 +413,14 @@ def ox_setup(p, J, fam):
             raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭에서 'MOSS-Image' 를 설치해 주세요.")
         if not moss_ctype():
             raise RuntimeError("이 ComfyUI 는 MOSS-Image 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    elif fam in ("zimage", "flux3k"):
+        nm = {"zimage": ("텍스트 인코더(Qwen3 4B)", "VAE(ae.safetensors)", "Z-Image-Turbo", "lumina2"),
+              "flux3k": ("텍스트 인코더(Qwen3-VL 4B)", "FLUX.2 VAE", "FLUX 3 Klein", "flux3")}[fam]
+        miss = ([] if all(te.values()) else [nm[0]]) + ([] if vae else [nm[1]])
+        if miss:
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + f". '설치와 모델' 탭에서 '{nm[2]}' 를 설치해 주세요.")
+        if not ctype_of(nm[3]) or (fam == "flux3k" and not has_node("EmptyFlux2LatentImage")):
+            raise RuntimeError(f"이 ComfyUI 는 {nm[2]} 를 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
     return sel, te, vae
 
 
@@ -439,6 +464,9 @@ def do_gen_other(p, J):
     """SD3.5 · MOSS-Image 생성(LoRA·다이나믹 프롬프트·번역 지원). 설정 칸은 FLUX 계열과 같은 fx_* 를 써요."""
     fam = p["gengine"]
     sel, te, vae = ox_setup(p, J, fam)
+    if fam == "flux3k" and "base" in sel.lower() and num(p, "fx_cfg", 1.0) <= 1.0:     # 원본판을 증류판 설정(CFG 1)으로 그리면 흐려요
+        p = dict(p, fx_steps=50, fx_cfg=3.5)
+        warn(J, "FLUX 3 Klein 원본판(Base)은 공식 설정인 50단계·CFG 3.5 로 그렸어요. 빠르게는 증류판을 쓰세요.")
     dsteps, dcfg, dsamp, dsch, dshift = ox_defaults(fam, sel)
     base, n = seed_of(p), clamp(num(p, "n", 1, int), 1, 8)
     w, h = (clamp(num(p, k, 1024, int) // 16 * 16, 256, 2048) for k in ("w", "h"))
@@ -466,6 +494,12 @@ def do_gen_other(p, J):
         if fam == "moss":
             q.update(unet=sel, te=te["qwen35"], ctype=moss_ctype(), latent="EmptyFlux2LatentImage" if has_node("EmptyFlux2LatentImage") else "EmptySD3LatentImage")
             g = flows.wf_moss(q)
+        elif fam == "zimage":
+            q.update(unet=sel, te=te["qwen3"])
+            g = flows.wf_zimage(q)
+        elif fam == "flux3k":
+            q.update(unet=sel, te=te["qwen3vl"])
+            g = flows.wf_flux3k(q)
         else:
             q["ckpt"] = sel
             g = flows.wf_other(q)

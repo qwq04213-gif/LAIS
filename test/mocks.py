@@ -218,7 +218,7 @@ class Comfy(BaseHTTPRequestHandler):
             if "StyleModelLoader" not in STATE["missing"]: o["StyleModelLoader"] = {"input": {"required": {"style_model_name": [STATE.get("styles", [])]}}}
             if "StyleModelApply" not in STATE["missing"]: o["StyleModelApply"] = {"input": {"required": {"conditioning": ["CONDITIONING"], "style_model": ["STYLE_MODEL"], "clip_vision_output": ["CLIP_VISION_OUTPUT"], "strength": ["FLOAT", {"default": 1.0}], "strength_type": [["multiply", "attn_bias"]]}}}
             if "FluxKontextMultiReferenceLatentMethod" not in STATE["missing"]: o["FluxKontextMultiReferenceLatentMethod"] = {"input": {"required": {"conditioning": ["CONDITIONING"], "reference_latents_method": [["offset", "index", "uxo/uno", "index_timestep_zero"]]}}}
-            o["CLIPLoader"] = {"input": {"required": {"clip_name": [[]], "type": [STATE.get("clip_types", ["stable_diffusion", "flux", "chroma", "krea2", "qwen_image", "wan", "lumina2", "stable_audio", "ltxv", "moss_image"])]}}}
+            o["CLIPLoader"] = {"input": {"required": {"clip_name": [[]], "type": [STATE.get("clip_types", ["stable_diffusion", "flux", "chroma", "krea2", "qwen_image", "wan", "lumina2", "stable_audio", "ltxv", "moss_image", "flux3"])]}}}
             return self.j(o)
         if u.startswith("/history/"):
             pid = u.split("/")[-1]; h = HIST.get(pid)

@@ -329,12 +329,14 @@
         <option value="sd35">Stable Diffusion 3.5</option>
         <option value="qwenimg">Qwen-Image 2.1 (글자·포스터, 편집과 같은 모델)</option>
         <option value="moss">MOSS-Image (배치 지정·긴 글자, 시험 중)</option>
+        <option value="zimage">Z-Image-Turbo (빠른 실사·글자, 8단계)</option>
+        <option value="flux3k">FLUX 3 Klein (새 모델, 사실적인 사진)</option>
       </select></label>
     <div data-for="sdxl" data-blk="sd-main"></div>
-    <div data-for="flux chroma krea2 sd35 qwenimg moss">
+    <div data-for="flux chroma krea2 sd35 qwenimg moss zimage flux3k">
       <label class="f">모델 파일<select name="fx_model"></select></label>
       <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button> <span data-for="sd35"><button type="button" class="link" data-open="checkpoints">체크포인트 폴더 열기</button></span></p>
-      <p class="hint plain" data-for="sd35 qwenimg moss">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 문장형 프롬프트가 잘 맞아요.</p>
+      <p class="hint plain" data-for="sd35 qwenimg moss zimage flux3k">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 문장형 프롬프트가 잘 맞아요.</p>
       <p class="hint plain" data-for="qwenimg">단계를 8 이하로 두면 Lightning LoRA(있으면)로 4단계에 그려요.</p>
       <p class="hint plain" data-for="moss">배치 지정: 프롬프트에 JSON 을 그대로 써요. 예: {"caption":"카페 포스터","layout":[{"bbox":[0.1,0.05,0.9,0.25],"text":"OPEN"}]}</p>
       <details data-for="flux chroma krea2"><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
@@ -352,7 +354,7 @@
       <p class="hint" id="wcs"></p>
     </details>
     <p class="hint" data-for="flux chroma krea2">FLUX·Krea 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
-    <label class="f" data-for="sdxl chroma krea2 sd35 qwenimg moss">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <label class="f" data-for="sdxl chroma krea2 sd35 qwenimg moss zimage flux3k">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="row">
       <label class="f">가로<input type="number" name="w" value="1024" step="1" min="256" max="2048"></label>
@@ -397,11 +399,11 @@
       </div>
     </details>
     <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
-    <details data-for="flux chroma krea2 sd35 qwenimg moss" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
+    <details data-for="flux chroma krea2 sd35 qwenimg moss zimage flux3k" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
         <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.1" min="0" max="20"></label>
-        <label class="f" data-for="chroma krea2 sd35 qwenimg moss">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
+        <label class="f" data-for="chroma krea2 sd35 qwenimg moss zimage flux3k">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>

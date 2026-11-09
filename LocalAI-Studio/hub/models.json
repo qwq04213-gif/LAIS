@@ -131,6 +131,69 @@
    ]
   },
   {
+   "id": "z-image-turbo",
+   "name": "Z-Image-Turbo (빠른 실사·글자, int8)",
+   "gb": 12.1,
+   "desc": "이미지 생성 > 모델 종류 'Z-Image-Turbo'. 8단계로 빠르게 고품질 실사·인물·글자(한자·영어)를 그려요. 요즘 ComfyUI 에서 가장 많이 쓰는 생성 모델 중 하나예요. Alibaba Tongyi, Apache-2.0. VRAM 12GB 이상 권장(8GB 는 느려요).",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "flux3-klein",
+   "name": "FLUX 3 Klein (빠른 증류판, int8)",
+   "gb": 15,
+   "desc": "이미지 생성 > 모델 종류 'FLUX 3 Klein'. 2026년 10월 Black Forest Labs 의 새 모델로, 16단계로 사실적인 사진과 긴 문장 이해에 강해요. VRAM 12GB 이상 권장. 라이선스는 Black Forest Labs 의 모델 페이지에서 확인해 주세요(상업 이용 조건이 있을 수 있어요).",
+   "license": "FLUX 3 Klein License",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/diffusion_models/flux3-image-klein-int8-convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "flux3-klein-base",
+   "name": "FLUX 3 Klein Base (원본판 · 고품질·느림, int8)",
+   "gb": 15,
+   "desc": "FLUX 3 Klein 의 원본판 — 50단계·CFG 3.5 로 더 세밀하지만 3배쯤 느려요. LoRA 학습 기반으로도 좋아요. VRAM 12GB 이상. 라이선스는 모델 페이지에서 확인해 주세요.",
+   "license": "FLUX 3 Klein License",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/diffusion_models/flux3-image-klein-base-int8-convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors"
+    }
+   ]
+  },
+  {
    "id": "stable-audio-open",
    "name": "Stable Audio Open 1.0 — 효과음 만들기",
    "gb": 5.3,

@@ -54,4 +54,23 @@ STATE["missing"].add("SeedVR2Conditioning"); hub._CAPS["t"] = 0
 j = job({"kind": "up", "image": png(400, 300), "upm": "SeedVR2 3B (AI 복원)", "scale": "2"}); assert j["state"] == "error" and "SeedVR2Conditioning" in j["error"], j
 STATE["missing"].discard("SeedVR2Conditioning"); hub._CAPS["t"] = 0
 ok("SeedVR2: listed with the upscale models once installed, official 1-step graph at the target size, 4096px cap, missing 7B/nodes explained, ESRGAN still works")
+# ── Z-Image-Turbo · FLUX 3 Klein ──
+j = job({"kind": "gen", "gengine": "zimage", "prompt": "a cat"}); assert j["state"] == "error" and "Z-Image-Turbo" in j["error"] and j.get("need") == ["z-image-turbo"], j
+touch(*[f["dir"] + "/" + f["url"].rsplit("/", 1)[1] for f in CAT["z-image-turbo"]["files"]])
+L = json.load(urllib.request.urlopen(B + "/api/lists")); assert L["oxmodels"]["zimage"] == ["z_image_turbo_int8_convrot.safetensors"] and L["ox_ready"]["zimage"]
+assert not any("z_image" in x for x in L["fluxmodels"] + L["chromamodels"])
+j = job({"kind": "gen", "gengine": "zimage", "prompt": "a cat", "fx_steps": 8, "fx_cfg": 1, "fx_sampler": "res_multistep", "fx_scheduler": "simple", "w": 1024, "h": 768}); assert j["state"] == "done", j
+k = cls("KSampler")[0]; assert (k["steps"], k["cfg"], k["sampler_name"]) == (8, 1.0, "res_multistep") and node(k["negative"]) == "ConditioningZeroOut"
+assert cls("ModelSamplingAuraFlow")[0]["shift"] == 3.0 and cls("CLIPLoader")[0]["type"] == "lumina2" and cls("VAELoader")[0]["vae_name"] == "ae.safetensors"
+touch(*[f["dir"] + "/" + f["url"].rsplit("/", 1)[1] for f in CAT["flux3-klein"]["files"] + CAT["flux3-klein-base"]["files"]])
+L = json.load(urllib.request.urlopen(B + "/api/lists")); assert L["oxmodels"]["flux3k"][0] == "flux3-image-klein-int8-convrot.safetensors" and L["ox_ready"]["flux3k"]
+assert not any("flux3" in x for x in L["fluxmodels"])
+j = job({"kind": "gen", "gengine": "flux3k", "prompt": "a red fox", "fx_steps": 16, "fx_cfg": 1, "fx_sampler": "euler", "fx_scheduler": "simple"}); assert j["state"] == "done", j
+k = cls("KSampler")[0]; assert (k["steps"], k["cfg"]) == (16, 1.0) and cls("CLIPLoader")[0]["type"] == "flux3" and cls("EmptyFlux2LatentImage") and cls("VAELoader")[0]["vae_name"] == "flux2-vae.safetensors"
+j = job({"kind": "gen", "gengine": "flux3k", "fx_model": "flux3-image-klein-base-int8-convrot.safetensors", "prompt": "a red fox", "fx_steps": 16, "fx_cfg": 1}); assert j["state"] == "done", j
+k = cls("KSampler")[0]; assert (k["steps"], k["cfg"]) == (50, 3.5) and any("50단계" in w for w in j["warn"]), (k, j.get("warn"))
+STATE["clip_types"] = ["stable_diffusion", "flux"]; hub._CAPS["t"] = 0
+j = job({"kind": "gen", "gengine": "flux3k", "prompt": "x"}); assert j["state"] == "error" and "지원하지 않아요" in j["error"], j
+STATE.pop("clip_types"); hub._CAPS["t"] = 0
+ok("Z-Image-Turbo / FLUX 3 Klein: official graphs (AuraFlow shift 3 + zeroed negative · flux3 encoder + Flux2 latent), base model gets 50 steps/CFG 3.5, kept out of FLUX lists, old ComfyUI explained")
 print("ALL OK")

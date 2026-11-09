@@ -47,13 +47,13 @@ const TIERS=[
   {gb:8,rows:{chat:[['qwen3-8b'],'대화·번역은 8B 가 알맞아요'],gen:[['noobai','realvisxl5','sdxl-vae-fix'],'SDXL 계열(그림체 NoobAI · 실사 RealVis)'],
     edit:[['qwen-image','qwen-te-small','qwen-lightning'],'작은 텍스트 인코더 + 빠르게(4단계). RAM 32GB 이상 필요, 느려요'],vid:[['ltx-video'],'LTX-Video 로 짧고 작게'],
     aud:[['stable-audio-open'],'짧은 효과음·음악'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['esrgan','esrgan-anime','seedvr2'],'흐린 사진은 SeedVR2 3B(AI 복원)']}},
-  {gb:12,rows:{chat:[['qwen3-14b'],''],gen:[['noobai','krea-dev','sdxl-vae-fix'],'FLUX Krea 는 12GB 부터'],
+  {gb:12,rows:{chat:[['qwen3-14b'],''],gen:[['noobai','z-image-turbo','krea-dev','sdxl-vae-fix'],'Z-Image-Turbo(빠른 실사) · FLUX Krea 는 12GB 부터'],
     edit:[['qwen-image','qwen-te-small','qwen-lightning'],'작은 텍스트 인코더로 여유 있게'],vid:[['wan22-ti2v-5b','ltx-video','wan-vace'],'Wan 2.2 5B 기본 길이'],
     aud:[['ace-step-15-turbo'],'노래(가사) 만들기'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan','ultrasharp'],'SeedVR2 3B(AI 복원)']}},
-  {gb:16,rows:{chat:[['qwen3-14b','qwen25vl-7b'],'사진 보는 대화는 Qwen2.5-VL'],gen:[['krea2-turbo','noobai','sdxl-vae-fix'],'Krea 2 Turbo 가 빠르고 고와요'],
+  {gb:16,rows:{chat:[['qwen3-14b','qwen25vl-7b'],'사진 보는 대화는 Qwen2.5-VL'],gen:[['krea2-turbo','z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Krea 2 Turbo · Z-Image-Turbo · FLUX 3 Klein'],
     edit:[['qwen-image','qwen-lightning'],'기본 텍스트 인코더'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v','ltx25'],'Wan 2.2 14B + 4단계 가속, 말하는 영상, LTX-2.5(소리까지)'],
     aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['seedvr2-7b','esrgan','ultrasharp'],'SeedVR2 7B(AI 복원 · 고화질)']}},
-  {gb:24,rows:{chat:[['qwen3-32b','qwen25vl-7b'],'32B 로 더 똑똑하게'],gen:[['krea2-turbo','chroma-hd','sd35-large'],'큰 모델 여러 개를 바꿔 가며'],
+  {gb:24,rows:{chat:[['qwen3-32b','qwen25vl-7b'],'32B 로 더 똑똑하게'],gen:[['krea2-turbo','z-image-turbo','flux3-klein-base','chroma-hd'],'큰 모델 여러 개를 바꿔 가며'],
     edit:[['qwen-image','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['ltx25','wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'LTX-2.5(소리까지) · 14B 를 길게'],
     aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['seedvr2-7b','esrgan','ultrasharp'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
 const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};

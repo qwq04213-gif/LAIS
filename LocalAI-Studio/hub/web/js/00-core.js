@@ -25,6 +25,7 @@ const FX_DEF={sdxl:{rdenoise:0.3,cn_strength:0.7},flux:{rdenoise:0.3,cn_strength
               krea2:{rdenoise:0.3,cn_strength:1,fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
               sd35:{fx_steps:28,fx_cfg:4.5,fx_sampler:'euler',fx_scheduler:'sgm_uniform'},
               qwenimg:{fx_steps:25,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},moss:{fx_steps:50,fx_cfg:3,fx_sampler:'euler',fx_scheduler:'simple'},
+              zimage:{fx_steps:8,fx_cfg:1,fx_sampler:'res_multistep',fx_scheduler:'simple'},flux3k:{fx_steps:16,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
               qwen:{rdenoise:0.45}};   // Krea 2 Turbo 기준(8단계, CFG 1)
 const LORA_NOTE='프롬프트에 &lt;lora:이름:0.8&gt; 태그를 쓰면 설치된 LoRA 중 이름이 맞는 파일을 자동으로 찾아 적용해요. 개수 제한은 없어요.';
 
@@ -397,7 +398,7 @@ function fillCaps(){
 }
 async function loadCaps(){try{CAPS=await api('/api/caps');fillCaps()}catch{}}
 /* FLUX 종류에 맞는 모델만 목록에 보여 줘요 (이름에 chroma 가 있으면 Chroma) */
-const OXF=['sd35','qwenimg','moss'],OXN={sd35:'Stable Diffusion 3.5',qwenimg:'Qwen-Image 2.1',moss:'MOSS-Image'};
+const OXF=['sd35','qwenimg','moss','zimage','flux3k'],OXN={sd35:'Stable Diffusion 3.5',qwenimg:'Qwen-Image 2.1',moss:'MOSS-Image',zimage:'Z-Image-Turbo',flux3k:'FLUX 3 Klein'};
 const fxModels=g=>(OXF.includes(g)?(LISTS.oxmodels||{})[g]:g==='chroma'?LISTS.chromamodels:g==='krea2'?LISTS.krea2models:LISTS.fluxmodels)||[];
 const fxLabel=x=>x.startsWith('ckpt::')?x.slice(6)+' (올인원 체크포인트)':x;
 function fillFx(){

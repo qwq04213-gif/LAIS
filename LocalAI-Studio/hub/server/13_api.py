@@ -73,7 +73,7 @@ def sorted_models():
         info["diffusion_models/" + n] = dict(family=fam, all_in_one=allin, how=how)
         if fam == "krea2":
             krea2.append(n)
-        elif fam in ("hidden", "qwen", "moss", "sd15", "sdxl", "sd3", "hidream", "lumina") or re.search(r"trellis|pixal3d|ltx", n.lower()) or (fam == "unknown" and re.search(r"qwen|moss", n.lower())):
+        elif fam in ("hidden", "qwen", "moss", "sd15", "sdxl", "sd3", "hidream", "lumina") or re.search(r"trellis|pixal3d|ltx|seedvr|flux[_-]?3.*klein|z[_-]?image", n.lower()) or (fam == "unknown" and re.search(r"qwen|moss", n.lower())):
             continue
         else:
             (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)

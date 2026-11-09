@@ -403,6 +403,41 @@ def wf_moss(q):
     return w.n
 
 
+def wf_zimage(q):
+    """Z-Image-Turbo(공식 예시와 같게): UNET → ModelSamplingAuraFlow(shift 3) + Qwen3 4B(lumina2) + ae VAE, 8단계 res_multistep, 음성 프롬프트는 0으로."""
+    w = WF()
+    model = [w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default"), 0]
+    for name, wt in q.get("loras", []):
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    model = [w.add("ModelSamplingAuraFlow", model=model, shift=q.get("shift") or 3.0), 0]
+    clip = [w.add("CLIPLoader", clip_name=q["te"], type="lumina2", device="default"), 0]
+    vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=clip), 0]
+    neg = [w.add("CLIPTextEncode", text=q["negative"], clip=clip), 0] if q.get("negative") and q.get("cfg", 1) > 1 else [w.add("ConditioningZeroOut", conditioning=pos), 0]
+    lat = [w.add("EmptySD3LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+              positive=pos, negative=neg, latent_image=lat, denoise=1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
+def wf_flux3k(q):
+    """FLUX 3 Klein(공식 예시와 같게): UNET + Qwen3-VL 4B(flux3) + FLUX.2 VAE, EmptyFlux2LatentImage, 증류판 16단계 CFG 1 · 원본판 50단계 CFG 3.5."""
+    w = WF()
+    model = [w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default"), 0]
+    for name, wt in q.get("loras", []):
+        model = [w.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=wt), 0]
+    clip = [w.add("CLIPLoader", clip_name=q["te"], type="flux3", device="default"), 0]
+    vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=clip), 0]
+    neg = [w.add("CLIPTextEncode", text=q.get("negative") or "", clip=clip), 0]
+    lat = [w.add("EmptyFlux2LatentImage", width=q["w"], height=q["h"], batch_size=1), 0]
+    k = w.add("KSampler", model=model, seed=q["seed"], steps=q["steps"], cfg=q["cfg"], sampler_name=q["sampler"], scheduler=q["scheduler"],
+              positive=pos, negative=neg, latent_image=lat, denoise=1.0)
+    w.add("PreviewImage", images=[w.add("VAEDecode", samples=[k, 0], vae=vae), 0])
+    return w.n
+
+
 # ───────────────────────── 영상 (Wan 2.2 TI2V 5B) ─────────────────────────
 WAN_NEG = ("色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，"
            "多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走")
