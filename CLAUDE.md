@@ -66,7 +66,11 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 1. **3D 장면 전체(사진 속 여러 물체)** — 됨: `/api/m3d/scene`(물체 넣기·빼기), 작업 `op=scene`, `hub/glbscene.py`(파이썬만으로 GLB 합치기·자리 어림),
    Blender 는 `blender_game.scene_export`(.blend·FBX·OBJ). 화면은 3D 만들기의 '장면 전체' 칸. 미검증: 실제 깊이·배치가 그럴듯한지, Blender 장면 내보내기
-2. **기능별 엔진 최신 점검** — 기능마다 쓰는 엔진이 지금 기준으로 좋은지 조사(사양별 추천 표는 4.1 의 `web/js/40-models.js` `TIERS`)
+2. **엔진 최신화** — 됨: 배경 지우기 경계 다듬기(`bgremove.refine` 컬러 가이드 필터 + 색 번짐 제거)·BiRefNet(`rmodel=best`, ComfyUI),
+   LTX-2.5(`wan_ver=ltx25`, 영상+소리, 24GB), SeedVR2(업스케일 목록에 'SeedVR2 3B/7B (AI 복원)' — 사진·영상 다듬기·영상 복원), Z-Image-Turbo·FLUX 3 Klein(생성, `OX_FAMS`),
+   FLUX 3 Klein·MOSS 편집(`engine=flux3k|moss`), Qwen 2.1 Turbo(공식 시그마), Depth Anything 3(`control_prep` 깊이 우선), Stable Audio 3(효과음 우선, 180초),
+   대화 Qwen3.5 27B·Gemma 4. 사양별 추천 표(`TIERS`)는 2026-11 조사 기준. 넣지 않음: MiniMax H3(실측 32GB·RAM 128GB), HunyuanVideo 1.5, ACE-Step XL(따로 나뉜 파일 구조)
+3. 출시 전: README `[4.2]` 변경 내역, 전체 회귀
 
 ### 미검증(실제 PC 에서 확인 필요)
 
