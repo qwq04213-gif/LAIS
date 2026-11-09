@@ -292,7 +292,7 @@ def do_tts_model(p, J, engine, text, speed):
 def do_vid(p, J):
     if p.get("wan_ver") == "14b":
         return do_vid14(p, J)
-    if p.get("wan_ver") in ("ltx", "vace", "s2v"):
+    if p.get("wan_ver") in ("ltx", "ltx25", "vace", "s2v"):
         return do_vid_more(p, J)
     """Wan 2.2 5B 로 영상 만들기(글→영상, 이미지를 올리면 그 이미지에서 시작). 결과: [(바이트, 확장자, 정보)]"""
     for node, why in (("Wan22ImageToVideoLatent", "Wan 2.2 영상 노드"), ("CreateVideo", "영상 만들기 노드"), ("SaveVideo", "영상 저장 노드")):
@@ -362,6 +362,9 @@ def put_audio(data_url, J):
 
 
 VID_MORE = {"ltx": ("LTX-Video", ("LTXVConditioning", "LTXVScheduler", "EmptyLTXVLatentVideo", "SamplerCustom")),
+            "ltx25": ("LTX-2.5", ("LTXVConditioning", "LTXVDualCFGGuider", "LTXVImgToVideoInplace", "LTXVPreprocess", "LTXVEmptyLatentAudio",
+                                  "LTXVConcatAVLatent", "LTXVSeparateAVLatent", "LTXVLatentUpsampler", "LatentUpscaleModelLoader", "LTXVAudioVAEDecode",
+                                  "ManualSigmas", "SamplerCustomAdvanced", "RandomNoise", "VAEDecodeTiled")),
             "vace": ("Wan VACE", ("WanVaceToVideo", "TrimVideoLatent")),
             "s2v": ("Wan 2.2 S2V", ("WanSoundImageToVideo", "WanSoundImageToVideoExtend", "LatentConcat", "AudioEncoderLoader", "AudioEncoderEncode", "LoadAudio"))}
 
@@ -373,11 +376,19 @@ def s2v_fast_lora():
     return pick("lightx2v", "t2v", "high") or pick("lightning", "t2v", "high") or pick("lightx2v", "high") or pick("lightx2v")
 
 
+def ltx25_files():
+    """LTX-2.5 파일(없으면 None)."""
+    dm, te, va, lu = files("diffusion_models"), files("text_encoders"), files("vae"), files("latent_upscale_models")
+    f = lambda L, *k: next((n for n in L if all(x in n.lower() for x in k)), None)    # noqa: E731
+    return {"unet": f(dm, "ltx-2.5", "transformer") or f(dm, "ltx-2.5"), "te": f(te, "gemma4", "ltx-2.5") or f(te, "ltx-2.5"),
+            "vae": f(va, "ltx-2.5", "video"), "avae": f(va, "ltx-2.5", "audio"), "upscaler": f(lu, "ltx-2.5", "upscal") or f(lu, "ltx-2.5")}
+
+
 def vid_more_state():
     """LTX-Video · Wan VACE · Wan S2V 모델이 있는지(화면 안내용)."""
     dm, te, va = files("diffusion_models"), files("text_encoders"), files("vae")
     wan = bool(_pick(te, "umt5")) and bool(_pick(va, "wan_2.1_vae", "wan2.1", ("wan", "2.1")))
-    return {"ltx": bool(ltx_models()) and bool(_pick(te, "t5xxl")), "vace": wan and any("vace" in n.lower() for n in dm),
+    return {"ltx": bool(ltx_models()) and bool(_pick(te, "t5xxl")), "ltx25": all(ltx25_files().values()), "vace": wan and any("vace" in n.lower() for n in dm),
             "s2v": wan and any("s2v" in n.lower() for n in dm) and bool(_pick(files("audio_encoders"), "wav2vec")), "s2v_fast": bool(s2v_fast_lora())}
 
 
@@ -419,6 +430,22 @@ def do_vid_more(p, J):
         start = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J) if img is not None else None
         J["msg"] = f"LTX-Video 로 영상 만드는 중 ({w}×{h}, {frames}프레임)"
         g, model = flows.wf_ltx(q, start), ms[0]
+    elif ver == "ltx25":
+        lf = ltx25_files()
+        names = {"unet": "LTX-2.5 모델", "te": "Gemma 4 텍스트 인코더(LTX-2.5용)", "vae": "LTX-2.5 영상 VAE", "avae": "LTX-2.5 소리 VAE", "upscaler": "LTX-2.5 키우기 모델"}
+        miss = [names[k] for k, v in lf.items() if not v]
+        if miss:
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭의 영상 분류에서 'LTX-2.5'를 설치해 주세요.")
+        fps = clamp(num(p, "fps", 24, int), 12, 30)
+        frames = clamp(int(round(clamp(num(p, "sec", 5.0), 1.0, 10.0) * fps / 8)) * 8 + 1, 9, 249)
+        w, h = (clamp(int(round(x / 64)) * 64, 256, 1920) for x in (w, h))      # 절반 크기도 32의 배수가 되게
+        q = dict(lf, prompt=text, negative=neg or flows.LTX25_NEG, seed=seed, w=w, h=h, frames=frames, fps=fps, steps=11, cfg=1.0)
+        start = None
+        if img is not None:
+            s = 1536 / max(w, h) if max(w, h) > 1536 else 1.0
+            start = put_input(ImageOps.fit(img, (round(w * s), round(h * s)), RS.LANCZOS), J)
+        J["msg"] = f"LTX-2.5 로 영상·소리 만드는 중 ({w}×{h}, {frames}프레임)"
+        g, model = flows.wf_ltx25(q, start), lf["unet"]
     else:
         unet = vace_model() if ver == "vace" else next((n for n in files("diffusion_models") if ver in n.lower()), None)
         umt5 = _pick(te, "umt5")

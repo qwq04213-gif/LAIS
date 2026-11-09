@@ -522,6 +522,50 @@ def wf_ltx(q, start=None):
     return w.n
 
 
+LTX25_NEG = "pc game, console game, video game, cartoon, childish, ugly"
+
+
+def wf_ltx25(q, start=None):
+    """LTX-2.5(영상 + 소리): ComfyUI 공식 예시(video_ltx2_5_i2v/t2v)와 같은 2단계 —
+    절반 크기로 8단계(euler_ancestral, 정해진 시그마) → 잠재 공간 2배 키우기 → 3단계 다듬기 → 영상·소리 디코드.
+    q: unet, te, vae, avae, upscaler, prompt, negative, seed, w, h(64의 배수), frames(8k+1), fps. start = 시작 이미지(입력 파일명, 미리 맞춘 크기)"""
+    w = WF()
+    model = [w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default"), 0]
+    clip = [w.add("CLIPLoader", clip_name=q["te"], type="ltxv", device="default"), 0]
+    vae = [w.add("VAELoader", vae_name=q["vae"]), 0]
+    avae = [w.add("VAELoader", vae_name=q["avae"]), 0]
+    pos = [w.add("CLIPTextEncode", text=q["prompt"], clip=clip), 0]
+    neg = [w.add("CLIPTextEncode", text=q["negative"], clip=clip), 0]
+    cond = w.add("LTXVConditioning", positive=pos, negative=neg, frame_rate=float(q["fps"]))
+
+    def guider():
+        return [w.add("LTXVDualCFGGuider", model=model, positive=[cond, 0], negative=[cond, 1], video_cfg=1.0, audio_cfg=1.0), 0]
+    img = None
+    if start:
+        img = [w.add("LTXVPreprocess", image=[w.add("LoadImage", image=start), 0], img_compression=18), 0]
+    lat = [w.add("EmptyLTXVLatentVideo", width=q["w"] // 2, height=q["h"] // 2, length=q["frames"], batch_size=1), 0]
+    if img:
+        lat = [w.add("LTXVImgToVideoInplace", vae=vae, image=img, latent=lat, strength=0.7, bypass=False), 0]
+    aud = [w.add("LTXVEmptyLatentAudio", audio_vae=avae, frames_number=q["frames"], frame_rate=int(q["fps"]), batch_size=1), 0]
+    av = [w.add("LTXVConcatAVLatent", video_latent=lat, audio_latent=aud), 0]
+    s1 = w.add("SamplerCustomAdvanced", noise=[w.add("RandomNoise", noise_seed=q["seed"]), 0], guider=guider(),
+               sampler=[w.add("KSamplerSelect", sampler_name="euler_ancestral"), 0],
+               sigmas=[w.add("ManualSigmas", sigmas="1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"), 0], latent_image=av)
+    sep = w.add("LTXVSeparateAVLatent", av_latent=[s1, 0])
+    up = [w.add("LTXVLatentUpsampler", samples=[sep, 0], upscale_model=[w.add("LatentUpscaleModelLoader", model_name=q["upscaler"]), 0], vae=vae), 0]
+    if img:
+        up = [w.add("LTXVImgToVideoInplace", vae=vae, image=img, latent=up, strength=1.0, bypass=False), 0]
+    av2 = [w.add("LTXVConcatAVLatent", video_latent=up, audio_latent=[sep, 1]), 0]
+    s2 = w.add("SamplerCustomAdvanced", noise=[w.add("RandomNoise", noise_seed=q["seed"] + 1), 0], guider=guider(),
+               sampler=[w.add("KSamplerSelect", sampler_name="euler_ancestral"), 0],
+               sigmas=[w.add("ManualSigmas", sigmas="0.85, 0.7250, 0.4219, 0.0"), 0], latent_image=av2)
+    sep2 = w.add("LTXVSeparateAVLatent", av_latent=[s2, 0])
+    frames = [w.add("VAEDecodeTiled", samples=[sep2, 0], vae=vae, tile_size=512, overlap=64, temporal_size=64, temporal_overlap=16), 0]
+    sound = [w.add("LTXVAudioVAEDecode", samples=[sep2, 1], audio_vae=avae), 0]
+    _save_video(w, frames, q["fps"], audio=sound)
+    return w.n
+
+
 def _wan21_base(w, q):
     unet = w.add("UNETLoader", unet_name=q["unet"], weight_dtype="default")
     clip = w.add("CLIPLoader", clip_name=q["te"], type="wan", device="default")

@@ -473,7 +473,7 @@
 <section class="view split" id="v-vid">
   <form id="f-vid" autocomplete="off" novalidate>
     <button class="go">영상 만들기</button>
-    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx">LTX-Video — 아주 빠름</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
+    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx25">LTX-2.5 — 최신 · 소리까지 (VRAM 16GB+)</option><option value="ltx">LTX-Video 0.9.8 — 아주 빠름 · 가벼움</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
     <p class="hint plain" id="vid-more-note" hidden></p>
     <div class="f" id="vid-audio-row" hidden><span>목소리 (소리 파일 — 고른 길이만큼, 최대 30초)</span><span class="seedrow"><label class="ghost vpick">소리 파일 고르기<input type="file" id="vid-audio" accept="audio/*" hidden></label><button type="button" class="ghost sm" id="vid-audio-clear" hidden>빼기</button></span><audio id="vid-audio-pv" controls hidden></audio></div>
     <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. 안 되면 5B 를 쓰세요.</p>

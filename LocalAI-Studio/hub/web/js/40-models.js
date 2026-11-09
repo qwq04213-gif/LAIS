@@ -51,10 +51,10 @@ const TIERS=[
     edit:[['qwen-image','qwen-te-small','qwen-lightning'],'작은 텍스트 인코더로 여유 있게'],vid:[['wan22-ti2v-5b','ltx-video','wan-vace'],'Wan 2.2 5B 기본 길이'],
     aud:[['ace-step-15-turbo'],'노래(가사) 만들기'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['esrgan','ultrasharp'],'']}},
   {gb:16,rows:{chat:[['qwen3-14b','qwen25vl-7b'],'사진 보는 대화는 Qwen2.5-VL'],gen:[['krea2-turbo','noobai','sdxl-vae-fix'],'Krea 2 Turbo 가 빠르고 고와요'],
-    edit:[['qwen-image','qwen-lightning'],'기본 텍스트 인코더'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
+    edit:[['qwen-image','qwen-lightning'],'기본 텍스트 인코더'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v','ltx25'],'Wan 2.2 14B + 4단계 가속, 말하는 영상, LTX-2.5(소리까지)'],
     aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['esrgan','ultrasharp'],'']}},
   {gb:24,rows:{chat:[['qwen3-32b','qwen25vl-7b'],'32B 로 더 똑똑하게'],gen:[['krea2-turbo','chroma-hd','sd35-large'],'큰 모델 여러 개를 바꿔 가며'],
-    edit:[['qwen-image','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'14B 를 길게(가속 없이도)'],
+    edit:[['qwen-image','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['ltx25','wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'LTX-2.5(소리까지) · 14B 를 길게'],
     aud:[['ace-step-15-turbo'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['esrgan','ultrasharp'],'']}}];
 const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};
 const tierOf=v=>v>=22?24:v>=15?16:v>=11?12:8;

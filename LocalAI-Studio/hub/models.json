@@ -539,13 +539,42 @@
    ]
   },
   {
+   "id": "ltx25",
+   "name": "LTX-2.5 22B (영상 + 소리, int8)",
+   "gb": 52,
+   "desc": "영상 만들기 > 영상 모델 'LTX-2.5'. 2026년 Lightricks 의 최신 영상 모델로, 영상과 어울리는 소리까지 함께 만들어요. 절반 크기로 그린 뒤 2배로 키워 다듬어 선명해요(빠른 증류판, 11단계). VRAM 16GB 이상 + RAM 64GB 권장(24GB 면 넉넉). 가벼운 영상은 LTX-Video 0.9.8 이나 Wan 2.2 5B 를 쓰세요. LTX-2 커뮤니티 라이선스(연 매출 1천만 달러 이하 무료).",
+   "license": "LTX-2 Community License",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-audio-vae-bf16.safetensors"
+    },
+    {
+     "dir": "latent_upscale_models",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    }
+   ]
+  },
+  {
    "id": "ltx-video",
-   "name": "LTX-Video 2B 0.9.8 (빠른 영상)",
+   "name": "LTX-Video 2B 0.9.8 (가벼운 영상)",
    "gb": 6.3,
    "requires": [
     "flux-common"
    ],
-   "desc": "영상 만들기 > 영상 모델 'LTX-Video'. 글이나 사진으로 몇십 초 만에 짧은 영상을 만들어요(8단계). 화질은 Wan 보다 낮지만 훨씬 빨라요. T5 텍스트 인코더는 FLUX 공용 파일을 같이 써요. VRAM 8GB 이상.",
+   "desc": "영상 만들기 > 영상 모델 'LTX-Video 0.9.8'. 예전 판이지만 가벼워서 VRAM 8GB 에서도 돌아요(최신은 LTX-2.5). 글이나 사진으로 몇십 초 만에 짧은 영상을 만들어요(8단계). 화질은 Wan 보다 낮지만 훨씬 빨라요. T5 텍스트 인코더는 FLUX 공용 파일을 같이 써요. VRAM 8GB 이상.",
    "files": [
     {
      "dir": "checkpoints",
