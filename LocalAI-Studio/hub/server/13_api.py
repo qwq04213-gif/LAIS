@@ -148,7 +148,58 @@ def catalog():
         inst = img_installed(m)
         sz = sum(fsize(MODELS / f["dir"] / cat_name(f)) for f in m["files"]) if inst else 0
         img.append({**m, "installed": inst, "cat": cat_of(m), "disk_gb": round(sz / 1e9, 1) if inst else None})
-    return {"llm": llm, "image": img}
+    return {"llm": llm, "image": img, "superseded": superseded(llm, img)}
+
+
+# 새 엔진으로 바뀐 예전 모델: (예전 id, 이 중 하나라도 설치돼 있으면 정리를 권해요, 이유). 자동으로 지우지 않고 목록만 보여 줘요.
+SUPERSEDED = [
+    ("ltx-video", ("ltx25",), "LTX-2.5 가 영상을 대신 만들어요(소리까지)"),
+    ("stable-audio-open", ("stable-audio-3",), "효과음은 Stable Audio 3 를 먼저 써요"),
+    ("sd35-large", ("flux3-klein", "flux3-klein-base", "z-image-turbo"), "FLUX 3 Klein · Z-Image-Turbo 가 더 새롭고 빨라요"),
+    ("sd35-medium", ("flux3-klein", "flux3-klein-base", "z-image-turbo"), "FLUX 3 Klein · Z-Image-Turbo 가 더 새롭고 빨라요"),
+    ("qwen25vl-7b", ("qwen35-9b", "qwen35-27b", "gemma4-e4b", "gemma4-26b"), "새 대화 모델(Qwen3.5 · Gemma 4)이 사진도 볼 수 있어요"),
+]   # 제한 해제판(Abliterated) 대화 모델은 공식판으로 똑같이 대신할 수 없어서 넣지 않아요
+
+
+def superseded(llm, img):
+    """설치된 예전 모델 중 새 엔진이 있는 것 → [{id, name, gb, why, new}] (배경 지우기 예전 모델 포함)."""
+    by = {m["id"]: m for m in llm + img}
+    out = []
+    for old, news, why in SUPERSEDED:
+        o = by.get(old)
+        have = [by[n]["name"] for n in news if by.get(n, {}).get("installed")]
+        if o and o.get("installed") and have:
+            out.append({"id": old, "name": o["name"], "gb": o.get("disk_gb") or o.get("gb"), "why": why, "new": have[0], "kind": "llm" if "ollama" in o else "image"})
+    if rmbg_best_ready():
+        for k, m in bgremove.MODELS.items():
+            f = MODELS / "rmbg" / m["file"]
+            if f.is_file():
+                out.append({"id": "rmbg:" + k, "name": f"배경 지우기 모델 '{m['label']}' ({m['file']})", "gb": round(f.stat().st_size / 1e9, 2),
+                            "why": "배경 지우기는 BiRefNet(최고)을 먼저 써요", "new": "BiRefNet", "kind": "rmbg"})
+    return out
+
+
+def superseded_remove(p):
+    """예전 모델 지우기(사용자가 확인한 뒤에만 불려요). {id} 하나 또는 {all: 1, ids: [...]}(화면에 보인 것만)."""
+    ids = [str(x) for x in (p.get("ids") or [])] if p.get("all") else [str(p.get("id") or "")]
+    allowed = {x["id"] for x in catalog()["superseded"]}
+    done, errs = [], []
+    for i in ids:
+        if i not in allowed:
+            errs.append(f"{i}: 지울 수 있는 예전 모델이 아니에요")
+            continue
+        if i.startswith("rmbg:"):
+            f = MODELS / "rmbg" / bgremove.MODELS[i[5:]]["file"]
+            try:
+                f.unlink()
+                RM["engine"] = None
+                done.append(i)
+            except OSError as e:
+                errs.append(f"{f.name}: {e.strerror or e}")
+            continue
+        r = catalog_remove({"id": i})
+        (errs.append(f"{i}: {r['error']}") if r.get("error") else done.append(i))
+    return {"ok": not errs, "removed": done, **({"error": "일부를 지우지 못했어요: " + "; ".join(errs)} if errs else {})}
 
 
 def cat_of(m):

@@ -541,6 +541,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(delete_item(p))
         if u == "/api/photo/save":
             return self.send_json(photo_save(p))
+        if u == "/api/superseded/remove":
+            return self.send_json(superseded_remove(p))
         if u == "/api/catalog/remove":
             return self.send_json(catalog_remove(p))
         if u == "/api/meta":

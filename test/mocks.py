@@ -274,12 +274,14 @@ class Ollama(BaseHTTPRequestHandler):
         b = json.dumps(o).encode(); self.send_response(200); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
     def do_GET(self):
         if self.path == "/api/version": return self.j({"version": "x"})
-        if self.path == "/api/tags": return self.j({"models": [{"name": "testmodel:latest", "size": 5_000_000_000}, {"name": "venice:old", "size": 1}]})
+        if self.path == "/api/tags": return self.j({"models": [{"name": "testmodel:latest", "size": 5_000_000_000}, {"name": "venice:old", "size": 1}] + [{"name": n, "size": 4_000_000_000} for n in STATE.get("ollama_extra", [])]})
         if self.path == "/api/ps": return self.j({"models": [{"name": "testmodel:latest"}]})
         self.j({})
     def do_DELETE(self):
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
-        STATE["ollama_deleted"].append(body.get("model")); self.j({})
+        STATE["ollama_deleted"].append(body.get("model"))
+        if body.get("model") in STATE.get("ollama_extra", []): STATE["ollama_extra"].remove(body.get("model"))
+        self.j({})
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
         if self.path == "/api/generate":

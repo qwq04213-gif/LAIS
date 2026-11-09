@@ -31,7 +31,7 @@ async function loadSetup(){
   const by=k=>c.image.filter(m=>(m.cat||'image')===k).map(row).join('')||'<p class="mute">항목이 없어요.</p>';
   $('#cat-img').innerHTML=by('image');$('#cat-vid').innerHTML=by('video');$('#cat-aud').innerHTML=by('audio');$('#cat-3d').innerHTML=by('d3');catVoice();
   $$('#v-setup .item input').forEach(i=>{if(keep.has(i.value))i.checked=true});
-  CATALOG_NOW=c;selSummary();loadTasks();tierPaint();
+  CATALOG_NOW=c;selSummary();loadTasks();tierPaint();oldPaint(c.superseded||[]);
 }
 /* 체크한 항목 요약: 무엇을 얼마나 받는지 */
 let CATALOG_NOW={llm:[],image:[]};
@@ -44,16 +44,16 @@ function selSummary(){const box=$('#sel-sum');if(!box)return;
 document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))selSummary()});
 /* 사양별 추천: 그래픽카드 메모리(VRAM) 8/12/16/24GB 에서 기능마다 어떤 모델·설정이 알맞은지. ids 는 '이 구성 고르기'로 체크할 항목 */
 const TIERS=[      // 그 메모리에서 실제로 돌아가는 가장 최신 모델(2026년 11월 기준, 공식 자료·사용자 측정 참고)
-  {gb:8,rows:{chat:[['qwen35-9b','gemma4-e4b'],'Qwen3.5 9B · Gemma 4 E4B(사진도 봐요)'],gen:[['flux3-klein','z-image-turbo','noobai','sdxl-vae-fix'],'FLUX 3 Klein(공식 8GB) · Z-Image-Turbo(느림) · 그림체는 NoobAI'],
+  {gb:8,rows:{chat:[['qwen35-9b','gemma4-e4b','qwen3-8b'],'Qwen3.5 9B · Gemma 4 E4B(사진도 봐요) · 제한 해제판은 Qwen3 8B'],gen:[['flux3-klein','z-image-turbo','noobai','sdxl-vae-fix'],'FLUX 3 Klein(공식 8GB) · Z-Image-Turbo(느림) · 그림체는 NoobAI'],
     edit:[['flux3-klein'],"'말로 편집 (FLUX 3 Klein)' — Qwen-Image 는 8GB 에 버거워요"],vid:[['wan22-ti2v-5b','ltx-video'],'Wan 2.2 5B 를 짧고 작게 · 빠른 미리보기는 LTX-Video'],
     aud:[['stable-audio-3'],'효과음·연주곡'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원) · Real-ESRGAN']}},
-  {gb:12,rows:{chat:[['qwen35-9b','gemma4-e4b'],'Qwen3.5 9B'],gen:[['z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Z-Image-Turbo · FLUX 3 Klein'],
+  {gb:12,rows:{chat:[['qwen35-9b','gemma4-e4b','qwen3-14b'],'Qwen3.5 9B · 제한 해제판은 Qwen3 14B'],gen:[['z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Z-Image-Turbo · FLUX 3 Klein'],
     edit:[['qwen-image-turbo','qwen-image','qwen-te-small','flux3-klein'],'Qwen-Image 2.1 Turbo(작은 텍스트 인코더) · FLUX 3 Klein'],vid:[['wan22-ti2v-5b','wan-vace'],'Wan 2.2 5B 기본 길이 · VACE'],
     aud:[['ace-step-15-turbo','stable-audio-3'],'노래는 ACE-Step 1.5'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원)']}},
-  {gb:16,rows:{chat:[['gemma4-26b','qwen35-9b'],'Gemma 4 26B(MoE, 빠름)'],gen:[['krea2-turbo','z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Krea 2 Turbo · Z-Image-Turbo · FLUX 3 Klein'],
+  {gb:16,rows:{chat:[['gemma4-26b','qwen35-9b','qwen3-14b'],'Gemma 4 26B(MoE, 빠름) · 제한 해제판은 Qwen3 14B'],gen:[['krea2-turbo','z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Krea 2 Turbo · Z-Image-Turbo · FLUX 3 Klein'],
     edit:[['qwen-image','qwen-image-turbo','qwen-lightning','moss-image-edit'],'Qwen-Image 2.1(+Turbo) · MOSS 편집'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
     aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}},
-  {gb:24,rows:{chat:[['qwen35-27b','gemma4-26b'],'Qwen3.5 27B — 가장 똑똑해요'],gen:[['krea2-turbo','flux3-klein-base','z-image-turbo','chroma-hd'],'큰 모델 여러 개를 바꿔 가며'],
+  {gb:24,rows:{chat:[['qwen35-27b','gemma4-26b','qwen3-32b'],'Qwen3.5 27B — 가장 똑똑해요 · 제한 해제판은 Qwen3 32B'],gen:[['krea2-turbo','flux3-klein-base','z-image-turbo','chroma-hd'],'큰 모델 여러 개를 바꿔 가며'],
     edit:[['qwen-image','qwen-image-turbo','qwen-lightning','moss-image-edit'],'여러 장 합치기도 넉넉해요'],vid:[['ltx25','wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'LTX-2.5(소리까지, RAM 64GB) · Wan 2.2 14B'],
     aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
 const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};
@@ -64,6 +64,19 @@ function tierPaint(){const box=$('#tiers');if(!box)return;const all=[...CATALOG_
     Object.entries(TIER_ROW).map(([k,lab])=>`<tr><th>${lab}</th>${TIERS.map(t=>{const[ids,tip]=t.rows[k];return `<td class="${t.gb===mine?'mine':''}">${ids.filter(i=>!/vae-fix|lightning|te-small/.test(i)||k==='edit').map(i=>`<span class="${by[i]?.installed?'have':''}" title="${by[i]?.installed?'설치됨':''}">${nm(i)}</span>`).join('<br>')}${tip?`<small>${esc(tip)}</small>`:''}</td>`}).join('')}</tr>`).join('')
   }<tr><th></th>${TIERS.map(t=>`<td class="${t.gb===mine?'mine':''}"><button type="button" class="ghost sm" data-tier="${t.gb}">이 구성 고르기</button></td>`).join('')}</tr></tbody></table>
   <p class="mute">이미지·영상·3D 는 한 번에 하나씩 돌아서, 표의 모델을 다 받아도 메모리를 나눠 쓰지 않아요(디스크 공간만 더 써요). 메모리 부족이 나면 한 칸 왼쪽 구성을 써 보세요.</p>`}
+/* 새 엔진으로 바뀐 예전 모델: 찾아서 보여 주기만 하고, 사용자가 확인해야 지워요 */
+function oldPaint(L){const b=$('#oldbox');if(!b)return;b.hidden=!L.length;if(!L.length){b.innerHTML='';return}
+  const gb=L.reduce((a,x)=>a+(+x.gb||0),0);
+  b.innerHTML=`<div class="oldhead"><b>새 엔진으로 바뀐 예전 모델 ${L.length}개</b> <span class="mute">약 ${gb.toFixed(1)}GB · 지우면 저장 공간이 늘어요(자동으로 지우지 않아요)</span>
+    <button type="button" class="ghost sm" id="old-all">모두 지우기</button></div>
+    <ul class="oldlist">${L.map(x=>`<li><span><b>${esc(x.name)}</b> <span class="mute">${x.gb?(+x.gb).toFixed(1)+'GB · ':''}${esc(x.why)} — 지금 '${esc(x.new)}' 이(가) 있어요</span></span><button type="button" class="ghost sm old-del" data-id="${esc(x.id)}" data-n="${esc(x.name)}">삭제</button></li>`).join('')}</ul>`;
+  b.dataset.ids=JSON.stringify(L.map(x=>x.id))}
+document.addEventListener('click',async e=>{const one=e.target.closest('.old-del'),all=e.target.closest('#old-all');if(!one&&!all)return;
+  const ids=JSON.parse($('#oldbox').dataset.ids||'[]');
+  if(!confirm(one?`'${one.dataset.n}' 을(를) 지울까요?\n새 엔진이 이 역할을 대신해요. 다른 모델이 같이 쓰는 공용 파일은 남겨요. 다시 쓰려면 새로 받아야 해요.`
+    :`예전 모델 ${ids.length}개를 모두 지울까요?\n새 엔진이 이 역할들을 대신해요. 공용 파일은 남겨요. 다시 쓰려면 새로 받아야 해요.`))return;
+  (one||all).disabled=true;let r;try{r=await api('/api/superseded/remove',one?{id:one.dataset.id}:{all:1,ids})}catch{r={error:'지우지 못했어요.'}}
+  toast(r.error||`예전 모델 ${(r.removed||[]).length}개를 지웠어요.`,6000);loadSetup();loadLists(true)});
 function tierPick(gb){const t=TIERS.find(x=>x.gb===gb);if(!t)return;const ids=new Set(Object.values(t.rows).flatMap(r=>r[0]));
   $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.has(i.value)});selSummary();
   const n=$$('#v-setup .item input:checked').length;toast(n?`${gb}GB 구성에서 아직 없는 ${n}개를 골랐어요. [선택한 항목 설치]를 누르면 받아요.`:`${gb}GB 구성은 이미 모두 설치돼 있어요.`,6000)}
