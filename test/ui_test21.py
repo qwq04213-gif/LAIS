@@ -33,7 +33,7 @@ with sync_playwright() as p:
     pg.click("#f-gen .go"); pg.wait_for_selector("#v-gen .res figure", timeout=30000)
     cap = pg.locator("#v-gen .res figcaption").first; vis = [x.strip() for x in cap.locator(":scope > a, :scope > button, :scope > details > summary").all_inner_texts()]; assert vis == ["저장", "편집으로", "업스케일", "같은 설정으로", "영상으로", "더 보기"], vis
     assert pg.locator("#v-gen .res .more .menu").first.is_hidden(); ok("result card shows 저장 / 편집으로 / 업스케일 / 같은 설정으로 / 영상으로 + [더 보기]")
-    pg.locator("#v-gen .res .more summary").first.click(); menu = [x.strip() for x in pg.locator("#v-gen .res .more .menu button").first.locator("xpath=..").locator("button").all_inner_texts()]; assert menu == ["여러 장 변형", "캐릭터·스타일로 저장", "사진 편집기로", "배경 지우기", "정보", "폴더 열기"], menu
+    pg.locator("#v-gen .res .more summary").first.click(); pg.wait_for_function("getComputedStyle(document.querySelector('#v-gen .res .more .menu')).visibility==='visible'", timeout=3000); menu = [x.strip() for x in pg.locator("#v-gen .res .more .menu button").first.locator("xpath=..").locator("button").all_inner_texts()]; assert menu == ["여러 장 변형", "캐릭터·스타일로 저장", "사진 편집기로", "배경 지우기", "정보", "폴더 열기"], menu
     mb = pg.evaluate("(()=>{const r=document.querySelector('#v-gen .res .more[open] .menu').getBoundingClientRect();return [r.top,r.bottom,innerHeight]})()"); assert mb[0] >= 0 and mb[1] <= mb[2], mb; ok("menu stays fully on screen")
     pg.mouse.click(5, 5); assert pg.locator("#v-gen .res .more[open]").count() == 0; ok("[더 보기] holds the rest and closes when you click elsewhere")
     n0 = len(SUBMITTED); pg.locator("#v-gen .res .more summary").first.click(); pg.locator("#v-gen .res button[data-to=var]").first.click(); pg.wait_for_selector("#v-gen .varbar")

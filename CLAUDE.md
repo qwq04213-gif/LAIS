@@ -60,14 +60,14 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.2**(커밋 `v4.2`). 다음 판 **4.3**.
+마지막 출시: **4.3**(커밋 `v4.3`). 다음 판 **4.4**.
 
-### 4.3 할 일
+### 다음 할 일
 
-1. 코드 정리(안 쓰는 코드·비효율), 용량 정리 개선(작업 폴더·캐시가 저장 공간 화면에 다 보이고 정리되게)
-2. **3D 품질(얼굴·디테일)** — 사진 한 장일 때 Pixal3D(픽셀 정렬, 공식 예시 기본: MoGe 로 화각 → Pixal3DConditioning)를 기본으로, 해상도·텍스처 기본값 올리기, 작은 사진 자동 키우기
-3. 3D 결과 전체화면 보기, 권장 해상도 표기 + 업스케일 연동, 방향 칸마다 그 방향만 그리기
-4. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
+1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
+
+4.3 에서 넣은 것: 3D Pixal3D 사진 한 장 기본(`m3d_engine`, MoGe 화각)·캐릭터 텍스처 4096·16GB 이상 1536·작은 사진 자동 키우기(`m3d_enlarge`)·[업스케일로 키우기]·
+방향 칸마다 [그리기]·방향/T자 그림 outputs\3D 저장·3D 전체화면, 저장 공간(작업 폴더 표시·정리), 성인 표현 표시(`models.json` 의 `nsfw`)·제한 해제 대화 모델(Qwen3.5·Gemma 4 abliterated)
 
 4.2 에서 넣은 것: 3D 장면 전체(`glbscene.py`), 배경 지우기 경계 다듬기·BiRefNet, LTX-2.5·SeedVR2·Z-Image-Turbo·FLUX 3 Klein(생성·편집)·MOSS 편집·
 Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양별 추천(`TIERS`, 2026-11 조사), 예전 엔진 정리(`SUPERSEDED` — 제한 해제판 대화 모델은 넣지 않음)
