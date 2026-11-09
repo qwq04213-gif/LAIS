@@ -3,7 +3,6 @@
 ComfyUI 와 섞이지 않게 engine/lora 에 전용 파이썬 환경과 sd-scripts 코드를 따로 둬요. 그 폴더를 지우면 깨끗이 사라져요.
 지금은 SD1.5 · SDXL 계열(Illustrious·Pony·NoobAI 포함) 체크포인트로 LoRA 를 만들어요."""
 import io
-import json
 import os
 import re
 import shutil

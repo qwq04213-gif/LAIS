@@ -520,7 +520,6 @@ def ensure_mods(mods, J=None):
 def _node_install(repo):
     J = NODE_JOBS[repo]
     try:
-        import zipfile
         dest = _repo_dir(repo)
         kp = KNOWN_PACKS.get(repo) or {}
         resume = dest.exists() and bool(kp.get("install_py")) and not (dest / ".hub-setup-done").exists()     # 내려받기는 됐는데 부품·모델 설치가 덜 끝난 경우

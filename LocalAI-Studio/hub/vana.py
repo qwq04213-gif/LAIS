@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import ImageFilter
 
 import vmix
 
