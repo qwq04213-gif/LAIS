@@ -172,6 +172,24 @@ j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "", "tex": "2048", 
 assert len(glbscene.read(urllib.request.urlopen(B + j["images"][0]).read())[0]["meshes"][0]["primitives"]) == 1 and not j["m3d_stats"]["photo"].get("head")
 ok("3D build: face found → head texture on by default (shown on the result), off with the option")
 
+# 전신 사진에서 얼굴이 작아 가슴(옷)을 얼굴로 잘못 잡으면: 피부색이 아니라 버리고, 몸 위쪽만 잘라 다시 찾아요
+am_ = np.asarray(photo.getchannel("A")) > 127; ys_, xs_ = np.nonzero(am_); sb = (xs_.min(), ys_.min())
+chest = (int(S / 2 - 0.12 * K), int(S / 2 - 0.5 * K), int(S / 2 + 0.12 * K), int(S / 2 - 0.25 * K))
+calls = []
+def face_fn(img):
+    calls.append(img.size)
+    return chest if img.size == (S, S) else (fb[0] - sb[0], fb[1] - sb[1], fb[2] - sb[0], fb[3] - sb[1])
+STATE["face_fn"] = face_fn
+jid = post("/api/job", {"kind": "m3d", "op": "build", "id": sid, "blender": "", "tex": "2048", "engine3": "trellis"})["id"]; j = wait(jid); assert j["state"] == "done", j
+gg_, bb_ = glbscene.read(urllib.request.urlopen(B + j["images"][0]).read())
+assert len(calls) == 2 and calls[1] != (S, S), calls
+Ph = photoproj._acc(gg_, bb_, gg_["meshes"][0]["primitives"][1]["attributes"]["POSITION"]); assert Ph[:, 1].min() > 1.35, Ph.min(0)   # 머리(1.43 m 위)만
+STATE["face_fn"] = lambda img: chest                                                       # 끝내 못 찾으면 얼굴 고해상도는 건너뛰고 알려요
+jid = post("/api/job", {"kind": "m3d", "op": "build", "id": sid, "blender": "", "tex": "2048", "engine3": "trellis"})["id"]; j = wait(jid)
+assert j["state"] == "done" and not j["m3d_stats"]["photo"].get("head") and "얼굴을 확실히 찾지 못해" in j["m3d_stats"]["photo"]["text"], j["m3d_stats"]
+STATE["face_fn"] = None
+ok("a wrong 'face' (chest/clothes) is rejected by the skin check, the upper body is searched again; if still not found, head texture is skipped with a note")
+
 # Pixal3D 화각 → 사진 붙이기 원근을 계산으로(카메라 거리 = 0.55/tan(화각/2) × 긴 변)
 CAT = {m["id"]: m for m in json.loads((Path(BASE) / "LocalAI-Studio/hub/models.json").read_text(encoding="utf-8"))["image"]}
 for f in CAT["pixal3d"]["files"]:

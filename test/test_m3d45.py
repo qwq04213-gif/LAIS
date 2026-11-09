@@ -71,7 +71,8 @@ ok("colour match pulls the engine texture toward the photo (limited), skin tone 
 
 # 4) 3D 만들기: 사진 붙인 곳 그늘(AO) 줄이고, 피부는 거칠기 0.5·금속 0, 뒤는 그대로 + 결과 화면용 정보
 S = 1200
-photo = Image.new("RGB", (S, S), (128, 128, 128)); photo.paste((235, 190, 165), (0, 0, S // 2, S)); photo.paste((40, 90, 200), (S // 2, 0, S, S))   # 왼쪽 피부색, 오른쪽 파랑 옷
+photo = Image.new("RGB", (S, S), (128, 128, 128)); photo.paste((235, 190, 165), (0, 0, S // 2, S)); photo.paste((40, 90, 200), (S // 2, 0, S, S))
+photo.paste((235, 190, 165), (690, 290, 830, 430))                                        # 얼굴 자리(피부색)   # 왼쪽 피부색, 오른쪽 파랑 옷
 TX = Image.new("RGB", (512, 512), (40, 40, 160)); TX.paste((200, 160, 140), (0, 0, 85, 256)); TX.paste((50, 80, 170), (85, 0, 171, 256))
 STATE["glb"] = with_orm(uv_glb(0.75, 1.0, 0.5, TX, n=16))
 j = job({"kind": "m3d", "op": "prep", "image": url(photo), "kind3": "character", "name": "hero"}); sid = j["m3d"]["id"]

@@ -281,7 +281,11 @@ class Comfy(BaseHTTPRequestHandler):
         if u == "/view":
             pid = self.path.split("filename=")[1].split(".png")[0]
             w, h = HIST[pid]["size"]; im = Image.new("RGB", (w, h), (255, 0, 0))
-            if HIST[pid].get("face") and STATE.get("face_box"):        # 얼굴 찾기: (그림 크기, 얼굴 상자) → 흰 상자 마스크
+            if HIST[pid].get("face") and STATE.get("face_fn"):         # 얼굴 찾기: 넣은 그림 → 얼굴 상자(없으면 None) → 흰 상자 마스크
+                src = Image.open(M.parent / "input" / HIST[pid]["face_img"]); box = STATE["face_fn"](src)
+                im = Image.new("RGB", src.size, 0)
+                if box: im.paste((255, 255, 255), tuple(int(v) for v in box))
+            elif HIST[pid].get("face") and STATE.get("face_box"):        # 얼굴 찾기: (그림 크기, 얼굴 상자) → 흰 상자 마스크
                 (w, h), box = STATE["face_box"]; im = Image.new("RGB", (w, h), 0); im.paste((255, 255, 255), box)
             b = io.BytesIO(); im.save(b, "PNG")
             self.send_response(200); self.send_header("Content-Type", "image/png"); self.end_headers(); self.wfile.write(b.getvalue()); return
@@ -294,7 +298,7 @@ class Comfy(BaseHTTPRequestHandler):
             except AssertionError as e:
                 return self.j({"error": {"message": "Prompt outputs failed validation"}, "node_errors": {"1": {"class_type": "X", "errors": [{"message": str(e), "details": ""}]}}}, 400)
             pid = f"p{len(SUBMITTED)}"; SUBMITTED.append(wf)
-            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": any(n["class_type"] == "SaveGLB" for n in wf.values()), "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "txt": any(n["class_type"] == "PreviewAny" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
+            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": any(n["class_type"] == "SaveGLB" for n in wf.values()), "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "face_img": next((n["inputs"].get("image") for n in wf.values() if n["class_type"] == "LoadImage"), None), "txt": any(n["class_type"] == "PreviewAny" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
             if STATE["ws"] and WS_CLIENTS and not HIST[pid]["slow"]: HIST[pid]["polls"] = -14; threading.Thread(target=ws_progress, args=(pid, 5, 0.35, wf), daemon=True).start()
             return self.j({"prompt_id": pid, "number": 1, "node_errors": {}})
         if self.path == "/free": STATE["freed"] += 1; return self.j({})

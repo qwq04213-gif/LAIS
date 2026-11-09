@@ -817,13 +817,10 @@ def m3d_face_model():
     return model
 
 
-def m3d_face_box(photo, J, model=None):
-    """사진에서 얼굴 상자(MediaPipe) → (x0, y0, x1, y1) 사진 좌표 또는 None"""
-    model = model or m3d_face_model()
-    if not model:
-        return None
-    k = min(1.0, 1536 / max(photo.size))
-    small = photo.resize((max(1, round(photo.width * k)), max(1, round(photo.height * k))), RS.LANCZOS) if k < 1 else photo
+def _mp_face(img, J, model):
+    """MediaPipe 얼굴 찾기 한 번 → 그 그림 좌표의 얼굴 상자 또는 None"""
+    k = min(1.0, 1536 / max(img.size))
+    small = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), RS.LANCZOS) if k < 1 else img
     bg = Image.new("RGB", small.size, (128, 128, 128))
     bg.paste(small.convert("RGB"), mask=small.getchannel("A") if small.mode == "RGBA" else None)
     try:
@@ -834,6 +831,47 @@ def m3d_face_box(photo, J, model=None):
     mk = next((dat for n, dat in res if n.lower().endswith(".png")), None)
     box = Image.open(io.BytesIO(mk)).convert("L").point(lambda v: 255 if v > 127 else 0).getbbox() if mk else None
     return tuple(v / k for v in box) if box else None
+
+
+def m3d_face_ok(photo, box):
+    """찾은 얼굴이 진짜 얼굴 같은지: 몸 크기에 비해 말이 되는 크기이고, 가운데가 피부색이어야 해요
+    (작은 얼굴을 못 찾고 가슴·옷 무늬를 얼굴로 잡는 경우를 걸러요)."""
+    x0, y0, x1, y1 = box
+    w, h = x1 - x0, y1 - y0
+    a = photo.getchannel("A").point(lambda v: 255 if v > 127 else 0) if photo.mode == "RGBA" else None
+    sb = (a.getbbox() if a else None) or (0, 0, photo.width, photo.height)
+    sh = max(1, sb[3] - sb[1])
+    if w < 8 or h < 8 or not (0.012 * sh <= h <= 0.7 * sh):
+        return False
+    inner = photo.convert("RGB").crop((round(x0 + 0.2 * w), round(y0 + 0.3 * h), round(x1 - 0.2 * w), round(y1 - 0.15 * h)))
+    arr = np.asarray(inner).reshape(-1, 3).astype(np.float32)
+    return len(arr) > 0 and float(photoproj._skin(arr).mean()) >= 0.25
+
+
+def m3d_face_box(photo, J, model=None):
+    """사진에서 얼굴 상자(MediaPipe) → (x0, y0, x1, y1) 사진 좌표 또는 None.
+    전체에서 찾고, 못 찾거나 진짜 얼굴 같지 않으면 몸의 위쪽만 잘라 크게 해서 다시 찾아요(전신 사진의 작은 얼굴)."""
+    model = model or m3d_face_model()
+    if not model:
+        return None
+    b = _mp_face(photo, J, model)
+    if b and m3d_face_ok(photo, b):
+        return b
+    a = photo.getchannel("A").point(lambda v: 255 if v > 127 else 0) if photo.mode == "RGBA" else None
+    sb = (a.getbbox() if a else None) or (0, 0, photo.width, photo.height)
+    bw, bh = sb[2] - sb[0], sb[3] - sb[1]
+    if bh < 1.3 * bw:                                  # 세로로 긴(전신) 사진일 때만 위쪽을 다시 봐요
+        quiet_log("[3D 얼굴 찾기] 얼굴을 확실히 찾지 못했어요", b)
+        return None
+    top = (sb[0], sb[1], sb[2], min(sb[3], sb[1] + max(round(0.35 * bh), bw)))
+    crop = photo.crop(top)
+    b2 = _mp_face(crop, J, model)
+    if b2:
+        b2 = (b2[0] + top[0], b2[1] + top[1], b2[2] + top[0], b2[3] + top[1])
+        if m3d_face_ok(photo, b2):
+            return b2
+    quiet_log("[3D 얼굴 찾기] 얼굴을 확실히 찾지 못했어요", b, b2)
+    return None
 
 
 def m3d_face_stats(img, J):
@@ -917,9 +955,11 @@ def m3d_photo(glb, photo, J, o=None, dist_e=None):
         J["m3d_photo_res"] = {"done": False, "text": "사진 쪽에서 보이는 면이 없어 건너뛰었어요."}
         return glb
     J.setdefault("m3d_photo", []).append(info)
+    noface = o.get("head", True) and box is None and bool(m3d_face_model())
     J["m3d_photo_res"] = {"done": True, "iou": info["iou"], "face": info.get("face"), "head": info.get("head"),
                           "text": f"앞 사진을 그대로 붙였어요(겹침 {info['iou']:.0%}{', 얼굴은 키워서' if info.get('face') else ''}"
-                                  f"{', 머리는 전용 텍스처 ' + str(info['head_tex']) + 'px' if info.get('head') else ''})."}
+                                  f"{', 머리는 전용 텍스처 ' + str(info['head_tex']) + 'px' if info.get('head') else ''})."
+                                  + (" 얼굴을 확실히 찾지 못해 얼굴 고해상도는 건너뛰었어요(얼굴이 크게 나온 사진에서 잘 돼요)." if noface else "")}
     if info.get("head_error"):
         quiet_log("[머리 전용 텍스처 건너뜀]", info["head_error"])
     if "face_model" in (J.get("m3d_notes") or []) and not J.get("_face_noted"):

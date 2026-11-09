@@ -29,6 +29,7 @@ touch("diffusion_models/trellis_2_int8_convrot.safetensors", "clip_vision/dino_v
 
 S = 1200                                                       # 물체 부분 600×800 — 키우지 않아도 되는 크기
 photo = Image.new("RGB", (S, S), (128, 128, 128)); photo.paste((200, 40, 40), (0, 0, S // 2, S)); photo.paste((40, 200, 40), (S // 2, 0, S, S))
+photo.paste((230, 185, 160), (690, 290, 790, 390))                                       # 얼굴 자리는 피부색(얼굴 찾기 결과를 피부색으로 확인해요)
 T = Image.new("RGB", (512, 512), (40, 40, 160))                # 3D 엔진이 칠한 색(흐릿): 앞 칸 왼쪽 탁한 빨강, 오른쪽 탁한 초록, 나머지 파랑
 T.paste((120, 70, 70), (0, 0, 85, 256)); T.paste((70, 120, 70), (85, 0, 171, 256))
 STATE["glb"] = uv_glb(0.75, 1.0, 0.5, T, n=16)
@@ -77,9 +78,10 @@ fm = next(v["inputs"] for v in gs[fi].values() if v["class_type"] == "MediaPipeF
 t = tex_of(j)
 assert np.abs(at(t, 740, 340) - (255, 0, 0)).max() <= 30 and np.abs(at(t, 750, 800) - (40, 200, 40)).max() <= 12, (at(t, 740, 340), at(t, 750, 800))
 ok("face: MediaPipe finds the face, that part is upscaled and pasted from the enlarged crop (rest from the photo); missing face model noted")
-STATE["face_box"] = ((S, S), (300, 200, 1000, 1000))          # 이미 큰 얼굴은 키우지 않아요
+STATE["face_box"] = ((S, S), (300, 200, 1000, 1000)); ok_ = hub.m3d_face_ok; hub.m3d_face_ok = lambda *a: True   # 이미 큰 얼굴은 키우지 않아요
 n0 = len(SUBMITTED); j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""})
 assert j["state"] == "done" and not any("UpscaleModelLoader" in {v["class_type"] for v in g.values()} for g in SUBMITTED[n0:])
+hub.m3d_face_ok = ok_
 ok("a face that is already large is not upscaled")
 
 # 5) 면 수 기본값·다시 짜기
