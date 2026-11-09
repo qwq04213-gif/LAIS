@@ -559,7 +559,7 @@ function lbLoad(){
   $('#lb-dl').href=it.url;$('#lb-dl').download=it.name||'image.png';
   if(LB.media){im.removeAttribute('src');$('#lb-cmp').hidden=true;
     md.innerHTML=ty==='video'?`<video src="${it.url}" controls autoplay loop playsinline></video>`:ty==='audio'?`<div class="lbaud"><b>♪ ${esc(it.name||'')}</b><audio src="${it.url}" controls autoplay></audio></div>`
-      :`<model-viewer src="${it.url}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer>`;
+      :`<div class="gmvbox lbmv"><model-viewer src="${it.url}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer><button type="button" class="ghost sm gmv-full" title="화면 가득 크게 봐요(Esc 로 나가요)">전체화면</button></div>`;
     if(ty==='3d')loadMV();$('#lb-info').textContent=`${it.name||''}  (${LB.i+1}/${LB.list.length})`;return}
   im.onload=()=>{LB.nw=im.naturalWidth;LB.nh=im.naturalHeight;im.style.width=LB.nw+'px';im.style.height=LB.nh+'px';lbFit();if(LB.wantCmp){LB.wantCmp=false;lbCmp()}};
   im.src=it.url;

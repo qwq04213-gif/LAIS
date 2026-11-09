@@ -3,6 +3,13 @@
 # ruff: noqa: F821
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+JOB_RX = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}(?:-[0-9A-Za-z가-힣_.-]{1,40})?$")     # 작업 한 번 = 폴더 하나(예: 20261109-223645-d1ad-모델이름)
+
+
+def job_dir_name(stamp, label=""):
+    """작업 한 번의 결과를 모으는 폴더 이름(날짜-시간-구분자[-이름])."""
+    lab = re.sub(r"[^0-9A-Za-z가-힣_.-]+", "_", str(label or "")).strip("_.")[:40]
+    return f"{stamp}-{uuid.uuid4().hex[:4]}" + (f"-{lab}" if lab else "")
 OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악", "tts": "음성", "photo": "사진 편집", "etc": "기타", "depth": "깊이 맵", "vrestore": "영상 복원", "audio": "소리 분리·복원", "m3d": "3D"}
 
 
@@ -11,7 +18,7 @@ def out_path(rel):
     parts = [x for x in urllib.parse.unquote(rel).split("/") if x]
     if len(parts) == 2 and parts[0] in OUT_SUB.values() or parts[:1] == ["기타"] and len(parts) == 2:
         return OUT / parts[0] / Path(parts[1]).name
-    if len(parts) == 3 and parts[0] in OUT_SUB.values() and DATE_RX.match(parts[1]):      # 날짜별로 정리한 폴더
+    if len(parts) == 3 and parts[0] in OUT_SUB.values() and (DATE_RX.match(parts[1]) or JOB_RX.match(parts[1])):      # 날짜별로 정리한 폴더 · 작업 폴더
         return OUT / parts[0] / parts[1] / Path(parts[2]).name
     return OUT / Path(parts[-1] if parts else "x").name
 

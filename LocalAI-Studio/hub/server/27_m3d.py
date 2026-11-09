@@ -349,6 +349,7 @@ def m3d_scene(p, J):
     """장면 전체: 고른 물체마다 3D → 깊이·사진 속 자리로 배치 → 한 장면 GLB (+ Blender 가 있으면 FBX·.blend)."""
     sid = p.get("id")
     m = m3d_meta(sid)
+    J["out_label"] = m.get("name") or ""                 # 결과 폴더 이름에 3D 이름을 붙여요
     d = M3D_DIR / sid
     objs = [o for o in m.get("scene") or [] if (d / f"scene_obj_{o['n']}.png").is_file()]
     if not objs:
@@ -972,6 +973,7 @@ def m3d_build(p, J):
     """3D 만들기: 사진(+고른 방향 그림) → 텍스처 입힌 게임용 GLB → (Blender) 크기·LOD·FBX/OBJ 묶음."""
     sid = p.get("id")
     m = m3d_meta(sid)
+    J["out_label"] = m.get("name") or ""                 # 결과 폴더 이름에 3D 이름을 붙여요
     d = M3D_DIR / sid
     o = m3d_opts(p, m)
     use = [s for s in M3D_SIDES if s in (p.get("sides") or []) and (d / f"view_{s}.png").is_file()]

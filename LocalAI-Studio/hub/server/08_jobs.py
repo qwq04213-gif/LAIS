@@ -152,10 +152,11 @@ def job_thread(J, p):
             claim("image")
         items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora, "vrestore": do_vrestore, "audio": do_audio, "m3d": do_m3d}[p["kind"]](p, J)
         sub = OUT_SUB["vid"] if p["kind"] in ("vpost", "vmix", "vedit", "vana") else OUT_SUB.get(p["kind"], "기타")
-        (OUT / sub).mkdir(parents=True, exist_ok=True)
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
+        jdir = job_dir_name(stamp, J.get("out_label") or "")         # 작업 한 번 = 폴더 하나(사용자 요청 — 결과 폴더가 너무 어지러워서)
         for i, (im, info, graph) in enumerate(items):
-            dsub = info.pop("_sub", None) or sub if isinstance(info, dict) else sub      # 깊이 맵처럼 따로 모아 두는 결과는 자기 폴더로
+            dsub0 = info.pop("_sub", None) or sub if isinstance(info, dict) else sub      # 깊이 맵처럼 따로 모아 두는 결과는 자기 폴더로
+            dsub = dsub0 + "/" + jdir
             (OUT / dsub).mkdir(parents=True, exist_ok=True)
             if p["kind"] in ("vid", "vpost", "vmix", "vedit", "music", "tts") or isinstance(im, (bytes, bytearray, Path)):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
                 name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts", "audio", "m3d") else "m3d" if graph in (".glb", ".zip") else "vid"}-{i}{graph}'
@@ -170,7 +171,7 @@ def job_thread(J, p):
                 (OUT / dsub / (name + ".json")).write_text(json.dumps({k: v for k, v in info.items() if k != "_extra"}, ensure_ascii=False), encoding="utf-8")
                 for xext, xdata in (info.get("_extra") or {}).items():      # 자막 파일(.srt) 같은 덧붙이는 파일
                     (OUT / dsub / (Path(name).stem + xext)).write_text(xdata, encoding="utf-8")
-                J["images"].append("/out/" + urllib.parse.quote(dsub) + "/" + name)
+                J["images"].append("/out/" + urllib.parse.quote(dsub0) + "/" + urllib.parse.quote(jdir) + "/" + name)
                 J.setdefault("used", []).append(info.get("prompt", ""))
                 continue
             if p["kind"] == "gen" and not p.get("init"):      # 모델은 8·16 배수 크기로만 그려서, 입력한 정확한 크기와 조금 다르면 그 크기로 맞춰 저장해요
@@ -180,9 +181,9 @@ def job_thread(J, p):
                         im = im.resize((rw, rh), RS.LANCZOS)
                 except (TypeError, ValueError):
                     pass
-            name = f'{stamp}-{uuid.uuid4().hex[:4]}-{"depth" if dsub == DEPTH_SUB else p["kind"]}-{i}.png'
+            name = f'{stamp}-{uuid.uuid4().hex[:4]}-{"depth" if dsub0 == DEPTH_SUB else p["kind"]}-{i}.png'
             im.save(OUT / dsub / name, "PNG", pnginfo=meta.pnginfo(info, graph) if embed else None)
-            J["images"].append("/out/" + urllib.parse.quote(dsub) + "/" + name)
+            J["images"].append("/out/" + urllib.parse.quote(dsub0) + "/" + urllib.parse.quote(jdir) + "/" + name)
             J.setdefault("used", []).append(info.get("prompt", ""))
         J["state"], J["progress"] = "done", 1.0
     except Cancelled as e:

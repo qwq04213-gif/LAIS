@@ -122,7 +122,7 @@ $('#gal-grid').addEventListener('click',async e=>{
   if(GSEL){const t=e.target.closest('.gt');if(t&&!e.target.closest('button,a,audio,video,model-viewer,summary')){e.preventDefault();const u=t.dataset.u;GPICK.has(u)?GPICK.delete(u):GPICK.add(u);galSelUi();return}}
   const st=e.target.closest('[data-star]');if(st){const on=!st.classList.contains('on'),r=await api('/api/gallery/fav',{file:st.dataset.star,on});
     if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
-  const g3=e.target.closest('[data-g3d]');if(g3){const box=g3.closest('.g3d');loadMV();box.outerHTML=`<model-viewer class="gmv" src="${g3.dataset.g3d}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer>`;return}
+  const g3=e.target.closest('[data-g3d]');if(g3){const box=g3.closest('.g3d');loadMV();box.outerHTML=`<div class="gmvbox"><model-viewer class="gmv" src="${g3.dataset.g3d}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer><button type="button" class="ghost sm gmv-full" title="화면 가득 크게 봐요(Esc 로 나가요)">전체화면</button></div>`;return}
   if(e.target.closest('audio,a,model-viewer,video'))return;
   const t=e.target.closest('.gt');if(!t||e.target.closest('figcaption'))return;
   const it=GAL.items.find(x=>x.url===t.dataset.u);if(!it)return;
@@ -352,3 +352,7 @@ $('#bk-go').onclick=async()=>{if(!BK)return;const mode=$('input[name=bkmode]:che
   $$('form[id^=f-]').forEach(f=>{try{const sel=$('.pre-sel',f);if(sel&&f.id){const a=ls.get('preset:'+f.id,{});const v=sel.value;sel.innerHTML='<option value="">내 프리셋 불러오기</option>'+Object.keys(a).map(n=>`<option>${esc(n)}</option>`).join('');sel.value=v}}catch{}});
   const c=r.counts;BK=null;$('#bk-box').hidden=true;
   toast(`되살렸어요: 프롬프트 ${c.prompts} · 와일드카드 ${c.wildcards} · 즐겨찾기 ${c.favs} · LoRA 정보 ${c.lora_user} · 프리셋 ${np} · 대화 ${c.chats||0}`,9000);loadLists()};
+
+/* 갤러리 3D 미리보기·크게 보기 화면의 3D 를 전체화면으로(Esc 로 나가요) */
+document.addEventListener('click',async e=>{const b=e.target.closest('.gmv-full');if(!b)return;e.preventDefault();e.stopPropagation();
+  const mv=b.parentElement.querySelector('model-viewer');if(!mv)return;try{await (mv.requestFullscreen||mv.webkitRequestFullscreen).call(mv)}catch{toast('전체화면을 열 수 없어요.')}});

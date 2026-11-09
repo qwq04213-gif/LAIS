@@ -216,7 +216,7 @@ def do_batch(p, J):
         if not steps:
             raise ValueError("하나 이상 골라 주세요. (자를 비율, 회전, 뒤집기, 긴 변 크기)")
         suffix = "_크기변경"
-    out_dir = OUT / OUT_SUB["batch"]
+    out_dir = OUT / OUT_SUB["batch"] / job_dir_name(time.strftime("%Y%m%d-%H%M%S"), op)      # 작업 한 번 = 폴더 하나
     out_dir.mkdir(parents=True, exist_ok=True)
     n, fails = len(imgs), []
     J["batch"] = {"total": n, "ok": 0, "failed": fails}
@@ -238,7 +238,7 @@ def do_batch(p, J):
                 res = res.convert("RGB")
             dst = _unique(out_dir / (f.stem + suffix + ext))
             res.save(dst, "JPEG", quality=95) if jpg else res.save(dst, "PNG")
-            J["images"].append("/out/" + urllib.parse.quote(OUT_SUB["batch"]) + "/" + urllib.parse.quote(dst.name))
+            J["images"].append("/out/" + urllib.parse.quote(OUT_SUB["batch"]) + "/" + urllib.parse.quote(out_dir.name) + "/" + urllib.parse.quote(dst.name))
             J["batch"]["ok"] += 1
         except Cancelled:
             raise
@@ -433,14 +433,14 @@ def gal_prompt(path, mtime):
 
 
 def out_files(d, exts=None):
-    """결과 하위 폴더(예: 생성)의 이미지·영상 파일. 날짜별로 정리한 폴더(2026-10-18)도 한 단계 들여다봐요."""
+    """결과 하위 폴더(예: 생성)의 이미지·영상 파일. 날짜별로 정리한 폴더(2026-10-18)·작업 폴더(작업 한 번 = 폴더 하나)도 한 단계 들여다봐요."""
     exts = exts or GAL_EXT
     try:
         for f in d.iterdir():
             if f.is_file():
                 if f.suffix.lower() in exts:
                     yield f
-            elif f.is_dir() and DATE_RX.match(f.name):
+            elif f.is_dir() and (DATE_RX.match(f.name) or JOB_RX.match(f.name)):
                 for g in f.iterdir():
                     if g.is_file() and g.suffix.lower() in exts:
                         yield g
@@ -470,8 +470,12 @@ def gal_delete(p):
             gone += 1
         except OSError:
             bad += 1
-        if len(parts) == 3:      # 비어 버린 날짜 폴더는 치워요
+        if len(parts) == 3:      # 비어 버린 날짜·작업 폴더는 치워요(작업 폴더에 남은 게 설정·묶음 파일뿐이면 그것도 함께)
             try:
+                if JOB_RX.match(fp.parent.name) and not any(x.suffix.lower() in GAL_EXT for x in fp.parent.iterdir() if x.is_file()):
+                    for x in fp.parent.iterdir():
+                        if x.is_file() and (x.suffix.lower() in (".json", ".srt", ".zip")):
+                            x.unlink()
                 fp.parent.rmdir()
             except OSError:
                 pass
