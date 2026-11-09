@@ -60,12 +60,13 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.3**(커밋 `v4.3`). 다음 판 **4.4**.
+마지막 출시: **4.4**(커밋 `v4.4`). 다음 판 **4.5**.
 
 ### 다음 할 일
 
-0. 출시 전(4.4 에 함께): 모델 지우기 용량 고침(`delete_files`·`delete_llm`·저장 공간 `llm_orphans`), 3D 사진 붙이기(`photoproj.py` — 카메라 자동 맞춤, `m3d_photo`)·얼굴 키워 붙이기(`m3d_face`, MediaPipe `mediapipe-face`)·캐릭터 면 20만/70만 선택·1536 이면 다시 짜기 1024. README 변경 내역은 출시 때 넣기(미검증: 실제 Pixal3D 결과에서 사진 붙이기 위치·얼굴 찾기)
 1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
+
+4.4 에서 넣은 것: 모델 지우기 용량 고침(`delete_files`·`delete_llm`·저장 공간 `llm_orphans`), 3D 사진 붙이기(`photoproj.py` — 카메라 자동 맞춤, `m3d_photo`)·얼굴 키워 붙이기(`m3d_face`, MediaPipe `mediapipe-face`)·캐릭터 면 20만/70만·1536 이면 다시 짜기 1024
 
 4.3 에서 넣은 것: 3D Pixal3D 사진 한 장 기본(`m3d_engine`, MoGe 화각)·캐릭터 텍스처 4096·16GB 이상 1536·작은 사진 자동 키우기(`m3d_enlarge`)·[업스케일로 키우기]·
 방향 칸마다 [그리기]·방향/T자 그림 outputs\3D 저장·3D 전체화면, 저장 공간(작업 폴더 표시·정리), 성인 표현 표시(`models.json` 의 `nsfw`)·제한 해제 대화 모델(Qwen3.5·Gemma 4 abliterated)
@@ -75,6 +76,7 @@ Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양�
 
 ### 미검증(실제 PC 에서 확인 필요)
 
+- 3D 사진 붙이기: 실제 Pixal3D·TRELLIS.2 GLB 의 좌표·원근에서 붙는 위치, MediaPipe 얼굴 찾기. 윈도우에서 모델 지운 뒤 실제 용량 감소
 - TRELLIS.2·Pixal3D 실제 결과 — 4.1 에서 ComfyUI 공식 예시(workflow_templates `3d_pixal3d_trellis2_image_to_model`)와 같게 맞춤:
   구조 CFGOverride(0.667)+RescaleCFG 0.7+shift 5, 모양 CFGOverride(0.769)+RescaleCFG 0.5·20단계, RemeshMesh `solid`. 멀티뷰 방향: 왼쪽 그림 = 얼굴이 그림 왼쪽
 - Blender 실제 실행(가져오기·LOD·FBX/OBJ 내보내기, 리깅·움직임 미리보기)
