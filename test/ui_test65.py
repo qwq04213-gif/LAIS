@@ -55,8 +55,9 @@ with sync_playwright() as p:
     assert "rig_preview.glb" in pg.get_attribute("#m3-mv", "src") and pg.get_attribute("#m3-mv", "autoplay") is not None and pg.inner_text("#m3-move") == "움직임 끄기"
     pg.evaluate("document.querySelector('#m3-mv').dispatchEvent(new Event('load'))"); assert pg.evaluate("window.__played") == 1
     pg.click("#m3-move"); assert pg.get_attribute("#m3-mv", "src") == glb and pg.get_attribute("#m3-mv", "autoplay") is None
-    pg.evaluate("window.__fs=0;HTMLElement.prototype.requestFullscreen=function(){window.__fs++;return Promise.resolve()}")
-    pg.click("#m3-full"); pg.wait_for_timeout(200); assert pg.evaluate("window.__fs") >= 1, pg.evaluate("[window.__fs, typeof document.querySelector('#m3-mv').requestFullscreen, document.querySelector('#toast')?.innerText]")
+    pg.click("#m3-full"); pg.wait_for_selector("#lb:not([hidden]) #lb-media model-viewer")          # 갤러리와 같은 크게 보기 화면
+    assert pg.get_attribute("#lb-media model-viewer", "src") == glb and pg.locator("#lb-media .gmv-full").count() == 1
+    pg.keyboard.press("Escape"); pg.wait_for_selector("#lb", state="hidden")
     ok("build with rig → bone info, motion preview toggles the viewer and plays")
     pg.select_option("#m3-kind", "object"); pg.click("#m3-go"); pg.wait_for_function("document.querySelector('#m3-mv') && !document.querySelector('.m3-rig')", timeout=30000)
     assert pg.locator("#m3-move").count() == 0

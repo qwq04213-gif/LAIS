@@ -198,7 +198,7 @@ function addTtsResults(sec,j){
 }
 function add3dResults(sec,j){
   const glb=j.images.filter(u=>/\.glb$/i.test(u));
-  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${glb.map(u=>`<figure class="vfig m3d"><model-viewer src="${u}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1" style="width:100%;height:420px;background:var(--raised);border-radius:8px"></model-viewer><figcaption><a href="${u}" download>저장 (.glb)</a> <button type="button" class="ghost sm mv-full" title="화면 가득 크게 봐요(Esc 로 나가요)">전체화면</button> <span class="mute">마우스로 돌리고 휠로 확대해요. 화면에 안 보이면 저장해서 Windows 3D 뷰어나 Blender 로 열어 주세요.</span></figcaption></figure>`).join('')}</div>`);
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${glb.map(u=>`<figure class="vfig m3d"><model-viewer src="${u}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1" style="width:100%;height:420px;background:var(--raised);border-radius:8px"></model-viewer><figcaption><a href="${u}" download>저장 (.glb)</a> <button type="button" class="ghost sm mv-full" title="갤러리처럼 크게 봐요(Esc 로 닫아요)">크게 보기</button> <span class="mute">마우스로 돌리고 휠로 확대해요. 화면에 안 보이면 저장해서 Windows 3D 뷰어나 Blender 로 열어 주세요.</span></figcaption></figure>`).join('')}</div>`);
   if(!window.customElements||customElements.get('model-viewer'))return;
   const sc=document.createElement('script');sc.type='module';sc.src='https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js';document.head.appendChild(sc)}
 function addResults(sec,j,kind){
@@ -305,4 +305,4 @@ const W5MSG=($('#w-vid')||{}).innerHTML||'';
 const need=(f,t)=>setBar(f.closest('.view'),t,'bad');
 
 document.addEventListener('click',e=>{const b=e.target.closest('.mv-full');if(!b)return;const mv=b.closest('figure')?.querySelector('model-viewer');
-  if(mv)(mv.requestFullscreen||mv.webkitRequestFullscreen||(()=>{})).call(mv)});
+  if(mv){const u=mv.getAttribute('src');lbOpen([{url:u,name:u.split('/').pop(),type:'3d'}],0)}});

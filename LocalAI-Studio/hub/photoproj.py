@@ -69,7 +69,14 @@ def load(glb):
     if "NORMAL" in at:
         N = _acc(g, b, at["NORMAL"])[:, :3] @ m[:3, :3].T
         N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
-    return {"g": g, "b": b, "P": P, "F": F, "UV": UV, "N": N, "image": ii, "tex": tex, "mat": mat, "node": ni, "prim": pr}
+    TG = None
+    if "TANGENT" in at and N is not None:     # 엔진이 노멀맵을 구운 방향 — 노멀맵은 꼭 이걸로 읽어요(직접 계산한 방향과 반대인 엔진이 있어요)
+        TG = _acc(g, b, at["TANGENT"])
+        if TG.shape[1] == 4:
+            TG = np.concatenate([TG[:, :3] @ m[:3, :3].T, TG[:, 3:4]], 1)
+        else:
+            TG = None
+    return {"g": g, "b": b, "P": P, "F": F, "UV": UV, "N": N, "TG": TG, "image": ii, "tex": tex, "mat": mat, "node": ni, "prim": pr}
 
 
 def _world(g, ni):
@@ -470,6 +477,12 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     T = np.asarray(tex.convert("RGB")).astype(np.float32)
     TH, TW = T.shape[:2]
     sel = np.nonzero(pick)[0]
+    align = None
+    if head is not None:                     # 3D 얼굴과 사진 얼굴의 각도·자리가 다르면 사진 얼굴을 3D 쪽으로 휘어요
+        try:
+            rgb, alpha, face, align = _align_face(P, F, UV, tex, cam, head, rgb, alpha, face, log)
+        except Exception as e:  # noqa: BLE001 — 맞추기는 덤: 실패하면 그대로
+            align = {"ok": False, "why": str(e)[:80]}
     soft = Image.fromarray((alpha * 255).astype(np.uint8))
     er = max(1, round(max(H0, W0) * 0.004))
     soft = soft.filter(ImageFilter.MinFilter(er * 2 + 1)).filter(ImageFilter.GaussianBlur(er))
@@ -542,7 +555,7 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
         new = replace_image(g, b, ii, data)
         g, b = glbscene.read(new)
     info = {"iou": round(v, 3), "pat": round(pat, 3), "cam": cam.name, "dist": str(cam.dist), "texels": int((w[:, 0] > 0.5).sum()), "face": bool(fbox),
-            "skin": round(float(sk.mean()), 3)}
+            "skin": round(float(sk.mean()), 3), "align": align}
     if head is not None:
         try:
             new, hi = head_split(new, cam, head, head_size, n, visible, soft, photo_rgb, fbox, (W0, H0), x, y, d, log)
@@ -554,6 +567,171 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     if progress:
         progress(1.0)
     return new, info
+
+
+# ───────────────────────── 얼굴 맞추기(사진 휘기) ─────────────────────────
+# 3D 엔진이 만든 얼굴은 사진 속 얼굴과 각도·기울기가 다를 수 있어요(고개를 돌린 사진, AI 가 그린 옆모습과 엇갈림).
+# 그대로 앞에서 비춰 붙이면 사진의 코가 3D 의 볼에 칠해져서, 앞에선 멀쩡해도 돌리면 얼굴이 깨져 보여요.
+# 엔진이 3D 에 칠한 얼굴(눈·코·입이 3D 굴곡 자리에 있어요)을 사진 카메라로 그려 사진과 맞춰 보고, 사진의 얼굴 부분을 그 자리로 휘어요.
+ALIGN_GRID = 160         # 얼굴을 이 크기(px)로 놓고 맞춰요
+ALIGN_MIN_GAIN = 0.08    # 맞춘 뒤 닮은 정도(NCC)가 이만큼은 좋아져야 휘어요
+ALIGN_MIN_MOVE = (3.0, 0.03, 0.05)   # 이보다 작게 휘는 건 안 해요(기울기°, 자리 이동÷얼굴, 크기 차이) — 이미 맞는 얼굴을 괜히 흐리게 하지 않게
+ALIGN_BLURS = (2.0, 4.0, 7.0)
+ALIGN_ROTS = (0.0, -15.0, 15.0)
+ALIGN_LCN = 10.0
+
+
+def _gblur(a, s):
+    """2D 배열 가우스 흐림(가장자리는 늘여서)"""
+    if s <= 0:
+        return a
+    r = max(1, int(3 * s))
+    k = np.exp(-0.5 * (np.arange(-r, r + 1) / s) ** 2)
+    k /= k.sum()
+    a = np.pad(a, r, mode="edge")
+    a = np.apply_along_axis(lambda v: np.convolve(v, k, "valid"), 0, a)
+    return np.apply_along_axis(lambda v: np.convolve(v, k, "valid"), 1, a)
+
+
+def _lcn(g, s=6.0):
+    """밝기·대비 차이를 지운 무늬(국소 정규화) — 엔진 색과 사진 색이 달라도 눈·코·입 모양으로 맞춰요"""
+    h = g - _gblur(g, s)
+    return h / (np.sqrt(_gblur(h * h, s)) + 4.0)
+
+
+def _ncc(a, b, m):
+    x, y = a[m] - a[m].mean(), b[m] - b[m].mean()
+    return float((x * y).sum() / (np.sqrt((x * x).sum() * (y * y).sum()) + 1e-9))
+
+
+def _warp_affine(I, p, H, W):
+    """격자(H×W) 화소 중심 → p 로 옮긴 자리에서 I 를 읽어요(가운데 기준 좌표)"""
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
+    u, v = xx + 0.5 - W / 2, yy + 0.5 - H / 2
+    X = p[0] * u + p[1] * v + p[2] + I.shape[1] / 2
+    Y = p[3] * u + p[4] * v + p[5] + I.shape[0] / 2
+    return _sample(I[..., None], X.ravel(), Y.ravel())[:, 0].reshape(H, W)
+
+
+def _lk_affine(Tm, I, m, iters=40, p0=None):
+    """Tm(u) ≈ I(A·u) 가 되게 A(2×3) 를 찾아요 — 거친 크기부터 차례로(가우스-뉴턴). → 6개 값"""
+    p = np.array([1.0, 0, 0, 0, 1.0, 0]) if p0 is None else np.array(p0, float)
+    for lv in (4, 2, 1):
+        H, W = Tm.shape[0] // lv, Tm.shape[1] // lv
+        if H < 8 or W < 8:
+            continue
+        crop = lambda a: a[:H * lv, :W * lv].reshape(H, lv, W, lv).mean((1, 3))
+        T_, I_, m_ = crop(Tm), crop(I), crop(m.astype(np.float64)) > 0.5
+        p[2] *= 1 if lv == 4 else 2
+        p[5] *= 1 if lv == 4 else 2
+        gy, gx = np.gradient(I_)
+        ys, xs = np.nonzero(m_)
+        if len(ys) < 30:
+            continue
+        u, v = xs + 0.5 - W / 2, ys + 0.5 - H / 2
+        for _ in range(iters):
+            X = p[0] * u + p[1] * v + p[2] + W / 2
+            Y = p[3] * u + p[4] * v + p[5] + H / 2
+            st = np.stack([I_, gx, gy], -1)
+            sv = _sample(st, X, Y)
+            e = T_[ys, xs] - sv[:, 0]
+            J = np.stack([sv[:, 1] * u, sv[:, 1] * v, sv[:, 1], sv[:, 2] * u, sv[:, 2] * v, sv[:, 2]], 1)
+            Hm = J.T @ J
+            dp = np.linalg.solve(Hm + 1e-3 * np.trace(Hm) / 6 * np.eye(6), J.T @ e)
+            p += dp
+            if np.abs(dp[[2, 5]]).max() < 0.01 and np.abs(dp[[0, 1, 3, 4]]).max() < 1e-4:
+                break
+    return p
+
+
+def _align_face(P, F, UV, tex, cam, head, rgb, alpha, face, log=None):
+    """→ (휜 rgb, 휜 alpha, 휜 얼굴 확대본, 정보). 맞출 수 없거나 나아지지 않으면 그대로 돌려줘요."""
+    x0, y0, x1, y1 = head
+    fs = float(max(x1 - x0, y1 - y0))
+    cx0, cy0 = (x0 + x1) / 2, (y0 + y1) / 2
+    k = ALIGN_GRID / fs
+    pad = 0.35
+    n = int(round((1 + 2 * pad) * ALIGN_GRID))
+    rx0, ry0 = cx0 - (0.5 + pad) * fs, cy0 - (0.5 + pad) * fs
+    x, y, d = cam.px(P)
+    gx, gy = (x - rx0) * k, (y - ry0) * k
+    tsel = np.nonzero(((gx[F] > -2) & (gx[F] < n + 2) & (gy[F] > -2) & (gy[F] < n + 2)).any(1))[0]
+    if len(tsel) < 50:
+        return rgb, alpha, face, {"ok": False, "why": "3D 얼굴 없음"}
+    pix, fid, b0, b1 = raster(np.stack([gx, gy], 1), F[tsel], n, n, d)
+    f = tsel[fid]
+    uv = UV[F[f, 0]] * b0[:, None] + UV[F[f, 1]] * b1[:, None] + UV[F[f, 2]] * (1 - b0 - b1)[:, None]
+    T = np.asarray(tex.convert("RGB")).astype(np.float32)
+    E = np.zeros((n * n, 3), np.float32)
+    E[pix] = _sample(T, (uv[:, 0] % 1.0) * T.shape[1], uv[:, 1] * T.shape[0])
+    have = np.zeros(n * n, bool)
+    have[pix] = True
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    PX, PY = rx0 + (xx.ravel() + 0.5) / k, ry0 + (yy.ravel() + 0.5) / k
+    Ph = _sample(rgb.astype(np.float32) * 255, PX, PY)
+    Al = _sample(alpha[..., None].astype(np.float32), PX, PY)[:, 0]
+    lum = lambda c: (0.3 * c[:, 0] + 0.59 * c[:, 1] + 0.11 * c[:, 2]).reshape(n, n).astype(np.float64)
+    le, lp = lum(E), lum(Ph)
+    inface = (np.abs(xx - n / 2) < (0.5 + 0.1) * ALIGN_GRID) & (np.abs(yy - n / 2) < (0.5 + 0.1) * ALIGN_GRID)
+    roi = have.reshape(n, n) & (Al.reshape(n, n) > 0.5) & inface
+    if roi.sum() < 0.3 * ALIGN_GRID ** 2:
+        return rgb, alpha, face, {"ok": False, "why": "겹치는 얼굴 부분이 적음"}
+    best = None
+    for sb in ALIGN_BLURS:                   # 엔진 색은 사진보다 훨씬 흐려요 — 사진을 여러 정도로 흐려 보고 가장 잘 맞는 것
+        ge, gp = _lcn(_gblur(le, 1.0), ALIGN_LCN), _lcn(_gblur(lp, sb), ALIGN_LCN)
+        b0_ = _ncc(ge, gp, roi)
+        for r0 in ALIGN_ROTS:                # 시작 각도도 몇 가지(고개를 많이 기울인 사진)
+            cr, sr = math.cos(math.radians(r0)), math.sin(math.radians(r0))
+            pp_ = _lk_affine(ge, gp, roi, p0=[cr, -sr, 0, sr, cr, 0])
+            a_ = _ncc(ge, _warp_affine(gp, pp_, n, n), roi)
+            if best is None or a_ - b0_ > best[0] - best[1]:
+                best = (a_, b0_, pp_)
+    after, before, p = best
+    A = np.array([[p[0], p[1]], [p[3], p[4]]])
+    sv = np.linalg.svd(A, compute_uv=False)
+    rot = float(np.degrees(np.arctan2(p[3] - p[1], p[0] + p[4])))
+    shift = float(np.hypot(p[2], p[5]) / ALIGN_GRID)
+    info = {"ok": False, "ncc": [round(before, 3), round(after, 3)], "rot": round(rot, 1), "shift": round(shift, 3), "scale": [round(float(v), 3) for v in sv]}
+    big = abs(rot) >= ALIGN_MIN_MOVE[0] or shift >= ALIGN_MIN_MOVE[1] or abs(sv.max() - 1) >= ALIGN_MIN_MOVE[2] or abs(sv.min() - 1) >= ALIGN_MIN_MOVE[2]
+    if not (big and after >= before + ALIGN_MIN_GAIN and 0.7 < sv.min() and sv.max() < 1.45 and abs(rot) < 35 and shift < 0.35):
+        info["why"] = "맞춰도 나아지지 않거나 너무 많이 휘어야 함"
+        if log:
+            log("[얼굴 맞추기 건너뜀]", info)
+        return rgb, alpha, face, info
+    info["ok"] = True
+    if log:
+        log("[얼굴 맞추기]", info)
+
+    def disp(qx, qy):
+        """사진 좌표 → 그 자리에 올 사진 좌표(얼굴은 휘고, 바깥으로 갈수록 그대로)"""
+        u, v = (qx - rx0) * k - n / 2, (qy - ry0) * k - n / 2
+        wx, wy = p[0] * u + p[1] * v + p[2], p[3] * u + p[4] * v + p[5]
+        r = np.maximum(np.abs(u), np.abs(v)) / ALIGN_GRID          # 0.5 = 얼굴 상자 가장자리
+        w = np.clip((0.5 + pad - r) / (pad - 0.1), 0, 1)
+        w = w * w * (3 - 2 * w)
+        return qx + w * (wx - u) / k, qy + w * (wy - v) / k
+
+    H0, W0 = alpha.shape
+    bx0, by0 = max(0, int(rx0)), max(0, int(ry0))
+    bx1, by1 = min(W0, int(np.ceil(rx0 + n / k))), min(H0, int(np.ceil(ry0 + n / k)))
+    if bx1 > bx0 and by1 > by0:
+        qy, qx = np.mgrid[by0:by1, bx0:bx1].astype(np.float64)
+        sx, sy = disp(qx.ravel() + 0.5, qy.ravel() + 0.5)
+        st = np.concatenate([rgb.astype(np.float32), alpha[..., None].astype(np.float32)], -1)
+        out = _sample(st, sx, sy).reshape(by1 - by0, bx1 - bx0, 4)
+        rgb, alpha = rgb.copy(), alpha.copy()
+        rgb[by0:by1, bx0:bx1] = out[..., :3]
+        alpha[by0:by1, bx0:bx1] = out[..., 3]
+    if face is not None:
+        fx0, fy0, fx1, fy1, fim = face
+        fa = np.asarray(fim.convert("RGB")).astype(np.float32)
+        fh, fw = fa.shape[:2]
+        kx, ky = fw / (fx1 - fx0), fh / (fy1 - fy0)
+        qy, qx = np.mgrid[0:fh, 0:fw].astype(np.float64)
+        sx, sy = disp(fx0 + (qx.ravel() + 0.5) / kx, fy0 + (qy.ravel() + 0.5) / ky)
+        fa2 = _sample(fa, (sx - fx0) * kx, (sy - fy0) * ky).reshape(fh, fw, 3)
+        face = (fx0, fy0, fx1, fy1, Image.fromarray(np.clip(fa2, 0, 255).astype(np.uint8)))
+    return rgb, alpha, face, info
 
 
 # ───────────────────────── 머리 전용 텍스처 ─────────────────────────
@@ -709,6 +887,7 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         nm = np.asarray(_img_of(g, b, mat["normalTexture"]["index"]).convert("RGB")).astype(np.float32)
         To, Bo = _frames(P3, OUV3, None)
         Tn, Bn = _frames(P3, NUV3, None)
+        TG3 = M["TG"][FH] if M.get("TG") is not None else None
         nt = np.zeros((TS, TS, 3), np.float32)
         nt[...] = (127.5, 127.5, 255)
     tex = np.zeros((TS, TS, 3), np.float32)
@@ -749,7 +928,13 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         tex[ty, tx], done[ty, tx] = col, True
         if has_nm:                                     # 노멀맵: 원래 텍스처 방향 → 세상 방향 → 새 텍스처 방향으로 옮겨요
             ns = _sample(nm, ouv[:, 0] * nm.shape[1], ouv[:, 1] * nm.shape[0]) / 127.5 - 1
-            T1, B1 = _tbn(To[t], Bo[t], Nn)
+            if TG3 is not None:                        # 엔진이 준 접선(TANGENT)으로 읽어요
+                T1 = (TG3[t, :, :3] * c[..., None]).sum(1)
+                T1 -= Nn * (T1 * Nn).sum(1, keepdims=True)
+                T1 /= np.maximum(np.linalg.norm(T1, axis=1, keepdims=True), 1e-12)
+                B1 = np.cross(Nn, T1) * np.where(TG3[t, 0, 3:4] < 0, -1.0, 1.0)
+            else:
+                T1, B1 = _tbn(To[t], Bo[t], Nn)
             T2, B2 = _tbn(Tn[t], Bn[t], Nn)
             wv = ns[:, 0:1] * T1 + ns[:, 1:2] * B1 + ns[:, 2:3] * Nn
             nn = np.stack([(wv * T2).sum(1), (wv * B2).sum(1), (wv * Nn).sum(1)], 1)
@@ -807,12 +992,20 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         raise ValueError("노드 변환이 있는 3D 예요")
     Ph = P3.reshape(-1, 3).astype(np.float32)
     Nh = N3.reshape(-1, 3).astype(np.float32)
+    Th = None
+    if has_nm and M["N"] is not None:
+        Tc = np.repeat(Tn[:, None], 3, 1).reshape(-1, 3)
+        Bc = np.repeat(Bn[:, None], 3, 1).reshape(-1, 3)
+        Nc = Nh.astype(np.float64) / np.maximum(np.linalg.norm(Nh, axis=1, keepdims=True), 1e-12)
+        Tt, Bt = _tbn(Tc, Bc, Nc)
+        wsg = np.where((np.cross(Nc, Tt) * Bt).sum(1) < 0, -1.0, 1.0)
+        Th = np.concatenate([Tt, wsg[:, None]], 1).astype(np.float32)
     UVh = NUV3.reshape(-1, 2).astype(np.float32)
     keep = np.ones(len(F), bool)
     keep[hf] = False
     body_idx = F[keep].astype(np.uint32).tobytes()
     head_idx = np.arange(len(Ph), dtype=np.uint32).tobytes()
-    adds = [Ph.tobytes(), UVh.tobytes(), head_idx] + ([Nh.tobytes()] if M["N"] is not None else []) + [_png(a) for _, a in imgs]
+    adds = [Ph.tobytes(), UVh.tobytes(), head_idx] + ([Nh.tobytes()] if M["N"] is not None else []) + ([Th.tobytes()] if Th is not None else []) + [_png(a) for _, a in imgs]
     pr = M["prim"]
     g2, b2, nv = rebuild(g, b, {g["accessors"][pr["indices"]]["bufferView"]: body_idx}, adds)
     acc = [dict(x) for x in g2["accessors"]]
@@ -830,6 +1023,10 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         acc.append({"bufferView": nv[3], "componentType": 5126, "count": len(Nh), "type": "VEC3"})
         attrs["NORMAL"] = base_acc + 3
         vi = 4
+    if Th is not None:
+        acc.append({"bufferView": nv[vi], "componentType": 5126, "count": len(Th), "type": "VEC4"})
+        attrs["TANGENT"] = len(acc) - 1
+        vi += 1
     g2["accessors"] = acc
     g2["images"] = [dict(x) for x in g2["images"]] + [{"bufferView": nv[vi + i], "mimeType": "image/png"} for i in range(len(imgs))]
     g2["samplers"] = [dict(x) for x in g2.get("samplers") or []] + [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 33071}]

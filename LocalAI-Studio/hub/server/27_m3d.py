@@ -791,6 +791,11 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
             fov = next((float(t) for t in texts if re.fullmatch(r"\s*\d+(\.\d+)?\s*", str(t)) and 5 < float(t) < 170), None)
         if fov:
             dist_e = 0.55 / math.tan(math.radians(fov) / 2)
+    if J.get("_m3d_dir"):                  # 3D 엔진이 만든 원래 3D(사진 붙이기 전) — 마지막 것 하나만 작업 폴더에 남겨요(문제 살필 때 보내 주세요)
+        try:
+            (Path(J["_m3d_dir"]) / "engine_last.glb").write_bytes(glb)
+        except OSError:
+            pass
     if o.get("photo", True):
         glb = m3d_photo(glb, imgs["front"], J, o, dist_e)
     return glb
@@ -962,7 +967,8 @@ def m3d_photo(glb, photo, J, o=None, dist_e=None):
     J["m3d_photo_res"] = {"done": True, "iou": info["iou"], "face": info.get("face"), "head": info.get("head"),
                           "text": f"앞 사진을 그대로 붙였어요(겹침 {info['iou']:.0%}{', 얼굴은 키워서' if info.get('face') else ''}"
                                   f"{', 머리는 전용 텍스처 ' + str(info['head_tex']) + 'px' if info.get('head') else ''})."
-                                  + (" 얼굴을 확실히 찾지 못해 얼굴 고해상도는 건너뛰었어요(얼굴이 크게 나온 사진에서 잘 돼요)." if noface else "")}
+                                  + (" 얼굴을 확실히 찾지 못해 얼굴 고해상도는 건너뛰었어요(얼굴이 크게 나온 사진에서 잘 돼요)." if noface else "")
+                                  + (f" 사진 속 얼굴의 각도·자리를 3D 얼굴에 맞춰 휘어 붙였어요(기울기 {abs((info.get('align') or {}).get('rot', 0)):.0f}°)." if (info.get("align") or {}).get("ok") else "")}
     if info.get("head_error"):
         quiet_log("[머리 전용 텍스처 건너뜀]", info["head_error"])
     if "face_model" in (J.get("m3d_notes") or []) and not J.get("_face_noted"):
@@ -977,6 +983,7 @@ def m3d_build(p, J):
     m = m3d_meta(sid)
     J["out_label"] = m.get("name") or ""                 # 결과 폴더 이름에 3D 이름을 붙여요
     d = M3D_DIR / sid
+    J["_m3d_dir"] = str(d)
     o = m3d_opts(p, m)
     use = [s for s in M3D_SIDES if s in (p.get("sides") or []) and (d / f"view_{s}.png").is_file()]
     mv = bool(use)

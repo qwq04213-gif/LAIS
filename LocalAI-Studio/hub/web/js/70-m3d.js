@@ -70,7 +70,7 @@ $('#m3-go').onclick=async()=>{if(!M3.S)return;
   const j=await m3Job(p,'3D 만드는 중');if(!j)return;m3Show(j)};
 function m3Show(j){const glb=j.images.find(u=>/\.glb$/i.test(u)),zip=j.images.find(u=>/\.zip$/i.test(u)),st=j.m3d_stats,rg=st?.rig;loadMV();M3.glb=glb;M3.pv=rg?.preview||'';
   $('#m3-out').innerHTML=`<div class="va-tool"><div class="m3-viewer"><model-viewer id="m3-mv" src="${glb}" camera-controls auto-rotate shadow-intensity="0.7" exposure="1.05" environment-image="neutral"></model-viewer></div>
-    <div class="vbtns m3-bar"><button type="button" class="ghost sm" id="m3-clay" title="색을 빼고 모양만 봐요">모양만 보기</button><button type="button" class="ghost sm" id="m3-spin">회전 멈추기</button><button type="button" class="ghost sm" id="m3-full" title="화면 가득 크게 봐요(Esc 로 나가요)">전체화면</button>
+    <div class="vbtns m3-bar"><button type="button" class="ghost sm" id="m3-clay" title="색을 빼고 모양만 봐요">모양만 보기</button><button type="button" class="ghost sm" id="m3-spin">회전 멈추기</button><button type="button" class="ghost sm" id="m3-full" title="갤러리처럼 크게 봐요(Esc 로 닫아요)">크게 보기</button>
       ${M3.pv?'<button type="button" class="ghost sm" id="m3-move" title="팔 들기·고개 끄덕임으로 뼈대·가중치를 확인해요(게임용 파일에는 안 들어가요)">움직임 미리보기</button>':''}
       <a class="ghost sm" href="${glb}" download>GLB 저장</a>${zip?`<a class="go sm" href="${zip}" download>게임용 묶음 저장 (.zip)</a>`:''}</div>
     ${st?.photo?`<p class="m3-photo ${st.photo.done?'ok':'no'}">${st.photo.done?'✓':'⚠'} 사진 붙이기: ${esc(st.photo.text)}</p>`:''}
@@ -84,7 +84,7 @@ $('#m3-out').addEventListener('click',async e=>{const mv=$('#m3-mv');if(!mv)retu
   if(e.target.id==='m3-move'&&M3.pv){const on=!mv.dataset.move;mv.dataset.move=on?'1':'';mv.setAttribute('src',on?M3.pv:M3.glb);
     if(on){mv.setAttribute('autoplay','');mv.addEventListener('load',()=>mv.play({repetitions:Infinity}),{once:true})}else mv.removeAttribute('autoplay');
     e.target.textContent=on?'움직임 끄기':'움직임 미리보기'}
-  if(e.target.id==='m3-full'){try{await (mv.requestFullscreen||mv.webkitRequestFullscreen).call(mv)}catch{toast('전체화면을 열 수 없어요.')}return}
+  if(e.target.id==='m3-full'){lbOpen([{url:mv.getAttribute('src')||M3.glb,name:(M3.glb||'').split('/').pop(),type:'3d'}],0);return}      /* 갤러리의 크게 보기 화면 그대로 */
   if(e.target.id==='m3-spin'){const on=mv.toggleAttribute('auto-rotate');e.target.textContent=on?'회전 멈추기':'회전하기'}
   if(e.target.id==='m3-clay'&&mv.model){const on=!mv.dataset.clay;mv.dataset.clay=on?'1':'';
     for(const m of mv.model.materials){const pb=m.pbrMetallicRoughness,bt=pb.baseColorTexture;
