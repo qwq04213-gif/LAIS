@@ -27,7 +27,7 @@ with sync_playwright() as p:
     pg.wait_for_function("document.querySelector('#f-gen [name=prompt]').value.includes('red scarf')", timeout=10000)
     pg.wait_for_function("document.querySelectorAll('#v-gen .res figure img').length>=4", timeout=40000); ok("⟳ fills the same settings and makes 4 new pictures at once")
     pg.click("nav button[data-v=gal]"); pg.locator("#gal-grid .gt img").first.click(); pg.wait_for_selector("#lb:not([hidden])")
-    assert pg.is_visible("#lb-cont"); pg.click("#lb-cont summary"); labels = pg.inner_text("#lb-cont .menu"); assert "이미지 생성으로 보내기" in labels and "업스케일" in labels and "영상" in labels and "변형" in labels; ok("big view has a [이어서 작업] menu with every follow-up")
+    assert pg.is_visible("#lb-cont"); pg.click("#lb-cont summary"); pg.wait_for_function("(()=>{const m=document.querySelector('#lb-cont .menu');return m&&getComputedStyle(m).visibility==='visible'&&m.innerText.includes('변형')})()"); labels = pg.inner_text("#lb-cont .menu"); assert "이미지 생성으로 보내기" in labels and "업스케일" in labels and "영상" in labels and "변형" in labels; ok("big view has a [이어서 작업] menu with every follow-up")
     pg.click('#lb-cont [data-to="vid"]'); pg.wait_for_selector("#v-vid.on"); assert pg.is_hidden("#lb"); ok("choosing an item closes the big view and opens that screen")
     pg.click("nav button[data-v=gal]"); pg.locator("#gal-grid .gt img").first.click(); pg.click("#lb-cont summary"); pg.click('#lb-cont [data-to="gvar"]'); pg.wait_for_selector("#v-gen.on")
     pg.wait_for_function("document.querySelectorAll('#v-gen .res figure img').length>=4", timeout=40000); ok("variation from the big view runs on the gen screen")
