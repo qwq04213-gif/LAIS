@@ -33,6 +33,19 @@ r = post("/api/gallery/delete", {"files": urls}); assert r["deleted"] == 2 and r
 assert "생성/a.png" not in json.loads((hub.ROOT / "gallery.json").read_text(encoding="utf-8"))["favs"]; ok("delete removes the files and their favourite marks")
 vd = time.strftime("%Y-%m-%d", time.localtime(time.time() - 2 * 86400)); r = post("/api/gallery/delete", {"files": [f"/out/영상/{vd}/v.mp4"]}); assert r["deleted"] == 1 and not (V / vd).exists(); ok("video delete also removes its settings file and the emptied date folder")
 bad = post("/api/gallery/delete", {"files": ["/out/../x.png", "/out/생성/nope.png", "../../etc/passwd", "/out/기타/z.png", f"/out/생성/{d3}/b.png.json"]}); assert bad["deleted"] == 0 and bad["failed"] == 5 and (G / d3 / "b.png").exists(); ok("traversal / missing / non-media paths refused")
+# 3D 를 지우면 같은 작업의 게임용 묶음(.zip)·설정 파일도 함께(예전 방식 — 한 폴더에 섞여 있는 파일)
+D3 = hub.OUT / "3D"; D3.mkdir(parents=True, exist_ok=True)
+for n in ("20261109-223645-d1ad-m3d-0.glb", "20261109-223645-d1ad-m3d-0.glb.json", "20261109-223645-3e90-m3d-1.zip", "20261109-223645-3e90-m3d-1.zip.json", "20261109-230000-aaaa-m3d-1.zip"):
+    (D3 / n).write_bytes(b"x")
+r = post("/api/gallery/delete", {"files": ["/out/3D/20261109-223645-d1ad-m3d-0.glb"]}); assert r["deleted"] == 1 and r["urls"] == ["/out/3D/20261109-223645-d1ad-m3d-0.glb"]
+assert sorted(x.name for x in D3.iterdir()) == ["20261109-230000-aaaa-m3d-1.zip"], list(D3.iterdir())     # 다른 작업의 묶음은 그대로
+# 작업 폴더(작업 한 번 = 폴더 하나): 마지막 결과를 지우면 남은 설정·묶음과 폴더까지
+jd = D3 / "20261110-101010-beef-hero"; jd.mkdir()
+for n in ("20261110-101010-1111-m3d-0.glb", "20261110-101010-1111-m3d-0.glb.json", "20261110-101010-2222-m3d-1.zip", "20261110-101010-2222-m3d-1.zip.json"):
+    (jd / n).write_bytes(b"x")
+assert any(x["url"].endswith("/20261110-101010-beef-hero/20261110-101010-1111-m3d-0.glb") for x in get("/api/gallery?kind=3D")["items"])
+r = post("/api/gallery/delete", {"files": ["/out/3D/20261110-101010-beef-hero/20261110-101010-1111-m3d-0.glb"]}); assert r["deleted"] == 1 and not jd.exists(), list(jd.iterdir()) if jd.exists() else None
+ok("deleting a 3D model also removes its game zip and settings; an emptied job folder goes too; job folders show in the gallery")
 # 일괄 처리 입력으로 날짜 폴더 포함
 r = post("/api/batch/scan", {"outsub": "생성"}); assert r["count"] >= 3, r; ok("batch 'result folder' source also sees date folders")
 print("ALL OK")

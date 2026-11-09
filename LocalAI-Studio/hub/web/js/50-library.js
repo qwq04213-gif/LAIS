@@ -101,7 +101,7 @@ const galSelUi=()=>{GSEL=GPICK.size>0;$('#gal-grid').classList.toggle('sel',GSEL
 async function galDelete(urls){if(!urls.length)return;
   if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;
   const r=await api('/api/gallery/delete',{files:urls});if(r.error)return toast(r.error);
-  const set=new Set(urls);$$('#gal-grid .gt').forEach(t=>{if(set.has(t.dataset.u))t.remove()});GAL.items=GAL.items.filter(x=>!set.has(x.url));urls.forEach(u=>GPICK.delete(u));
+  const set=new Set(r.urls||urls);urls=[...set];      // 실제로 지운 것만 갤러리에서 빼요(못 지운 건 남겨 둬요)$$('#gal-grid .gt').forEach(t=>{if(set.has(t.dataset.u))t.remove()});GAL.items=GAL.items.filter(x=>!set.has(x.url));urls.forEach(u=>GPICK.delete(u));
   $$('#gal-grid .gday').forEach(h=>{if(!(h.nextElementSibling&&h.nextElementSibling.classList.contains('gt')))h.remove()});$('#gal-n').textContent=$$('#gal-grid .gt').length+'개 표시 중';galSelUi();toast(`${r.deleted}개를 지웠어요.`+(r.failed?` (${r.failed}개는 지우지 못했어요)`:''))}
 $('#gal-sel').onclick=()=>{$$('#gal-grid .gt').forEach(g=>GPICK.add(g.dataset.u));galSelUi()};
 $('#gal-unsel').onclick=()=>{GPICK.clear();galSelUi()};

@@ -89,7 +89,7 @@ assert [node(x["model"]) for x in ks] == ["ModelSamplingSD3", "RescaleCFG", "Res
 rm = cls("RemeshMesh")[0]; assert rm["sign_mode"] == "solid" and rm["sign_mode.fill"] == 20.0 and rm["smooth_iters"] == 20 and not any("drop_inverted" in k for k in rm), rm
 assert cls("ImageCropToMask")[0]["pad_factor"] == 1.0 and node(cls("BakeNormalMapFromMesh")[0]["high_poly"]) == "RemeshMesh"
 assert node(cls("Trellis2TextureStage")[0]["positive"]) == "Trellis2UpsampleStage" and len(cls("MeshSmoothNormals")) == 2
-side = json.loads(next((hub.OUT / "3D").glob("*.glb.json")).read_text(encoding="utf-8")); assert side["engine"] == "TRELLIS.2" and side["views"] == ["front"]
+side = json.loads(next((hub.OUT / "3D").rglob("*.glb.json")).read_text(encoding="utf-8")); assert side["engine"] == "TRELLIS.2" and side["views"] == ["front"]
 ok("build (single view): TRELLIS.2 graph — seeds, upsample to 1024, remesh, faces, texture size; Pixal3D fallback warned; saved in 3D/")
 # 빠르게(512) + 다시 짜기 끔 → 올려 그리기·다시 짜기 없음, 이상한 값은 기본값
 j = job({"kind": "m3d", "op": "build", "id": sid, "res": "512", "remesh": False, "faces": "123", "tex": "9999", "blender": False}); assert j["state"] == "done", j

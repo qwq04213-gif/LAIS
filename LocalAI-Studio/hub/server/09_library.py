@@ -382,8 +382,16 @@ def gal_type(f):
 
 
 def gal_sides(f):
-    """결과 파일 옆에 붙는 설정(.json)·자막(.srt) 파일"""
-    return [x for x in (f.with_name(f.name + ".json"), f.with_suffix(".srt")) if x != f and x.is_file()]
+    """결과 파일 옆에 붙는 설정(.json)·자막(.srt) 파일. 3D(.glb)는 같은 작업에서 함께 만든 게임용 묶음(.zip)과 그 설정 파일까지."""
+    out = [x for x in (f.with_name(f.name + ".json"), f.with_suffix(".srt")) if x != f and x.is_file()]
+    m = re.match(r"^(\d{8}-\d{6})-[0-9a-f]{4}-m3d-\d+\.glb$", f.name)
+    if m:
+        for z in f.parent.glob(m.group(1) + "-*-m3d-*.zip"):
+            if z.is_file():
+                out.append(z)
+                if z.with_name(z.name + ".json").is_file():
+                    out.append(z.with_name(z.name + ".json"))
+    return out
 _GMETA = {}
 
 
@@ -451,7 +459,7 @@ def out_files(d, exts=None):
 def gal_delete(p):
     """갤러리에서 고른 파일을 컴퓨터에서 지워요(영상의 설정 파일·즐겨찾기 표시도 함께). 복구할 수 없어요."""
     gone, bad = 0, 0
-    keys = []
+    keys, done = [], []
     for rel in [str(x) for x in (p.get("files") or [])][:200]:
         if not rel.startswith("/out/"):
             bad += 1
@@ -468,6 +476,7 @@ def gal_delete(p):
                 side.unlink()
             keys.append(parts[0] + "/" + fp.name)
             gone += 1
+            done.append(rel)
         except OSError:
             bad += 1
         if len(parts) == 3:      # 비어 버린 날짜·작업 폴더는 치워요(작업 폴더에 남은 게 설정·묶음 파일뿐이면 그것도 함께)
@@ -484,7 +493,7 @@ def gal_delete(p):
             fav = gal_favs()
             if fav & set(keys):
                 GAL_FILE.write_text(json.dumps({"favs": sorted(fav - set(keys))}, ensure_ascii=False), encoding="utf-8")
-    return {"ok": True, "deleted": gone, "failed": bad}
+    return {"ok": True, "deleted": gone, "failed": bad, "urls": done}
 
 
 def organize_outputs(p):
@@ -518,7 +527,12 @@ def organize_outputs(p):
                     sides = gal_sides(f)
                     f.rename(dst)
                     for side in sides:
-                        side.rename(dst.with_name(dst.name + ".json") if side.suffix == ".json" else dst.with_suffix(".srt"))
+                        if side.name == f.name + ".json":
+                            side.rename(dst.with_name(dst.name + ".json"))
+                        elif side.suffix == ".srt" and side.stem == f.stem:
+                            side.rename(dst.with_suffix(".srt"))
+                        else:                                  # 3D 게임용 묶음(.zip)·그 설정 파일은 이름 그대로 같은 날짜 폴더로
+                            side.rename(_unique(dd / side.name))
                     moved += 1
                 except OSError:
                     failed += 1
