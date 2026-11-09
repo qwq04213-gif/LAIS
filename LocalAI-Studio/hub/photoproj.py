@@ -10,6 +10,7 @@
 3) 얼굴 확대본(face)이 있으면 그 부분은 확대본에서 가져와요(사진보다 촘촘해요).
 """
 import io
+import json
 import math
 
 import numpy as np
@@ -63,7 +64,11 @@ def load(glb):
     P = P @ m[:3, :3].T + m[:3, 3]
     F = _acc(g, b, pr["indices"]).astype(np.int64).reshape(-1, 3)
     UV = _acc(g, b, at["TEXCOORD_0"])[:, :2]
-    return {"g": g, "b": b, "P": P, "F": F, "UV": UV, "image": ii, "tex": tex, "mat": mat}
+    N = None
+    if "NORMAL" in at:
+        N = _acc(g, b, at["NORMAL"])[:, :3] @ m[:3, :3].T
+        N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+    return {"g": g, "b": b, "P": P, "F": F, "UV": UV, "N": N, "image": ii, "tex": tex, "mat": mat, "node": ni, "prim": pr}
 
 
 def _world(g, ni):
@@ -74,6 +79,37 @@ def _world(g, ni):
         m = glbscene._mat(nodes[i]) @ m
         i, k = parent.get(i), k + 1
     return m
+
+
+def rebuild(g, b, repl=None, add=()):
+    """버퍼 다시 묶기: repl {bufferView 번호: 새 바이트} 는 바꾸고, add 의 바이트는 새 bufferView 로 뒤에 붙여요.
+    → (g, 새 bin, 새로 붙인 bufferView 번호들). g 는 복사본이에요."""
+    repl = repl or {}
+    g = {**g, "bufferViews": [dict(v) for v in g["bufferViews"]], "buffers": [dict(x) for x in g["buffers"]]}
+    out, pos = [], 0
+    for k in sorted(range(len(g["bufferViews"])), key=lambda k: g["bufferViews"][k].get("byteOffset", 0)):
+        v = g["bufferViews"][k]
+        if v.get("buffer", 0) != 0:
+            raise ValueError("버퍼가 여러 개예요")
+        chunk = repl[k] if k in repl else b[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]]
+        pad = -pos % 4
+        out.append(b"\0" * pad)
+        pos += pad
+        v["byteOffset"], v["byteLength"] = pos, len(chunk)
+        out.append(chunk)
+        pos += len(chunk)
+    new = []
+    for chunk in add:
+        pad = -pos % 4
+        out.append(b"\0" * pad)
+        pos += pad
+        g["bufferViews"].append({"buffer": 0, "byteOffset": pos, "byteLength": len(chunk)})
+        new.append(len(g["bufferViews"]) - 1)
+        out.append(chunk)
+        pos += len(chunk)
+    nb = b"".join(out)
+    g["buffers"][0]["byteLength"] = len(nb)
+    return g, nb, new
 
 
 def replace_image(g, b, ii, data, mime="image/png"):
@@ -373,8 +409,9 @@ def _adjust_orm(M, wmap, skin):
     return out
 
 
-def project(glb, photo, face=None, log=None, progress=None):
+def project(glb, photo, face=None, log=None, progress=None, head=None, head_size=4096):
     """photo: 배경 지운 앞 사진(RGBA PIL). face: (x0, y0, x1, y1, 확대한 RGBA PIL) — 사진 좌표의 얼굴 상자와 그 확대본.
+    head: (x0, y0, x1, y1) 사진 속 얼굴 상자 — 주면 머리를 따로 떼어 자기 텍스처(head_size)를 줘요(얼굴 해상도 여러 배).
     → (새 GLB 바이트, 정보 dict). 맞지 않으면 (원래 GLB, {"skip": 이유})"""
     M = load(glb)
     P, F, UV, tex = M["P"], M["F"], M["UV"], M["tex"]
@@ -489,7 +526,242 @@ def project(glb, photo, face=None, log=None, progress=None):
     for ii, data in pics:
         new = replace_image(g, b, ii, data)
         g, b = glbscene.read(new)
+    info = {"iou": round(v, 3), "pat": round(pat, 3), "cam": cam.name, "texels": int((w[:, 0] > 0.5).sum()), "face": bool(fbox),
+            "skin": round(float(sk.mean()), 3)}
+    if head is not None:
+        try:
+            new, hi = head_split(new, cam, head, head_size, n, visible, soft, photo_rgb, fbox, (W0, H0), x, y, d, log)
+            info.update(hi)
+        except Exception as e:  # noqa: BLE001 — 머리 텍스처는 덤: 실패하면 한 장 텍스처 그대로
+            info["head_error"] = str(e)[:120]
+            if log:
+                log("[머리 텍스처 실패]", repr(e))
     if progress:
         progress(1.0)
-    return new, {"iou": round(v, 3), "pat": round(pat, 3), "cam": cam.name, "texels": int((w[:, 0] > 0.5).sum()), "face": bool(fbox),
-                 "skin": round(float(sk.mean()), 3)}
+    return new, info
+
+
+# ───────────────────────── 머리 전용 텍스처 ─────────────────────────
+# 게임 회사들은 머리를 따로 떼어 자기 텍스처를 줘요(카메라에 가까이 잡히는 얼굴에 해상도를 몰아줘요).
+# 몸 전체가 텍스처 한 장을 나눠 쓰면 얼굴 몫은 5% 남짓이라, 사진을 아무리 키워 붙여도 그 크기로 줄어들어요.
+# 머리 둘레를 원통처럼 펼치되 앞쪽 반(±90°)에 가로 70% 를 줘요 → 얼굴이 텍스처의 절반 가까이를 써요.
+HEAD_BOX = (1.05, 0.95, 0.3)     # 얼굴 크기 기준 머리 상자: 좌우 반폭, 위로(머리카락), 아래로(턱·목)
+HEAD_DEPTH = (0.6, 1.7)          # 얼굴 앞면 깊이 기준 앞쪽·뒤쪽 범위(얼굴 크기 배수)
+
+
+def _head_uv(Q, cam, hmin, hmax):
+    """머리 가운데 기준 좌표 → (u, v). 앞(카메라 쪽)이 u=0.5, 뒤가 u=0/1(이음새)."""
+    a, bb, h = Q @ cam.r, Q @ cam.b, Q @ cam.u
+    th = np.arctan2(a, bb)
+    hp = np.pi / 2
+    u = np.where(np.abs(th) <= hp, 0.5 + 0.35 * th / hp, np.where(th > 0, 0.85 + 0.15 * (th - hp) / hp, 0.15 + 0.15 * (th + hp) / hp))
+    v = (hmax - h) / max(1e-9, hmax - hmin)
+    return u, np.clip(v, 0.002, 0.998)
+
+
+def _frames(P3, UV3, N):
+    """삼각형마다 텍스처 방향(접선 T, 종접선 B) — glTF 규칙(B 는 텍스처 위쪽 = -v). N 은 점마다 법선(정규화)."""
+    e1, e2 = P3[:, 1] - P3[:, 0], P3[:, 2] - P3[:, 0]
+    d1, d2 = UV3[:, 1] - UV3[:, 0], UV3[:, 2] - UV3[:, 0]
+    r = d1[:, 0] * d2[:, 1] - d2[:, 0] * d1[:, 1]
+    r = np.where(np.abs(r) < 1e-12, 1e-12, r)
+    Tu = (e1 * d2[:, 1:2] - e2 * d1[:, 1:2]) / r[:, None]
+    Bv = (e2 * d1[:, 0:1] - e1 * d2[:, 0:1]) / r[:, None]
+    return Tu, -Bv
+
+
+def _tbn(Tu, Bu, N):
+    """점마다: 법선 N 에 맞춰 T 를 곧게 세우고 B 는 방향(손잡이)만 따라요."""
+    T = Tu - N * (Tu * N).sum(1, keepdims=True)
+    T /= np.maximum(np.linalg.norm(T, axis=1, keepdims=True), 1e-12)
+    B = np.cross(N, T)
+    sgn = np.sign((B * Bu).sum(1, keepdims=True))
+    return T, B * np.where(sgn == 0, 1, sgn)
+
+
+def _img_of(g, b, tex_index):
+    im = g["images"][g["textures"][tex_index]["source"]]
+    v = g["bufferViews"][im["bufferView"]]
+    return Image.open(io.BytesIO(b[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]]))
+
+
+def _png(arr):
+    buf = io.BytesIO()
+    Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).save(buf, "PNG", compress_level=4)
+    return buf.getvalue()
+
+
+def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, size, px, py, pd, log=None):
+    """사진을 붙인 GLB → 머리를 따로 떼어 자기 텍스처(TS×TS: 색·노멀·그늘/거칠기)를 준 GLB. → (GLB, 정보)"""
+    M = load(glb)
+    g, b, P, F, UV, N = M["g"], M["b"], M["P"], M["F"], M["UV"], M["N"]
+    W0, H0 = size
+    x0, y0, x1, y1 = fbox_px
+    fs = max(x1 - x0, y1 - y0)
+    cxp, cyp = (x0 + x1) / 2, (y0 + y1) / 2
+    hx0, hx1 = cxp - HEAD_BOX[0] * fs, cxp + HEAD_BOX[0] * fs
+    hy0, hy1 = y0 - HEAD_BOX[1] * fs, y1 + HEAD_BOX[2] * fs
+    # 얼굴 앞면 깊이와 얼굴 크기(3D 단위): 얼굴 상자 안에서 보이는 정점들
+    inf = (px > x0) & (px < x1) & (py > y0) & (py < y1) & visible(px, py, pd)
+    if inf.sum() < 20:
+        raise ValueError("얼굴 부분의 3D 를 찾지 못했어요")
+    Qf = P[inf] - P[inf].mean(0)
+    fw = max(np.ptp(Qf @ cam.r), np.ptp(Qf @ cam.u))
+    zf = float(np.percentile(pd[inf], 10))
+    zr = fw
+    cen = P[F].mean(1)
+    cx, cy, cd = cam.px(cen)
+    sel = (cx > hx0) & (cx < hx1) & (cy > hy0) & (cy < hy1) & (cd > zf - HEAD_DEPTH[0] * zr) & (cd < zf + HEAD_DEPTH[1] * zr)
+    if sel.sum() < 50 or sel.mean() > 0.85:
+        raise ValueError("머리 부분을 고르지 못했어요")
+    hf = np.nonzero(sel)[0]
+    FH = F[hf]
+    P3 = P[FH]                                         # (Mh, 3, 3) 머리 삼각형 모서리
+    ctr = P3.reshape(-1, 3).mean(0)
+    hh = (P3.reshape(-1, 3) - ctr) @ cam.u
+    hmin, hmax = hh.min(), hh.max()
+    u, v = _head_uv(P3.reshape(-1, 3) - ctr, cam, hmin, hmax)
+    U3, V3 = u.reshape(-1, 3), v.reshape(-1, 3)
+    seam = U3.max(1) - U3.min(1) > 0.5                 # 뒤쪽 이음새를 넘는 삼각형: 작은 쪽을 +1(텍스처는 가로로 되풀이)
+    U3 = np.where(seam[:, None] & (U3 < 0.5), U3 + 1, U3)
+    NUV3 = np.stack([U3, V3], -1)                      # (Mh, 3, 2)
+    OUV3 = UV[FH]
+    N3 = N[FH] if N is not None else np.repeat(n_face[hf][:, None], 3, 1)
+    # 새 텍스처 화소마다 → 머리 삼각형·무게중심 (이음새 삼각형은 한 칸 왼쪽에도 한 번 더)
+    tri_xy = NUV3 * TS
+    ids = np.arange(len(hf))
+    extra = np.nonzero(seam)[0]
+    xy = np.concatenate([tri_xy.reshape(-1, 2), (tri_xy[extra] - [TS, 0]).reshape(-1, 2)])
+    owner = np.concatenate([ids, extra])
+    FF = np.arange(len(xy)).reshape(-1, 3)
+    tp, tf, c0, c1 = raster(xy, FF, TS, TS)
+    t = owner[tf]
+    c = np.stack([c0, c1, 1 - c0 - c1], 1)
+    X = (P3[t] * c[..., None]).sum(1)
+    ouv = (OUV3[t] * c[..., None]).sum(1)
+    Nn = (N3[t] * c[..., None]).sum(1)
+    Nn /= np.maximum(np.linalg.norm(Nn, axis=1, keepdims=True), 1e-12)
+    ty, tx = np.divmod(tp, TS)
+    # 색: 원래 텍스처(사진을 이미 붙인 것)에서 옮기고, 사진에서 보이는 곳은 사진·얼굴 확대본에서 다시(이번엔 머리 텍스처 해상도로)
+    base = np.asarray(M["tex"].convert("RGB")).astype(np.float32)
+    BH, BW = base.shape[:2]
+    col = _sample(base, ouv[:, 0] * BW, ouv[:, 1] * BH)
+    sx, sy, sd = cam.px(X)
+    ok = visible(sx, sy, sd) & (sx >= 0) & (sy >= 0) & (sx < W0) & (sy < H0)
+    if ok.any():
+        cs = np.abs((n_face[hf][t[ok]] * cam.view(X[ok])).sum(1))
+        w = np.clip((cs - FACING[0]) / (FACING[1] - FACING[0]), 0, 1)
+        w = (w * w * (3 - 2 * w))[:, None].astype(np.float32) * _sample(soft, sx[ok], sy[ok])
+        pc = _sample(photo_rgb, sx[ok], sy[ok])
+        if fbox:
+            fx0, fy0, fx1, fy1, fa = fbox
+            q = (sx[ok] > fx0) & (sx[ok] < fx1) & (sy[ok] > fy0) & (sy[ok] < fy1)
+            if q.any():
+                kx, ky = fa.shape[1] / (fx1 - fx0), fa.shape[0] / (fy1 - fy0)
+                fc = _sample(fa, (sx[ok][q] - fx0) * kx, (sy[ok][q] - fy0) * ky)
+                ex = np.minimum.reduce([sx[ok][q] - fx0, fx1 - sx[ok][q], sy[ok][q] - fy0, fy1 - sy[ok][q]]) / max(1.0, 0.08 * (fx1 - fx0))
+                fwq = np.clip(ex, 0, 1)[:, None].astype(np.float32)
+                pc[q] = pc[q] * (1 - fwq) + fc * fwq
+        col[ok] = col[ok] + (pc - col[ok]) * w
+    tex = np.zeros((TS, TS, 3), np.float32)
+    done = np.zeros((TS, TS), bool)
+    tex[ty, tx], done[ty, tx] = col, True
+    tex, done = _spread(tex, done, 3)
+    mat = dict(M["mat"] or {})
+    pbr = dict(mat.get("pbrMetallicRoughness") or {})
+    imgs = [("base", tex)]
+    # 노멀맵: 원래 텍스처 방향 → 세상 방향 → 새 텍스처 방향으로 옮겨요
+    if mat.get("normalTexture") is not None:
+        nm = np.asarray(_img_of(g, b, mat["normalTexture"]["index"]).convert("RGB")).astype(np.float32)
+        ns = _sample(nm, ouv[:, 0] * nm.shape[1], ouv[:, 1] * nm.shape[0]) / 127.5 - 1
+        To, Bo = _frames(P3, OUV3, None)
+        Tn, Bn = _frames(P3, NUV3, None)
+        T1, B1 = _tbn(To[t], Bo[t], Nn)
+        T2, B2 = _tbn(Tn[t], Bn[t], Nn)
+        wv = ns[:, 0:1] * T1 + ns[:, 1:2] * B1 + ns[:, 2:3] * Nn
+        nn = np.stack([(wv * T2).sum(1), (wv * B2).sum(1), (wv * Nn).sum(1)], 1)
+        nn /= np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-12)
+        nt = np.zeros((TS, TS, 3), np.float32)
+        nt[...] = (127.5, 127.5, 255)
+        dn = np.zeros((TS, TS), bool)
+        nt[ty, tx], dn[ty, tx] = (nn + 1) * 127.5, True
+        nt, _ = _spread(nt, dn, 3)
+        imgs.append(("normal", nt))
+    # 그늘·거칠기·금속(ORM) 은 같은 자리 값을 옮겨요
+    mrt = (pbr.get("metallicRoughnessTexture") or {}).get("index")
+    occ = (mat.get("occlusionTexture") or {}).get("index")
+    orm_src = {}
+    for key, ti in (("mr", mrt), ("ao", occ)):
+        if ti is not None:
+            orm_src.setdefault(g["textures"][ti]["source"], []).append(key)
+    orm_new = {}
+    for ii, keys in orm_src.items():
+        pic = np.asarray(_img_of(g, b, next(ti for ti in (mrt, occ) if ti is not None and g["textures"][ti]["source"] == ii)).convert("RGB")).astype(np.float32)
+        hs = max(1024, TS // 2)
+        k = hs / TS
+        tp2, tf2, d0, d1 = raster(xy * k, FF, hs, hs)
+        t2 = owner[tf2]
+        cc = np.stack([d0, d1, 1 - d0 - d1], 1)
+        o2 = (OUV3[t2] * cc[..., None]).sum(1)
+        val = _sample(pic, o2[:, 0] * pic.shape[1], o2[:, 1] * pic.shape[0])
+        arr = np.zeros((hs, hs, 3), np.float32)
+        dd = np.zeros((hs, hs), bool)
+        y2, x2 = np.divmod(tp2, hs)
+        arr[y2, x2], dd[y2, x2] = val, True
+        arr, _ = _spread(arr, dd, 3)
+        orm_new[ii] = ("orm" + str(ii), arr, keys)
+        imgs.append(("orm" + str(ii), arr))
+    # 새 머리 그물망(삼각형마다 정점 3개 — 이음새·새 텍스처 좌표 때문에 따로)
+    if not np.allclose(_world(g, M["node"]), np.eye(4)):    # ComfyUI 결과는 노드 변환이 없어요 — 있으면 손대지 않아요
+        raise ValueError("노드 변환이 있는 3D 예요")
+    Ph = P3.reshape(-1, 3).astype(np.float32)
+    Nh = N3.reshape(-1, 3).astype(np.float32)
+    UVh = NUV3.reshape(-1, 2).astype(np.float32)
+    keep = np.ones(len(F), bool)
+    keep[hf] = False
+    body_idx = F[keep].astype(np.uint32).tobytes()
+    head_idx = np.arange(len(Ph), dtype=np.uint32).tobytes()
+    adds = [Ph.tobytes(), UVh.tobytes(), head_idx] + ([Nh.tobytes()] if M["N"] is not None else []) + [_png(a) for _, a in imgs]
+    pr = M["prim"]
+    g2, b2, nv = rebuild(g, b, {g["accessors"][pr["indices"]]["bufferView"]: body_idx}, adds)
+    acc = [dict(x) for x in g2["accessors"]]
+    ia = dict(acc[pr["indices"]])
+    ia.update(componentType=5125, count=int(keep.sum()) * 3, byteOffset=0)
+    ia.pop("min", None), ia.pop("max", None)
+    acc[pr["indices"]] = ia
+    base_acc = len(acc)
+    acc += [{"bufferView": nv[0], "componentType": 5126, "count": len(Ph), "type": "VEC3", "min": Ph.min(0).tolist(), "max": Ph.max(0).tolist()},
+            {"bufferView": nv[1], "componentType": 5126, "count": len(UVh), "type": "VEC2"},
+            {"bufferView": nv[2], "componentType": 5125, "count": len(Ph), "type": "SCALAR"}]
+    attrs = {"POSITION": base_acc, "TEXCOORD_0": base_acc + 1}
+    vi = 3
+    if M["N"] is not None:
+        acc.append({"bufferView": nv[3], "componentType": 5126, "count": len(Nh), "type": "VEC3"})
+        attrs["NORMAL"] = base_acc + 3
+        vi = 4
+    g2["accessors"] = acc
+    g2["images"] = [dict(x) for x in g2["images"]] + [{"bufferView": nv[vi + i], "mimeType": "image/png"} for i in range(len(imgs))]
+    g2["samplers"] = [dict(x) for x in g2.get("samplers") or []] + [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 33071}]
+    smp = len(g2["samplers"]) - 1
+    tex0 = len(g2["textures"])
+    g2["textures"] = [dict(x) for x in g2["textures"]] + [{"source": len(g2["images"]) - len(imgs) + i, "sampler": smp} for i in range(len(imgs))]
+    tid = {name: tex0 + i for i, (name, _) in enumerate(imgs)}
+    hm = json.loads(json.dumps(mat))
+    hm["name"] = (mat.get("name") or "material") + "_head"
+    hp = hm.setdefault("pbrMetallicRoughness", {})
+    hp["baseColorTexture"] = {"index": tid["base"]}
+    if "normal" in tid:
+        hm["normalTexture"] = {**(mat.get("normalTexture") or {}), "index": tid["normal"], "texCoord": 0}
+    for ii, (name, _, keys) in orm_new.items():
+        if "mr" in keys:
+            hp["metallicRoughnessTexture"] = {"index": tid[name]}
+        if "ao" in keys:
+            hm["occlusionTexture"] = {**(mat.get("occlusionTexture") or {}), "index": tid[name], "texCoord": 0}
+    g2["materials"] = [dict(x) for x in g2["materials"]] + [hm]
+    meshes = [dict(x) for x in g2["meshes"]]
+    mi = g2["nodes"][M["node"]]["mesh"]
+    meshes[mi] = {**meshes[mi], "primitives": [dict(x) for x in meshes[mi]["primitives"]] + [{"attributes": attrs, "indices": base_acc + 2, "material": len(g2["materials"]) - 1}]}
+    g2["meshes"] = meshes
+    if log:
+        log(f"[머리 텍스처] 삼각형 {len(hf):,}개 · {TS}px · 이음새 {int(seam.sum())}")
+    return glbscene.write(g2, b2), {"head": True, "head_tris": int(len(hf)), "head_tex": TS}

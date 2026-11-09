@@ -633,7 +633,7 @@ def m3d_opts(p, m):
             "remesh": (1024 if res >= 1536 else M3D_REMESH) if flag(p, "remesh", True) else 0, "blender": flag(p, "blender", True), "height": clamp(num(p, "height", kind["height"]), 0.0, 500.0),
             "rotate": int(num(p, "rotate", 0, int)) % 360 // 90 * 90, "lods": flag(p, "lods", True),
             "formats": [x for x in ("glb", "fbx", "obj") if flag(p, "fmt_" + x, x != "obj")] or ["glb"],
-            "rig": flag(p, "rig", m.get("kind") == "character"), "photo": flag(p, "photo", True)}
+            "rig": flag(p, "rig", m.get("kind") == "character"), "photo": flag(p, "photo", True), "head": flag(p, "head", True)}
 
 
 def m3d_engine(p):
@@ -774,7 +774,7 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     _clean_tmp(J)
     glb = photoproj.fix_samplers(glb)
     if o.get("photo", True):
-        glb = m3d_photo(glb, imgs["front"], J)
+        glb = m3d_photo(glb, imgs["front"], J, o)
     return glb
 
 
@@ -843,15 +843,19 @@ def m3d_face_check(checks, st):
 
 
 def m3d_face(photo, J):
-    """사진에서 얼굴을 찾아(MediaPipe) 그 부분을 업스케일로 키워요 → (x0, y0, x1, y1, 키운 그림) 또는 None.
-    얼굴 찾기 모델·노드·업스케일 모델이 없거나, 얼굴이 없거나, 이미 충분히 크면 None."""
+    """사진에서 얼굴을 찾아(MediaPipe) 그 부분을 업스케일로 키워요 → (얼굴 상자 또는 None, (x0, y0, x1, y1, 키운 그림) 또는 None).
+    얼굴 찾기 모델·노드가 없거나 얼굴이 없으면 (None, None), 업스케일 모델이 없거나 이미 충분히 크면 (상자, None)."""
     model = m3d_face_model()
     if not model:
         J.setdefault("m3d_notes", []).append("face_model")
-        return None
+        return None, None
     b = m3d_face_box(photo, J, model)
     if not b:
-        return None
+        return None, None
+    return b, m3d_face_up(photo, b, J)
+
+
+def m3d_face_up(photo, b, J):
     x0, y0, x1, y1 = b
     cx, cy, side = (x0 + x1) / 2, (y0 + y1) / 2, max(x1 - x0, y1 - y0) * 1.5
     x0, y0 = max(0, round(cx - side / 2)), max(0, round(cy - side / 2))
@@ -869,16 +873,17 @@ def m3d_face(photo, J):
     return (x0, y0, x1, y1, big)
 
 
-def m3d_photo(glb, photo, J):
+def m3d_photo(glb, photo, J, o=None):
     """사진 붙이기: 3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요(얼굴·무늬가 사진처럼). 안 맞으면 원래 색 그대로."""
-    face = None
+    box, face = None, None
+    if o.get("head", True):
+        try:
+            box, face = m3d_face(photo, J)
+        except Exception as e:  # noqa: BLE001
+            quiet_log("[3D 얼굴 키우기 실패]", repr(e))
+    J["msg"] = "사진을 3D 에 붙이는 중 — 얼굴·무늬를 사진 그대로" + (" · 머리 전용 텍스처" if box else "")
     try:
-        face = m3d_face(photo, J)
-    except Exception as e:  # noqa: BLE001
-        quiet_log("[3D 얼굴 키우기 실패]", repr(e))
-    J["msg"] = "사진을 3D 에 붙이는 중 — 얼굴·무늬를 사진 그대로"
-    try:
-        new, info = photoproj.project(glb, photo, face, log=quiet_log)
+        new, info = photoproj.project(glb, photo, face, log=quiet_log, head=box, head_size=max(2048, int(o.get("tex") or 4096)))
     except ValueError as e:              # 붙일 수 없는 모양(텍스처 없음 등) — 원래 색 그대로
         quiet_log("[3D 사진 붙이기 건너뜀]", e)
         J["m3d_photo_res"] = {"done": False, "text": f"이 3D 에는 붙일 수 없었어요({e})"}
@@ -897,8 +902,11 @@ def m3d_photo(glb, photo, J):
         J["m3d_photo_res"] = {"done": False, "text": "사진 쪽에서 보이는 면이 없어 건너뛰었어요."}
         return glb
     J.setdefault("m3d_photo", []).append(info)
-    J["m3d_photo_res"] = {"done": True, "iou": info["iou"], "face": info.get("face"),
-                          "text": f"앞 사진을 그대로 붙였어요(겹침 {info['iou']:.0%}{', 얼굴은 키워서' if info.get('face') else ''})."}
+    J["m3d_photo_res"] = {"done": True, "iou": info["iou"], "face": info.get("face"), "head": info.get("head"),
+                          "text": f"앞 사진을 그대로 붙였어요(겹침 {info['iou']:.0%}{', 얼굴은 키워서' if info.get('face') else ''}"
+                                  f"{', 머리는 전용 텍스처 ' + str(info['head_tex']) + 'px' if info.get('head') else ''})."}
+    if info.get("head_error"):
+        quiet_log("[머리 전용 텍스처 건너뜀]", info["head_error"])
     if "face_model" in (J.get("m3d_notes") or []) and not J.get("_face_noted"):
         J["_face_noted"] = 1
         warn(J, "얼굴 찾기 모델이 없어 얼굴 확대는 건너뛰었어요. '설치와 모델'의 3D 분류에서 '얼굴 찾기(MediaPipe)'를 받으면 얼굴이 더 선명해져요.")
