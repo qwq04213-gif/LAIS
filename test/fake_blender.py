@@ -15,6 +15,13 @@ if j.get("selftest"):
     json.dump({"ok": True, "blender": "4.5.15"}, open(os.path.join(j["selftest"], "result.json"), "w")); sys.exit(0)
 out, name = j["out"], j["name"]
 assert open(j["glb"], "rb").read(4) == b"glTF"
+if j.get("scene"):          # 장면 전체: 합친 장면 GLB → .blend·GLB·FBX
+    os.makedirs(out, exist_ok=True)
+    data = open(j["glb"], "rb").read(); res = {"ok": True, "blender": "4.5.15", "name": name, "blend": name + ".blend", "glb": name + ".glb", "args": j}
+    open(os.path.join(out, name + ".blend"), "wb").write(b"BLENDER"); open(os.path.join(out, name + ".glb"), "wb").write(data)
+    for f in j.get("formats") or []:
+        if f != "glb": open(os.path.join(out, name + "." + f), "wb").write(f.encode()); res[f] = name + "." + f
+    json.dump(res, open(os.path.join(out, "result.json"), "w", encoding="utf-8"), ensure_ascii=False); print("fake blender scene done"); sys.exit(0)
 os.makedirs(os.path.join(out, "textures"), exist_ok=True)
 open(os.path.join(out, "textures", "base.png"), "wb").write(b"png")
 open(os.path.join(out, name + ".blend"), "wb").write(b"BLENDER")

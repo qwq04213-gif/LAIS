@@ -31,6 +31,29 @@ for d, f in ([("checkpoints", "noobai_xl_v11.safetensors"),("checkpoints", "Noob
 INPUT = M.parent / "input"; INPUT.mkdir(exist_ok=True)
 (TMP / "wildcards").mkdir(); (TMP / "wildcards" / "hair_color.txt").write_text("# c\nblack hair\nblonde hair\nred hair\n", encoding="utf-8")
 
+
+def tiny_glb(w=0.6, h=1.0, d=0.4):
+    """가짜 ComfyUI 의 3D 결과: 진짜 GLB 형식의 상자 하나(정점·면·재질·텍스처 그림 포함). 상자 바닥 가운데가 원점이 아님(y -0.5~0.5)."""
+    import struct as _st
+    xs, ys, zs = (-w / 2, w / 2), (-h / 2, h / 2), (-d / 2, d / 2)
+    pos = [(x, y, z) for x in xs for y in ys for z in zs]
+    idx = [0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5, 0, 4, 5, 0, 5, 1, 2, 3, 7, 2, 7, 6, 0, 2, 6, 0, 6, 4, 1, 5, 7, 1, 7, 3]
+    pb = b"".join(_st.pack("<3f", *p) for p in pos); ib = b"".join(_st.pack("<H", i) for i in idx) + b"\0\0"
+    bi = io.BytesIO(); Image.new("RGB", (4, 4), (200, 50, 50)).save(bi, "PNG"); png = bi.getvalue() + b"\0" * (-len(bi.getvalue()) % 4)
+    bin_ = pb + ib + png
+    g = {"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0, "name": "mesh"}],
+         "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1, "material": 0}]}],
+         "materials": [{"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}], "textures": [{"source": 0, "sampler": 0}], "samplers": [{}],
+         "images": [{"bufferView": 2, "mimeType": "image/png"}], "buffers": [{"byteLength": len(bin_)}],
+         "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(pb)}, {"buffer": 0, "byteOffset": len(pb), "byteLength": len(idx) * 2},
+                         {"buffer": 0, "byteOffset": len(pb) + len(ib), "byteLength": len(bi.getvalue())}],
+         "accessors": [{"bufferView": 0, "componentType": 5126, "count": 8, "type": "VEC3", "min": [xs[0], ys[0], zs[0]], "max": [xs[1], ys[1], zs[1]]},
+                       {"bufferView": 1, "componentType": 5123, "count": len(idx), "type": "SCALAR"}]}
+    js = json.dumps(g).encode(); js += b" " * (-len(js) % 4)
+    body = _st.pack("<II", len(js), 0x4E4F534A) + js + _st.pack("<II", len(bin_), 0x004E4942) + bin_
+    return _st.pack("<4sII", b"glTF", 2, 12 + len(body)) + body
+
+
 REQ = {"CheckpointLoaderSimple": ["ckpt_name"], "LoraLoader": ["model", "clip", "lora_name", "strength_model", "strength_clip"],
        "LoraLoaderModelOnly": ["model", "lora_name", "strength_model"], "CLIPSetLastLayer": ["clip", "stop_at_clip_layer"],
        "CLIPTextEncode": ["text", "clip"], "EmptyLatentImage": ["width", "height", "batch_size"],
@@ -198,7 +221,7 @@ class Comfy(BaseHTTPRequestHandler):
             if h.get("video"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".mp4", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
             return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".png", "subfolder": "", "type": "temp"}]}}, "status": {"status_str": "success", "messages": []}}})
         if u == "/view" and ".glb" in self.path:
-            self.send_response(200); self.send_header("Content-Type", "model/gltf-binary"); self.end_headers(); self.wfile.write(b"glTF\x02\x00\x00\x00" + bytes(64)); return
+            self.send_response(200); self.send_header("Content-Type", "model/gltf-binary"); self.end_headers(); self.wfile.write(tiny_glb()); return
         if u == "/view" and ".mp3" in self.path:
             self.send_response(200); self.send_header("Content-Type", "audio/mpeg"); self.end_headers(); self.wfile.write(b"ID3\x04\x00\x00\x00\x00\x00\x00" + bytes(range(256)) * 4); return
         if u == "/view" and ".webp" in self.path:

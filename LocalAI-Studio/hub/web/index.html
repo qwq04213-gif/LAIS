@@ -791,6 +791,15 @@
       <div class="vbtns" id="m3-tposebox" hidden><button type="button" class="ghost" id="m3-tpose" title="앞 사진의 캐릭터를 양팔을 옆으로 편 T자 자세로 다시 그려요(Qwen-Image 2.1) — 뼈대·가중치가 더 잘 맞아요">T자 자세로 바꾸기</button>
         <button type="button" class="ghost" id="m3-tundo" title="T자로 바꾸기 전 앞 사진으로 되돌려요" hidden>원래 자세로</button></div>
     </fieldset>
+    <fieldset class="vset" id="m3-sceneset" hidden><legend>장면 전체 <span class="mute">선택 · 사진 속 여러 물체를 한 장면으로</span></legend>
+      <p class="mute">원본 사진에서 물체를 눌러 고르고 [이 물체 넣기]를 눌러요(Shift+클릭은 빼기). 물체마다 3D 를 만들어 사진 속 자리에 놓아요. 위치·크기는 AI 어림값이에요.</p>
+      <div class="m3-sbox" id="m3-sbox" title="물체를 눌러 고르기 · Shift+클릭은 빼기"><img id="m3-sorig" alt="원본 사진"><canvas id="m3-smask"></canvas></div>
+      <div class="vbtns"><button type="button" class="ghost" id="m3-sadd" disabled>이 물체 넣기</button><button type="button" class="ghost sm" id="m3-sreset" disabled>다시 고르기</button>
+        <button type="button" class="ghost" id="m3-ssam" hidden>선택 도구 설치 (약 45MB)</button></div>
+      <div class="m3-sobjs" id="m3-sobjs"></div>
+      <label class="chk" title="다른 물체에 가려졌거나 사진 가장자리에서 잘린 부분을 AI 편집(Qwen-Image 2.1)으로 그려 넣은 뒤 3D 로 만들어요"><input type="checkbox" id="m3-sfill"> 가려진 부분 채우기 <span class="mute">물체마다 AI 편집 · 느려요</span></label>
+      <button type="button" class="go wide" id="m3-sgo" disabled>장면 만들기</button>
+    </fieldset>
     <fieldset class="vset"><legend>모양·텍스처</legend>
       <div class="row"><label class="f">세밀함<select id="m3-res"><option value="512">빠르게 (512)</option><option value="1024" selected>보통 (1024)</option><option value="1536">아주 촘촘하게 (1536)</option></select></label>
         <label class="f">면 수<select id="m3-faces"><option value="5000">5천 (모바일)</option><option value="20000" selected>2만 (게임)</option><option value="50000">5만 (고품질)</option><option value="200000">20만 (원본에 가깝게)</option></select></label>

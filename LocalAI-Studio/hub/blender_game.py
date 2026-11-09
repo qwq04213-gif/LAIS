@@ -182,9 +182,49 @@ def preview_motion(arm, frames=60):
     scn.frame_set(1)
 
 
+def scene_export(j):
+    """장면 전체: 허브가 이미 제자리에 놓아 합친 장면 GLB → .blend·GLB·FBX·OBJ (물체 위치·크기는 그대로)."""
+    out, name = j["out"], safe(j.get("name") or "scene")
+    os.makedirs(out, exist_ok=True)
+    clear()
+    bpy.ops.import_scene.gltf(filepath=j["glb"])
+    objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    if not objs:
+        raise RuntimeError("GLB 안에 그물망(메시)이 없어요.")
+    blend = os.path.join(out, f"{name}.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=blend)
+    try:
+        bpy.ops.file.unpack_all(method="WRITE_LOCAL")
+    except RuntimeError:
+        pass
+    tris, verts = tri_count(objs)
+    res = {"ok": True, "blender": bpy.app.version_string, "name": name, "blend": os.path.basename(blend), "tris": tris, "verts": verts,
+           "objects": sorted(o.name for o in bpy.context.scene.objects if o.parent is None)}
+    fmts = set(j.get("formats") or ["glb", "fbx"]) | {"glb"}
+    select_only(list(bpy.context.scene.objects))
+    p = os.path.join(out, name + ".glb")
+    bpy.ops.export_scene.gltf(filepath=p, export_format="GLB", use_selection=True, export_animations=False)
+    res["glb"] = os.path.basename(p)
+    if "fbx" in fmts:
+        p = os.path.join(out, name + ".fbx")
+        bpy.ops.export_scene.fbx(filepath=p, use_selection=True, path_mode="COPY", embed_textures=True, axis_forward="-Z", axis_up="Y",
+                                 apply_scale_options="FBX_SCALE_UNITS", mesh_smooth_type="FACE", add_leaf_bones=False, bake_anim=False)
+        res["fbx"] = os.path.basename(p)
+    if "obj" in fmts:
+        p = os.path.join(out, name + ".obj")
+        bpy.ops.wm.obj_export(filepath=p, export_selected_objects=True, export_materials=True, path_mode="COPY", forward_axis="NEGATIVE_Z", up_axis="Y")
+        res["obj"] = os.path.basename(p)
+    bpy.ops.wm.save_as_mainfile(filepath=blend)
+    with open(os.path.join(out, "result.json"), "w", encoding="utf-8") as f:
+        json.dump(res, f, ensure_ascii=False)
+
+
 def main(j):
     if j.get("selftest"):
         selftest(j["selftest"])
+        return
+    if j.get("scene"):
+        scene_export(j)
         return
     out, name = j["out"], safe(j.get("name") or "model")
     os.makedirs(out, exist_ok=True)

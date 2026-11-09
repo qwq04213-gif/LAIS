@@ -64,8 +64,8 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ### 4.2 할 일
 
-1. **3D 장면 전체(사진 속 여러 물체)** — 원본 사진에서 물체를 눌러 고르기(MobileSAM `/api/sam/segment`) → 물체마다 잘라 TRELLIS.2 → 깊이(`get_depth`)로 위치·크기 어림 →
-   Blender 로 한 장면(GLB·FBX·.blend), Blender 없으면 물체별 GLB + 배치 json. 가려진 물체는 선택적으로 Qwen 편집으로 채우기. (`m3d_file` 이 `scene_obj_N.png` 를 이미 허용)
+1. **3D 장면 전체(사진 속 여러 물체)** — 됨: `/api/m3d/scene`(물체 넣기·빼기), 작업 `op=scene`, `hub/glbscene.py`(파이썬만으로 GLB 합치기·자리 어림),
+   Blender 는 `blender_game.scene_export`(.blend·FBX·OBJ). 화면은 3D 만들기의 '장면 전체' 칸. 미검증: 실제 깊이·배치가 그럴듯한지, Blender 장면 내보내기
 2. **기능별 엔진 최신 점검** — 기능마다 쓰는 엔진이 지금 기준으로 좋은지 조사(사양별 추천 표는 4.1 의 `web/js/40-models.js` `TIERS`)
 
 ### 미검증(실제 PC 에서 확인 필요)

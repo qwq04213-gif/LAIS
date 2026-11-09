@@ -371,6 +371,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(lora_train.uninstall(ROOT))
         if u == "/api/keep":
             return self.send_json(keep_post(p))
+        if u == "/api/m3d/scene":
+            try:
+                return self.send_json(m3d_scene_obj(p))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
         if u in ("/api/m3d/slot", "/api/m3d/delete"):
             try:
                 return self.send_json((m3d_slot if u.endswith("slot") else m3d_delete)(p))

@@ -23,7 +23,7 @@ document.addEventListener('click',async e=>{const id=e.target.id;
 async function m3Sessions(sel){let r;try{r=await api('/api/m3d')}catch{return}const s=$('#m3-sess');
   s.innerHTML='<option value="">새로 시작…</option>'+(r.items||[]).map(x=>`<option value="${x.id}">${esc(x.name)} · ${new Date(x.time*1000).toLocaleDateString()}</option>`).join('');
   if(sel)s.value=sel}
-function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$('#m3-viewset').hidden=!S;if(!S){$('#m3-check').innerHTML='';return}
+function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$('#m3-viewset').hidden=!S;$('#m3-sceneset').hidden=!S?.orig;if(!S){$('#m3-check').innerHTML='';return}
   $('#m3-check').innerHTML=`<ul class="m3-checks">${(S.checks||[]).map(c=>`<li class="lv-${c.level}">${esc(c.text)}</li>`).join('')}</ul>`;
   const mv=S.ready?.multiview,vc=S.vcheck||{};
   $('#m3-slots').innerHTML=['front','left','back','right'].map(k=>{const u=S.slots?.[k],c=vc[k],sus=u&&c&&!c.ok;return `<figure class="m3-slot${u?'':' empty'}${sus?' sus':''}" data-side="${k}">
@@ -33,7 +33,7 @@ function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$
   $('#m3-mvnote').textContent=mv?'고른 방향 그림을 함께 써서 Pixal3D 멀티뷰로 만들어요. 앞 사진과 모양이 다른 그림은 체크를 풀어 주세요.'
     :"방향 그림을 함께 쓰려면 '설치와 모델'에서 'Pixal3D 멀티뷰'를 받아 주세요. 없으면 앞 사진 한 장으로 만들어요.";
   if(S.kind&&$('#m3-kind').value!==S.kind){$('#m3-kind').value=S.kind;$('#m3-kind').onchange()}$('#m3-name').value=S.name||'';
-  $('#m3-tposebox').hidden=S.kind!=='character';$('#m3-tundo').hidden=!S.front_orig}
+  $('#m3-tposebox').hidden=S.kind!=='character';$('#m3-tundo').hidden=!S.front_orig;m3sPaint()}
 async function m3Open(id){if(!id){M3.S=null;m3Paint();return}const r=await api('/api/m3d/'+id);if(r.error){toast(r.error);return}M3.S=r;m3Paint()}
 $('#m3-sess').onchange=e=>m3Open(e.target.value);
 $('#m3-del').onclick=async()=>{if(!M3.S||!confirm(`'${M3.S.name}' 작업(사진·방향 그림)을 지울까요? 만든 3D 파일은 그대로 남아요.`))return;
@@ -66,7 +66,9 @@ function m3Show(j){const glb=j.images.find(u=>/\.glb$/i.test(u)),zip=j.images.fi
     <div class="vbtns m3-bar"><button type="button" class="ghost sm" id="m3-clay" title="색을 빼고 모양만 봐요">모양만 보기</button><button type="button" class="ghost sm" id="m3-spin">회전 멈추기</button>
       ${M3.pv?'<button type="button" class="ghost sm" id="m3-move" title="팔 들기·고개 끄덕임으로 뼈대·가중치를 확인해요(게임용 파일에는 안 들어가요)">움직임 미리보기</button>':''}
       <a class="ghost sm" href="${glb}" download>GLB 저장</a>${zip?`<a class="go sm" href="${zip}" download>게임용 묶음 저장 (.zip)</a>`:''}</div>
-    ${st?`<table class="m3-stat"><thead><tr><th>LOD</th><th>면(삼각형)</th><th>정점</th><th>파일</th></tr></thead><tbody>${st.lods.map(l=>`<tr><td>${l.lod} (${Math.round(l.ratio*100)}%)</td><td>${l.tris.toLocaleString()}</td><td>${l.verts.toLocaleString()}</td><td class="mute">${['glb','fbx','obj'].filter(k=>l[k]).join(' · ')}</td></tr>`).join('')}</tbody></table>
+    ${st?.scene?`<table class="m3-stat"><thead><tr><th>물체</th><th>키</th><th>거리</th><th>면(삼각형)</th></tr></thead><tbody>${st.scene.map((x,i)=>`<tr><td>물체 ${i+1}</td><td>${x.height.toFixed(2)} m</td><td>${x.dist.toFixed(1)} m</td><td>${x.tris.toLocaleString()}</td></tr>`).join('')}</tbody></table>
+      <p class="mute">위치·크기는 AI 가 사진 한 장과 깊이 추정으로 어림한 값이에요. 묶음에는 장면 GLB, 물체별 GLB, 배치 정보(layout.json)${st.blender?', Blender 로 만든 장면 파일(.blend·FBX)':''}이 들어 있어요.</p>`:''}
+    ${st?.lods?`<table class="m3-stat"><thead><tr><th>LOD</th><th>면(삼각형)</th><th>정점</th><th>파일</th></tr></thead><tbody>${st.lods.map(l=>`<tr><td>${l.lod} (${Math.round(l.ratio*100)}%)</td><td>${l.tris.toLocaleString()}</td><td>${l.verts.toLocaleString()}</td><td class="mute">${['glb','fbx','obj'].filter(k=>l[k]).join(' · ')}</td></tr>`).join('')}</tbody></table>
       <p class="mute">크기 ${st.size_m.map(v=>v.toFixed(2)).join(' × ')} m · 묶음에는 LOD 별 파일, 텍스처(textures 폴더), Blender 파일(.blend)이 들어 있어요.</p>`:''}
     ${rg?`<p class="m3-rig">뼈대 ${rg.bones}개 · 자세 ${({T:'T자',A:'A자',down:'팔 내림'})[rg.pose]||esc(rg.pose)}${rg.legs?'':' · 다리를 못 찾아 다리 뼈는 어림'}${rg.fixed?` · 가중치를 못 받은 정점 ${rg.fixed.toLocaleString()}개는 가장 가까운 뼈에 붙였어요`:''}
       <br><span class="mute">뼈 이름이 Mixamo 와 같아서 Unity·Unreal 의 사람형(Humanoid)에 자동으로 맞고, Mixamo 동작을 그대로 입힐 수 있어요.</span></p>`:''}</div>`}
@@ -81,3 +83,37 @@ $('#m3-out').addEventListener('click',async e=>{const mv=$('#m3-mv');if(!mv)retu
     e.target.textContent=on?'색 보기':'모양만 보기'}});
 document.addEventListener('viewshow',e=>{if(e.detail==='m3d'){m3Sessions(M3.S?.id);m3Bl()}});
 if($('#v-m3d.on')){m3Sessions();m3Bl()}
+/* 장면 전체: 원본 사진에서 물체를 눌러 고르기(MobileSAM) → 물체 목록 → 물체마다 3D → 한 장면 */
+const M3S={pts:[],mask:null,samId:null,src:'',data:null,busy:false};
+function m3sReset(){M3S.pts=[];M3S.mask=null;const c=$('#m3-smask');c.getContext('2d').clearRect(0,0,c.width,c.height);$('#m3-sadd').disabled=$('#m3-sreset').disabled=true}
+function m3sPaint(){const S=M3.S;if(!S?.orig)return;const im=$('#m3-sorig'),base=S.orig.split('?')[0];
+  if(M3S.src!==base){M3S.src=base;M3S.samId=null;M3S.data=null;im.src=S.orig;m3sReset()}
+  const L=S.scene||[];$('#m3-sobjs').innerHTML=L.length?L.map((o,i)=>`<figure class="m3-sobj${o.edge?' edge':''}"><img src="${o.url}" alt="물체 ${i+1}"><figcaption>물체 ${i+1}${o.edge?' <span class="m3-sus" title="사진 가장자리에서 잘렸어요. [가려진 부분 채우기]를 켜면 잘린 부분을 그려 넣어요">잘림</span>':''}<button type="button" class="ghost sm" data-srm="${o.n}" title="장면에서 빼기">×</button></figcaption></figure>`).join('')
+    :'<p class="mute">아직 고른 물체가 없어요.</p>';
+  $('#m3-sgo').disabled=!L.length;$('#m3-sgo').textContent=L.length?`장면 만들기 (물체 ${L.length}개)`:'장면 만들기'}
+async function m3sDraw(){const c=$('#m3-smask'),im=$('#m3-sorig');c.width=im.naturalWidth||1;c.height=im.naturalHeight||1;const x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);
+  if(M3S.mask){const mi=new Image();await new Promise(ok=>{mi.onload=ok;mi.onerror=ok;mi.src=M3S.mask});
+    const t=document.createElement('canvas');t.width=c.width;t.height=c.height;const y=t.getContext('2d');y.drawImage(mi,0,0,c.width,c.height);
+    const d=y.getImageData(0,0,t.width,t.height),p=d.data;for(let i=0;i<p.length;i+=4){const on=p[i]>127;p[i]=70;p[i+1]=110;p[i+2]=255;p[i+3]=on?120:0}y.putImageData(d,0,0);x.drawImage(t,0,0)}
+  const r=Math.max(4,c.width/120);for(const[px,py,l]of M3S.pts){x.beginPath();x.arc(px*c.width,py*c.height,r,0,7);x.fillStyle=l?'#2ecc71':'#e74c3c';x.fill();x.lineWidth=r/3;x.strokeStyle='#fff';x.stroke()}}
+async function m3sSam(){const st=await api('/api/sam/status');if(!st.ready){$('#m3-ssam').hidden=false;m3St(st.busy?'선택 도구를 설치하는 중이에요…':'물체를 고르려면 선택 도구(MobileSAM)를 먼저 설치해 주세요.',null);return false}$('#m3-ssam').hidden=true;return true}
+$('#m3-sbox').addEventListener('click',async e=>{if(!M3.S||M3S.busy)return;const im=$('#m3-sorig'),b=im.getBoundingClientRect();if(!b.width)return;
+  const x=(e.clientX-b.left)/b.width,y=(e.clientY-b.top)/b.height;if(x<0||y<0||x>1||y>1)return;
+  if(!await m3sSam())return;M3S.busy=true;M3S.pts.push([+x.toFixed(4),+y.toFixed(4),e.shiftKey?0:1]);m3sDraw();m3St('고르는 중… (사진을 처음 살펴볼 때는 몇 초 걸려요)',null);
+  try{const body={points:M3S.pts,level:1,id:M3S.samId};if(!body.id){M3S.data=M3S.data||await urlToDataURL(M3.S.orig);body.image=M3S.data}
+    let r=await api('/api/sam/segment',body);if(r.resend){M3S.data=M3S.data||await urlToDataURL(M3.S.orig);body.image=M3S.data;r=await api('/api/sam/segment',body)}
+    if(r.need){M3S.pts.pop();await m3sSam();return}if(r.error){M3S.pts.pop();m3St(r.error,null,true);return}
+    M3S.samId=r.id;M3S.mask=r.mask;await m3sDraw();$('#m3-sadd').disabled=$('#m3-sreset').disabled=false;m3St('골랐어요. 맞으면 [이 물체 넣기], 넓히려면 더 누르고, 빼려면 Shift+클릭이에요.',null)}
+  catch(err){M3S.pts.pop();m3St('고르지 못했어요: '+(err&&err.message||err),null,true)}finally{M3S.busy=false}});
+$('#m3-sreset').onclick=()=>{m3sReset();m3St('')};
+$('#m3-sadd').onclick=async()=>{if(!M3S.mask||!M3.S)return;$('#m3-sadd').disabled=true;const r=await api('/api/m3d/scene',{id:M3.S.id,mask:M3S.mask});
+  if(r.error){$('#m3-sadd').disabled=false;return toast(r.error,6000)}M3.S=r;m3sReset();m3Paint();m3St(`물체 ${r.scene.length}개를 골랐어요. 다른 물체도 눌러서 넣을 수 있어요.`,null)};
+$('#m3-sobjs').addEventListener('click',async e=>{const b=e.target.closest('[data-srm]');if(!b||!M3.S)return;const r=await api('/api/m3d/scene',{id:M3.S.id,remove:b.dataset.srm});if(r.error)return toast(r.error);M3.S=r;m3Paint()});
+$('#m3-ssam').onclick=async()=>{$('#m3-ssam').disabled=true;const r=await api('/api/sam/install',{});if(r.error){$('#m3-ssam').disabled=false;return toast(r.error,6000)}
+  m3St('선택 도구를 설치하는 중이에요… (설치와 모델의 진행 목록에서도 볼 수 있어요)',null);
+  for(let i=0;i<600;i++){await sleep(2000);const st=await api('/api/sam/status');if(st.ready){$('#m3-ssam').hidden=true;$('#m3-ssam').disabled=false;m3St('설치했어요. 원본 사진에서 물체를 눌러 보세요.',null);return}
+    if(!st.busy){const t=(await api('/api/install')).filter(x=>x.kind==='sam').pop();if(t?.state==='error'){$('#m3-ssam').disabled=false;return m3St('설치하지 못했어요: '+t.msg,null,true)}}}};
+$('#m3-sgo').onclick=async()=>{if(!M3.S?.scene?.length)return;
+  const p={kind:'m3d',op:'scene',id:M3.S.id,fill:$('#m3-sfill').checked,fast:$('#m3-vfast').checked?'on':'',res:$('#m3-res').value,faces:$('#m3-faces').value,tex:$('#m3-tex').value,
+    remesh:$('#m3-remesh').checked,blender:$('#m3-blender').checked,fmt_glb:$('#m3-fmt-glb').checked,fmt_fbx:$('#m3-fmt-fbx').checked,fmt_obj:$('#m3-fmt-obj').checked};
+  const j=await m3Job(p,`장면 만드는 중 (물체 ${M3.S.scene.length}개)`);if(j)m3Show(j)};

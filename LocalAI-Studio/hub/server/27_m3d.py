@@ -3,6 +3,7 @@
 # ruff: noqa: F821
 
 import blender3d
+import glbscene
 
 M3D_DIR = ROOT / "m3d_work"
 M3D_SUB = "3D"
@@ -263,6 +264,153 @@ def m3d_frame(ims, size=1024, pad=1.1):
     return out
 
 
+M3D_SCENE_MAX = 12
+M3D_FILL = ("This picture shows one object cut out of a photo. Parts of it may be hidden behind other things or cut off at the edge. "
+            "Redraw the complete, whole object alone with every hidden or missing part filled in naturally. Keep exactly the same design, shape, "
+            "proportions, colors, materials, details and viewing angle. Whole object in frame, plain pure white background, soft even lighting, no shadow, nothing else.")
+
+
+def m3d_scene_obj(p):
+    """장면 전체: 원본 사진에서 고른 물체(마스크) 넣기 · 빼기 · 모두 비우기."""
+    sid = p.get("id")
+    d = m3d_dir(sid)
+    m = m3d_meta(sid)
+    objs = m.get("scene") or []
+    if p.get("clear") or p.get("remove") is not None:
+        drop = [o for o in objs if p.get("clear") or str(o["n"]) == str(p.get("remove"))]
+        for o in drop:
+            for nm in (f"scene_obj_{o['n']}.png", f"scene_mask_{o['n']}.png"):
+                (d / nm).unlink(missing_ok=True)
+        m["scene"] = [o for o in objs if o not in drop]
+        m3d_save_meta(sid, m)
+        return m3d_view(sid)
+    if len(objs) >= M3D_SCENE_MAX:
+        return {"error": f"물체는 {M3D_SCENE_MAX}개까지 넣을 수 있어요."}
+    if not (d / "orig.png").is_file():
+        return {"error": "원본 사진이 없어요. 사진을 다시 골라 주세요."}
+    orig = Image.open(d / "orig.png").convert("RGB")
+    try:
+        mk = load_img(p["mask"]).convert("L").resize(orig.size, RS.BILINEAR)
+    except Exception:  # noqa: BLE001
+        return {"error": "고른 부분을 읽을 수 없어요."}
+    a = np.asarray(mk) > 127
+    if a.sum() < 64 or a.mean() > 0.9:
+        return {"error": "물체를 찾지 못했어요. 물체 위를 눌러 다시 골라 주세요."}
+    ys, xs = np.nonzero(a)
+    x0, x1, y0, y1 = int(xs.min()), int(xs.max()), int(ys.min()), int(ys.max())
+    W, H = orig.size
+    pad = round(0.04 * max(x1 - x0, y1 - y0))
+    rgba = orig.convert("RGBA")
+    alpha = Image.fromarray((a * 255).astype("uint8"), "L")
+    rgba.putalpha(alpha)
+    n = max([o["n"] for o in objs], default=0) + 1
+    rgba.crop((max(0, x0 - pad), max(0, y0 - pad), min(W, x1 + pad + 1), min(H, y1 + pad + 1))).save(d / f"scene_obj_{n}.png")
+    alpha.save(d / f"scene_mask_{n}.png")
+    edge = x0 <= 1 or y0 <= 1 or x1 >= W - 2 or y1 >= H - 2
+    objs.append({"n": n, "box": [x0, y0, x1, y1], "area": round(float(a.mean()), 4), "edge": bool(edge)})
+    m["scene"] = objs
+    m3d_save_meta(sid, m)
+    return m3d_view(sid)
+
+
+def m3d_fill(img, p, J, seed):
+    """가려지거나 잘린 부분을 Qwen-Image 2.1 편집으로 채워 물체 전체를 다시 그려요 → 배경 지우기."""
+    bg = Image.new("RGB", img.size, (255, 255, 255))
+    bg.paste(img, mask=img.getchannel("A"))
+    side = max(bg.size)
+    sq = Image.new("RGB", (round(side * 1.3), round(side * 1.3)), (255, 255, 255))          # 둘레를 넉넉히(잘린 부분을 그릴 자리)
+    sq.paste(bg, ((sq.width - bg.width) // 2, (sq.height - bg.height) // 2))
+    b = io.BytesIO()
+    sq.save(b, "PNG")
+    res = do_edit({"kind": "edit", "engine": "qwen", "image": "data:image/png;base64," + base64.b64encode(b.getvalue()).decode(), "prompt": M3D_FILL,
+                   "seed": seed, "fast": p.get("fast") or "", "translate": ""}, J)
+    return m3d_cut(res[0][0].convert("RGB"), J)
+
+
+def m3d_scene(p, J):
+    """장면 전체: 고른 물체마다 3D → 깊이·사진 속 자리로 배치 → 한 장면 GLB (+ Blender 가 있으면 FBX·.blend)."""
+    sid = p.get("id")
+    m = m3d_meta(sid)
+    d = M3D_DIR / sid
+    objs = [o for o in m.get("scene") or [] if (d / f"scene_obj_{o['n']}.png").is_file()]
+    if not objs:
+        raise ValueError("장면에 넣을 물체를 먼저 골라 주세요(원본 사진에서 물체를 눌러요).")
+    o = m3d_opts(p, {**m, "kind": "object"})
+    f, _ = m3d_need(False, J)
+    orig = Image.open(d / "orig.png").convert("RGB")
+    dep, _how, _node = get_depth({}, J, orig)
+    D = np.asarray(dep.convert("L").resize(orig.size), dtype=np.float32) / 255
+    masks = []
+    for ob in objs:
+        mf = d / f"scene_mask_{ob['n']}.png"
+        masks.append((ob["n"], ob["box"], np.asarray(Image.open(mf).convert("L").resize(orig.size)) > 127 if mf.is_file() else None))
+    lay = {x["n"]: x for x in glbscene.layout(orig.size, D, masks)}
+    seed = seed_of(p)
+    fill = flag(p, "fill", False)
+    items, parts = [], []
+    for i, ob in enumerate(objs):
+        check_cancel(J)
+        n, tag = ob["n"], f"물체 {i + 1}/{len(objs)}"
+        J["progress"] = i / len(objs)
+        img = Image.open(d / f"scene_obj_{n}.png").convert("RGBA")
+        if fill:
+            J["msg"] = f"{tag} — 가려진 부분 채우는 중"
+            img = m3d_fill(img, p, J, seed + i)
+        glb = m3d_glb({"front": img}, False, f, o, seed + 10 * i, J, f"{tag} 3D 만드는 중 — 면 {o['faces']:,}개 · 텍스처 {o['tex']}px (물체마다 몇 분)")
+        L = lay[n]
+        parts.append({"glb": glb, "name": f"object_{n}", "pos": L["pos"], "height": L["height"]})
+    J["msg"] = "장면으로 합치는 중"
+    scene, info = glbscene.merge(parts)
+    name = (m["name"] + "_장면")[:48]
+    plan = {"note": "AI 추정값 — 사진 한 장과 깊이 추정으로 어림한 상대 위치·크기예요(실제로 잰 값 아님)", "unit": "m",
+            "axes": "x 오른쪽 · y 앞쪽(카메라에서 멀어짐) · z 위 (Blender 기준), 위치는 물체 바닥 가운데",
+            "objects": [{"name": pt["name"], "file": pt["name"] + ".glb", "pos": pt["pos"], "height": pt["height"], "size_m": inf["size_m"],
+                         "tris": inf["tris"]} for pt, inf in zip(parts, info)]}
+    base_info = {"kind": "3d", "engine": "TRELLIS.2 장면", "objects": len(parts), "res": o["res"], "faces": o["faces"], "tex": o["tex"],
+                 "seed": seed, "name": m["name"], "_sub": M3D_SUB, "fill": fill}
+    work = d / f"scene_{uuid.uuid4().hex[:6]}"
+    (work / "pack").mkdir(parents=True, exist_ok=True)
+    try:
+        (work / "scene.glb").write_bytes(scene)
+        for pt in parts:
+            (work / "pack" / (pt["name"] + ".glb")).write_bytes(pt["glb"])
+        (work / "pack" / "layout.json").write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf-8")
+        shown, bl = scene, None
+        if o["blender"] and blender3d.exe(ROOT):
+            J["msg"], J["progress"] = "Blender 로 장면 파일 만드는 중 — FBX·.blend", 0.97
+            try:
+                r = blender3d.finish(ROOT, work / "scene.glb", work / "pack", {"name": name, "scene": True, "formats": o["formats"]},
+                                     lambda: J.get("cancel"))
+                bl = r.get("blender")
+                g = work / "pack" / str(r.get("glb") or "")
+                if r.get("glb") and g.is_file():
+                    shown = g.read_bytes()
+            except InterruptedError:
+                raise Cancelled("사용자가 중단했어요.") from None
+            except Exception as e:  # noqa: BLE001
+                warn(J, f"{e} — Blender 없이 합친 장면(GLB)과 물체별 GLB 만 저장했어요.")
+        elif o["blender"]:
+            warn(J, "Blender 가 없어 FBX·.blend 는 건너뛰었어요(장면 GLB·물체별 GLB 는 만들었어요). 3D 만들기 화면에서 [Blender 설치]를 누르면 다음부터 해요.")
+        if not (work / "pack" / f"{name}.glb").is_file():
+            (work / "pack" / f"{name}.glb").write_bytes(scene)
+        z = d / f"{m['name']}_scene_{uuid.uuid4().hex[:4]}.zip"
+        with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
+            for x in sorted((work / "pack").rglob("*")):
+                if x.is_file() and x.name not in ("result.json", "error.txt"):
+                    zf.write(x, x.relative_to(work / "pack"))
+        info2 = {**base_info, **({"blender": bl} if bl else {}), "layout": plan["objects"]}
+        items.append((shown, info2, ".glb"))
+        items.append((z, {**info2, "pack": True}, ".zip"))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    J["m3d_stats"] = {"scene": [{"name": x["name"], "pos": x["pos"], "height": x["height"], "size_m": x["size_m"], "tris": x["tris"],
+                                 "dist": lay[int(x["name"].split("_")[-1])]["dist"]} for x in plan["objects"]], "blender": bool(bl)}
+    J["msg"] = f"장면을 만들었어요 — 물체 {len(parts)}개 · 위치·크기는 AI 어림값이에요"
+    m["scenes"] = m.get("scenes", 0) + 1
+    m3d_save_meta(sid, m)
+    return items
+
+
 def m3d_view(sid):
     m = m3d_meta(sid)
     d = M3D_DIR / sid
@@ -270,7 +418,9 @@ def m3d_view(sid):
     slots = {s: (url(f"view_{s}.png") if (d / f"view_{s}.png").is_file() else None) for s in ("front",) + M3D_SIDES}
     return {**m, "id": sid, "slots": slots, "ready": m3d_ready(), "blender": blender3d.status(ROOT),
             "orig": url("orig.png") if (d / "orig.png").is_file() else None, "front_orig": (d / "view_front_orig.png").is_file(),
-            "vcheck": m3d_vcheck(d)}
+            "vcheck": m3d_vcheck(d),
+            "scene": [{"n": o["n"], "url": url(f"scene_obj_{o['n']}.png"), "edge": o.get("edge", False)}
+                      for o in m.get("scene") or [] if (d / f"scene_obj_{o['n']}.png").is_file()]}
 
 
 def m3d_list():
@@ -432,18 +582,12 @@ def m3d_opts(p, m):
             "rig": flag(p, "rig", m.get("kind") == "character")}
 
 
-def m3d_build(p, J):
-    """3D 만들기: 사진(+고른 방향 그림) → 텍스처 입힌 게임용 GLB → (Blender) 크기·LOD·FBX/OBJ 묶음."""
-    sid = p.get("id")
-    m = m3d_meta(sid)
-    d = M3D_DIR / sid
-    o = m3d_opts(p, m)
-    use = [s for s in M3D_SIDES if s in (p.get("sides") or []) and (d / f"view_{s}.png").is_file()]
-    mv = bool(use)
+def m3d_need(mv, J):
+    """만들 수 있는지 확인: 모델 파일·ComfyUI 노드. 멀티뷰 모델이 없으면 한 장으로 바꿔요 → (파일, 멀티뷰 여부)"""
     f = trellis_files(mv)
     if mv and not all(f.values()):
         warn(J, "여러 방향으로 만들려면 'Pixal3D 멀티뷰' 모델이 필요해요. 이번엔 앞 사진 한 장으로 만들었어요.")
-        mv, use = False, []
+        mv = False
         f = trellis_files(False)
     if not all(f.values()):
         names = {"model": "TRELLIS.2 모델", "dino": "DINOv3 이미지 인코더", "svae": "모양 VAE", "tvae": "텍스처 VAE"}
@@ -452,21 +596,26 @@ def m3d_build(p, J):
     miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
     if miss:
         raise RuntimeError("이 ComfyUI 에는 3D 노드(" + ", ".join(miss) + ")가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    return f, mv
+
+
+def m3d_glb(imgs, mv, f, o, seed, J, label=None):
+    """사진(배경 지운 RGBA, {방향: 그림}) → ComfyUI TRELLIS.2/Pixal3D → 텍스처 입힌 GLB 바이트."""
     if mv:                                              # 멀티뷰: 모든 방향을 같은 배율로 맞춰서 넣어요
-        fr = m3d_frame({s: Image.open(d / f"view_{s}.png").convert("RGBA") for s in ["front"] + use})
-        views = {s: put_input(fr[s], J) for s in ["front"] + use}
+        fr = m3d_frame(imgs)
+        views = {sd: put_input(fr[sd], J) for sd in imgs}
     else:
-        views = {"front": put_input(Image.open(d / "view_front.png"), J)}
+        views = {"front": put_input(imgs["front"], J)}
     # 단계 수(구조, 모양 512, 재질, 모양 올려 그리기)·cfg — 원본 TRELLIS.2 기본값
     nodes = caps()["nodes"]
     co = not nodes or "CFGOverride" in nodes
-    q = {"files": f, "views": views, "multiview": mv, "framed": mv, "seed": seed_of(p), "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
+    q = {"files": f, "views": views, "multiview": mv, "framed": mv, "seed": seed, "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
          "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"], "cfg_override": co}
     if not co:
         warn(J, "이 ComfyUI 에는 CFGOverride 노드가 없어서 원본 설정 일부(앞쪽 단계에만 가이드 걸기) 없이 만들었어요. "
                 "ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 모양이 더 좋아져요.")
     free_ollama()
-    J["msg"] = f"3D 만드는 중 — 모양 {o['res']} · 면 {o['faces']:,}개 · 텍스처 {o['tex']}px (몇 분 걸려요)"
+    J["msg"] = label or f"3D 만드는 중 — 모양 {o['res']} · 면 {o['faces']:,}개 · 텍스처 {o['tex']}px (몇 분 걸려요)"
     fixed = []
     res = run_wf(wf_fit(flows.wf_trellis(q), fixed), J, raw=True)
     if any(x.startswith("RemeshMesh.") for x in fixed):
@@ -476,6 +625,25 @@ def m3d_build(p, J):
     if not glb:
         raise RuntimeError("3D 결과(GLB)를 받지 못했어요.")
     _clean_tmp(J)
+    return glb
+
+
+def m3d_build(p, J):
+    """3D 만들기: 사진(+고른 방향 그림) → 텍스처 입힌 게임용 GLB → (Blender) 크기·LOD·FBX/OBJ 묶음."""
+    sid = p.get("id")
+    m = m3d_meta(sid)
+    d = M3D_DIR / sid
+    o = m3d_opts(p, m)
+    use = [s for s in M3D_SIDES if s in (p.get("sides") or []) and (d / f"view_{s}.png").is_file()]
+    mv = bool(use)
+    f, mv = m3d_need(mv, J)
+    if not mv:
+        use = []
+    imgs = {"front": Image.open(d / "view_front.png").convert("RGBA")}
+    for sd in use:
+        imgs[sd] = Image.open(d / f"view_{sd}.png").convert("RGBA")
+    q = {"seed": seed_of(p)}
+    glb = m3d_glb(imgs, mv, f, o, q["seed"], J)
     base_info = {"kind": "3d", "engine": "Pixal3D 멀티뷰" if mv else "TRELLIS.2", "views": ["front"] + use, "res": o["res"], "faces": o["faces"],
                  "tex": o["tex"], "seed": q["seed"], "name": m["name"], "_sub": M3D_SUB}
     items = []
@@ -539,7 +707,7 @@ def m3d_quick(img, p, J):
 
 
 def do_m3d(p, J):
-    fn = {"prep": m3d_prep, "views": m3d_views, "tpose": m3d_tpose, "build": m3d_build}.get(p.get("op") or "")
+    fn = {"prep": m3d_prep, "views": m3d_views, "tpose": m3d_tpose, "build": m3d_build, "scene": m3d_scene}.get(p.get("op") or "")
     if not fn:
         raise ValueError("알 수 없는 3D 작업이에요.")
     return fn(p, J)
