@@ -399,6 +399,7 @@ def m3d_scene(p, J):
             try:
                 r = blender3d.finish(ROOT, work / "scene.glb", work / "pack", {"name": name, "scene": True, "formats": o["formats"]},
                                      lambda: J.get("cancel"))
+                m3d_fix_pack(work / "pack")
                 bl = r.get("blender")
                 g = work / "pack" / str(r.get("glb") or "")
                 if r.get("glb") and g.is_file():
@@ -472,6 +473,9 @@ def m3d_prep(p, J):
         img = img.resize((round(img.width * k), round(img.height * k)), RS.LANCZOS)
     cut = m3d_cut(img, J)
     checks, stats = m3d_analyze(cut)
+    stats.update(m3d_face_stats(cut, J))
+    stats["face_rec"] = M3D_FACE_REC
+    checks = m3d_face_check(checks, stats)
     sid = uuid.uuid4().hex[:12]
     d = M3D_DIR / sid
     d.mkdir(parents=True, exist_ok=True)
@@ -569,7 +573,11 @@ def m3d_enlarge_op(p, J):
     img.save(f)
     if s == "front":
         m = m3d_meta(sid)
+        old = m.get("stats") or {}
         m["checks"], m["stats"] = m3d_analyze(img)
+        if old.get("face"):                           # 키운 만큼 얼굴 크기도 커져요
+            m["stats"].update(face=int(round(old["face"] * k)), face_box=[round(v * k) for v in old.get("face_box") or []], face_rec=M3D_FACE_REC)
+            m["checks"] = m3d_face_check(m["checks"], m["stats"])
         m3d_save_meta(sid, m)
     J["m3d"], J["msg"] = m3d_view(sid), f"{M3D_SIDE_KO[s]} 그림을 {k:g}배 키웠어요."
     return []
@@ -700,6 +708,34 @@ def m3d_enlarge(img, J, target=M3D_GOOD, force=False):
     return big, k
 
 
+def m3d_defringe(img):
+    """배경 지운 사진의 가장자리 손질: 반쯤 투명한 가장자리(머리카락 끝 등)는 원래 배경색이 섞여 있고, 3D 엔진은 이를 검은 배경 위에 얹어 받아서
+    3D 색에 검은 테두리로 굳어요. 가장자리 색을 안쪽 물체 색으로 채우고(색 번짐 제거), 투명도 경계를 조금 또렷하게 해요."""
+    if img.mode != "RGBA":
+        return img
+    a = np.asarray(img.getchannel("A")).astype(np.float32) / 255
+    if not ((a > 0.02) & (a < 0.98)).any():
+        return img
+    rgb = np.asarray(img.convert("RGB")).astype(np.float32)
+    solid = (a >= 0.95).astype(np.float32)
+    fill = rgb.copy()
+    todo = solid < 1
+    for r in (2, 4, 8, 16, 32):                       # 가까운 물체 색부터 넓혀 가며 채워요
+        if not todo.any():
+            break
+        sw = np.asarray(Image.fromarray((solid * 255).astype(np.uint8)).filter(ImageFilter.BoxBlur(r))).astype(np.float32) / 255
+        sc = np.stack([np.asarray(Image.fromarray(np.clip(rgb[..., c] * solid, 0, 255).astype(np.uint8)).filter(ImageFilter.BoxBlur(r))).astype(np.float32)
+                       for c in range(3)], -1)
+        got = todo & (sw > 0.02)
+        fill[got] = sc[got] / sw[got][:, None]
+        todo &= ~got
+    out = np.where(solid[..., None] > 0, rgb, fill)
+    a2 = np.clip((a - 0.25) / 0.5, 0, 1)                # 투명도 경계를 또렷하게(0.25 아래는 투명, 0.75 위는 불투명)
+    o = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).convert("RGBA")
+    o.putalpha(Image.fromarray((a2 * 255).astype(np.uint8)))
+    return o
+
+
 def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     """사진(배경 지운 RGBA, {방향: 그림}) → ComfyUI TRELLIS.2/Pixal3D → 텍스처 입힌 GLB 바이트."""
     grown = []
@@ -709,6 +745,8 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
             grown.append(f"{M3D_SIDE_KO.get(sd, sd)} {k:g}배")
     if grown:
         warn(J, "물체 부분이 작아서 업스케일로 키워 만들었어요(" + ", ".join(grown) + ").")
+    for sd in list(imgs):                              # 가장자리 검은 테두리 막기
+        imgs[sd] = m3d_defringe(imgs[sd])
     if mv:                                              # 멀티뷰: 모든 방향을 같은 배율로 맞춰서 넣어요
         fr = m3d_frame(imgs)
         views = {sd: put_input(fr[sd], J) for sd in imgs}
@@ -734,21 +772,40 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     if not glb:
         raise RuntimeError("3D 결과(GLB)를 받지 못했어요.")
     _clean_tmp(J)
+    glb = photoproj.fix_samplers(glb)
     if o.get("photo", True):
         glb = m3d_photo(glb, imgs["front"], J)
     return glb
 
 
+def m3d_fix_pack(folder):
+    """Blender 가 내보낸 GLB 들도 텍스처 밉맵을 켜 둬요(게임 엔진 기본값)."""
+    for f in Path(folder).rglob("*.glb"):
+        try:
+            data = f.read_bytes()
+            new = photoproj.fix_samplers(data)
+            if new != data:
+                f.write_bytes(new)
+        except OSError:
+            pass
+
+
 M3D_FACE_GOOD = 1024      # 얼굴 부분이 이보다 작으면 키워서 붙여요
+M3D_FACE_REC = 512        # 사진 점검: 얼굴이 이보다 작으면 알려 줘요(얼굴 선명도는 원본 얼굴 크기를 넘지 못해요)
 
 
-def m3d_face(photo, J):
-    """사진에서 얼굴을 찾아(MediaPipe) 그 부분을 업스케일로 키워요 → (x0, y0, x1, y1, 키운 그림) 또는 None.
-    얼굴 찾기 모델·노드·업스케일 모델이 없거나, 얼굴이 없거나, 이미 충분히 크면 None."""
+def m3d_face_model():
     model = next((n for n in files("detection") if "mediapipe_face" in n.lower()), None)
     nodes = caps()["nodes"]
     if not model or (nodes and not all(x in nodes for x in ("LoadMediaPipeFaceLandmarker", "MediaPipeFaceLandmarker", "MediaPipeFaceMask"))):
-        J.setdefault("m3d_notes", []).append("face_model")
+        return None
+    return model
+
+
+def m3d_face_box(photo, J, model=None):
+    """사진에서 얼굴 상자(MediaPipe) → (x0, y0, x1, y1) 사진 좌표 또는 None"""
+    model = model or m3d_face_model()
+    if not model:
         return None
     k = min(1.0, 1536 / max(photo.size))
     small = photo.resize((max(1, round(photo.width * k)), max(1, round(photo.height * k))), RS.LANCZOS) if k < 1 else photo
@@ -761,9 +818,41 @@ def m3d_face(photo, J):
         return None
     mk = next((dat for n, dat in res if n.lower().endswith(".png")), None)
     box = Image.open(io.BytesIO(mk)).convert("L").point(lambda v: 255 if v > 127 else 0).getbbox() if mk else None
-    if not box:
+    return tuple(v / k for v in box) if box else None
+
+
+def m3d_face_stats(img, J):
+    """사진 점검용 얼굴 크기(px). 이미지 엔진이 켜져 있고 얼굴 찾기 모델이 있을 때만 → {face, face_box} 또는 {}"""
+    try:
+        if not m3d_face_model() or not alive(CUI + "/system_stats"):
+            return {}
+        b = m3d_face_box(img, J)
+    except Exception as e:  # noqa: BLE001
+        quiet_log("[3D 얼굴 크기 확인 실패]", repr(e))
+        return {}
+    return {"face": int(round(max(b[2] - b[0], b[3] - b[1]))), "face_box": [round(v) for v in b]} if b else {}
+
+
+def m3d_face_check(checks, st):
+    """얼굴이 작으면 점검 목록에 알려 줘요."""
+    f = st.get("face")
+    if f and f < M3D_FACE_REC:
+        checks = [c for c in checks if c["level"] != "ok"] + [{"level": "warn", "text": f"얼굴이 {f}px 로 작아요. 3D 얼굴의 선명도는 사진 속 얼굴 크기를 넘지 못해요 — "
+                                                                                 f"권장 {M3D_FACE_REC}px 이상(얼굴·상반신이 크게 나온 사진)이에요."}]
+    return checks
+
+
+def m3d_face(photo, J):
+    """사진에서 얼굴을 찾아(MediaPipe) 그 부분을 업스케일로 키워요 → (x0, y0, x1, y1, 키운 그림) 또는 None.
+    얼굴 찾기 모델·노드·업스케일 모델이 없거나, 얼굴이 없거나, 이미 충분히 크면 None."""
+    model = m3d_face_model()
+    if not model:
+        J.setdefault("m3d_notes", []).append("face_model")
         return None
-    x0, y0, x1, y1 = (v / k for v in box)
+    b = m3d_face_box(photo, J, model)
+    if not b:
+        return None
+    x0, y0, x1, y1 = b
     cx, cy, side = (x0 + x1) / 2, (y0 + y1) / 2, max(x1 - x0, y1 - y0) * 1.5
     x0, y0 = max(0, round(cx - side / 2)), max(0, round(cy - side / 2))
     x1, y1 = min(photo.width, round(cx + side / 2)), min(photo.height, round(cy + side / 2))
@@ -792,17 +881,24 @@ def m3d_photo(glb, photo, J):
         new, info = photoproj.project(glb, photo, face, log=quiet_log)
     except ValueError as e:              # 붙일 수 없는 모양(텍스처 없음 등) — 원래 색 그대로
         quiet_log("[3D 사진 붙이기 건너뜀]", e)
+        J["m3d_photo_res"] = {"done": False, "text": f"이 3D 에는 붙일 수 없었어요({e})"}
         return glb
     except Exception as e:  # noqa: BLE001
         quiet_log("[3D 사진 붙이기 실패]", repr(e))
         warn(J, f"사진 붙이기를 하지 못해 3D 엔진이 칠한 색 그대로예요({str(e)[:80]}).")
+        J["m3d_photo_res"] = {"done": False, "text": f"오류로 하지 못했어요({str(e)[:80]})"}
         return glb
     if info.get("skip") == "shape":
         warn(J, f"사진과 3D 모양이 충분히 겹치지 않아(겹침 {info['iou']:.0%}) 사진 붙이기는 건너뛰었어요. 어긋나게 붙으면 번져 보여서요.")
+        J["m3d_photo_res"] = {"done": False, "iou": info["iou"], "text": f"사진과 3D 모양이 충분히 겹치지 않아 건너뛰었어요(겹침 {info['iou']:.0%}, 필요 85% — 머리카락이 많으면 75% + 무늬 일치). "
+                                                                      "배경이 깨끗하게 지워진 사진, 물체 전체가 나온 사진에서 잘 돼요."}
         return glb
     if info.get("skip"):
+        J["m3d_photo_res"] = {"done": False, "text": "사진 쪽에서 보이는 면이 없어 건너뛰었어요."}
         return glb
     J.setdefault("m3d_photo", []).append(info)
+    J["m3d_photo_res"] = {"done": True, "iou": info["iou"], "face": info.get("face"),
+                          "text": f"앞 사진을 그대로 붙였어요(겹침 {info['iou']:.0%}{', 얼굴은 키워서' if info.get('face') else ''})."}
     if "face_model" in (J.get("m3d_notes") or []) and not J.get("_face_noted"):
         J["_face_noted"] = 1
         warn(J, "얼굴 찾기 모델이 없어 얼굴 확대는 건너뛰었어요. '설치와 모델'의 3D 분류에서 '얼굴 찾기(MediaPipe)'를 받으면 얼굴이 더 선명해져요.")
@@ -825,6 +921,8 @@ def m3d_build(p, J):
         imgs[sd] = Image.open(d / f"view_{sd}.png").convert("RGBA")
     q = {"seed": seed_of(p)}
     glb = m3d_glb(imgs, mv, f, o, q["seed"], J)
+    if J.get("m3d_photo_res"):
+        J.setdefault("m3d_stats", {})["photo"] = J["m3d_photo_res"]
     base_info = {"kind": "3d", "photo": bool(J.get("m3d_photo")), "face": any(x.get("face") for x in J.get("m3d_photo") or []), "engine": "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2", "views": ["front"] + use, "res": o["res"], "faces": o["faces"],
                  "tex": o["tex"], "seed": q["seed"], "name": m["name"], "_sub": M3D_SUB}
     items = []
@@ -838,6 +936,7 @@ def m3d_build(p, J):
                                                                          "lods": [1.0, 0.5, 0.2] if o["lods"] else [1.0], "formats": o["formats"],
                                                                          "rig": o["rig"]},
                                  lambda: J.get("cancel"))
+            m3d_fix_pack(work / "pack")
             z = d / f"{m['name']}_game_{uuid.uuid4().hex[:4]}.zip"
             with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
                 for x in sorted((work / "pack").rglob("*")):
@@ -845,7 +944,7 @@ def m3d_build(p, J):
                         zf.write(x, x.relative_to(work / "pack"))
             lod0 = work / "pack" / r["lods"][0].get("glb", "")
             info = {**base_info, "blender": r.get("blender"), "lods": r["lods"], "size_m": r["size_m"]}
-            J["m3d_stats"] = {"lods": r["lods"], "size_m": r["size_m"]}
+            J.setdefault("m3d_stats", {}).update(lods=r["lods"], size_m=r["size_m"])
             rg = r.get("rig")
             if rg:
                 info["rig"] = {k: rg.get(k) for k in ("bones", "pose", "legs")}

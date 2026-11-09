@@ -18,6 +18,9 @@ from PIL import Image, ImageFilter
 import glbscene
 
 MIN_IOU = 0.85          # 사진·3D 실루엣이 이만큼 겹쳐야 붙여요
+MIN_IOU_PAT = (0.75, 0.4)   # 또는: 겹침이 이만큼이고 무늬(밝기)가 이만큼 맞으면 — 머리카락이 많아 실루엣이 덜 겹치는 캐릭터
+AO_KEEP = 0.15          # 사진을 붙인 곳의 그늘 굽기는 이만큼만 남겨요(사진에 이미 진짜 그늘이 있어서 겹치면 두 배로 어두워져요)
+SKIN_ROUGH = 0.5        # 사진을 붙인 피부의 거칠기(업계 시작값 0.4~0.6) — 3D 엔진은 피부를 매우 거칠게 칠해 찰흙처럼 보여요
 FACING = (0.3, 0.65)    # 면이 사진 쪽을 보는 정도(cos) — 아래쪽은 원래 색, 위쪽은 사진 색, 사이는 섞어요
 _CT = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8, 5122: np.int16, 5120: np.int8}
 _NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
@@ -60,7 +63,7 @@ def load(glb):
     P = P @ m[:3, :3].T + m[:3, 3]
     F = _acc(g, b, pr["indices"]).astype(np.int64).reshape(-1, 3)
     UV = _acc(g, b, at["TEXCOORD_0"])[:, :2]
-    return {"g": g, "b": b, "P": P, "F": F, "UV": UV, "image": ii, "tex": tex}
+    return {"g": g, "b": b, "P": P, "F": F, "UV": UV, "image": ii, "tex": tex, "mat": mat}
 
 
 def _world(g, ni):
@@ -93,6 +96,27 @@ def replace_image(g, b, ii, data, mime="image/png"):
     nb = b"".join(out)
     g["buffers"][0]["byteLength"] = len(nb)
     return glbscene.write(g, nb)
+
+
+def fix_samplers(glb):
+    """텍스처 '밉맵'을 켜요(게임 엔진 기본값). ComfyUI 는 줄일 때 밉맵 없이(minFilter LINEAR) 저장해서,
+    텍스처가 화면에서 작게 보이면 자글자글 깨져 보여요(얼굴이 픽셀처럼). 텍스처가 없으면 그대로 돌려줘요."""
+    try:
+        g, b = glbscene.read(glb)
+    except Exception:  # noqa: BLE001 — GLB 가 아니거나 깨졌으면 손대지 않아요
+        return glb
+    if not g.get("textures"):
+        return glb
+    ss = g.setdefault("samplers", [])
+    if not ss:
+        ss.append({})
+    for s in ss:
+        s["magFilter"], s["minFilter"] = 9729, 9987       # LINEAR / LINEAR_MIPMAP_LINEAR
+        s.setdefault("wrapS", 33071)
+        s.setdefault("wrapT", 33071)
+    for t in g["textures"]:
+        t.setdefault("sampler", 0)
+    return glbscene.write(g, b)
 
 
 # ───────────────────────── 삼각형 → 화소 ─────────────────────────
@@ -222,12 +246,13 @@ def _sil(cam, P, F, scale, W, H, z=False):
 
 
 def fit(P, F, UV, tex, alpha, rgb, log=None):
-    """사진 실루엣(alpha, 0~1)과 가장 잘 맞는 카메라 → (Cam, 겹침)"""
+    """사진 실루엣(alpha, 0~1)과 가장 잘 맞는 카메라 → (Cam, 겹침, 무늬 겹침)"""
     L = 192
     H0, W0 = alpha.shape
     sc = L / max(H0, W0)
     W, H = max(1, round(W0 * sc)), max(1, round(H0 * sc))
-    am = np.asarray(Image.fromarray((alpha * 255).astype(np.uint8)).resize((W, H), Image.BILINEAR)) > 127
+    am_im = Image.fromarray((alpha * 255).astype(np.uint8)).resize((W, H), Image.BILINEAR).point(lambda q: 255 if q > 127 else 0)
+    am = np.asarray(am_im.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))) > 127      # 가는 머리카락 가닥은 빼고 비교해요
     abox = _bbox(alpha > 0.5)
     if abox is None:
         raise ValueError("사진에 물체가 없어요")
@@ -267,14 +292,87 @@ def fit(P, F, UV, tex, alpha, rgb, log=None):
         top.sort(key=lambda x: diff(Cam(x[1], P, abox)) - x[0])
     v, c = top[0]
     cands = [(ncc(cam), cam) for cam in (Cam(c, P, abox, k) for k in DIST)]      # 원근은 무늬로 골라요
-    top = [(v, max(cands, key=lambda x: x[0])[1])]
-    v, cam = top[0]
+    pat, cam = max(cands, key=lambda x: x[0])
     if log:
-        log(f"[사진 붙이기] 카메라 {cam.name} 거리 {cam.dist} 겹침 {v:.3f}")
-    return cam, float(v)
+        log(f"[사진 붙이기] 카메라 {cam.name} 거리 {cam.dist} 겹침 {v:.3f} 무늬 {pat:.3f}")
+    return cam, float(v), float(pat)
 
 
 # ───────────────────────── 붙이기 ─────────────────────────
+def _skin(col):
+    """사진 색(0~255) → 피부일 정도 0~1 (YCbCr 피부색 범위, 밝은 피부·만화 피부 포함)"""
+    r, g, b = col[:, 0], col[:, 1], col[:, 2]
+    y = 0.299 * r + 0.587 * g + 0.114 * b
+    cb = 128 - 0.1687 * r - 0.3313 * g + 0.5 * b
+    cr = 128 + 0.5 * r - 0.4187 * g - 0.0813 * b
+    ok = (cr > 133) & (cr < 175) & (cb > 75) & (cb < 130) & (y > 50)
+    return ok.astype(np.float32)
+
+
+def _color_match(T, tp, w, col):
+    """3D 엔진이 칠한 색 전체를 사진 색감에 맞춰요(같은 곳을 비교해 채널별 밝기·대비) → 맞춘 T.
+    사진 색과 엔진 색이 만나는 경계에 띠가 생기지 않게 하고, 옆·뒤 색도 사진과 어울리게 해요."""
+    sel = w[:, 0] > 0.7
+    if sel.sum() < 500:
+        return T
+    ty, tx = np.divmod(tp[sel], T.shape[1])
+    o, p = T[ty, tx].astype(np.float64), col[sel].astype(np.float64)
+    mo, mp = o.mean(0), p.mean(0)
+    so, sp = o.std(0) + 1e-6, p.std(0) + 1e-6
+    k = np.clip(sp / so, 0.75, 1.33)
+    out = (T - mo) * k + mo + np.clip(mp - mo, -40, 40)
+    return np.clip(0.2 * T + 0.8 * out, 0, 255).astype(np.float32)
+
+
+def _spread(vals, mask, steps=2):
+    """바뀐 값을 둘레로 번지게(섬 가장자리 이음새가 안 보이게) — vals(H,W,C), mask(H,W)"""
+    for _ in range(steps):
+        grow = np.zeros_like(mask)
+        acc = np.zeros_like(vals)
+        cnt = np.zeros(mask.shape + (1,), np.float32)
+        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+            sh = np.roll(mask, (dy, dx), (0, 1))
+            acc += np.roll(vals, (dy, dx), (0, 1)) * sh[..., None]
+            cnt += sh[..., None]
+            grow |= sh
+        add = grow & ~mask
+        vals[add] = acc[add] / np.maximum(cnt[add], 1)
+        mask |= add
+    return vals, mask
+
+
+def _adjust_orm(M, wmap, skin):
+    """사진을 붙인 곳: 그늘 굽기(AO) 줄이기, 피부는 거칠기 맞추기(금속 0). → [(그림 번호, PNG)]"""
+    g, b, mat = M["g"], M["b"], M["mat"] or {}
+    occ = (mat.get("occlusionTexture") or {}).get("index")
+    mr = ((mat.get("pbrMetallicRoughness") or {}).get("metallicRoughnessTexture") or {}).get("index")
+    jobs = {}
+    if occ is not None:
+        jobs.setdefault(g["textures"][occ]["source"], set()).add("ao")
+    if mr is not None:
+        jobs.setdefault(g["textures"][mr]["source"], set()).add("mr")
+    out = []
+    for ii, what in jobs.items():
+        im = g["images"][ii]
+        if "bufferView" not in im:
+            continue
+        v = g["bufferViews"][im["bufferView"]]
+        pic = Image.open(io.BytesIO(b[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]])).convert("RGB")
+        A = np.asarray(pic).astype(np.float32)
+        size = (A.shape[1], A.shape[0])
+        wm = np.asarray(Image.fromarray((wmap * 255).astype(np.uint8)).resize(size, Image.BILINEAR)).astype(np.float32) / 255
+        if "ao" in what:
+            A[..., 0] += (255 - A[..., 0]) * wm * (1 - AO_KEEP)
+        if "mr" in what:
+            sk = np.asarray(Image.fromarray((skin * 255).astype(np.uint8)).resize(size, Image.BILINEAR)).astype(np.float32) / 255 * wm
+            A[..., 1] += (SKIN_ROUGH * 255 - A[..., 1]) * sk
+            A[..., 2] *= 1 - sk
+        buf = io.BytesIO()
+        Image.fromarray(np.clip(A, 0, 255).astype(np.uint8)).save(buf, "PNG", compress_level=4)
+        out.append((ii, buf.getvalue()))
+    return out
+
+
 def project(glb, photo, face=None, log=None, progress=None):
     """photo: 배경 지운 앞 사진(RGBA PIL). face: (x0, y0, x1, y1, 확대한 RGBA PIL) — 사진 좌표의 얼굴 상자와 그 확대본.
     → (새 GLB 바이트, 정보 dict). 맞지 않으면 (원래 GLB, {"skip": 이유})"""
@@ -282,9 +380,9 @@ def project(glb, photo, face=None, log=None, progress=None):
     P, F, UV, tex = M["P"], M["F"], M["UV"], M["tex"]
     ph = np.asarray(photo.convert("RGBA")).astype(np.float64) / 255
     alpha, rgb = ph[..., 3], ph[..., :3]
-    cam, v = fit(P, F, UV, tex, alpha, rgb, log)
-    if v < MIN_IOU:
-        return glb, {"skip": "shape", "iou": round(v, 3)}
+    cam, v, pat = fit(P, F, UV, tex, alpha, rgb, log)
+    if not (v >= MIN_IOU or (v >= MIN_IOU_PAT[0] and pat >= MIN_IOU_PAT[1])):
+        return glb, {"skip": "shape", "iou": round(v, 3), "pat": round(pat, 3)}
     if progress:
         progress(0.2)
     H0, W0 = alpha.shape
@@ -316,7 +414,7 @@ def project(glb, photo, face=None, log=None, progress=None):
         return glb, {"skip": "none", "iou": round(v, 3)}
     if progress:
         progress(0.35)
-    # 텍스처 화소마다 3D 위치 → 사진 위치
+    # 텍스처 화소마다 3D 위치 → 사진 위치 (먼저 모두 모으고, 색 맞추기 뒤에 섞어요)
     T = np.asarray(tex.convert("RGB")).astype(np.float32)
     TH, TW = T.shape[:2]
     sel = np.nonzero(pick)[0]
@@ -330,11 +428,9 @@ def project(glb, photo, face=None, log=None, progress=None):
         fx0, fy0, fx1, fy1, fim = face
         fa = np.asarray(fim.convert("RGB")).astype(np.float32)
         fbox = (fx0, fy0, fx1, fy1, fa)
-    changed = np.zeros((TH, TW), bool)
-    delta = np.zeros((TH, TW, 3), np.float32)
     uvp = np.stack([UV[:, 0] * TW, UV[:, 1] * TH], 1)
     CH = 60000
-    used = 0
+    TPs, Ws, COLs = [], [], []
     for k in range(0, len(sel), CH):
         fs = sel[k:k + CH]
         tp, tf, c0, c1 = raster(uvp, F[fs], TW, TH)
@@ -361,32 +457,39 @@ def project(glb, photo, face=None, log=None, progress=None):
                 ex = np.minimum.reduce([sx[inb] - fx0, fx1 - sx[inb], sy[inb] - fy0, fy1 - sy[inb]]) / max(1.0, 0.08 * (fx1 - fx0))
                 fw = np.clip(ex, 0, 1)[:, None].astype(np.float32)
                 col[inb] = col[inb] * (1 - fw) + fc * fw
-        ty, tx = np.divmod(tp, TW)
-        old = T[ty, tx]
-        delta[ty, tx] = (col - old) * w
-        changed[ty, tx] |= w[:, 0] > 0.002
-        used += int((w[:, 0] > 0.5).sum())
+        keep = w[:, 0] > 0.002
+        TPs.append(tp[keep]); Ws.append(w[keep]); COLs.append(col[keep].astype(np.float32))
         if progress:
-            progress(0.35 + 0.55 * min(1.0, (k + CH) / len(sel)))
-    if not changed.any():
+            progress(0.35 + 0.45 * min(1.0, (k + CH) / len(sel)))
+    if not TPs:
         return glb, {"skip": "none", "iou": round(v, 3)}
-    # 섬 가장자리 이음새가 안 보이게 바뀐 색을 둘레 2칸으로 번지게 해요
-    for _ in range(2):
-        grow = np.zeros_like(changed)
-        acc = np.zeros_like(delta)
-        cnt = np.zeros((TH, TW, 1), np.float32)
-        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-            sh = np.roll(changed, (dy, dx), (0, 1))
-            acc += np.roll(delta, (dy, dx), (0, 1)) * sh[..., None]
-            cnt += sh[..., None]
-            grow |= sh
-        add = grow & ~changed
-        delta[add] = acc[add] / np.maximum(cnt[add], 1)
-        changed |= add
+    tp, w, col = np.concatenate(TPs), np.concatenate(Ws), np.concatenate(COLs)
+    T = _color_match(T, tp, w, col)
+    ty, tx = np.divmod(tp, TW)
+    delta = np.zeros((TH, TW, 3), np.float32)
+    changed = np.zeros((TH, TW), bool)
+    delta[ty, tx] = (col - T[ty, tx]) * w
+    changed[ty, tx] = True
+    delta, changed = _spread(delta, changed)
     out = np.clip(T + delta, 0, 255).astype(np.uint8)
+    # 그늘 굽기·피부 거칠기: 사진을 붙인 정도(w)와 피부일 정도를 텍스처 크기 지도로
+    wm = np.zeros((TH, TW, 1), np.float32)
+    wm[ty, tx] = w
+    sk = np.zeros((TH, TW, 1), np.float32)
+    sk[ty, tx] = _skin(col)[:, None]
+    mk = changed.copy()
+    wm, _ = _spread(wm, np.zeros((TH, TW), bool) | (wm[..., 0] > 0))
+    sk, _ = _spread(sk, mk.copy())
+    if progress:
+        progress(0.9)
     buf = io.BytesIO()
     Image.fromarray(out).save(buf, "PNG", compress_level=4)
-    new = replace_image(M["g"], M["b"], M["image"], buf.getvalue())
+    pics = [(M["image"], buf.getvalue())] + [x for x in _adjust_orm(M, wm[..., 0], sk[..., 0]) if x[0] != M["image"]]
+    g, b = M["g"], M["b"]
+    for ii, data in pics:
+        new = replace_image(g, b, ii, data)
+        g, b = glbscene.read(new)
     if progress:
         progress(1.0)
-    return new, {"iou": round(v, 3), "cam": cam.name, "texels": used, "face": bool(fbox)}
+    return new, {"iou": round(v, 3), "pat": round(pat, 3), "cam": cam.name, "texels": int((w[:, 0] > 0.5).sum()), "face": bool(fbox),
+                 "skin": round(float(sk.mean()), 3)}

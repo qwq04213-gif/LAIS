@@ -131,7 +131,7 @@ assert hub.m3d_opts({"rotate": "450"}, {})["rotate"] == 90 and hub.m3d_opts({"fm
 ok("Blender options: no LODs, glb only, default height by kind, rotation snapped to 90°")
 open("/tmp/claude-0/fail_bl", "w").close(); os.environ["FAKE_BLENDER_FAIL"] = "/tmp/claude-0/fail_bl"
 j = job({"kind": "m3d", "op": "build", "id": sid}); assert j["state"] == "done" and len(j["images"]) == 1 and j["images"][0].endswith(".glb"), j
-assert any("Blender 마무리 실패" in w and "메시" in w for w in j["warn"]) and "m3d_stats" not in j, j
+assert any("Blender 마무리 실패" in w and "메시" in w for w in j["warn"]) and "lods" not in (j.get("m3d_stats") or {}), j
 os.remove("/tmp/claude-0/fail_bl")
 ok("Blender failure → reason shown, ComfyUI GLB still saved")
 # 이미지 기능 메뉴 '사진 → 3D 모델'(한 번에, Blender 없이)

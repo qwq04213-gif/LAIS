@@ -43,6 +43,7 @@ with sync_playwright() as p:
     pg.click("#m3-go"); pg.wait_for_selector("#m3-mv", timeout=30000)
     s = SUBMITTED[-1]; assert any(v["class_type"] == "UnwrapMesh" and v["inputs"]["resolution"] == 1024 for v in s.values())
     assert pg.locator(".m3-stat tbody tr").count() == 3 and pg.locator("#m3-out a[href$='.zip']").count() == 1 and pg.locator("#m3-out a[href$='.glb']").count() == 1
+    assert pg.locator("#m3-out .m3-photo").count() == 1 and "사진 붙이기" in pg.inner_text("#m3-out .m3-photo")
     assert "1.70" in pg.inner_text("#m3-out") and "obj" in pg.inner_text(".m3-stat") and pg.get_attribute("#m3-mv", "src").endswith(".glb")
     pg.click("#m3-spin"); assert pg.inner_text("#m3-spin") == "회전하기"
     ok("build → viewer, LOD table (3 rows, OBJ included), GLB + zip downloads, height 1.7m")

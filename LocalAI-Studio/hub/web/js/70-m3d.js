@@ -26,7 +26,8 @@ async function m3Sessions(sel){let r;try{r=await api('/api/m3d')}catch{return}co
   if(sel)s.value=sel}
 function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$('#m3-viewset').hidden=!S;$('#m3-sceneset').hidden=!S?.orig;if(!S){$('#m3-check').innerHTML='';return}
   const st=S.stats||{},lg=st.long||0,gd=st.good||1024;
-  $('#m3-check').innerHTML=`<ul class="m3-checks">${(S.checks||[]).map(c=>`<li class="lv-${c.level}">${esc(c.text)}</li>`).join('')}</ul>`+(lg?`<p class="m3-size">물체 크기 <b>${lg}px</b> · 권장 ${gd}px 이상 ${lg>=gd?'<span class="okc">✓ 충분해요</span>':`<button type="button" class="ghost sm" id="m3-enlarge" title="업스케일 모델(SeedVR2 가 있으면 SeedVR2)로 물체 부분을 ${gd}px 로 키워요">업스케일로 키우기</button>`}</p>`:'');
+  $('#m3-check').innerHTML=`<ul class="m3-checks">${(S.checks||[]).map(c=>`<li class="lv-${c.level}">${esc(c.text)}</li>`).join('')}</ul>`+(lg?`<p class="m3-size">물체 크기 <b>${lg}px</b> · 권장 ${gd}px 이상 ${lg>=gd?'<span class="okc">✓ 충분해요</span>':`<button type="button" class="ghost sm" id="m3-enlarge" title="업스케일 모델(SeedVR2 가 있으면 SeedVR2)로 물체 부분을 ${gd}px 로 키워요">업스케일로 키우기</button>`}</p>`:'')
+    +(st.face?`<p class="m3-size">얼굴 크기 <b>${st.face}px</b> · 권장 ${st.face_rec||512}px 이상 ${st.face>=(st.face_rec||512)?'<span class="okc">✓ 충분해요</span>':'<span class="mute">— 얼굴·상반신이 크게 나온 사진이 얼굴이 가장 선명해요(만들 때 얼굴 부분은 자동으로 키워 붙여요)</span>'}</p>`:'');
   const mv=S.ready?.multiview,vc=S.vcheck||{};{const n=$('#m3-engnote');n.hidden=!!S.ready?.pixal;
     n.innerHTML=S.ready?.pixal?'':`얼굴·무늬 디테일을 살리려면 Pixal3D 를 받아 주세요(지금은 TRELLIS.2 로 만들어요). ${needBox(['pixal3d'])}`}
   $('#m3-slots').innerHTML=['front','left','back','right'].map(k=>{const u=S.slots?.[k],c=vc[k],sus=u&&c&&!c.ok;return `<figure class="m3-slot${u?'':' empty'}${sus?' sus':''}" data-side="${k}">
@@ -72,6 +73,7 @@ function m3Show(j){const glb=j.images.find(u=>/\.glb$/i.test(u)),zip=j.images.fi
     <div class="vbtns m3-bar"><button type="button" class="ghost sm" id="m3-clay" title="색을 빼고 모양만 봐요">모양만 보기</button><button type="button" class="ghost sm" id="m3-spin">회전 멈추기</button><button type="button" class="ghost sm" id="m3-full" title="화면 가득 크게 봐요(Esc 로 나가요)">전체화면</button>
       ${M3.pv?'<button type="button" class="ghost sm" id="m3-move" title="팔 들기·고개 끄덕임으로 뼈대·가중치를 확인해요(게임용 파일에는 안 들어가요)">움직임 미리보기</button>':''}
       <a class="ghost sm" href="${glb}" download>GLB 저장</a>${zip?`<a class="go sm" href="${zip}" download>게임용 묶음 저장 (.zip)</a>`:''}</div>
+    ${st?.photo?`<p class="m3-photo ${st.photo.done?'ok':'no'}">${st.photo.done?'✓':'⚠'} 사진 붙이기: ${esc(st.photo.text)}</p>`:''}
     ${st?.scene?`<table class="m3-stat"><thead><tr><th>물체</th><th>키</th><th>거리</th><th>면(삼각형)</th></tr></thead><tbody>${st.scene.map((x,i)=>`<tr><td>물체 ${i+1}</td><td>${x.height.toFixed(2)} m</td><td>${x.dist.toFixed(1)} m</td><td>${x.tris.toLocaleString()}</td></tr>`).join('')}</tbody></table>
       <p class="mute">위치·크기는 AI 가 사진 한 장과 깊이 추정으로 어림한 값이에요. 묶음에는 장면 GLB, 물체별 GLB, 배치 정보(layout.json)${st.blender?', Blender 로 만든 장면 파일(.blend·FBX)':''}이 들어 있어요.</p>`:''}
     ${st?.lods?`<table class="m3-stat"><thead><tr><th>LOD</th><th>면(삼각형)</th><th>정점</th><th>파일</th></tr></thead><tbody>${st.lods.map(l=>`<tr><td>${l.lod} (${Math.round(l.ratio*100)}%)</td><td>${l.tris.toLocaleString()}</td><td>${l.verts.toLocaleString()}</td><td class="mute">${['glb','fbx','obj'].filter(k=>l[k]).join(' · ')}</td></tr>`).join('')}</tbody></table>
