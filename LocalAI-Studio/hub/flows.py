@@ -587,6 +587,16 @@ def wf_s2v(q, ref, audio):
     return w.n
 
 
+def wf_rmbg(q):
+    """배경 지우기(BiRefNet, ComfyUI 기본 노드): 사진 → 물체 마스크(흰색 = 남길 부분)를 그림으로 저장."""
+    w = WF()
+    li = w.add("LoadImage", image=q["image"])
+    bm = w.add("LoadBackgroundRemovalModel", bg_removal_name=q["model"])
+    m = w.add("RemoveBackground", bg_removal_model=[bm, 0], image=[li, 0])
+    w.add("SaveImage", images=[w.add("MaskToImage", mask=[m, 0]), 0], filename_prefix="hub_tmp/rmbg")
+    return w.n
+
+
 def wf_trellis(q):
     """사진 → 게임용 3D(GLB). TRELLIS.2(사진 한 장) 또는 Pixal3D 멀티뷰(앞·왼쪽·뒤·오른쪽).
     ComfyUI 공식 예시(3d_pixal3d_trellis2_image_to_model)와 같은 설정이에요:

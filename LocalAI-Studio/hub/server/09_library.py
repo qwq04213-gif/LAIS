@@ -86,13 +86,34 @@ def batch_upload(p):
     return {"stage": sid, "count": len(list(d.iterdir()))}
 
 
+RM_BEST = {"label": "최고(BiRefNet)", "mb": 424, "file": "birefnet.safetensors", "id": "birefnet"}
+RM_KEYS = tuple(bgremove.MODELS) + ("best",)
+
+
+def rmbg_best_ready():
+    return (MODELS / "background_removal" / RM_BEST["file"]).is_file()
+
+
+def rmbg_ready(key):
+    return rmbg_best_ready() if key == "best" else bgremove.have_ort() and bgremove.installed(MODELS / "rmbg", key)
+
+
+def rmbg_default():
+    """고르지 않았을 때: BiRefNet 이 있으면 그걸, 없으면 '보통'."""
+    return "best" if rmbg_best_ready() else "normal"
+
+
 def rmbg_status():
-    busy = any(t.get("kind") == "rmbg" and t["state"] in ("queued", "running") for t in TASKS)
+    busy = any((t.get("kind") == "rmbg" or t.get("mid") == RM_BEST["id"]) and t["state"] in ("queued", "running") for t in TASKS)
     ort = bgremove.have_ort()
-    return {"ort": ort, "busy": busy, "models": {k: {"label": m["label"], "mb": m["mb"], "installed": bgremove.installed(MODELS / "rmbg", k)} for k, m in bgremove.MODELS.items()}}
+    ms = {k: {"label": m["label"], "mb": m["mb"], "installed": bgremove.installed(MODELS / "rmbg", k)} for k, m in bgremove.MODELS.items()}
+    ms["best"] = {"label": RM_BEST["label"], "mb": RM_BEST["mb"], "installed": rmbg_best_ready(), "comfy": True}
+    return {"ort": ort, "busy": busy, "models": ms, "default": rmbg_default()}
 
 
 def rmbg_install(p):
+    if p.get("key") == "best":
+        return install({"ids": [RM_BEST["id"]]})
     key = p.get("key") if p.get("key") in bgremove.MODELS else "normal"
     if any(t.get("kind") == "rmbg" and t["state"] in ("queued", "running") for t in TASKS):
         return {"ok": True}
@@ -124,7 +145,34 @@ def rmbg_run_install(t):
     RM["engine"] = None
 
 
+class RmbgComfy:
+    """배경 지우기 '최고': ComfyUI 의 BiRefNet(그래픽카드). 경계는 bgremove.refine 으로 색 번짐만 걷어내요."""
+
+    def mask(self, img, J=None):
+        J = J if J is not None else {"tmp": []}
+        J.setdefault("tmp", [])
+        wait_comfy()
+        claim("image")
+        name = put_input(img.convert("RGB"), J)
+        try:
+            res = run_wf(flows.wf_rmbg({"image": name, "model": RM_BEST["file"]}), J)
+        finally:
+            _clean_tmp(J)
+        return res[0].convert("L").resize(img.size, RS.LANCZOS)
+
+    def cut(self, img, bg=None, J=None, refine_edges=True):
+        return bgremove.compose(img, self.mask(img, J), bg, refine_edges, coarse=False)
+
+
+def rmbg_cut(key, img, bg=None, J=None):
+    """배경 지우기 한 장(엔진 종류와 상관없이)."""
+    eng = rmbg_engine(key)
+    return eng.cut(img, bg, J=J) if isinstance(eng, RmbgComfy) else eng.cut(img, bg)
+
+
 def rmbg_engine(key):
+    if key == "best":
+        return RmbgComfy()
     with RM_LOCK:
         if RM["engine"] is None or RM["key"] != key:
             RM["engine"] = bgremove.Remover(MODELS / "rmbg", key, RM.get("factory"))
@@ -157,8 +205,8 @@ def do_batch(p, J):
             raise RuntimeError("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.")
         suffix = f"_업스케일x{scale:g}" if scale > 1 else f"_축소x{scale:g}"
     elif op == "rmbg":
-        rm_key = p.get("rmodel") if p.get("rmodel") in bgremove.MODELS else "normal"
-        if not bgremove.have_ort() or not bgremove.installed(MODELS / "rmbg", rm_key):
+        rm_key = p.get("rmodel") if p.get("rmodel") in RM_KEYS else rmbg_default()
+        if not rmbg_ready(rm_key):
             raise RuntimeError("배경 지우기 모델이 아직 설치되지 않았어요. 일괄 처리 화면의 [설치] 버튼을 눌러 주세요.")
         rm_bg = {"white": (255, 255, 255), "black": (0, 0, 0)}.get(p.get("bg"))
         jpg = jpg and rm_bg is not None          # 투명 배경은 PNG 만 가능해요
@@ -182,7 +230,7 @@ def do_batch(p, J):
                 scale_check(img.size, scale)
                 res = upscale(img, J, model, scale)
             elif op == "rmbg":
-                res = rmbg_engine(rm_key).cut(img, rm_bg)
+                res = rmbg_cut(rm_key, img, rm_bg, J)
             else:
                 res, _ = resize_steps(img, p)
             ext = ".jpg" if jpg else ".png"

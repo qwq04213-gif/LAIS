@@ -129,8 +129,8 @@ def m3d_cut(img, J=None):
         a = np.asarray(img.getchannel("A"))
         if (a < 16).mean() > 0.05:            # 이미 배경이 비어 있어요
             return img
-    key = "normal"
-    if not bgremove.have_ort() or not bgremove.installed(MODELS / "rmbg", key):
+    key = rmbg_default()                              # BiRefNet 이 있으면 그걸로(경계가 또렷해요)
+    if not rmbg_ready(key):
         r = rmbg_install({"key": key})
         if r.get("error") and "이미" not in r["error"]:
             raise RuntimeError(r["error"])
@@ -138,7 +138,7 @@ def m3d_cut(img, J=None):
                            "설치와 모델의 진행 목록에서 끝난 걸 확인한 뒤 다시 눌러 주세요.")
     if J is not None:
         J["msg"] = "배경 지우는 중"
-    return rmbg_engine(key).cut(img.convert("RGB"), None)
+    return rmbg_cut(key, img.convert("RGB"), None, J)
 
 
 def m3d_analyze(rgba):

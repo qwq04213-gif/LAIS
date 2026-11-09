@@ -88,8 +88,8 @@ async function cnPack(box,node){const n=$('.cn-node',box);let r;try{r=await api(
   const sync=()=>{$$('[data-src]',f).forEach(e=>e.hidden=e.dataset.src!==mode());$$('[data-op]',f).forEach(e=>e.hidden=e.dataset.op!==op());
     $$('.bt-op',f).forEach(l=>l.classList.toggle('on',l.querySelector('input').checked));info.textContent='';rmNote()};
   async function rmNote(){if(op()!=='rmbg')return;let st;try{st=await api('/api/rmbg/status')}catch{return}
-    const k=f.elements.rmodel.value,m=st.models[k],ok=st.ort&&m.installed;
-    $('#bt-rm-note').textContent=ok?`✔ 설치됨 — ${m.label} 모델을 써요.`:`아직 설치되지 않았어요. 아래 버튼을 누르면 ${m.label} 모델(약 ${m.mb}MB)을 받아요.`+(st.ort?'':' (분석 엔진도 함께 설치돼요)');
+    const k=f.elements.rmodel.value,m=st.models[k],ok=m.comfy?m.installed:st.ort&&m.installed;
+    $('#bt-rm-note').textContent=ok?`✔ 설치됨 — ${m.label} 모델을 써요.`:`아직 설치되지 않았어요. 아래 버튼을 누르면 ${m.label} 모델(약 ${m.mb}MB)을 받아요.`+(st.ort||m.comfy?'':' (분석 엔진도 함께 설치돼요)');
     const b=$('#bt-rm-install');b.hidden=ok;b.disabled=st.busy;b.textContent=st.busy?'설치하는 중…':`배경 지우기 도구 설치 (${m.mb}MB)`;return ok}
   f.addEventListener('change',e=>{if(e.target.name==='srcm'||e.target.name==='op')sync();else if(e.target.name==='rmodel')rmNote()});
   $('#bt-rm-install').onclick=async()=>{const r=await api('/api/rmbg/install',{key:f.elements.rmodel.value});if(r.error)return toast(r.error);

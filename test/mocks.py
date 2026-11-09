@@ -103,6 +103,7 @@ REQ = {"CheckpointLoaderSimple": ["ckpt_name"], "LoraLoader": ["model", "clip", 
        "IPAdapter": ["model", "ipadapter", "image", "weight", "weight_type", "start_at", "end_at"],
        "FaceDetailer": ["image", "model", "clip", "vae", "positive", "negative", "bbox_detector", "seed", "steps", "cfg", "sampler_name", "scheduler",
                         "denoise", "guide_size", "max_size", "feather", "bbox_threshold", "bbox_dilation", "bbox_crop_factor", "sam_detection_hint", "wildcard", "cycle"]}
+REQ.update({"LoadBackgroundRemovalModel": ["bg_removal_name"], "RemoveBackground": ["bg_removal_model", "image"], "MaskToImage": ["mask"]})
 REQ.update({"InvertMask": ["mask"], "ImageCropToMask": ["images", "masks"], "Trellis2Conditioning": ["clip_vision_model", "image"],
             "Pixal3DMultiViewConditioning": ["clip_vision_model", "front"], "EmptyTrellis2LatentStructure": ["batch_size"],
             "VaeDecodeStructureTrellis2": ["samples", "vae", "resolution"], "Trellis2ShapeStage": ["positive", "negative", "voxel"],

@@ -185,6 +185,19 @@
    ]
   },
   {
+   "id": "birefnet",
+   "name": "BiRefNet (배경 지우기 · 최고 품질)",
+   "gb": 0.42,
+   "desc": "배경 지우기의 '최고' 품질. 사진을 1024px 로 보고 경계를 찾아 머리카락·가장자리가 또렷해요. 그래픽카드(ComfyUI)로 돌아요. 3D 만들기의 배경 지우기에도 써요. MIT 라이선스.",
+   "license": "MIT",
+   "files": [
+    {
+     "dir": "background_removal",
+     "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors"
+    }
+   ]
+  },
+  {
    "id": "esrgan",
    "name": "Real-ESRGAN x4plus",
    "gb": 0.07,
