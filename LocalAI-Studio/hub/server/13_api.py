@@ -157,8 +157,14 @@ SUPERSEDED = [
     ("stable-audio-open", ("stable-audio-3",), "효과음은 Stable Audio 3 를 먼저 써요"),
     ("sd35-large", ("flux3-klein", "flux3-klein-base", "z-image-turbo"), "FLUX 3 Klein · Z-Image-Turbo 가 더 새롭고 빨라요"),
     ("sd35-medium", ("flux3-klein", "flux3-klein-base", "z-image-turbo"), "FLUX 3 Klein · Z-Image-Turbo 가 더 새롭고 빨라요"),
-    ("qwen25vl-7b", ("qwen35-9b", "qwen35-27b", "gemma4-e4b", "gemma4-26b"), "새 대화 모델(Qwen3.5 · Gemma 4)이 사진도 볼 수 있어요"),
-]   # 제한 해제판(Abliterated) 대화 모델은 공식판으로 똑같이 대신할 수 없어서 넣지 않아요
+    ("qwen25vl-7b", ("qwen35-9b", "qwen35-27b", "gemma4-e4b", "gemma4-26b", "qwen35-9b-abl", "qwen35-27b-abl", "gemma4-12b-abl", "gemma4-26b-abl"),
+     "새 대화 모델(Qwen3.5 · Gemma 4)이 사진도 볼 수 있어요"),
+    # 제한 해제판은 제한 해제판으로만 대신해요(공식판은 성인 대화를 거절할 수 있어서)
+    ("qwen3-8b", ("qwen35-9b-abl", "gemma4-12b-abl"), "Qwen3.5 · Gemma 4 제한 해제판이 더 새것이에요"),
+    ("qwen3-14b", ("qwen35-9b-abl", "gemma4-12b-abl", "gemma4-26b-abl", "qwen35-27b-abl"), "Qwen3.5 · Gemma 4 제한 해제판이 더 새것이에요"),
+    ("qwen3-32b", ("qwen35-27b-abl", "gemma4-26b-abl"), "Qwen3.5 27B · Gemma 4 26B 제한 해제판이 더 새것이에요"),
+    ("mistral-small-24b", ("qwen35-27b-abl", "gemma4-26b-abl"), "Qwen3.5 27B · Gemma 4 26B 제한 해제판이 더 새것이에요"),
+]
 
 
 def superseded(llm, img):

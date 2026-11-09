@@ -24,7 +24,7 @@ async function loadTasks(){
 async function loadSetup(){
   const[s,c]=await Promise.all([api('/api/status'),api('/api/catalog')]);
   $('#gpuinfo').textContent=s.gpu?`내 GPU: ${s.gpu.name}, VRAM ${s.gpu.vram_gb}GB`:'NVIDIA GPU를 찾지 못했어요. 이미지 기능은 매우 느리거나 동작하지 않을 수 있어요.';
-  const row=m=>`<label class="item"><input type="checkbox" value="${m.id}" ${m.installed?'disabled':''}><span><b>${esc(m.name)}</b><small>${esc(m.desc)}</small><small class="ipg" data-mid="${m.id}" hidden></small></span><em>${m.installed?`설치됨${m.disk_gb?` · ${m.disk_gb}GB`:''} <button type="button" class="ghost sm cat-del" data-id="${m.id}" data-n="${esc(m.name)}" data-gb="${m.gb||''}">삭제</button>`:m.gb+'GB'}</em></label>`;
+  const row=m=>`<label class="item"><input type="checkbox" value="${m.id}" ${m.installed?'disabled':''}><span><b>${esc(m.name)}</b>${nsfwTag(m)}<small>${esc(m.desc)}</small><small class="ipg" data-mid="${m.id}" hidden></small></span><em>${m.installed?`설치됨${m.disk_gb?` · ${m.disk_gb}GB`:''} <button type="button" class="ghost sm cat-del" data-id="${m.id}" data-n="${esc(m.name)}" data-gb="${m.gb||''}">삭제</button>`:m.gb+'GB'}</em></label>`;
   const keep=new Set($$('#v-setup .item input:checked').map(i=>i.value));
   loadManage();
   $('#cat-llm').innerHTML=c.llm.map(row).join('');
@@ -43,27 +43,29 @@ function selSummary(){const box=$('#sel-sum');if(!box)return;
   box.innerHTML=ids.length?(todo.length?`<b>선택한 항목 ${ids.length}개</b> — ${todo.map(m=>esc(m.name)).join(' · ')}<br><small>함께 필요한 파일까지 합쳐 약 ${gb.toFixed(1)}GB를 받아요.</small>`:'<b>선택한 항목은 이미 모두 설치돼 있어요.</b>'):'<span class="mute">받을 모델을 체크하면 여기에 무엇을 얼마나 받는지 보여 줘요.</span>'}
 document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))selSummary()});
 /* 사양별 추천: 그래픽카드 메모리(VRAM) 8/12/16/24GB 에서 기능마다 어떤 모델·설정이 알맞은지. ids 는 '이 구성 고르기'로 체크할 항목 */
-const TIERS=[      // 그 메모리에서 실제로 돌아가는 가장 최신 모델(2026년 11월 기준, 공식 자료·사용자 측정 참고)
-  {gb:8,rows:{chat:[['qwen35-9b','gemma4-e4b','qwen3-8b'],'Qwen3.5 9B · Gemma 4 E4B(사진도 봐요) · 제한 해제판은 Qwen3 8B'],gen:[['flux3-klein','z-image-turbo','noobai','sdxl-vae-fix'],'FLUX 3 Klein(공식 8GB) · Z-Image-Turbo(느림) · 그림체는 NoobAI'],
-    edit:[['flux3-klein'],"'말로 편집 (FLUX 3 Klein)' — Qwen-Image 는 8GB 에 버거워요"],vid:[['wan22-ti2v-5b','ltx-video'],'Wan 2.2 5B 를 짧고 작게 · 빠른 미리보기는 LTX-Video'],
+const TIERS=[      // 그 메모리에서 돌아가는 가장 최신 모델, 성인 표현이 되는 모델을 먼저(2026년 11월 기준, 공식 자료·사용자 측정 참고)
+  {gb:8,rows:{chat:[['qwen35-9b-abl','gemma4-12b-abl'],'Qwen3.5 9B · Gemma 4 12B 제한 해제판'],gen:[['z-image-turbo','noobai','realvisxl5','sdxl-vae-fix'],'Z-Image-Turbo(실사, 느림) · 그림체 NoobAI · 실사 RealVis'],
+    edit:[['qwen-image-turbo','qwen-te-small','noobai'],"Qwen 2.1 Turbo + 작은 인코더(RAM 32GB, 느림) · 칠해서 편집(SDXL)"],vid:[['wan22-ti2v-5b','ltx-video'],'Wan 2.2 5B 를 짧고 작게'],
     aud:[['stable-audio-3'],'효과음·연주곡'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원) · Real-ESRGAN']}},
-  {gb:12,rows:{chat:[['qwen35-9b','gemma4-e4b','qwen3-14b'],'Qwen3.5 9B · 제한 해제판은 Qwen3 14B'],gen:[['z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Z-Image-Turbo · FLUX 3 Klein'],
-    edit:[['qwen-image-turbo','qwen-image','qwen-te-small','flux3-klein'],'Qwen-Image 2.1 Turbo(작은 텍스트 인코더) · FLUX 3 Klein'],vid:[['wan22-ti2v-5b','wan-vace'],'Wan 2.2 5B 기본 길이 · VACE'],
+  {gb:12,rows:{chat:[['gemma4-12b-abl','qwen35-9b-abl'],'Gemma 4 12B · Qwen3.5 9B 제한 해제판'],gen:[['z-image-turbo','noobai','realvisxl5','sdxl-vae-fix'],'Z-Image-Turbo · NoobAI · RealVis'],
+    edit:[['qwen-image-turbo','qwen-image','qwen-te-small'],'Qwen-Image 2.1 Turbo(작은 텍스트 인코더)'],vid:[['wan22-ti2v-5b','wan-vace'],'Wan 2.2 5B 기본 길이 · VACE'],
     aud:[['ace-step-15-turbo','stable-audio-3'],'노래는 ACE-Step 1.5'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원)']}},
-  {gb:16,rows:{chat:[['gemma4-26b','qwen35-9b','qwen3-14b'],'Gemma 4 26B(MoE, 빠름) · 제한 해제판은 Qwen3 14B'],gen:[['krea2-turbo','z-image-turbo','flux3-klein','noobai','sdxl-vae-fix'],'Krea 2 Turbo · Z-Image-Turbo · FLUX 3 Klein'],
-    edit:[['qwen-image','qwen-image-turbo','qwen-lightning','moss-image-edit'],'Qwen-Image 2.1(+Turbo) · MOSS 편집'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
+  {gb:16,rows:{chat:[['gemma4-26b-abl','gemma4-12b-abl'],'Gemma 4 26B 제한 해제판(MoE, 빠름)'],gen:[['chroma-hd','z-image-turbo','noobai','sdxl-vae-fix'],'Chroma(무검열) · Z-Image-Turbo · NoobAI'],
+    edit:[['qwen-image','qwen-image-turbo','qwen-lightning'],'Qwen-Image 2.1(+Turbo)'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
     aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}},
-  {gb:24,rows:{chat:[['qwen35-27b','gemma4-26b','qwen3-32b'],'Qwen3.5 27B — 가장 똑똑해요 · 제한 해제판은 Qwen3 32B'],gen:[['krea2-turbo','flux3-klein-base','z-image-turbo','chroma-hd'],'큰 모델 여러 개를 바꿔 가며'],
-    edit:[['qwen-image','qwen-image-turbo','qwen-lightning','moss-image-edit'],'여러 장 합치기도 넉넉해요'],vid:[['ltx25','wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v'],'LTX-2.5(소리까지, RAM 64GB) · Wan 2.2 14B'],
+  {gb:24,rows:{chat:[['qwen35-27b-abl','gemma4-26b-abl'],'Qwen3.5 27B 제한 해제판 — 가장 똑똑해요'],gen:[['chroma-hd','z-image-turbo','noobai','realvisxl5'],'Chroma · Z-Image-Turbo · NoobAI · RealVis'],
+    edit:[['qwen-image','qwen-image-turbo','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v','ltx25'],'Wan 2.2 14B · LTX-2.5(소리까지, 성인 표현은 확인 안 됨)'],
     aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
 const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};
 const tierOf=v=>v>=22?24:v>=15?16:v>=11?12:8;
+const nsfwTag=m=>m.nsfw==='ok'?' <span class="nsfw ok" title="성인 표현을 막지 않는 모델이에요(미성년자 관련 내용은 이 프로그램이 항상 막아요)">성인 표현 가능</span>'
+  :m.nsfw==='limited'?' <span class="nsfw lim" title="공식 필터·안전 학습 때문에 성인 표현이 막히거나 흐려질 수 있어요">성인 표현 제한</span>':'';
 function tierPaint(){const box=$('#tiers');if(!box)return;const all=[...CATALOG_NOW.llm,...CATALOG_NOW.image],by=Object.fromEntries(all.map(m=>[m.id,m]));
   const mine=GPU&&GPU.vram_gb?tierOf(GPU.vram_gb):0,nm=id=>by[id]?esc(by[id].name.replace(/\s*[(—].*$/,'')):esc(id);
   box.innerHTML=`<table class="tiers"><thead><tr><th>기능</th>${TIERS.map(t=>`<th class="${t.gb===mine?'mine':''}">${t.gb}GB${t.gb===mine?' <small>내 PC</small>':''}</th>`).join('')}</tr></thead><tbody>${
-    Object.entries(TIER_ROW).map(([k,lab])=>`<tr><th>${lab}</th>${TIERS.map(t=>{const[ids,tip]=t.rows[k];return `<td class="${t.gb===mine?'mine':''}">${ids.filter(i=>!/vae-fix|lightning|te-small/.test(i)||k==='edit').map(i=>`<span class="${by[i]?.installed?'have':''}" title="${by[i]?.installed?'설치됨':''}">${nm(i)}</span>`).join('<br>')}${tip?`<small>${esc(tip)}</small>`:''}</td>`}).join('')}</tr>`).join('')
+    Object.entries(TIER_ROW).map(([k,lab])=>`<tr><th>${lab}</th>${TIERS.map(t=>{const[ids,tip]=t.rows[k];return `<td class="${t.gb===mine?'mine':''}">${ids.filter(i=>!/vae-fix|lightning|te-small/.test(i)||k==='edit').map(i=>`<span class="${by[i]?.installed?'have':''}${by[i]?.nsfw==='limited'?' lim':''}" title="${by[i]?.installed?'설치됨 · ':''}${by[i]?.nsfw==='ok'?'성인 표현 가능':by[i]?.nsfw==='limited'?'성인 표현 제한':''}">${nm(i)}${by[i]?.nsfw==='limited'?'<sup>제한</sup>':''}</span>`).join('<br>')}${tip?`<small>${esc(tip)}</small>`:''}</td>`}).join('')}</tr>`).join('')
   }<tr><th></th>${TIERS.map(t=>`<td class="${t.gb===mine?'mine':''}"><button type="button" class="ghost sm" data-tier="${t.gb}">이 구성 고르기</button></td>`).join('')}</tr></tbody></table>
-  <p class="mute">이미지·영상·3D 는 한 번에 하나씩 돌아서, 표의 모델을 다 받아도 메모리를 나눠 쓰지 않아요(디스크 공간만 더 써요). 메모리 부족이 나면 한 칸 왼쪽 구성을 써 보세요.</p>`}
+  <p class="mute">성인 표현이 되는 모델을 먼저 골랐어요(<sup>제한</sup> 표시는 공식 필터가 있는 모델 — 표에는 넣지 않았어요). 미성년자 관련 내용은 이 프로그램이 항상 막아요. 이미지·영상·3D 는 한 번에 하나씩 돌아서, 표의 모델을 다 받아도 메모리를 나눠 쓰지 않아요(디스크 공간만 더 써요). 메모리 부족이 나면 한 칸 왼쪽 구성을 써 보세요.</p>`}
 /* 새 엔진으로 바뀐 예전 모델: 찾아서 보여 주기만 하고, 사용자가 확인해야 지워요 */
 function oldPaint(L){const b=$('#oldbox');if(!b)return;b.hidden=!L.length;if(!L.length){b.innerHTML='';return}
   const gb=L.reduce((a,x)=>a+(+x.gb||0),0);

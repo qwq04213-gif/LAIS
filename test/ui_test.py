@@ -209,7 +209,7 @@ with sync_playwright() as p:
     rows = pg.locator("#v-setup .item").count(); print("catalog rows:", rows)
     assert pg.locator("#v-setup .item", has_text="Real-ESRGAN x4plus").first.inner_text().find("설치됨") >= 0
     pg.click("#rec"); chk = pg.evaluate("[...document.querySelectorAll('#v-setup .item input:checked')].map(i=>i.value)"); print("12GB GPU recommendation:", chk)
-    assert "qwen3-14b" in chk and "noobai" in chk and "esrgan" not in chk  # esrgan already installed -> disabled
+    assert "gemma4-12b-abl" in chk and "noobai" in chk and "esrgan" not in chk  # esrgan already installed -> disabled
     pg.screenshot(path=str(SH / "6_setup.png"), full_page=True)
     # (주소로 직접 받기는 다운로드 탭으로 옮겼고 ui_test4 에서 검사해요)
     b.close()
