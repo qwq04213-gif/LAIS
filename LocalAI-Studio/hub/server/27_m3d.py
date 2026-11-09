@@ -210,6 +210,57 @@ def m3d_analyze(rgba):
                  "long": int(long), "good": M3D_GOOD}
 
 
+M3D_LEG_GAP = 0.3       # 사람 사진: 다리 높이의 줄 중 두 다리가 떨어져 보이는 줄이 이보다 적으면 '다리가 붙어 보여요'
+M3D_DARK = (60, 25)     # 옷·배경 가장자리 밝기가 둘 다 이보다 어둡고(0~255) 차이가 이보다 작으면 '어두운 옷·어두운 배경'
+
+
+def m3d_legs_gap(mask):
+    """사람 실루엣의 다리 높이(키의 72~92%) 줄 중 두 덩어리 이상으로 떨어져 보이는 줄의 비율(0~1). 다리 사이 틈이 보이면 커요."""
+    ys, xs = np.nonzero(mask)
+    if len(ys) < 50:
+        return None
+    y0, y1 = ys.min(), ys.max() + 1
+    h, w = y1 - y0, xs.max() - xs.min() + 1
+    rows = range(y0 + int(0.72 * h), y0 + int(0.92 * h))
+    two = 0
+    for y in rows:
+        r = photoproj._runs(mask[y])
+        if sum(1 for a_, b_ in r if b_ - a_ >= max(2, 0.03 * w)) >= 2:
+            two += 1
+    return round(two / max(1, len(rows)), 3)
+
+
+def m3d_body_check(orig, cut, kind):
+    """사진 점검 덧붙이기: 사람이면 다리 틈(붙어 있으면 엔진이 다리를 하나로 만들 수 있어요), 어두운 옷 + 어두운 배경(배경 지우기가 팔다리를 지울 수 있어요).
+    → (점검 목록, 숫자)"""
+    out, st = [], {}
+    a = np.asarray(cut.getchannel("A")) > 127 if cut.mode == "RGBA" else None
+    if a is None or a.sum() < 64:
+        return out, st
+    if kind == "character":
+        g = m3d_legs_gap(a)
+        st["legs_gap"] = g
+        if g is not None and g < M3D_LEG_GAP:
+            out.append({"level": "warn", "text": f"두 다리가 붙어 보여요(다리 사이 틈이 보이는 높이 {g:.0%}). 3D 엔진이 다리를 하나로 만들거나 한쪽을 빠뜨릴 수 있어요 — "
+                                                 "다리 사이가 보이는 사진이 좋아요. 만든 뒤 '팔다리 검사' 결과를 확인해 주세요."})
+    try:
+        o = np.asarray(orig.convert("L").resize(cut.size), dtype=np.float32)
+        am = Image.fromarray((a * 255).astype(np.uint8))
+        r = max(2, round(max(cut.size) * 0.006))
+        inner = (np.asarray(am.filter(ImageFilter.MinFilter(r * 2 + 1))) > 127)
+        outer = (np.asarray(am.filter(ImageFilter.MaxFilter(r * 4 + 1))) > 127)
+        rin, rout = a & ~inner, outer & ~a
+        if rin.sum() > 50 and rout.sum() > 50:
+            li, lo = float(o[rin].mean()), float(o[rout].mean())
+            st["edge_lum"] = [round(li), round(lo)]
+            if li < M3D_DARK[0] and lo < M3D_DARK[0] and abs(li - lo) < M3D_DARK[1]:
+                out.append({"level": "warn", "text": "옷과 배경이 둘 다 어두워요. 배경 지우기가 팔·다리 일부를 배경으로 지웠을 수 있어요 — "
+                                                     "3D 작업 폴더의 mask_front.png 로 확인하고, 밝거나 단순한 배경 사진이 좋아요."})
+    except Exception:  # noqa: BLE001 — 점검은 덤
+        pass
+    return out, st
+
+
 def _sil(im, mirror=False, size=(48, 96)):
     """실루엣(알파) → 물체 상자만 잘라 같은 크기로. 비교용."""
     a = im.getchannel("A") if im.mode == "RGBA" else im.convert("L")
@@ -227,9 +278,36 @@ def _iou(a, b):
     return float(np.logical_and(a, b).sum() / u) if u else 0.0
 
 
+M3D_VCOLOR = 0.45       # 방향 그림과 앞 사진의 물체 색 분포가 이만큼은 겹쳐야 같은 인물·옷으로 봐요
+
+
+def _vhist(im):
+    """물체 부분 색 분포(6단계 × 3색 = 216칸, 합 1)"""
+    a = np.asarray(im.getchannel("A")) > 127
+    c = np.asarray(im.convert("RGB"))[a]
+    if len(c) < 50:
+        return None
+    q = (c // 43).astype(np.int64)
+    h = np.bincount(q[:, 0] * 36 + q[:, 1] * 6 + q[:, 2], minlength=216).astype(np.float64)
+    return h / h.sum()
+
+
+def _legs_n(im):
+    """사람 실루엣 다리 높이(키의 80~92%)에서 떨어진 덩어리 수(가운데값)"""
+    a = np.asarray(im.getchannel("A")) > 127
+    ys, xs = np.nonzero(a)
+    if len(ys) < 50:
+        return None
+    y0, h, w = ys.min(), ys.max() + 1 - ys.min(), xs.max() + 1 - xs.min()
+    ns = [sum(1 for a_, b_ in photoproj._runs(a[y]) if b_ - a_ >= max(2, 0.03 * w)) for y in range(y0 + int(0.80 * h), y0 + int(0.92 * h))]
+    return int(np.median(ns)) if ns else None
+
+
 def m3d_vcheck(d):
-    """방향 그림이 앞 사진과 맞는지 실루엣으로 어림해요 → {방향: {"ok": bool, "score": 0~1, "text"}}.
-    뒤 = 앞을 좌우로 뒤집은 모양, 오른쪽 = 왼쪽을 좌우로 뒤집은 모양과 비슷해야 해요. 키(세로 길이) 비율도 봐요."""
+    """AI 방향 그림이 앞 사진과 맞는지 어림해요 → {방향: {"ok": bool, "score": 0~1, "text"}}.
+    앞·뒤 실루엣은 원래 다를 수 있어서 좌우를 뒤집어 비교하지 않아요. 대신
+    ① 같은 인물·옷(물체 색 분포가 앞 사진과 겹치는 정도) ② 그림 가장자리에서 잘렸는지 ③ 뒤: 몸 비율(너비÷키)이 앞과 비슷한지,
+    사람이면 다리 수가 같은지 ④ 왼쪽·오른쪽: 서로 거울처럼 맞는지(옆모습끼리는 좌우가 뒤집힌 모양이 맞아요)."""
     out = {}
     try:
         ims = {s: Image.open(d / f"view_{s}.png").convert("RGBA") for s in ("front",) + M3D_SIDES if (d / f"view_{s}.png").is_file()}
@@ -237,24 +315,46 @@ def m3d_vcheck(d):
         return out
     if "front" not in ims:
         return out
-    f, fr = _sil(ims["front"], True)
-    if "back" in ims and f is not None:
-        b, br = _sil(ims["back"])
-        sc = _iou(f, b) if b is not None else 0.0
-        if b is not None and fr and br and not (0.7 < br / fr < 1.43):
-            sc = min(sc, 0.4)
-        out["back"] = {"score": round(sc, 2), "ok": sc >= M3D_VFIT,
-                       "text": "앞모습과 실루엣이 잘 맞아요." if sc >= M3D_VFIT else "앞모습과 실루엣(자세·비율)이 많이 달라요. 다시 그리거나 체크를 풀어 주세요."}
+    try:
+        person = (m3d_meta(d.name) or {}).get("kind") == "character"
+    except Exception:  # noqa: BLE001
+        person = False
+    hf = _vhist(ims["front"])
+    fb = ims["front"].getchannel("A").point(lambda x: 255 if x > 127 else 0).getbbox()
+    fr = (fb[2] - fb[0]) / max(1, fb[3] - fb[1]) if fb else None
+    pair = None
     if "left" in ims and "right" in ims:
-        lft, lr = _sil(ims["left"], True)
-        rgt, rr = _sil(ims["right"])
-        sc = _iou(lft, rgt) if lft is not None and rgt is not None else 0.0
-        if lr and rr and not (0.7 < rr / lr < 1.43):
-            sc = min(sc, 0.4)
-        t = ("왼쪽·오른쪽 모습이 서로 거울처럼 잘 맞아요." if sc >= M3D_VFIT else
-             "왼쪽·오른쪽 모습이 서로 맞지 않아요(방향이 뒤바뀌었거나 자세가 달라요). 다시 그리거나 체크를 풀어 주세요.")
-        for s in ("left", "right"):
-            out[s] = {"score": round(sc, 2), "ok": sc >= M3D_VFIT, "text": t}
+        lft, _ = _sil(ims["left"], True)
+        rgt, _ = _sil(ims["right"])
+        pair = _iou(lft, rgt) if lft is not None and rgt is not None else 0.0
+    for s_ in M3D_SIDES:
+        if s_ not in ims:
+            continue
+        im, why = ims[s_], []
+        h = _vhist(im)
+        col = float(np.minimum(h, hf).sum()) if h is not None and hf is not None else 0.0
+        if col < M3D_VCOLOR:
+            why.append(f"색이 앞 사진과 달라요(같은 인물·옷으로 보기 어려움, {col:.0%})")
+        a = np.asarray(im.getchannel("A")) > 127
+        if a.any() and np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]]).mean() > 0.02:
+            why.append("그림 가장자리에서 잘렸어요")
+        score = col
+        if s_ == "back":
+            bb = im.getchannel("A").point(lambda x: 255 if x > 127 else 0).getbbox()
+            br = (bb[2] - bb[0]) / max(1, bb[3] - bb[1]) if bb else None
+            if fr and br and not (0.7 < br / fr < 1.43):
+                why.append("몸 비율(너비÷키)이 앞모습과 많이 달라요")
+                score = min(score, 0.4)
+            if person:
+                nf, nb = _legs_n(ims["front"]), _legs_n(im)
+                if nf and nb and nf != nb:
+                    why.append(f"다리 수가 앞모습과 달라요(앞 {nf}, 뒤 {nb})")
+                    score = min(score, 0.4)
+        elif pair is not None and pair < M3D_VFIT:
+            why.append("왼쪽·오른쪽 모습이 서로 거울처럼 맞지 않아요(방향이 뒤바뀌었거나 자세가 달라요)")
+            score = min(score, pair)
+        out[s_] = {"score": round(score, 2), "ok": not why,
+                   "text": "앞 사진과 같은 인물·옷이고 비율도 맞아요." if not why else " · ".join(why) + ". 다시 그리거나 체크를 풀어 주세요."}
     return out
 
 
@@ -470,6 +570,7 @@ def m3d_file(sid, name):
 def m3d_prep(p, J):
     """새 3D 작업: 사진 → 배경 지우기 → 상태 점검. 결과는 J['m3d'] (파일 저장 없음 — 작업 폴더에만 둬요)."""
     img = m3d_load(p["image"])
+    full = img
     if max(img.size) > 2048:
         k = 2048 / max(img.size)
         img = img.resize((round(img.width * k), round(img.height * k)), RS.LANCZOS)
@@ -478,11 +579,19 @@ def m3d_prep(p, J):
     stats.update(m3d_face_stats(cut, J))
     stats["face_rec"] = M3D_FACE_REC
     checks = m3d_face_check(checks, stats)
+    k3 = p.get("kind3") or p.get("kind")
+    bc, bs = m3d_body_check(img, cut, k3)
+    stats.update(bs)
+    checks = [c for c in checks if c["level"] != "ok"] + bc or checks
     sid = uuid.uuid4().hex[:12]
     d = M3D_DIR / sid
     d.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").save(d / "orig.png")
+    if full is not img:                                # 진짜 원본(줄이기 전)도 그대로 남겨요
+        full.save(d / "orig_full.png")
     cut.save(d / "view_front.png")
+    if cut.mode == "RGBA":                             # 배경 지우기 마스크(흰색 = 물체) — 팔다리가 지워졌는지 눈으로 확인할 수 있게
+        cut.getchannel("A").save(d / "mask_front.png")
     name = re.sub(r"[^0-9A-Za-z가-힣_-]+", "_", str(p.get("name") or "")).strip("_")[:40] or time.strftime("model_%m%d_%H%M")
     k = p.get("kind3") or p.get("kind")                  # 작업 요청의 kind 는 'm3d' 라서 화면은 kind3 로 보내요
     m3d_save_meta(sid, {"name": name, "checks": checks, "stats": stats, "kind": k if k in M3D_KIND else "object",
@@ -782,29 +891,32 @@ def m3d_defringe(img):
 def m3d_glb(imgs, mv, f, o, seed, J, label=None, stages=None):
     """사진(배경 지운 RGBA, {방향: 그림}) → ComfyUI TRELLIS.2/Pixal3D → 텍스처 입힌 GLB 바이트.
     stages(dict) 를 주면 단계별 결과를 담아요: A 엔진 원본, B 사진 붙이기(얼굴 텍스처 없이 — 비교할 때만), C 최종, hi 원본 고밀도 메시."""
-    grown = []
-    for sd in list(imgs):                              # 물체가 작게 나온 사진은 먼저 키워요(3D 모델은 물체를 1024px 로 봐요)
-        imgs[sd], k = m3d_enlarge(imgs[sd], J)
-        if k:
-            grown.append(f"{M3D_SIDE_KO.get(sd, sd)} {k:g}배")
-    if grown:
-        warn(J, "물체 부분이 작아서 업스케일로 키워 만들었어요(" + ", ".join(grown) + ").")
     for sd in list(imgs):                              # 가장자리 검은 테두리 막기
         imgs[sd] = m3d_defringe(imgs[sd])
-    if mv:                                              # 멀티뷰: 모든 방향을 같은 배율로 맞춰서 넣어요
-        fr = m3d_frame(imgs)
-        views = {sd: put_input(fr[sd], J) for sd in imgs}
-    else:
-        views = {"front": put_input(imgs["front"], J)}
+    # 3D 엔진 입력: 업스케일하지 않은 사진으로, 비율을 지킨 채 여백을 넣어 정사각형(우리가 직접 — 한 장·멀티뷰 같은 방식).
+    # 업스케일(AI 가 세부를 추정해 그림)은 엔진 입력에 쓰지 않고, 아래 사진 붙이기(텍스처)에만 써요.
+    pixal_like = mv or bool(f.get("pixal"))
+    fr = m3d_frame(imgs, pad=1.1 if pixal_like else 1.0)     # 노드 설명: Pixal3D 는 1.1, TRELLIS.2 는 1.0
+    views = {sd: put_input(fr[sd], J) for sd in imgs}
+    if J.get("_m3d_dir"):                               # 엔진이 받은 그림 그대로 남겨요(다리 등이 엔진 입력에서부터 빠졌는지 확인용)
+        for sd in imgs:
+            try:
+                fr[sd].save(Path(J["_m3d_dir"]) / f"engine_input_{sd}.png")
+            except OSError:
+                pass
+    tex_front, k_up = m3d_enlarge(imgs["front"], J)     # 사진 붙이기용: 작으면 업스케일(얼굴은 원래 얼굴 유지)
+    if k_up:
+        warn(J, f"사진이 작아서 사진 붙이기(텍스처)용으로만 업스케일로 키워 썼어요({k_up:g}배). 3D 모양은 원래 사진으로 만들어요.")
     # 단계 수(구조, 모양 512, 재질, 모양 올려 그리기)·cfg — 원본 TRELLIS.2 기본값
     nodes = caps()["nodes"]
     co = not nodes or "CFGOverride" in nodes
     nodes0 = caps()["nodes"]
-    q = {"files": f, "views": views, "multiview": mv, "pixal1": bool(f.get("pixal")) and not mv, "moge": f.get("moge"), "framed": mv, "seed": seed,
+    q = {"files": f, "views": views, "multiview": mv, "pixal1": bool(f.get("pixal")) and not mv, "moge": f.get("moge"), "framed": True, "seed": seed,
          "fov_out": not nodes0 or "PreviewAny" in nodes0,
          "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
          "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"], "cfg_override": co,
-         "keep_hi": stages is not None and o.get("keep_hi")}
+         "keep_hi": stages is not None and o.get("keep_hi"),
+         "stage_saves": stages is not None and o.get("compare")}
     if not co:
         warn(J, "이 ComfyUI 에는 CFGOverride 노드가 없어서 원본 설정 일부(앞쪽 단계에만 가이드 걸기) 없이 만들었어요. "
                 "ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 모양이 더 좋아져요.")
@@ -813,31 +925,30 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None, stages=None):
     fixed = []
     res = run_wf(wf_fit(flows.wf_trellis(q), fixed), J, raw=True)
     if any(x.startswith("RemeshMesh.") for x in fixed):
-        warn(J, "이 ComfyUI 는 '닫힌 몸체로 다시 짜기(solid)'를 몰라서 예전 방식(udf + 안쪽 껍질 지우기)으로 만들었어요. "
-                "ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 더 고르게 나와요.")
+        warn(J, "이 ComfyUI 는 '닫힌 몸체로 다시 짜기(solid)'를 몰라서 예전 방식(udf)으로 그물망을 다시 짰어요. 이 방식은 팔·다리가 떨어져 나가거나 "
+                "구멍이 생길 수 있어서 안쪽 껍질만 지우게 바꿨어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 "
+                "닫힌 몸체로 고르게 나와요(권장).")
     glbs = [(n, dat) for n, dat in res if n.lower().endswith(".glb")]
-    glb = next((dat for n, dat in glbs if "hub3d_hi" not in n), None)
+    extra = ("hub3d_hi", "hub3d_remesh", "hub3d_dec")
+    glb = next((dat for n, dat in glbs if not any(x in n for x in extra)), None)
     if not glb:
         raise RuntimeError("3D 결과(GLB)를 받지 못했어요.")
-    if stages is not None:
-        hi = next((dat for n, dat in glbs if "hub3d_hi" in n), None)
-        if hi:
-            stages["hi"] = hi
+    if stages is not None:                             # 모양 단계별 그물망: 고밀도(원본) → 다시 짠 뒤 → 면 줄인 뒤
+        for key, nm in (("hi", "hub3d_hi"), ("remesh", "hub3d_remesh"), ("dec", "hub3d_dec")):
+            dat = next((d_ for n, d_ in glbs if nm in n), None)
+            if dat:
+                stages[key] = dat
     _clean_tmp(J)
     glb = photoproj.fix_samplers(glb)
     # 사진 붙이기 원근: Pixal3D 는 정해진 화각으로 만들어서 계산할 수 있어요(카메라 거리 = 0.5/tan(화각/2), 물체는 화면의 1/1.1 → 긴 변 기준 0.55/tan)
     dist_e = None
     texts = J.pop("wf_text", None) or []
-    if mv:
-        bb = fr["front"].convert("L").point(lambda x: 255 if x > 8 else 0).getbbox()
-        if bb:
-            dist_e = 0.5 / math.tan(math.radians(20.0) / 2) * fr["front"].width / max(bb[2] - bb[0], bb[3] - bb[1])
-    elif q["pixal1"]:
-        fov = 49.13
-        if q.get("moge"):
-            fov = next((float(t) for t in texts if re.fullmatch(r"\s*\d+(\.\d+)?\s*", str(t)) and 5 < float(t) < 170), None)
-        if fov:
-            dist_e = 0.55 / math.tan(math.radians(fov) / 2)
+    fov = 20.0 if mv else 49.13 if q["pixal1"] else None
+    if q["pixal1"] and q.get("moge"):
+        fov = next((float(t) for t in texts if re.fullmatch(r"\s*\d+(\.\d+)?\s*", str(t)) and 5 < float(t) < 170), None)
+    bb = fr["front"].convert("L").point(lambda x: 255 if x > 8 else 0).getbbox()
+    if fov and bb:                                       # 엔진 입력 그림에서 물체가 차지한 크기로 정확히(한 장·멀티뷰 같은 식)
+        dist_e = 0.5 / math.tan(math.radians(fov) / 2) * fr["front"].width / max(bb[2] - bb[0], bb[3] - bb[1])
     if J.get("_m3d_dir"):                  # 3D 엔진이 만든 원래 3D(사진 붙이기 전) — 마지막 것 하나만 작업 폴더에 남겨요(문제 살필 때 보내 주세요)
         try:
             (Path(J["_m3d_dir"]) / "engine_last.glb").write_bytes(glb)
@@ -846,11 +957,11 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None, stages=None):
     o = {**o, "_pixal": bool(f.get("pixal")) or mv}
     if stages is not None:
         stages["A"] = glb
-        stages["_dist"], stages["_pixal"], stages["_front"] = dist_e, o["_pixal"], imgs["front"]
+        stages["_dist"], stages["_pixal"], stages["_front"], stages["_fov"] = dist_e, o["_pixal"], tex_front, fov
     if o.get("photo", True):
         if stages is not None and o.get("compare") and o.get("head", True):   # 비교용 B: 얼굴 전용 텍스처 없이
-            stages["B"] = m3d_photo(glb, imgs["front"], J, {**o, "head": False}, dist_e)
-        glb = m3d_photo(glb, imgs["front"], J, o, dist_e)
+            stages["B"] = m3d_photo(glb, tex_front, J, {**o, "head": False}, dist_e)
+        glb = m3d_photo(glb, tex_front, J, o, dist_e)
         if stages is not None and "B" not in stages and o.get("compare"):
             stages["B"] = glb
     if stages is not None:
@@ -1039,7 +1150,11 @@ def m3d_photo(glb, photo, J, o=None, dist_e=None):
 
 
 M3D_STAGE = {"A": ("A 엔진 원본", "A engine", "엔진원본"), "B": ("B 사진 붙이기", "B photo", "사진붙이기"), "C": ("C 얼굴 텍스처", "C head", "얼굴텍스처"),
-             "D": ("D Blender 마무리", "D Blender", "Blender"), "E": ("E AI 멀티뷰", "E multiview", "멀티뷰")}
+             "D": ("D Blender 마무리", "D Blender", "Blender"), "E": ("E AI 멀티뷰", "E multiview", "멀티뷰"),
+             "F": ("F TRELLIS.2", "F TRELLIS.2", "TRELLIS2"),
+             "hi": ("A0 고밀도(원본, 색 없음)", "A0 dense", "원본고밀도"), "remesh": ("A1 다시 짠 뒤(색 없음)", "A1 remeshed", "다시짠뒤"),
+             "dec": ("A2 면 줄인 뒤(색 없음)", "A2 decimated", "면줄인뒤")}
+M3D_SHAPE = ("hi", "remesh", "dec", "A")      # 모양 단계 순서(어디서 팔다리가 사라졌는지 보려고)
 M3D_HEAD_TRIS = 3000         # 사람 캐릭터의 머리(위쪽 13%)가 이보다 면이 적으면 얼굴 굴곡이 뭉개져요
 
 
@@ -1077,6 +1192,59 @@ def m3d_check_mesh(glb, kind, J):
     return rep
 
 
+def m3d_limbs(stages, J, all_stages=False):
+    """사람 3D 의 팔다리 검사: 사진 카메라로 본 실루엣이 사진 속 왼다리·오른다리·왼팔·오른팔을 하나씩 덮는지.
+    all_stages 면 모양 단계(고밀도 → 다시 짠 뒤 → 면 줄인 뒤 → 엔진 최종)마다 재서 어디서 사라졌는지 찾아요. → dict 또는 None"""
+    A, front = stages.get("A"), stages.get("_front")
+    if not A or front is None or front.mode != "RGBA":
+        return None
+    try:
+        cam = photoproj.shape_cam(A, front, stages.get("_dist"), photoproj.PIXAL_CAM if stages.get("_pixal") else None)
+        alpha = np.asarray(front.getchannel("A")).astype(np.float64) / 255
+        res = {}
+        for k in (M3D_SHAPE if all_stages else ("A",)):
+            if stages.get(k):
+                res[k] = photoproj.limbs_of(stages[k], cam, alpha)
+    except Exception as e:  # noqa: BLE001 — 검사는 덤
+        quiet_log("[3D 팔다리 검사 실패]", repr(e))
+        return None
+    wa = res.get("A", {}).get("whole", 0)
+    lost = None
+    for k in M3D_SHAPE:
+        r = res.get(k)
+        if not r:
+            continue
+        if r["whole"] < 0.5 <= wa:                          # 좌표가 달라 비교할 수 없는 단계(엔진 판마다 다를 수 있어요)
+            r["note"] = "좌표가 달라 비교하지 못했어요"
+            continue
+        if r["missing"] and lost is None:
+            lost = k
+    return {"stages": res, "missing": res.get("A", {}).get("missing", []), "lost_at": lost}
+
+
+class M3dVram:
+    """3D 만드는 동안 GPU 메모리(VRAM) 사용량을 2초마다 재서 가장 많이 쓴 값을 남겨요(다른 프로그램이 쓰는 몫도 함께 잡혀요)."""
+    def __init__(self):
+        self.peak, self.start, self.total, self.on = 0, None, None, True
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        t0 = time.time()
+        while self.on and time.time() - t0 < 6 * 3600:     # 중간에 멈춰도 6시간 뒤엔 스스로 끝나요
+            try:
+                v = gpu_live()
+            except Exception:  # noqa: BLE001
+                v = None
+            if v:
+                self.start = v["used_mb"] if self.start is None else self.start
+                self.peak, self.total = max(self.peak, v["used_mb"]), v["total_mb"]
+            time.sleep(2)
+
+    def stop(self):
+        self.on = False
+        return {"peak_mb": self.peak, "start_mb": self.start, "total_mb": self.total} if self.total else None
+
+
 def m3d_build(p, J):
     """3D 만들기: 사진 한 장(기본) 또는 AI 멀티뷰 보조 → 텍스처 입힌 GLB → (Blender) 크기·LOD·FBX/OBJ 묶음.
     언제나: 4방향 캡처(앞·왼쪽·오른쪽·뒤), 그물망 검사, (켜 두면) 원본 고밀도 메시. 비교를 켜면 단계별 결과(A~E)와 비교표도 남겨요."""
@@ -1089,9 +1257,13 @@ def m3d_build(p, J):
     have = [s for s in M3D_SIDES if (d / f"view_{s}.png").is_file()]
     use = []
     if o["mode"] == "multi":
-        use = m3d_mv_check(d, [s for s in have if s in (p.get("sides") or have)], J)
-        if not use:
-            warn(J, "AI 멀티뷰 보조로 쓸 수 있는 방향 그림이 없어 사진 한 장으로 만들었어요.")
+        asked = [s for s in have if s in (p.get("sides") or have)]
+        if asked and not all(trellis_files(True).values()):
+            use = asked                                    # 멀티뷰 모델이 없으면 검사할 것 없이 아래(m3d_need)에서 '모델이 필요해요'로 알리고 한 장으로
+        else:
+            use = m3d_mv_check(d, asked, J)
+            if not use:
+                warn(J, "AI 멀티뷰 보조로 쓸 수 있는 방향 그림이 없어 사진 한 장으로 만들었어요.")
     mv = bool(use)
     f, mv = m3d_need(mv, J, m3d_engine(p))
     if not mv:
@@ -1101,7 +1273,12 @@ def m3d_build(p, J):
         imgs[sd] = Image.open(d / f"view_{sd}.png").convert("RGBA")
     q = {"seed": seed_of(p)}
     stages = {}
-    glb = m3d_glb(imgs, mv, f, o, q["seed"], J, stages=stages)
+    vram = M3dVram()
+    try:
+        glb = m3d_glb(imgs, mv, f, o, q["seed"], J, stages=stages)
+    except BaseException:
+        vram.stop()
+        raise
     if J.get("m3d_photo_res"):
         J.setdefault("m3d_stats", {})["photo"] = J["m3d_photo_res"]
     engine = "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2"
@@ -1176,12 +1353,40 @@ def m3d_build(p, J):
             raise
         except Exception as e:  # noqa: BLE001
             warn(J, f"비교용 AI 멀티뷰(E)를 만들지 못했어요({str(e)[:80]}).")
+    # F: 비교할 때 같은 사진·씨앗으로 TRELLIS.2 도 하나 더(Pixal3D 로 만들었을 때만)
+    if o["compare"] and (mv or f.get("pixal")):
+        try:
+            if all(trellis_files(False).values()):
+                fF, _ = m3d_need(False, J, "trellis")
+                sF = {}
+                stages["F"] = m3d_glb({"front": Image.open(d / "view_front.png").convert("RGBA")}, False, fF, {**o, "compare": False, "keep_hi": False}, q["seed"], J,
+                                      label="비교용 TRELLIS.2(F) 만드는 중", stages=sF)
+                stages["_F"] = sF
+            else:
+                warn(J, "비교용 TRELLIS.2(F)는 TRELLIS.2 모델이 없어 건너뛰었어요.")
+        except Cancelled:
+            raise
+        except Exception as e:  # noqa: BLE001
+            warn(J, f"비교용 TRELLIS.2(F)를 만들지 못했어요({str(e)[:80]}).")
+    vr = vram.stop()
+    if vr:
+        J.setdefault("m3d_stats", {})["vram"] = vr
+    # 팔다리 검사(사람) — 빠진 부위가 있으면 알려요. 비교할 때는 모양 단계마다 재서 어디서 사라졌는지도
+    if m.get("kind") == "character":
+        J["msg"] = "팔다리 검사 중"
+        lb = m3d_limbs(stages, J, all_stages=o["compare"])
+        if lb:
+            J.setdefault("m3d_stats", {})["limbs"] = lb
+            if lb["missing"]:
+                where = {"hi": "3D 엔진이 모양을 처음 만들 때부터", "remesh": "그물망을 다시 짤 때", "dec": "면을 줄일 때", "A": "엔진 마지막 단계에서"}.get(lb["lost_at"] or "", "")
+                warn(J, f"3D 에서 {', '.join(lb['missing'])}가 빠졌거나 많이 달라요{f'({where} 사라졌어요)' if where else ''}. "
+                        "씨앗을 바꿔 다시 만들거나, 다리 사이가 보이는 사진·'단계별 결과·비교표 저장'으로 확인해 보세요.")
     # 검사·4방향 캡처
     J["msg"] = "그물망 검사·4방향 캡처 중"
     rep = m3d_check_mesh(final, m.get("kind"), J)
     if rep:
         J.setdefault("m3d_stats", {})["mesh"] = rep
-    rows = [(M3D_STAGE[k][0], M3D_STAGE[k][1], stages[k]) for k in "ABCDE" if k in stages] if o["compare"] else [("최종 결과", "final", final)]
+    rows = [(M3D_STAGE[k][0], M3D_STAGE[k][1], stages[k]) for k in ("hi", "remesh", "dec", "A", "B", "C", "D", "E", "F") if stages.get(k)] if o["compare"] else [("최종 결과", "final", final)]
     try:
         if not (o["capture"] or o["compare"]):
             raise StopIteration
@@ -1195,19 +1400,27 @@ def m3d_build(p, J):
         quiet_log("[3D 캡처 실패]", repr(e))
     if o["compare"]:
         st = []
-        for k in "ABCDE":
-            if k in stages and k not in ("D",) and not (k == "C" and stages[k] is final):
-                rk = m3d_check_mesh(stages[k], m.get("kind"), None) if k in ("A", "E") else None
+        for k in ("remesh", "dec", "A", "B", "C", "E", "F"):
+            if stages.get(k) and not (k == "C" and stages[k] is final):
+                rk = m3d_check_mesh(stages[k], m.get("kind"), None) if k in ("remesh", "dec", "A", "E", "F") else None
                 mt = None
-                if k in ("A", "E"):                    # 엔진 결과가 사진과 맞는 정도(실루엣·얼굴 자리) — 멀티뷰가 정면을 망치는지 숫자로
-                    src = stages if k == "A" else stages.get("_E") or {}
+                if k in ("A", "E", "F"):               # 엔진 결과가 사진과 맞는 정도(실루엣·얼굴 자리) — 멀티뷰·TRELLIS.2 와 숫자로 비교
+                    src = stages if k == "A" else stages.get("_" + k) or {}
                     try:
                         mt = photoproj.engine_match(src.get("A", stages[k]), src.get("_front") or imgs["front"], J.get("_m3d_face"), src.get("_dist"),
                                                     photoproj.PIXAL_CAM if src.get("_pixal") else None)
                     except Exception as e:  # noqa: BLE001
                         quiet_log("[3D 단계 비교 실패]", repr(e))
+                lk = None
+                if k in ("E", "F") and m.get("kind") == "character":   # E·F 도 팔다리 검사(각자 카메라로)
+                    lk = (m3d_limbs(stages.get("_" + k) or {}, J) or {}).get("stages", {}).get("A")
+                elif k in ("remesh", "dec", "A"):
+                    lk = ((J.get("m3d_stats") or {}).get("limbs") or {}).get("stages", {}).get(k)
                 items.append((stages[k], {**base_info, "stage": k, "_tag": M3D_STAGE[k][2], "match": mt}, ".glb"))
-                st.append({"stage": k, "name": M3D_STAGE[k][0], "mesh": rk, "match": mt})
+                st.append({"stage": k, "name": M3D_STAGE[k][0], "mesh": rk, "match": mt, "limbs": lk})
+        hi_l = ((J.get("m3d_stats") or {}).get("limbs") or {}).get("stages", {}).get("hi")
+        if stages.get("hi"):
+            st.insert(0, {"stage": "hi", "name": M3D_STAGE["hi"][0], "mesh": None, "match": None, "limbs": hi_l})
         J.setdefault("m3d_stats", {})["stages"] = st
     if stages.get("hi"):
         items.append((stages["hi"], {**base_info, "hi": True, "_tag": "원본고밀도"}, ".glb"))

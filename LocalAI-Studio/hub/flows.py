@@ -844,11 +844,17 @@ def wf_trellis(q):
         hi = [w.add("RemeshMesh", mesh=dense, resolution=int(q["remesh"]), sign_mode="solid", band=1.0, project_back=0.0, fix_poles=False,
                     smooth_iters=20, drop_small_components=0.01, precluster_max_verts=20000000,
                     **{"sign_mode.fill": 20.0, "sign_mode.qef": False}), 0]
-        # 예전 ComfyUI(선택지에 solid 가 없음)용 대신 값 — udf 는 안팎 두 겹이 생겨서 안쪽 껍질을 지워요(hub 의 wf_fit 이 골라요)
+        # 예전 ComfyUI(선택지에 solid 가 없음)용 대신 값 — udf 는 안팎 두 겹이 생겨요. 예전에는 '뒤집힌 조각 지우기'로 안쪽 껍질을 지웠는데,
+        # 실제 결과에서 다리 하나가 통째로 지워지고 엉덩이 높이에 큰 구멍만 남았어요(4.8). 그래서 '다른 것 안에 갇힌 조각'(안쪽 껍질)만 지워요 —
+        # 팔·다리는 아무 것에도 갇혀 있지 않아 남아요. 그 칸이 없는 판은 두 겹 그대로(밖에서는 안쪽이 안 보여요)
         g = w.n[hi[0]]
-        g["_alt"] = {"sign_mode": [("udf", {"sign_mode.qef": False, "sign_mode.drop_inverted_components": True,
-                                            "sign_mode.drop_enclosed_components": False})]}
+        g["_alt"] = {"sign_mode": [("udf", {"sign_mode.qef": False, "sign_mode.drop_inverted_components": False,
+                                            "sign_mode.drop_enclosed_components": True})]}
+    if q.get("stage_saves") and q.get("remesh"):      # 진단: 다시 짠 뒤 그물망(색 없음)
+        w.add("SaveGLB", mesh=hi, filename_prefix="3d/hub3d_remesh")
     low = [w.add("DecimateMesh", mesh=hi, target_face_count=int(q["faces"]), placement_mode="midpoint"), 0]
+    if q.get("stage_saves"):                          # 진단: 면 줄인 뒤 그물망(색 없음)
+        w.add("SaveGLB", mesh=low, filename_prefix="3d/hub3d_dec")
     low = [w.add("MeshSmoothNormals", mesh=low, crease_angle=180.0), 0]
     low = [w.add("UnwrapMesh", mesh=low, segmenter="pec", resolution=int(q["tex"]), padding=1, weld_distance=0.0002), 0]
     bt = w.add("BakeTextureFromVoxel", mesh=low, voxel_colors=col, texture_size=int(q["tex"]), reference_mesh=dense)

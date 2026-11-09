@@ -89,7 +89,7 @@ ks = sorted(cls("KSampler"), key=lambda x: x["seed"]); assert [(x["steps"], x["c
 node = lambda ref: SUBMITTED[-1][ref[0]]["class_type"]
 assert [node(x["model"]) for x in ks] == ["ModelSamplingSD3", "RescaleCFG", "RescaleCFG", "UNETLoader"]
 rm = cls("RemeshMesh")[0]; assert rm["sign_mode"] == "solid" and rm["sign_mode.fill"] == 20.0 and rm["smooth_iters"] == 20 and not any("drop_inverted" in k for k in rm), rm
-assert cls("ImageCropToMask")[0]["pad_factor"] == 1.0 and node(cls("BakeNormalMapFromMesh")[0]["high_poly"]) == "RemeshMesh"
+assert (lambda b: abs(max(b[2] - b[0], b[3] - b[1]) - 1024 / 1.0) <= 3)(Image.open(hub.M3D_DIR / sid / "engine_input_front.png").convert("L").point(lambda v: 255 if v > 8 else 0).getbbox()) and node(cls("BakeNormalMapFromMesh")[0]["high_poly"]) == "RemeshMesh"
 assert node(cls("Trellis2TextureStage")[0]["positive"]) == "Trellis2UpsampleStage" and len(cls("MeshSmoothNormals")) == 2
 side = json.loads(next((hub.OUT / "3D").rglob("*.glb.json")).read_text(encoding="utf-8")); assert side["engine"] == "TRELLIS.2" and side["views"] == ["front"]
 ok("build (single view): TRELLIS.2 graph — seeds, upsample to 1024, remesh, faces, texture size; Pixal3D fallback warned; saved in 3D/")
@@ -99,6 +99,7 @@ assert not cls("Trellis2UpsampleStage") and not cls("RemeshMesh") and cls("Decim
 ok("build options: 512 skips upsample, remesh off, invalid faces/tex fall back")
 # Pixal3D 멀티뷰
 touch("diffusion_models/pixal3d_multiview_int8_convrot.safetensors", "clip_vision/dino_v3_L_naf_fp32.safetensors")
+for s_ in ("left", "back"): Image.open(hub.M3D_DIR / sid / "view_front.png").save(hub.M3D_DIR / sid / f"view_{s_}.png")   # 4.8: 같은 인물·옷(색)이어야 멀티뷰에 써요
 j = job({"kind": "m3d", "op": "build", "id": sid, "sides": ["left", "back", "right"], "blender": False}); assert j["state"] == "done" and not [w for w in j.get("warn", []) if "업스케일로 키워" not in w], j
 pc = cls("Pixal3DMultiViewConditioning"); assert pc and set(pc[0]) >= {"front", "left", "back"} and "right" not in pc[0] and len(cls("LoadImage")) == 3
 assert not cls("ImageCropToMask") and all(node(pc[0][k]) == "LoadImage" for k in ("front", "left", "back"))     # 허브가 같은 배율로 맞춰 넣어요
@@ -172,7 +173,7 @@ hub.caps = lambda *a, **k: {"nodes": ["RemeshMesh"], "info": {"RemeshMesh": RM}}
 g = hub.wf_fit(hub.flows.wf_trellis(q0), notes)
 hub.caps = real
 rm = next(v["inputs"] for v in g.values() if v["class_type"] == "RemeshMesh")
-assert rm["sign_mode"] == "udf" and rm["sign_mode.drop_inverted_components"] is True and "sign_mode.fill" not in rm and rm["sign_mode.qef"] is False, rm
+assert rm["sign_mode"] == "udf" and rm["sign_mode.drop_inverted_components"] is False and rm["sign_mode.drop_enclosed_components"] is True and "sign_mode.fill" not in rm and rm["sign_mode.qef"] is False, rm
 assert notes == ["RemeshMesh.sign_mode: solid → udf"] and not any("_alt" in v for v in g.values())
 g = hub.wf_fit(hub.flows.wf_trellis(q0))                                           # 설명이 없는 노드여도 '_alt' 는 빠져요(그대로 보내면 ComfyUI 가 거부)
 assert not any("_alt" in v for v in g.values()) and next(v["inputs"] for v in g.values() if v["class_type"] == "RemeshMesh")["sign_mode"] == "solid"

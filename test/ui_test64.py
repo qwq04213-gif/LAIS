@@ -14,7 +14,7 @@ for f in ("diffusion_models/trellis_2_int8_convrot.safetensors", "clip_vision/di
     (M / f).parent.mkdir(parents=True, exist_ok=True); (M / f).write_bytes(b"x")
 D = TMP / "pics"; D.mkdir()
 im = Image.new("RGBA", (400, 400), (0, 0, 0, 0)); im.paste((200, 60, 60, 255), (100, 60, 300, 360)); im.save(D / "knight.png")
-Image.new("RGB", (300, 300), (20, 200, 20)).save(D / "side.png")
+Image.new("RGB", (300, 300), (200, 60, 60)).save(D / "side.png")      # 4.8: 같은 인물·옷이면 색이 같아요(색이 다르면 '맞지 않아요')
 errs = []
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1500, "height": 950})

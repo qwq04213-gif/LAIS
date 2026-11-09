@@ -36,10 +36,13 @@ function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$
         <span>${k!=='front'?`<button type="button" class="ghost sm" data-slotdraw="${k}" title="${M3_SIDE[k]} 모습만 그려요(Qwen-Image 2.1)">그리기</button>`:''}<button type="button" class="ghost sm" data-slotup="${k}" title="내 사진으로 바꾸기">사진</button>${k!=='front'&&u?`<button type="button" class="ghost sm" data-slotclr="${k}" title="비우기">×</button>`:''}</span></figcaption></figure>`}).join('');
   $('#m3-mvnote').textContent=mv?'AI 가 그린 방향 그림은 실제 사진이 아니라 추정이에요. 고른 그림 중 앞 사진과 자세·비율이 다른 것은 만들 때 자동으로 빼요.'
     :"방향 그림을 함께 쓰려면 '설치와 모델'에서 'Pixal3D 멀티뷰'를 받아 주세요. 없으면 앞 사진 한 장으로 만들어요.";
+  {const fu=S.slots?.front,fb=$('#m3-front'),multi=$('#m3-mode').value==='multi';fb.hidden=!fu||multi;if(fu)$('img',fb).src=fu}      /* 방향 그림 칸이 숨으면 앞 사진은 여기서 보여요 */
   if(S.kind&&$('#m3-kind').value!==S.kind){$('#m3-kind').value=S.kind;$('#m3-kind').onchange()}$('#m3-name').value=S.name||'';
   $('#m3-tposebox').hidden=S.kind!=='character';$('#m3-tundo').hidden=!S.front_orig;m3sPaint()}
 async function m3Open(id){if(!id){M3.S=null;m3Paint();return}const r=await api('/api/m3d/'+id);if(r.error){toast(r.error);return}M3.S=r;m3Paint()}
 $('#m3-sess').onchange=e=>m3Open(e.target.value);
+$('#m3-front').addEventListener('click',e=>{if(e.target.id==='m3-frontup'){const b=$('#m3-slots [data-slotup=front]');if(b)b.click();return}
+  const im=e.target.closest('img');if(im)lbOpen([{url:im.getAttribute('src'),name:'올린 사진'}],0)});
 $('#m3-mode').onchange=()=>{$('#m3-modenote').textContent=$('#m3-mode').value==='multi'?'AI 가 그린 왼쪽·뒤·오른쪽 그림을 함께 넣어요. 그림이 앞 사진과 맞지 않으면 그 그림은 빼고 만들어요. 정면 품질이 떨어지면 사진 한 장으로 만들어 비교해 보세요.'
   :'사진에 없는 옆·뒤는 3D 엔진이 추정해요. 실제와 같다고 보장하지는 않아요.';m3Paint()};
 $('#m3-del').onclick=async()=>{if(!M3.S||!confirm(`'${M3.S.name}' 작업(사진·방향 그림)을 지울까요? 만든 3D 파일은 그대로 남아요.`))return;
@@ -70,14 +73,24 @@ $('#m3-go').onclick=async()=>{if(!M3.S)return;
     blender:$('#m3-blender').checked,height:$('#m3-height').value,rotate:$('#m3-rot').value,lods:$('#m3-lods').checked,rig:$('#m3-rig').checked,
     fmt_glb:$('#m3-fmt-glb').checked,fmt_fbx:$('#m3-fmt-fbx').checked,fmt_obj:$('#m3-fmt-obj').checked};
   const j=await m3Job(p,'3D 만드는 중');if(!j)return;m3Show(j)};
-const M3_TAG={'엔진원본':'A 엔진 원본','사진붙이기':'B 사진 붙이기','얼굴텍스처':'C 얼굴 텍스처','멀티뷰':'E AI 멀티뷰','원본고밀도':'원본 고밀도 메시(색 없음)'};
+const M3_TAG={'다시짠뒤':'A1 다시 짠 뒤(색 없음)','면줄인뒤':'A2 면 줄인 뒤(색 없음)','TRELLIS2':'F TRELLIS.2','엔진원본':'A 엔진 원본','사진붙이기':'B 사진 붙이기','얼굴텍스처':'C 얼굴 텍스처','멀티뷰':'E AI 멀티뷰','원본고밀도':'원본 고밀도 메시(색 없음)'};
 function m3Extra(j,glb){const png=j.images.find(u=>/\.png$/i.test(u)),ms=j.m3d_stats?.mesh,
     more=j.images.filter(u=>/\.glb$/i.test(u)&&u!==glb).map(u=>{const n=decodeURIComponent(u.split('/').pop()),t=Object.keys(M3_TAG).find(k=>n.includes('-'+k+'.'));return {u,n,label:t?M3_TAG[t]:n}});
   return (ms?`<p class="m3-mesh ${ms.notes?.length?'no':'ok'}">${ms.notes?.length?'⚠':'✓'} 그물망 검사: 면 ${ms.tris.toLocaleString()}개 · 구멍 ${ms.holes}곳 · 떨어진 조각 ${Math.max(0,ms.parts-1)}개 · 두께÷너비 ${ms.depth_ratio}${ms.head_tris!=null?` · 머리 부분 면 ${ms.head_tris.toLocaleString()}개`:''}${ms.notes?.length?`<br><span class="mute">${ms.notes.map(esc).join(' · ')}</span>`:''}</p>`:'')
     +(png?`<figure class="m3-sheet"><img src="${png}" alt="앞·왼쪽·오른쪽·뒤" data-m3sheet="${png}" title="크게 보기"><figcaption class="mute">앞·왼쪽·오른쪽·뒤 캡처${more.some(x=>x.label.startsWith('A '))?' — 단계별(A 엔진 원본 → B 사진 붙이기 → C 얼굴 텍스처 → D Blender → E AI 멀티뷰)':''} · 눌러서 크게 보기</figcaption></figure>`:'')
     +(j.m3d_stats?.stages?.some(x=>x.match)?`<table class="m3-stat"><thead><tr><th>단계</th><th title="사진 실루엣과 겹치는 정도(1 이 같음)">실루엣 겹침</th><th title="3D 엔진이 칠한 얼굴이 사진 얼굴과 같은 자리에 있는 정도(1 이 같음). 낮으면 3D 의 고개 각도·얼굴 자리가 사진과 달라요">얼굴 자리 일치</th><th>구멍·조각</th></tr></thead><tbody>${j.m3d_stats.stages.filter(x=>x.match).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.match.iou}</td><td>${x.match.face!=null?x.match.face:'—'}</td><td>${x.mesh?`${x.mesh.holes} · ${Math.max(0,x.mesh.parts-1)}`:'—'}</td></tr>`).join('')}</tbody></table>
       <p class="mute">A 는 사진 한 장, E 는 AI 멀티뷰로 만든 3D 엔진 결과(사진 붙이기 전)예요. 얼굴 자리 일치가 E 에서 많이 낮으면 멀티뷰가 정면을 망친 거예요.</p>`:'')
+    +m3Limbs(j.m3d_stats)
     +(more.length?`<ul class="m3-files">${more.map(x=>`<li>${esc(x.label)} <button type="button" class="ghost sm" data-m3view="${x.u}">돌려 보기</button> <a class="ghost sm" href="${x.u}" download>저장</a></li>`).join('')}</ul>`:'')}
+const M3_SHAPE={hi:'A0 고밀도(원본)',remesh:'A1 다시 짠 뒤',dec:'A2 면 줄인 뒤',A:'A 엔진 최종'},M3_LOST={hi:'3D 엔진이 모양을 처음 만들 때부터',remesh:'그물망을 다시 짤 때',dec:'면을 줄일 때',A:'엔진 마지막 단계에서'};
+function m3Limbs(st){const lb=st?.limbs,vr=st?.vram;let h='';
+  if(lb){const ss=Object.entries(lb.stages||{}),names=ss.length?Object.keys(ss[0][1].parts||{}):[];
+    h+=`<p class="m3-mesh ${lb.missing?.length?'no':'ok'}">${lb.missing?.length?'⚠':'✓'} 팔다리 검사: ${lb.missing?.length?`${lb.missing.map(esc).join(', ')} 빠졌거나 많이 달라요${lb.lost_at?` — ${M3_LOST[lb.lost_at]||''} 사라졌어요`:''}`:'팔·다리가 모두 있어요'}</p>`
+      +`<table class="m3-stat"><thead><tr><th>단계</th><th title="사진과 3D 실루엣 겹침(IoU, 1 이 같음)">전체</th>${names.map(n=>`<th title="사진 속 이 부위를 3D 가 덮는 비율(1 이 다 덮음, 0.6 미만이면 '없음')">${esc(n)}</th>`).join('')}</tr></thead><tbody>`
+      +ss.map(([k,r])=>`<tr><td>${M3_SHAPE[k]||k}</td><td>${r.whole}</td>${names.map(n=>{const c=r.parts?.[n]?.cover;return `<td class="${c!=null&&c<0.6?'bad':''}">${c==null?'—':c}</td>`}).join('')}</tr>`).join('')+'</tbody></table>'
+      +'<p class="mute">사진 카메라로 본 3D 가 사진 속 팔·다리를 얼마나 덮는지예요(1 이 다 덮음, 0.6 미만이면 없음). — 는 사진에서 거의 안 보이는 부위. 왼쪽·오른쪽은 인물 기준이에요.</p>'}
+  if(vr?.peak_mb)h+=`<p class="mute">GPU 메모리(VRAM) 가장 많이 쓸 때 ${(vr.peak_mb/1024).toFixed(1)} GB / ${(vr.total_mb/1024).toFixed(1)} GB (시작할 때 ${((vr.start_mb||0)/1024).toFixed(1)} GB — 다른 프로그램 몫 포함)</p>`;
+  return h}
 function m3Show(j){const glb=j.images.find(u=>/\.glb$/i.test(u)),zip=j.images.find(u=>/\.zip$/i.test(u)),st=j.m3d_stats,rg=st?.rig;loadMV();M3.glb=glb;M3.pv=rg?.preview||'';
   $('#m3-out').innerHTML=`<div class="va-tool"><div class="m3-viewer"><model-viewer id="m3-mv" src="${glb}" camera-controls auto-rotate shadow-intensity="0.7" exposure="1.05" environment-image="neutral"></model-viewer></div>
     <div class="vbtns m3-bar"><button type="button" class="ghost sm" id="m3-clay" title="색을 빼고 모양만 봐요">모양만 보기</button><button type="button" class="ghost sm" id="m3-spin">회전 멈추기</button><button type="button" class="ghost sm" id="m3-full" title="갤러리처럼 크게 봐요(Esc 로 닫아요)">크게 보기</button>

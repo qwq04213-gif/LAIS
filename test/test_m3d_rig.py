@@ -112,7 +112,7 @@ def old_caps(*a, **k):
 hub.caps = old_caps
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); hub.caps = real
 assert j["state"] == "done" and any("update_comfyui" in w and "solid" in w for w in j["warn"]), j
-rm = [v["inputs"] for v in SUBMITTED[-1].values() if v["class_type"] == "RemeshMesh"][0]; assert rm["sign_mode"] == "udf" and rm["sign_mode.drop_inverted_components"] is True, rm
+rm = [v["inputs"] for v in SUBMITTED[-1].values() if v["class_type"] == "RemeshMesh"][0]; assert rm["sign_mode"] == "udf" and rm["sign_mode.drop_inverted_components"] is False, rm      # 4.8: 뒤집힌 조각 지우기는 끔(다리가 통째로 지워졌어요)
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); assert j["state"] == "done" and not any("update_comfyui" in w for w in j.get("warn") or []), j
 STATE["missing"].add("CFGOverride"); hub._CAPS["t"] = 0
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": ""}); STATE["missing"].discard("CFGOverride"); hub._CAPS["t"] = 0

@@ -1289,22 +1289,47 @@ def mesh_report(glb):
     lab = comps(ue, nv)
     used = np.unique(W)
     parts, sizes = np.unique(lab[used], return_counts=True)
-    holes = 0
+    PW = np.zeros((nv, 3))
+    PW[wid] = P                                                       # 하나로 합친 정점의 위치
+    hgt = max(hi[1] - lo[1], 1e-9)
+    tri_lab = lab[W[:, 0]]
+    plist = []                                                        # 조각마다: 면 수, 높이 위치(0 발끝 ~ 100 머리끝), 크기
+    for pi in parts[np.argsort(-sizes)][:8]:
+        sel = tri_lab == pi
+        Q = PW[np.unique(W[sel])]
+        plist.append({"tris": int(sel.sum()), "share": round(float(sel.sum() / max(1, len(W))), 4),
+                      "height_pct": round(float((Q[:, 1].mean() - lo[1]) / hgt * 100), 1), "size": [round(float(v), 4) for v in np.ptp(Q, 0)]})
+    holes, hlist = 0, []
     if len(bnd):
         bl = comps(bnd, nv)
-        holes = int(len(np.unique(bl[np.unique(bnd)])))
+        ids = bl[bnd[:, 0]]
+        hk, hc = np.unique(ids, return_counts=True)
+        holes = int(len(hk))
+        for k_ in hk[np.argsort(-hc)][:8]:                            # 구멍마다: 테두리 모서리 수·둘레 길이·높이 위치
+            e_ = bnd[ids == k_]
+            ln = float(np.linalg.norm(PW[e_[:, 0]] - PW[e_[:, 1]], axis=1).sum())
+            hlist.append({"edges": int(len(e_)), "length": round(ln, 4), "height_pct": round(float((PW[e_].reshape(-1, 3)[:, 1].mean() - lo[1]) / hgt * 100), 1)})
+    # 그 밖의 이상: 같은 자리 정점(이음새에서는 정상), 넓이 0 인 면, 이웃 면과 감는 방향이 반대인 모서리(면 방향 뒤집힘)
+    dup = int(len(P) - len(np.unique(wid)))
+    degen = int((~ok).sum())
+    de = np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]])
+    _, dcnt = np.unique(de, axis=0, return_counts=True)
+    flip = int((dcnt > 1).sum())                                      # 같은 방향 모서리가 두 번 = 이웃 면과 방향이 반대
     w_, h_, d_ = (hi - lo).tolist()
     dr = d_ / max(w_, 1e-9)
     notes = []
     if holes:
         notes.append(f"구멍 {holes}곳(테두리 모서리 {len(bnd):,}개)")
     if len(parts) > 1:
-        notes.append(f"떨어진 조각 {len(parts) - 1}개(큰 덩어리 밖 {1 - sizes.max() / sizes.sum():.1%})")
+        notes.append(f"떨어진 조각 {len(parts) - 1}개(큰 덩어리 밖 {1 - sizes.max() / sizes.sum():.1%} — 머리카락 끝·신발 같은 작은 조각일 수 있어요. 지우지 않았어요)")
+    if flip > 0.01 * len(ue):
+        notes.append(f"면 방향이 뒤집힌 곳 {flip:,}군데")
     if dr < 0.25:
         notes.append(f"납작해요(두께 ÷ 너비 {dr:.2f})")
     return {"tris": int(len(F)), "verts": int(nv), "holes": holes, "hole_edges": int(len(bnd)), "parts": int(len(parts)),
             "main_share": round(float(sizes.max() / sizes.sum()), 4), "size": [round(w_, 4), round(h_, 4), round(d_, 4)],
-            "depth_ratio": round(float(dr), 3), "flat": bool(dr < 0.25), "notes": notes}
+            "depth_ratio": round(float(dr), 3), "flat": bool(dr < 0.25), "notes": notes,
+            "part_list": plist, "hole_list": hlist, "dup_verts": dup, "degenerate": degen, "flipped_edges": flip}
 
 
 def engine_match(glb, photo, head=None, dist_e=None, cam_hint=None):
@@ -1320,3 +1345,86 @@ def engine_match(glb, photo, head=None, dist_e=None, cam_hint=None):
         if info.get("ncc"):
             out["face"] = info["ncc"][0]
     return out
+
+
+# ───────────────────────── 팔다리 검사 ─────────────────────────
+LIMB_MIN = 0.6           # 사진 속 부위의 이 비율도 3D 가 덮지 못하면 '없음'으로 봐요(실패)
+LIMB_SMALL = 0.004       # 사진에서 이 비율(사진 실루엣 대비)보다 작게 보이는 부위는 판정하지 않아요(몸에 붙은 팔 등)
+
+
+def _runs(row):
+    """한 줄(bool)의 연속 구간 [(시작, 끝)]"""
+    d = np.diff(np.concatenate([[0], row.astype(np.int8), [0]]))
+    return list(zip(np.nonzero(d == 1)[0], np.nonzero(d == -1)[0]))
+
+
+def body_parts(mask):
+    """사진 실루엣(사람이 서 있는 모습, 정면 기준) → 부위별 영역 {이름: bool 지도}. 이름은 인물 기준(사진 왼쪽 = 인물의 오른쪽).
+    다리: 키의 아래 42%를 몸 가운데 줄로 좌우 반씩. 팔: 키의 17~55% 높이에서 몸통(가운데 줄을 품은 구간) 바깥쪽.
+    얼굴 위치를 몰라도 되는 단순한 나눔이라 다리를 꼬거나 팔을 몸 앞에 둔 자세에서는 어림이에요."""
+    ys, xs = np.nonzero(mask)
+    if len(ys) < 50:
+        return {}, None
+    y0, y1 = ys.min(), ys.max() + 1
+    h = y1 - y0
+    band = mask[y0 + int(0.40 * h):y0 + int(0.55 * h)]
+    cols = np.nonzero(band)[1]
+    cx = int(np.median(cols)) if len(cols) else int(np.median(xs))
+    H, W = mask.shape
+    yy, xx = np.mgrid[0:H, 0:W]
+    leg = mask & (yy >= y0 + int(0.58 * h))
+    parts = {"오른쪽 다리(사진 왼쪽)": leg & (xx < cx), "왼쪽 다리(사진 오른쪽)": leg & (xx >= cx)}
+    la, ra = np.zeros_like(mask), np.zeros_like(mask)
+    for y in range(y0 + int(0.17 * h), y0 + int(0.55 * h)):
+        rs = _runs(mask[y])
+        tor = next(((a, b) for a, b in rs if a <= cx < b), None)
+        if tor is None:
+            continue
+        la[y, :tor[0]] = mask[y, :tor[0]]
+        ra[y, tor[1]:] = mask[y, tor[1]:]
+    parts["오른쪽 팔(사진 왼쪽)"] = la
+    parts["왼쪽 팔(사진 오른쪽)"] = ra
+    return parts, cx
+
+
+def limb_check(P, F, cam, alpha):
+    """3D 를 사진 카메라로 본 실루엣이 사진 속 팔·다리를 하나씩 덮는지 → dict.
+    parts[이름] = {"photo": 사진 속 부위 화소 비율, "cover": 사진 부위 중 3D 가 덮는 비율(1 이 다 덮음)} — 사진에 거의 안 보이는 부위는 cover 가 None.
+    missing: cover < LIMB_MIN 인 부위. whole: 전체 실루엣 겹침(IoU)."""
+    H0, W0 = alpha.shape
+    k = min(1.0, 900 / max(H0, W0))                      # 900px 정도로 줄여 재요(빠르게)
+    W, H = max(1, round(W0 * k)), max(1, round(H0 * k))
+    am = np.asarray(Image.fromarray((np.clip(alpha, 0, 1) * 255).astype(np.uint8)).resize((W, H), Image.BILINEAR)) > 127
+    x, y, _ = cam.px(P)
+    pix, _, _, _ = raster(np.stack([x * k, y * k], 1), F, W, H)
+    m3 = np.zeros(W * H, bool)
+    m3[pix] = True
+    m3 = m3.reshape(H, W)
+    parts, _ = body_parts(am)
+    tot = max(1, am.sum())
+    out, miss = {}, []
+    for nm, pm in parts.items():
+        n = int(pm.sum())
+        cov = float((pm & m3).sum() / n) if n >= LIMB_SMALL * tot else None
+        out[nm] = {"photo": round(float(n / tot), 4), "cover": None if cov is None else round(cov, 3)}
+        if cov is not None and cov < LIMB_MIN:
+            miss.append(nm)
+    whole = float((am & m3).sum() / max(1, (am | m3).sum()))
+    return {"parts": out, "missing": miss, "whole": round(whole, 3)}
+
+
+def shape_cam(glb, photo, dist_e=None, cam_hint=None):
+    """텍스처 있는 3D(엔진 결과)와 사진으로 사진 카메라를 구해요(사진 붙이기와 같은 방법) → Cam"""
+    M = load(glb)
+    ph = np.asarray(photo.convert("RGBA")).astype(np.float64) / 255
+    cam, _, _ = fit(M["P"], M["F"], M["UV"], M["tex"], ph[..., 3], ph[..., :3], None, dist_e, cam_hint)
+    return cam
+
+
+def limbs_of(glb, cam, alpha):
+    """어떤 단계의 그물망(색 없어도 돼요)이든 같은 카메라로 팔다리 검사 → limb_check 결과"""
+    sc = _scene(glb, tex_max=16)
+    P = np.concatenate([x[0] for x in sc])
+    offs = np.cumsum([0] + [len(x[0]) for x in sc])
+    F = np.concatenate([x[1] + offs[i] for i, x in enumerate(sc)])
+    return limb_check(P, F, cam, alpha)
