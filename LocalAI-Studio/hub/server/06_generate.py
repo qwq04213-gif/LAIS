@@ -31,10 +31,24 @@ def control_prep(p):
         wait_comfy()
     except RuntimeError as e:
         return {"error": str(e)}
+    da3 = next((n for n in files("geometry_estimation") if "depth_anything_3" in n.lower() or "da3" in n.lower()), None) if kind == "depth" else None
+    if da3 and all(has_node(n) for n in flows.DA3_NODES):          # 깊이: Depth Anything 3 가 있으면 먼저(ComfyUI 기본 노드)
+        claim("image")
+        J = {"id": "prep", "state": "running", "msg": "", "images": [], "tmp": []}
+        try:
+            r = run_wf(wf_fit(flows.wf_da3_depth(da3, put_input(img, J), clamp(max(img.size) // 14 * 14, 504, 1512))), J)[0]
+        except RuntimeError as e:
+            return {"error": f"깊이 지도를 만들지 못했어요: {e}"}
+        finally:
+            _clean_tmp(J)
+        b = io.BytesIO()
+        r.convert("L").convert("RGB").save(b, "PNG")
+        return {"image": "data:image/png;base64," + base64.b64encode(b.getvalue()).decode(), "node": "Depth Anything 3", "w": r.width, "h": r.height}
     node = next((n for n in CN_PREP[kind] if has_node(n)), None)
     if not node:
         return {"error": "이 ComfyUI 에는 이 지도를 만드는 노드가 없어요." if kind == "canny" else
-                "이 지도를 만드는 확장(ComfyUI's ControlNet Auxiliary Preprocessors)이 설치되어 있지 않아요.",
+                "이 지도를 만드는 확장(ComfyUI's ControlNet Auxiliary Preprocessors)이 설치되어 있지 않아요."
+                + (" 깊이 지도는 '설치와 모델'에서 'Depth Anything 3'를 받으면 확장 없이 만들 수 있어요." if kind == "depth" else ""),
                 "missing": CN_PREP[kind][0], "need_pack": kind != "canny"}
     claim("image")
     J = {"id": "prep", "state": "running", "msg": "", "images": [], "tmp": []}

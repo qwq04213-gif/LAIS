@@ -238,7 +238,7 @@ NEED_RULES = [      # 작업 오류 글 → 바로 받을 추천 모델(models.j
     (r"체크포인트가 없", ["noobai", "sdxl-vae-fix"]), (r"업스케일 모델이 없", ["esrgan"]), (r"감지 모델이 없", ["adetailer"]),
     (r"Krea 2 스타일 참조", ["krea2-style-reference"]), (r"Krea 2 깊이 컨트롤", ["krea2-depth-control"]),
     (r"Stable Audio|T5-base", ["stable-audio-open"]), (r"ACE-Step", ["ace-step-15-turbo"]), (r"4단계 가속 LoRA", ["wan22-lightning"]),
-    (r"TRELLIS\.2", ["trellis2"]), (r"Pixal3D", ["pixal3d-mv"]), (r"LTX-2\.5", ["ltx25"]), (r"SeedVR2", ["seedvr2"]), (r"Z-Image-Turbo", ["z-image-turbo"]), (r"FLUX 3 Klein", ["flux3-klein"]), (r"LTX-Video", ["ltx-video"]), (r"Wan VACE", ["wan-vace"]), (r"S2V", ["wan-s2v"]),
+    (r"TRELLIS\.2", ["trellis2"]), (r"Pixal3D", ["pixal3d-mv"]), (r"LTX-2\.5", ["ltx25"]), (r"SeedVR2", ["seedvr2"]), (r"Z-Image-Turbo", ["z-image-turbo"]), (r"Depth Anything 3", ["depth-anything-3"]), (r"FLUX 3 Klein", ["flux3-klein"]), (r"LTX-Video", ["ltx-video"]), (r"Wan VACE", ["wan-vace"]), (r"S2V", ["wan-s2v"]),
     (r"Wan 2\.2 14B 이미지", ["wan22-14b-i2v"]), (r"Wan 2\.2 14B 글", ["wan22-14b-t2v"]), (r"'Wan 2\.2 영상'", ["wan22-ti2v-5b"]),
     (r"SD3\.5", ["sd35-medium"]), (r"MOSS-Image", ["moss-image"]), (r"Qwen-Image 2\.1", ["qwen-image"]),
     (r"Lightning LoRA", ["qwen-lightning"]),

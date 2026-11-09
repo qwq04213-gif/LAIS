@@ -676,6 +676,19 @@ def wf_rmbg(q):
     return w.n
 
 
+DA3_NODES = ("LoadDA3Model", "DA3Inference", "DA3Render")
+
+
+def wf_da3_depth(model, img, resolution=1008):
+    """깊이 지도(Depth Anything 3, ComfyUI 기본 노드 — 공식 예시와 같게 mono · v2_style: 가까울수록 밝음)."""
+    w = WF()
+    m = w.add("LoadDA3Model", model_name=model, weight_dtype="default")
+    g = w.add("DA3Inference", da3_model=[m, 0], image=[w.add("LoadImage", image=img), 0], resolution=resolution, resize_method="upper_bound_resize", mode="mono")
+    out = w.add("DA3Render", da3_geometry=[g, 0], output="depth", **{"output.normalization": "v2_style", "output.apply_sky_clip": False})
+    w.add("PreviewImage", images=[out, 0])
+    return w.n
+
+
 def wf_trellis(q):
     """사진 → 게임용 3D(GLB). TRELLIS.2(사진 한 장) 또는 Pixal3D 멀티뷰(앞·왼쪽·뒤·오른쪽).
     ComfyUI 공식 예시(3d_pixal3d_trellis2_image_to_model)와 같은 설정이에요:

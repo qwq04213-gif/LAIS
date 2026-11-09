@@ -73,4 +73,13 @@ STATE["clip_types"] = ["stable_diffusion", "flux"]; hub._CAPS["t"] = 0
 j = job({"kind": "gen", "gengine": "flux3k", "prompt": "x"}); assert j["state"] == "error" and "지원하지 않아요" in j["error"], j
 STATE.pop("clip_types"); hub._CAPS["t"] = 0
 ok("Z-Image-Turbo / FLUX 3 Klein: official graphs (AuraFlow shift 3 + zeroed negative · flux3 encoder + Flux2 latent), base model gets 50 steps/CFG 3.5, kept out of FLUX lists, old ComfyUI explained")
+# ── Depth Anything 3 ──
+touch(*[f["dir"] + "/" + f["url"].rsplit("/", 1)[1] for f in CAT["depth-anything-3"]["files"]])
+r = post("/api/control/prep", {"type": "depth", "image": png(900, 600)}); assert r.get("node") == "Depth Anything 3" and r["image"].startswith("data:image/png"), r
+g = SUBMITTED[-1]; inf = cls("DA3Inference")[0]; assert inf["mode"] == "mono" and inf["resolution"] % 14 == 0 and 504 <= inf["resolution"] <= 1512
+rd = cls("DA3Render")[0]; assert rd["output"] == "depth" and rd["output.normalization"] == "v2_style" and cls("LoadDA3Model")[0]["model_name"] == "depth_anything_3_mono_large.safetensors"
+STATE["missing"].add("DA3Inference"); hub._CAPS["t"] = 0
+r = post("/api/control/prep", {"type": "depth", "image": png()}); assert r.get("node") != "Depth Anything 3", r          # 노드가 없으면 예전 방식(확장 전처리기)
+STATE["missing"].discard("DA3Inference"); hub._CAPS["t"] = 0
+ok("depth maps prefer Depth Anything 3 (ComfyUI core nodes, mono, v2_style) and fall back to the old preprocessor")
 print("ALL OK")
