@@ -49,13 +49,13 @@ const TIERS=[      // 그 메모리에서 돌아가는 가장 최신 모델, 성
     aud:[['stable-audio-3'],'효과음·연주곡'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원) · Real-ESRGAN']}},
   {gb:12,rows:{chat:[['gemma4-12b-abl','qwen35-9b-abl'],'Gemma 4 12B · Qwen3.5 9B 제한 해제판'],gen:[['z-image-turbo','noobai','realvisxl5','sdxl-vae-fix'],'Z-Image-Turbo · NoobAI · RealVis'],
     edit:[['qwen-image-turbo','qwen-image','qwen-te-small'],'Qwen-Image 2.1 Turbo(작은 텍스트 인코더)'],vid:[['wan22-ti2v-5b','wan-vace'],'Wan 2.2 5B 기본 길이 · VACE'],
-    aud:[['ace-step-15-turbo','stable-audio-3'],'노래는 ACE-Step 1.5'],d3:[['trellis2'],"세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원)']}},
+    aud:[['ace-step-15-turbo','stable-audio-3'],'노래는 ACE-Step 1.5'],d3:[['pixal3d','trellis2'],"Pixal3D · 세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원)']}},
   {gb:16,rows:{chat:[['gemma4-26b-abl','gemma4-12b-abl'],'Gemma 4 26B 제한 해제판(MoE, 빠름)'],gen:[['chroma-hd','z-image-turbo','noobai','sdxl-vae-fix'],'Chroma(무검열) · Z-Image-Turbo · NoobAI'],
     edit:[['qwen-image','qwen-image-turbo','qwen-lightning'],'Qwen-Image 2.1(+Turbo)'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
-    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '보통(1024)' · 여러 방향(Pixal3D)"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}},
+    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['pixal3d','trellis2','pixal3d-mv'],"Pixal3D(사진에 충실) · 세밀함 1536 · 여러 방향"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}},
   {gb:24,rows:{chat:[['qwen35-27b-abl','gemma4-26b-abl'],'Qwen3.5 27B 제한 해제판 — 가장 똑똑해요'],gen:[['chroma-hd','z-image-turbo','noobai','realvisxl5'],'Chroma · Z-Image-Turbo · NoobAI · RealVis'],
     edit:[['qwen-image','qwen-image-turbo','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v','ltx25'],'Wan 2.2 14B · LTX-2.5(소리까지, 성인 표현은 확인 안 됨)'],
-    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['trellis2','pixal3d-mv'],"세밀함 '아주 촘촘하게(1536)'"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
+    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['pixal3d','trellis2','pixal3d-mv'],"Pixal3D · 세밀함 1536 · 텍스처 4096"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
 const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};
 const tierOf=v=>v>=22?24:v>=15?16:v>=11?12:8;
 const nsfwTag=m=>m.nsfw==='ok'?' <span class="nsfw ok" title="성인 표현을 막지 않는 모델이에요(미성년자 관련 내용은 이 프로그램이 항상 막아요)">성인 표현 가능</span>'
