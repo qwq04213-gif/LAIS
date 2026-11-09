@@ -35,7 +35,7 @@ hub.bgremove.have_ort = lambda: True; hub.bgremove.installed = lambda *a: True; 
 n0 = len(SUBMITTED)
 j = job({"kind": "m3d", "op": "prep", "image": rgba(), "kind3": "character", "name": "기사 캐릭터!"}); assert j["state"] == "done", j
 S = j["m3d"]; assert S["kind"] == "character" and S["name"] == "기사_캐릭터" and S["checks"][0]["level"] in ("ok", "warn") and S["slots"]["front"] and not S["slots"]["left"], S
-assert len(SUBMITTED) == n0 and S["ready"] == {"trellis": False, "multiview": False} and not j["images"]
+assert len(SUBMITTED) == n0 and S["ready"] == {"trellis": False, "multiview": False, "pixal": False} and not j["images"]
 sid = S["id"]; assert (hub.M3D_DIR / sid / "orig.png").is_file()
 im = Image.open(io.BytesIO(urllib.request.urlopen(B + S["slots"]["front"]).read())); assert im.mode == "RGBA"
 for bad in ("/m3d/" + sid + "/meta.json", "/m3d/" + sid + "/..%2Fmeta.json", "/m3d/zzz/orig.png"):
@@ -59,7 +59,8 @@ post("/api/m3d/slot", {"id": sid, "side": "front", "image": rgba()})
 ok("slots: my own photo (background removed), clear, front can't be cleared, replacing front re-checks")
 # 여러 방향 그림(Qwen-Image 2.1 편집)
 j = job({"kind": "m3d", "op": "views", "id": sid, "sides": ["left", "back"], "fast": "on"}); assert j["state"] == "done", j
-assert j["m3d"]["slots"]["left"] and j["m3d"]["slots"]["back"] and not j["m3d"]["slots"]["right"] and not j["images"]
+assert j["m3d"]["slots"]["left"] and j["m3d"]["slots"]["back"] and not j["m3d"]["slots"]["right"]
+assert len(j["images"]) == 2 and all("/3D/" in u and u.endswith(".png") for u in j["images"])          # 4.3: 방향 그림도 결과 폴더(3D)에 남아요
 txt = " ".join(str(v["inputs"].get("prompt", "")) + str(v["inputs"].get("text", "")) for v in SUBMITTED[-1].values())
 assert "back" in txt and "white background" in txt, txt[:300]
 assert any("lightning" in str(v["inputs"].get("lora_name", "")).lower() for v in SUBMITTED[-1].values())
@@ -69,7 +70,7 @@ ok("views: Qwen 2.1 edit per side (fast = Lightning), cut out, stored in slots")
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": False}); assert j["state"] == "error" and "TRELLIS.2" in j["error"] and j["need"] == ["trellis2"], j
 touch("diffusion_models/trellis_2_int8_convrot.safetensors", "diffusion_models/trellis_2_fp16.safetensors", "clip_vision/dino_v3_vit_l.safetensors",
       "vae/trellis_2_shape_vae_bf16.safetensors", "vae/trellis_2_texture_vae_bf16.safetensors")
-assert hub.m3d_ready() == {"trellis": True, "multiview": False}
+assert hub.m3d_ready() == {"trellis": True, "multiview": False, "pixal": False}
 # 한 장(방향 그림은 골랐지만 Pixal3D 없음 → 경고하고 앞 사진만)
 j = job({"kind": "m3d", "op": "build", "id": sid, "sides": ["left", "back"], "res": "1024", "faces": "50000", "tex": "4096", "blender": False, "seed": 7})
 assert j["state"] == "done" and len(j["images"]) == 1 and j["images"][0].endswith(".glb") and "/3D/" in j["images"][0], j
@@ -96,7 +97,7 @@ assert not cls("Trellis2UpsampleStage") and not cls("RemeshMesh") and cls("Decim
 ok("build options: 512 skips upsample, remesh off, invalid faces/tex fall back")
 # Pixal3D 멀티뷰
 touch("diffusion_models/pixal3d_multiview_int8_convrot.safetensors", "clip_vision/dino_v3_L_naf_fp32.safetensors")
-j = job({"kind": "m3d", "op": "build", "id": sid, "sides": ["left", "back", "right"], "blender": False}); assert j["state"] == "done" and not j.get("warn"), j
+j = job({"kind": "m3d", "op": "build", "id": sid, "sides": ["left", "back", "right"], "blender": False}); assert j["state"] == "done" and not [w for w in j.get("warn", []) if "업스케일로 키워" not in w], j
 pc = cls("Pixal3DMultiViewConditioning"); assert pc and set(pc[0]) >= {"front", "left", "back"} and "right" not in pc[0] and len(cls("LoadImage")) == 3
 assert not cls("ImageCropToMask") and all(node(pc[0][k]) == "LoadImage" for k in ("front", "left", "back"))     # 허브가 같은 배율로 맞춰 넣어요
 assert cls("UNETLoader")[0]["unet_name"].startswith("pixal3d") and cls("CLIPVisionLoader")[0]["clip_name"] == "dino_v3_L_naf_fp32.safetensors"
@@ -115,7 +116,7 @@ ok("no Blender → GLB only with a hint; auto install is Windows-only")
 fb = BASE + "/test/fake_blender.py"; os.chmod(fb, 0o755); os.environ["BLENDER_EXE"] = fb
 st = get("/api/blender"); assert st["installed"] and st["version"] == "4.5.15" and post("/api/blender/check", {})["ok"]
 j = job({"kind": "m3d", "op": "build", "id": sid, "sides": [], "blender": "on", "height": "1.8", "rotate": "450", "lods": True, "fmt_glb": True, "fmt_fbx": True, "fmt_obj": True})
-assert j["state"] == "done" and not j.get("warn"), j
+assert j["state"] == "done" and not [w for w in j.get("warn", []) if "업스케일로 키워" not in w], j
 glb, z = j["images"]; assert glb.endswith(".glb") and z.endswith(".zip") and "-m3d-" in z
 assert urllib.request.urlopen(B + glb).read().endswith(b"LOD0")
 names = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(B + z).read())).namelist()
@@ -135,7 +136,7 @@ os.remove("/tmp/claude-0/fail_bl")
 ok("Blender failure → reason shown, ComfyUI GLB still saved")
 # 이미지 기능 메뉴 '사진 → 3D 모델'(한 번에, Blender 없이)
 j = job({"kind": "feat", "feature": "img3d", "image": rgba(), "quality": "high", "faces": "5000"}); assert j["state"] == "done" and len(j["images"]) == 1 and j["images"][0].endswith(".glb") and "-m3d-" in j["images"][0], j
-assert cls("Trellis2UpsampleStage")[0]["target_resolution"] == 1536 and cls("DecimateMesh")[0]["target_face_count"] == 5000 and not j.get("warn")
+assert cls("Trellis2UpsampleStage")[0]["target_resolution"] == 1536 and cls("DecimateMesh")[0]["target_face_count"] == 5000 and not [w for w in j.get("warn", []) if "업스케일로 키워" not in w]
 ok("feature menu photo → 3D: one-shot TRELLIS.2, no Blender")
 # 지우기
 r = post("/api/m3d/delete", {"id": sid}); assert all(x["id"] != sid for x in r["items"]) and not (hub.M3D_DIR / sid).exists()

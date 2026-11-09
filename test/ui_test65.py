@@ -1,6 +1,6 @@
 """4.1 화면: 3D 만들기 — 방향 약속 안내, 맞지 않는 방향 그림 표시(체크 풀림), T자 자세로 바꾸기·원래 자세로, 뼈대 넣기 → 뼈대 정보·움직임 미리보기."""
 import os as _os; BASE = _os.environ.get("LAS_BASE") or _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))  # 저장소 맨 위 폴더
-import os, sys
+import os, sys, json
 os.environ["TEST_HUB_PORT"] = "17964"
 sys.path.insert(0, BASE + "/test")
 from mocks import *
@@ -37,6 +37,13 @@ with sync_playwright() as p:
     assert pg.locator("#m3-slots input[data-use]:checked").count() == 0 and "체크를 풀어" in pg.inner_text("#m3-st")
     assert "달라" in (pg.get_attribute("#m3-slots [data-side=back] .m3-sus", "title") or "")
     ok("generated views that don't match the front are flagged and left unchecked")
+    # 4.3: 권장 크기 표시 · 방향 하나만 그리기 · 엔진 칸 · 종류별 기본값
+    t = pg.inner_text(".m3-size"); assert "권장 1024px" in t, t
+    assert pg.locator("#m3-slots [data-slotdraw]").count() == 3 and pg.input_value("#m3-engine") == "auto" and pg.is_visible("#m3-engnote")
+    assert pg.input_value("#m3-tex") == "4096" and pg.input_value("#m3-res") == "1024"          # 캐릭터 · 테스트 GPU 12GB
+    n0 = len(SUBMITTED); pg.click("#m3-slots [data-slotdraw=left]"); pg.wait_for_function("M3.job!==null", timeout=10000); pg.wait_for_function("M3.job===null", timeout=30000)
+    assert len(SUBMITTED) == n0 + 1 and "left side" in json.dumps(SUBMITTED[-1])
+    ok("size vs recommended shown, per-side [그리기] draws only that side, engine picker, character defaults (texture 4096)")
     pg.click("#m3-tpose"); pg.wait_for_selector("#m3-tundo:not([hidden])", timeout=30000)
     assert any("T-pose" in str(v["inputs"].get("prompt", "")) + str(v["inputs"].get("text", "")) for v in SUBMITTED[-1].values())
     pg.click("#m3-tundo"); pg.wait_for_selector("#m3-tundo[hidden]", state="attached", timeout=5000)
@@ -48,6 +55,8 @@ with sync_playwright() as p:
     assert "rig_preview.glb" in pg.get_attribute("#m3-mv", "src") and pg.get_attribute("#m3-mv", "autoplay") is not None and pg.inner_text("#m3-move") == "움직임 끄기"
     pg.evaluate("document.querySelector('#m3-mv').dispatchEvent(new Event('load'))"); assert pg.evaluate("window.__played") == 1
     pg.click("#m3-move"); assert pg.get_attribute("#m3-mv", "src") == glb and pg.get_attribute("#m3-mv", "autoplay") is None
+    pg.evaluate("window.__fs=0;HTMLElement.prototype.requestFullscreen=function(){window.__fs++;return Promise.resolve()}")
+    pg.click("#m3-full"); pg.wait_for_timeout(200); assert pg.evaluate("window.__fs") >= 1, pg.evaluate("[window.__fs, typeof document.querySelector('#m3-mv').requestFullscreen, document.querySelector('#toast')?.innerText]")
     ok("build with rig → bone info, motion preview toggles the viewer and plays")
     pg.select_option("#m3-kind", "object"); pg.click("#m3-go"); pg.wait_for_function("document.querySelector('#m3-mv') && !document.querySelector('.m3-rig')", timeout=30000)
     assert pg.locator("#m3-move").count() == 0

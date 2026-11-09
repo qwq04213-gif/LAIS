@@ -40,8 +40,23 @@ def trellis_files(multiview=False):
             "tvae": next((n for n in va if "trellis_2_texture_vae" in low(n)), None)}
 
 
+def pixal_files():
+    """Pixal3D(사진 한 장) 파일 — moge(화각 어림)는 없으면 기본 화각으로 만들어요."""
+    dm, cv, va, ge = files("diffusion_models"), files("clip_vision"), files("vae"), files("geometry_estimation")
+    low = str.lower
+    return {"model": min((n for n in dm if "pixal3d" in low(n) and "multiview" not in low(n)), key=lambda n: ("int8" not in low(n), n), default=None),
+            "dino": next((n for n in cv if "dino_v3_l_naf" in low(n)), None),
+            "svae": next((n for n in va if "trellis_2_shape_vae" in low(n)), None), "tvae": next((n for n in va if "trellis_2_texture_vae" in low(n)), None),
+            "moge": next((n for n in ge if "moge" in low(n)), None)}
+
+
+def pixal_ready():
+    f = pixal_files()
+    return all(v for k, v in f.items() if k != "moge")
+
+
 def m3d_ready():
-    return {"trellis": all(trellis_files().values()), "multiview": all(trellis_files(True).values())}
+    return {"trellis": all(trellis_files().values()), "multiview": all(trellis_files(True).values()), "pixal": pixal_ready()}
 
 
 def wf_fit(g, notes=None):
@@ -161,8 +176,9 @@ def m3d_analyze(rgba):
         out.append({"level": "bad", "text": "물체가 사진 가장자리에서 잘린 것 같아요. 잘린 부분은 AI 가 지어내요 — 물체 전체가 나온 사진이 좋아요."})
     if area < 0.12:
         out.append({"level": "warn", "text": "물체가 사진에서 작게 나왔어요. 크게 나온 사진일수록 세밀해요."})
-    if side < 384:
-        out.append({"level": "warn", "text": f"물체 부분이 {side}px 로 작아요. 1024px 이상이면 좋아요(업스케일로 키워도 돼요)."})
+    long = max(x1 - x0 + 1, y1 - y0 + 1)
+    if long < M3D_SMALL:
+        out.append({"level": "warn", "text": f"물체 부분이 {long}px 로 작아요. 권장은 {M3D_GOOD}px 이상이에요 — [업스케일로 키우기]를 누르거나, 만들 때 자동으로 키워요."})
     if sharp < 30:
         out.append({"level": "warn", "text": "사진이 흐려 보여요. 무늬·글자 같은 텍스처가 뭉개질 수 있어요."})
     pieces = 0
@@ -189,7 +205,8 @@ def m3d_analyze(rgba):
         out.append({"level": "warn", "text": f"물체가 {pieces}개로 떨어져 보여요. 한 번에 한 물체만 만들 때 가장 잘 돼요."})
     if not out:
         out.append({"level": "ok", "text": "좋아요 — 물체가 잘 보이고 크기도 충분해요."})
-    return out, {"w": W, "h": H, "box": [int(x0), int(y0), int(x1), int(y1)], "area": round(float(area), 3), "sharp": round(sharp, 1), "pieces": pieces}
+    return out, {"w": W, "h": H, "box": [int(x0), int(y0), int(x1), int(y1)], "area": round(float(area), 3), "sharp": round(sharp, 1), "pieces": pieces,
+                 "long": int(long), "good": M3D_GOOD}
 
 
 def _sil(im, mirror=False, size=(48, 96)):
@@ -336,7 +353,7 @@ def m3d_scene(p, J):
     if not objs:
         raise ValueError("장면에 넣을 물체를 먼저 골라 주세요(원본 사진에서 물체를 눌러요).")
     o = m3d_opts(p, {**m, "kind": "object"})
-    f, _ = m3d_need(False, J)
+    f, _ = m3d_need(False, J, m3d_engine(p))
     orig = Image.open(d / "orig.png").convert("RGB")
     dep, _how, _node = get_depth({}, J, orig)
     D = np.asarray(dep.convert("L").resize(orig.size), dtype=np.float32) / 255
@@ -366,7 +383,7 @@ def m3d_scene(p, J):
             "axes": "x 오른쪽 · y 앞쪽(카메라에서 멀어짐) · z 위 (Blender 기준), 위치는 물체 바닥 가운데",
             "objects": [{"name": pt["name"], "file": pt["name"] + ".glb", "pos": pt["pos"], "height": pt["height"], "size_m": inf["size_m"],
                          "tris": inf["tris"]} for pt, inf in zip(parts, info)]}
-    base_info = {"kind": "3d", "engine": "TRELLIS.2 장면", "objects": len(parts), "res": o["res"], "faces": o["faces"], "tex": o["tex"],
+    base_info = {"kind": "3d", "engine": ("Pixal3D" if f.get("pixal") else "TRELLIS.2") + " 장면", "objects": len(parts), "res": o["res"], "faces": o["faces"], "tex": o["tex"],
                  "seed": seed, "name": m["name"], "_sub": M3D_SUB, "fill": fill}
     work = d / f"scene_{uuid.uuid4().hex[:6]}"
     (work / "pack").mkdir(parents=True, exist_ok=True)
@@ -483,6 +500,7 @@ def m3d_views(p, J):
     bg.save(b, "PNG")
     src = "data:image/png;base64," + base64.b64encode(b.getvalue()).decode()
     what = {"character": "character", "big": "object"}.get(m.get("kind"), "object")
+    items = []
     for i, s in enumerate(sides):
         check_cancel(J)
         J["msg"], J["progress"] = f"{M3D_SIDE_KO[s]} 모습 그리는 중 ({i + 1}/{len(sides)})", i / len(sides)
@@ -490,14 +508,16 @@ def m3d_views(p, J):
                 "Keep exactly the same design, shape, proportions, colors, materials and details, and exactly the same pose as the reference — do not move the arms, legs or head. "
                 "Full body / whole object in frame, same height and scale as the reference, plain pure white background, soft even studio lighting, no shadow.")
         res = do_edit({"kind": "edit", "engine": "qwen", "image": src, "prompt": text, "seed": seed_of(p) + i, "fast": p.get("fast") or "", "translate": ""}, J)
-        m3d_cut(res[0][0].convert("RGB"), J).save(d / f"view_{s}.png")
+        cut = m3d_cut(res[0][0].convert("RGB"), J)
+        cut.save(d / f"view_{s}.png")
+        items.append((cut, {"kind": "m3d-view", "prompt": text, "side": s, "name": m["name"], "_sub": M3D_SUB}, None))      # 결과 폴더(3D)에도 남겨요
     m["views_made"] = sorted(set(m.get("views_made", [])) | set(sides))
     m3d_save_meta(sid, m)
     J["m3d"] = m3d_view(sid)
     bad = [M3D_SIDE_KO[k] for k, v in J["m3d"]["vcheck"].items() if not v["ok"]]
     J["msg"] = ("여러 방향 그림을 만들었어요. " + (f"{'·'.join(bad)} 그림은 앞 사진과 잘 맞지 않아 체크를 풀어 뒀어요(다시 그리거나 내 사진으로 바꿀 수 있어요)."
                                                  if bad else "모양이 앞 사진과 다르면 체크를 풀고 3D 를 만들어 주세요."))
-    return []
+    return items
 
 
 M3D_TPOSE = ("Make the same character stand in a T-pose: both arms stretched straight out horizontally to the sides, palms facing down, "
@@ -527,6 +547,30 @@ def m3d_tpose(p, J):
     J["m3d"] = m3d_view(sid)
     made = [s for s in M3D_SIDES if (d / f"view_{s}.png").is_file()]
     J["msg"] = "T자 자세로 바꿨어요." + (" 방향 그림은 예전 자세라서 다시 그리거나 체크를 풀어 주세요." if made else "")
+    return [(cut, {"kind": "m3d-tpose", "prompt": M3D_TPOSE, "name": m["name"], "_sub": M3D_SUB}, None)]
+
+
+def m3d_enlarge_op(p, J):
+    """[업스케일로 키우기]: 방향 칸의 그림을 권장 크기(물체 부분 1024px)로 키워요."""
+    sid, s = p.get("id"), p.get("side") or "front"
+    if s not in ("front",) + M3D_SIDES:
+        raise ValueError("알 수 없는 방향이에요.")
+    d = m3d_dir(sid)
+    f = d / f"view_{s}.png"
+    if not f.is_file():
+        raise ValueError("그 방향에 그림이 없어요.")
+    if not m3d_upscaler():
+        raise RuntimeError("업스케일 모델이 없어요. '설치와 모델'에서 SeedVR2 또는 Real-ESRGAN 을 설치해 주세요.")
+    img, k = m3d_enlarge(Image.open(f).convert("RGBA"), J, force=True)
+    if not k:
+        J["m3d"], J["msg"] = m3d_view(sid), "이미 충분히 커요(물체 부분 1024px 이상)."
+        return []
+    img.save(f)
+    if s == "front":
+        m = m3d_meta(sid)
+        m["checks"], m["stats"] = m3d_analyze(img)
+        m3d_save_meta(sid, m)
+    J["m3d"], J["msg"] = m3d_view(sid), f"{M3D_SIDE_KO[s]} 그림을 {k:g}배 키웠어요."
     return []
 
 
@@ -582,25 +626,87 @@ def m3d_opts(p, m):
             "rig": flag(p, "rig", m.get("kind") == "character")}
 
 
-def m3d_need(mv, J):
-    """만들 수 있는지 확인: 모델 파일·ComfyUI 노드. 멀티뷰 모델이 없으면 한 장으로 바꿔요 → (파일, 멀티뷰 여부)"""
+def m3d_engine(p):
+    """사진 한 장일 때 엔진: auto(Pixal3D 가 있으면 Pixal3D) / pixal / trellis → 'pixal' 또는 'trellis'"""
+    e = p.get("engine3") if p.get("engine3") in ("pixal", "trellis") else "auto"
+    if e == "pixal" or (e == "auto" and pixal_ready()):
+        return "pixal"
+    return "trellis"
+
+
+def m3d_need(mv, J, engine="trellis"):
+    """만들 수 있는지 확인: 모델 파일·ComfyUI 노드. 멀티뷰 모델이 없으면 한 장으로 바꿔요 → (파일, 멀티뷰 여부)
+    engine='pixal' 이면 사진 한 장을 Pixal3D(픽셀 정렬)로 — 파일에 'pixal': True 가 붙어요(없으면 TRELLIS.2 로)."""
+    nodes = caps()["nodes"]
     f = trellis_files(mv)
     if mv and not all(f.values()):
         warn(J, "여러 방향으로 만들려면 'Pixal3D 멀티뷰' 모델이 필요해요. 이번엔 앞 사진 한 장으로 만들었어요.")
         mv = False
         f = trellis_files(False)
-    if not all(f.values()):
+    pixal = False
+    if not mv and engine == "pixal":
+        if pixal_ready() and (not nodes or "Pixal3DConditioning" in nodes):
+            f, pixal = {**pixal_files(), "pixal": True}, True
+            if not f["moge"] or (nodes and "MoGeInference" not in nodes):
+                warn(J, "화각 어림 모델(MoGe)이 없어 기본 화각으로 만들었어요. '설치와 모델'에서 'Pixal3D'를 다시 설치하면 함께 받아요.")
+                f["moge"] = None
+        elif pixal_ready():
+            warn(J, "이 ComfyUI 에는 Pixal3D 노드가 없어 TRELLIS.2 로 만들었어요. ComfyUI 를 업데이트하면 Pixal3D 로 만들어요.")
+        elif all(f.values()):
+            warn(J, "Pixal3D 가 아직 없어 TRELLIS.2 로 만들었어요. 사진에 더 충실하게 만들려면 '설치와 모델'에서 'Pixal3D'를 받아 주세요.")
+        else:
+            raise RuntimeError("없는 파일: Pixal3D 모델. '설치와 모델' 탭의 3D 분류에서 'Pixal3D'를 설치해 주세요.")
+    if not pixal and not all(f.values()):
         names = {"model": "TRELLIS.2 모델", "dino": "DINOv3 이미지 인코더", "svae": "모양 VAE", "tvae": "텍스처 VAE"}
         raise RuntimeError("없는 파일: " + ", ".join(names[k] for k, v in f.items() if not v) + ". '설치와 모델' 탭의 3D 분류에서 'TRELLIS.2' 를 설치해 주세요.")
-    need = ["Trellis2Conditioning", "Trellis2ShapeStage", "VaeDecodeShapeTrellis", "BakeTextureFromVoxel", "SaveGLB"] + (["Pixal3DMultiViewConditioning"] if mv else [])
-    miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
+    need = ["Trellis2ShapeStage", "VaeDecodeShapeTrellis", "BakeTextureFromVoxel", "SaveGLB"] + \
+        (["Pixal3DMultiViewConditioning"] if mv else ["Pixal3DConditioning"] if pixal else ["Trellis2Conditioning"])
+    miss = [n for n in need if nodes and n not in nodes]
     if miss:
         raise RuntimeError("이 ComfyUI 에는 3D 노드(" + ", ".join(miss) + ")가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
     return f, mv
 
 
+M3D_GOOD = 1024                                     # 3D 모델이 보는 크기(물체 부분 긴 변) — 이만큼이면 충분해요
+M3D_SMALL = 768                                     # 이보다 작으면 만들기 전에 키워요
+
+
+def m3d_upscaler():
+    """작은 사진을 키울 업스케일 모델: SeedVR2(복원까지) → 일반 업스케일 모델. 없으면 None."""
+    sv = seedvr_names()
+    return sv[0] if sv else (files("upscale_models") or [None])[0]
+
+
+def m3d_enlarge(img, J, target=M3D_GOOD, force=False):
+    """물체 부분이 작으면(긴 변 768px 미만) 업스케일 모델로 키워요(배경 투명도는 그대로 늘려요). → (그림, 키운 배율 또는 0)"""
+    box = img.getchannel("A").point(lambda v: 255 if v > 127 else 0).getbbox() if img.mode == "RGBA" else (0, 0, img.width, img.height)
+    if not box:
+        return img, 0
+    side = max(box[2] - box[0], box[3] - box[1])
+    if side >= (target if force else M3D_SMALL):
+        return img, 0
+    model = m3d_upscaler()
+    if not model:
+        warn(J, f"물체 부분이 {side}px 로 작아요. '설치와 모델'에서 업스케일 모델(SeedVR2 또는 Real-ESRGAN)을 받으면 키워서 더 세밀하게 만들어요.")
+        return img, 0
+    pad = round(side * 0.08)
+    c = img.crop((max(0, box[0] - pad), max(0, box[1] - pad), min(img.width, box[2] + pad), min(img.height, box[3] + pad)))
+    k = round(min(4.0, target / side), 2)
+    J["msg"] = f"사진이 작아서 키우는 중 ({side}px → 약 {round(side * k)}px)"
+    big = upscale(c.convert("RGB"), J, model, k).convert("RGBA")
+    big.putalpha(c.getchannel("A").resize(big.size, RS.LANCZOS))
+    return big, k
+
+
 def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     """사진(배경 지운 RGBA, {방향: 그림}) → ComfyUI TRELLIS.2/Pixal3D → 텍스처 입힌 GLB 바이트."""
+    grown = []
+    for sd in list(imgs):                              # 물체가 작게 나온 사진은 먼저 키워요(3D 모델은 물체를 1024px 로 봐요)
+        imgs[sd], k = m3d_enlarge(imgs[sd], J)
+        if k:
+            grown.append(f"{M3D_SIDE_KO.get(sd, sd)} {k:g}배")
+    if grown:
+        warn(J, "물체 부분이 작아서 업스케일로 키워 만들었어요(" + ", ".join(grown) + ").")
     if mv:                                              # 멀티뷰: 모든 방향을 같은 배율로 맞춰서 넣어요
         fr = m3d_frame(imgs)
         views = {sd: put_input(fr[sd], J) for sd in imgs}
@@ -609,7 +715,8 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     # 단계 수(구조, 모양 512, 재질, 모양 올려 그리기)·cfg — 원본 TRELLIS.2 기본값
     nodes = caps()["nodes"]
     co = not nodes or "CFGOverride" in nodes
-    q = {"files": f, "views": views, "multiview": mv, "framed": mv, "seed": seed, "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
+    q = {"files": f, "views": views, "multiview": mv, "pixal1": bool(f.get("pixal")) and not mv, "moge": f.get("moge"), "framed": mv, "seed": seed,
+         "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
          "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"], "cfg_override": co}
     if not co:
         warn(J, "이 ComfyUI 에는 CFGOverride 노드가 없어서 원본 설정 일부(앞쪽 단계에만 가이드 걸기) 없이 만들었어요. "
@@ -636,7 +743,7 @@ def m3d_build(p, J):
     o = m3d_opts(p, m)
     use = [s for s in M3D_SIDES if s in (p.get("sides") or []) and (d / f"view_{s}.png").is_file()]
     mv = bool(use)
-    f, mv = m3d_need(mv, J)
+    f, mv = m3d_need(mv, J, m3d_engine(p))
     if not mv:
         use = []
     imgs = {"front": Image.open(d / "view_front.png").convert("RGBA")}
@@ -644,7 +751,7 @@ def m3d_build(p, J):
         imgs[sd] = Image.open(d / f"view_{sd}.png").convert("RGBA")
     q = {"seed": seed_of(p)}
     glb = m3d_glb(imgs, mv, f, o, q["seed"], J)
-    base_info = {"kind": "3d", "engine": "Pixal3D 멀티뷰" if mv else "TRELLIS.2", "views": ["front"] + use, "res": o["res"], "faces": o["faces"],
+    base_info = {"kind": "3d", "engine": "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2", "views": ["front"] + use, "res": o["res"], "faces": o["faces"],
                  "tex": o["tex"], "seed": q["seed"], "name": m["name"], "_sub": M3D_SUB}
     items = []
     if o["blender"] and blender3d.exe(ROOT):
@@ -707,7 +814,7 @@ def m3d_quick(img, p, J):
 
 
 def do_m3d(p, J):
-    fn = {"prep": m3d_prep, "views": m3d_views, "tpose": m3d_tpose, "build": m3d_build, "scene": m3d_scene}.get(p.get("op") or "")
+    fn = {"prep": m3d_prep, "views": m3d_views, "tpose": m3d_tpose, "build": m3d_build, "scene": m3d_scene, "enlarge": m3d_enlarge_op}.get(p.get("op") or "")
     if not fn:
         raise ValueError("알 수 없는 3D 작업이에요.")
     return fn(p, J)

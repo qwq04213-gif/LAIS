@@ -781,7 +781,7 @@ def wf_trellis(q):
     m_ss = [w.add("ModelSamplingSD3", model=m_ss, shift=5.0), 0]
     m_sh = [w.add("CFGOverride", model=model, cfg=1.0, start_percent=0.769, end_percent=1.0), 0] if co else model
     m_sh = [w.add("RescaleCFG", model=m_sh, multiplier=0.5), 0]
-    pad = 1.1 if q.get("multiview") else 1.0         # 노드 설명: TRELLIS.2 는 1.0, Pixal3D 는 1.1
+    pad = 1.1 if q.get("multiview") or q.get("pixal1") else 1.0     # 노드 설명: TRELLIS.2 는 1.0, Pixal3D 는 1.1
 
     def prep(name):                                   # 배경을 지운 사진 → 물체만 가운데로 잘라 정사각형(검은 배경)
         li = w.add("LoadImage", image=name)
@@ -793,6 +793,14 @@ def wf_trellis(q):
     v = q["views"]
     if q.get("multiview"):
         cond = w.add("Pixal3DMultiViewConditioning", clip_vision_model=cv, fov=20.0, **{k: prep(n) for k, n in v.items() if n})
+    elif q.get("pixal1"):                             # Pixal3D 사진 한 장(공식 예시): MoGe 로 화각 어림 → 픽셀 정렬 조건
+        img = prep(v["front"])
+        fov = 49.13
+        if q.get("moge"):
+            geo = w.add("MoGeInference", moge_model=[w.add("LoadMoGeModel", model_name=q["moge"]), 0], image=img, resolution_level=9, fov_x_degrees=0.0,
+                        batch_size=4, force_projection=True, apply_mask=True, refine_steps=3)
+            fov = [w.add("MoGeGeometryToFOV", moge_geometry=[geo, 0], axis="horizontal", unit="degrees"), 0]
+        cond = w.add("Pixal3DConditioning", clip_vision_model=cv, image=img, camera_angle_x=fov)
     else:
         cond = w.add("Trellis2Conditioning", clip_vision_model=cv, image=prep(v["front"]))
     pos, neg = [cond, 0], [cond, 1]

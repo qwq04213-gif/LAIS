@@ -91,7 +91,7 @@ txt = " ".join(str(v["inputs"].get("prompt", "")) + str(v["inputs"].get("text", 
 assert txt.count("hidden or missing part") == 2, txt[:300]
 ok("fill hidden parts: one Qwen edit per object before 3D")
 fb = BASE + "/test/fake_blender.py"; os.chmod(fb, 0o755); os.environ["BLENDER_EXE"] = fb
-j = job({"kind": "m3d", "op": "scene", "id": sid, "blender": "on", "fmt_fbx": True, "fmt_obj": True}); assert j["state"] == "done" and not j.get("warn"), j
+j = job({"kind": "m3d", "op": "scene", "id": sid, "blender": "on", "fmt_fbx": True, "fmt_obj": True}); assert j["state"] == "done" and not [w for w in j.get("warn", []) if "업스케일로 키워" not in w], j
 names = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(B + j["images"][1]).read())).namelist()
 assert {"room_장면.blend", "room_장면.fbx", "room_장면.obj", "room_장면.glb", "object_1.glb", "layout.json"} <= set(names) and "result.json" not in names, names
 assert j["m3d_stats"]["blender"]

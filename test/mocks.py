@@ -116,7 +116,7 @@ REQ.update({"LTXVDualCFGGuider": ["model", "positive", "negative", "video_cfg", 
             "VAEDecodeTiled": ["samples", "vae", "tile_size", "overlap", "temporal_size", "temporal_overlap"]})
 REQ.update({"LoadBackgroundRemovalModel": ["bg_removal_name"], "RemoveBackground": ["bg_removal_model", "image"], "MaskToImage": ["mask"]})
 REQ.update({"InvertMask": ["mask"], "ImageCropToMask": ["images", "masks"], "Trellis2Conditioning": ["clip_vision_model", "image"],
-            "Pixal3DMultiViewConditioning": ["clip_vision_model", "front"], "EmptyTrellis2LatentStructure": ["batch_size"],
+            "Pixal3DMultiViewConditioning": ["clip_vision_model", "front"], "Pixal3DConditioning": ["clip_vision_model", "image", "camera_angle_x"], "LoadMoGeModel": ["model_name"], "MoGeInference": ["moge_model", "image"], "MoGeGeometryToFOV": ["moge_geometry"], "EmptyTrellis2LatentStructure": ["batch_size"],
             "VaeDecodeStructureTrellis2": ["samples", "vae", "resolution"], "Trellis2ShapeStage": ["positive", "negative", "voxel"],
             "Trellis2UpsampleStage": ["positive", "negative", "shape_latent", "vae", "target_resolution"], "VaeDecodeShapeTrellis": ["samples", "vae"],
             "Trellis2TextureStage": ["positive", "negative", "shape_latent"], "VaeDecodeTextureTrellis": ["samples", "vae", "shape_subdivides"],

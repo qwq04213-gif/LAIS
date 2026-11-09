@@ -93,7 +93,7 @@ touch("diffusion_models/trellis_2_int8_convrot.safetensors", "clip_vision/dino_v
 assert hub.trellis_files()["dino"] == "dino_v3_L_naf_fp32.safetensors"                 # TRELLIS.2 전용 인코더가 없으면 Pixal3D 것도 써요(공식 예시와 같음)
 fb = BASE + "/test/fake_blender.py"; os.chmod(fb, 0o755); os.environ["BLENDER_EXE"] = fb
 assert hub.m3d_opts({}, {"kind": "character"})["rig"] and not hub.m3d_opts({}, {"kind": "object"})["rig"] and not hub.m3d_opts({"rig": ""}, {"kind": "character"})["rig"]
-j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "on", "rig": True, "height": "1.8"}); assert j["state"] == "done" and not j.get("warn"), j
+j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "on", "rig": True, "height": "1.8"}); assert j["state"] == "done" and not [w for w in j.get("warn", []) if "업스케일로 키워" not in w], j
 rg = j["m3d_stats"]["rig"]; assert rg["bones"] == 22 and rg["pose"] == "T" and rg["legs"] and rg["fixed"] == 12, rg
 assert rg["preview"].startswith(f"/m3d/{sid}/rig_preview.glb") and urllib.request.urlopen(B + rg["preview"]).read().endswith(b"RIGPREVIEW")
 z = [u for u in j["images"] if u.endswith(".zip")][0]
