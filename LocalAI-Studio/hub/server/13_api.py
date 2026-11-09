@@ -189,7 +189,7 @@ def superseded_remove(p):
     """예전 모델 지우기(사용자가 확인한 뒤에만 불려요). {id} 하나 또는 {all: 1, ids: [...]}(화면에 보인 것만)."""
     ids = [str(x) for x in (p.get("ids") or [])] if p.get("all") else [str(p.get("id") or "")]
     allowed = {x["id"] for x in catalog()["superseded"]}
-    done, errs = [], []
+    done, errs, freed, pending = [], [], 0, 0
     for i in ids:
         if i not in allowed:
             errs.append(f"{i}: 지울 수 있는 예전 모델이 아니에요")
@@ -197,15 +197,18 @@ def superseded_remove(p):
         if i.startswith("rmbg:"):
             f = MODELS / "rmbg" / bgremove.MODELS[i[5:]]["file"]
             try:
-                f.unlink()
                 RM["engine"] = None
+                sz = fsize(f)
+                f.unlink()
+                freed += sz
                 done.append(i)
             except OSError as e:
                 errs.append(f"{f.name}: {e.strerror or e}")
             continue
         r = catalog_remove({"id": i})
         (errs.append(f"{i}: {r['error']}") if r.get("error") else done.append(i))
-    return {"ok": not errs, "removed": done, **({"error": "일부를 지우지 못했어요: " + "; ".join(errs)} if errs else {})}
+        freed, pending = freed + (r.get("freed") or 0), pending + (r.get("pending") or 0)
+    return {"ok": not errs, "removed": done, "freed": freed, "pending": pending, **({"error": "일부를 지우지 못했어요: " + "; ".join(errs)} if errs else {})}
 
 
 def cat_of(m):
@@ -234,23 +237,12 @@ def catalog_remove(p):
     for o in CATALOG["image"]:
         if o["id"] != mid and img_installed(o):
             shared |= mine & {(f["dir"], cat_name(f)) for f in o["files"]}
-    gone, kept, errs = [], [], []
-    for d, n in sorted(mine):
-        f = MODELS / d / n
-        if not f.is_file():
-            continue
-        if (d, n) in shared:
-            kept.append(n)
-            continue
-        try:
-            f.unlink()
-            gone.append(n)
-        except OSError as e:
-            errs.append(f"{n}: {e.strerror or e}")
+    kept = [n for d, n in sorted(mine) if (d, n) in shared and (MODELS / d / n).is_file()]
+    gone, errs, size, pending = delete_files([MODELS / d / n for d, n in sorted(mine) if (d, n) not in shared])
     _LC["key"] = None
     if errs:
         return {"error": "일부를 지우지 못했어요(ComfyUI 가 쓰는 중일 수 있어요): " + "; ".join(errs), "removed": gone, "kept": kept}
-    return {"ok": True, "removed": gone, "kept": kept}
+    return {"ok": True, "removed": gone, "kept": kept, "freed": size - pending, "pending": pending}
 
 
 # ───────────────────────── 내 PC 점검 (기능별로 빠진 부품 찾기) ─────────────────────────

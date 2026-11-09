@@ -280,6 +280,8 @@ class Ollama(BaseHTTPRequestHandler):
     def do_DELETE(self):
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
         STATE["ollama_deleted"].append(body.get("model"))
+        mf = (STATE.get("ollama_manifest") or {}).pop(body.get("model"), None)       # 진짜 Ollama 처럼 목록 파일은 지우고, 조각(blob)은 테스트가 정한 대로 남겨요
+        if mf: Path(mf).unlink()
         if body.get("model") in STATE.get("ollama_extra", []): STATE["ollama_extra"].remove(body.get("model"))
         self.j({})
     def do_POST(self):

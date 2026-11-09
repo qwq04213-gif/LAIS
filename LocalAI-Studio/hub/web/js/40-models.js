@@ -78,7 +78,7 @@ document.addEventListener('click',async e=>{const one=e.target.closest('.old-del
   if(!confirm(one?`'${one.dataset.n}' 을(를) 지울까요?\n새 엔진이 이 역할을 대신해요. 다른 모델이 같이 쓰는 공용 파일은 남겨요. 다시 쓰려면 새로 받아야 해요.`
     :`예전 모델 ${ids.length}개를 모두 지울까요?\n새 엔진이 이 역할들을 대신해요. 공용 파일은 남겨요. 다시 쓰려면 새로 받아야 해요.`))return;
   (one||all).disabled=true;let r;try{r=await api('/api/superseded/remove',one?{id:one.dataset.id}:{all:1,ids})}catch{r={error:'지우지 못했어요.'}}
-  toast(r.error||`예전 모델 ${(r.removed||[]).length}개를 지웠어요.`,6000);loadSetup();loadLists(true)});
+  toast(r.error||`예전 모델 ${(r.removed||[]).length}개를 지웠어요.`+freedTxt(r),6000);loadSetup();loadLists(true);freedCheck(r)});
 function tierPick(gb){const t=TIERS.find(x=>x.gb===gb);if(!t)return;const ids=new Set(Object.values(t.rows).flatMap(r=>r[0]));
   $$('#v-setup .item input').forEach(i=>{i.checked=!i.disabled&&ids.has(i.value)});selSummary();
   const n=$$('#v-setup .item input:checked').length;toast(n?`${gb}GB 구성에서 아직 없는 ${n}개를 골랐어요. [선택한 항목 설치]를 누르면 받아요.`:`${gb}GB 구성은 이미 모두 설치돼 있어요.`,6000)}
@@ -101,6 +101,11 @@ async function refreshModels(){
   b.forEach(x=>x.disabled=false)}
 document.addEventListener('click',e=>{if(e.target.closest('.refresh-models,#refresh-models,#refresh-models2'))refreshModels()});
 const fmtSize=b=>b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(0)+' MB';
+/* 모델을 지운 뒤: 비운 용량을 알려 주고, 이미지 엔진이 아직 파일을 잡고 있어 용량이 안 줄었으면 엔진 다시 시작을 권해요 */
+const freedTxt=r=>r&&r.freed>0?` (${fmtSize(r.freed)} 비웠어요)`:'';
+async function freedCheck(r){if(!r||!(r.pending>0))return;
+  if(!confirm(`지웠지만 이미지 엔진이 아직 파일을 잡고 있어서 ${fmtSize(r.pending)}가 아직 비워지지 않았어요.\n이미지 엔진을 다시 시작하면 바로 비워져요. 지금 다시 시작할까요?`))return;
+  const x=await api('/api/engine/restart',{});toast(x.error||'이미지 엔진을 다시 시작했어요. 용량이 곧 줄어들어요.',6000);setTimeout(()=>{if($('#disk')?.innerHTML)diskScan()},8000)}
 const DIRN={checkpoints:'체크포인트',loras:'LoRA',embeddings:'임베딩',controlnet:'ControlNet',vae:'VAE',upscale_models:'업스케일',diffusion_models:'디퓨전 모델',text_encoders:'텍스트 인코더',clip_vision:'CLIP Vision',style_models:'스타일 모델',unet:'UNet',clip:'CLIP'};
 async function loadManage(){
   let m;try{m=await api('/api/manage')}catch{return}
@@ -133,6 +138,7 @@ async function diskScan(){
    <table class="disktb"><tbody>${big1.map(row).join('')}${smallRow}<tr class="total"><td><b>합계</b></td><td class="num"><b>${gb(r.listed)}</b></td><td></td><td></td></tr></tbody></table>
    ${outs?`<h4>프로그램 폴더 밖에 있는 모델 폴더</h4><table class="disktb"><tbody>${outs}</tbody></table>`:''}
    ${ext?`<h4>프로그램 폴더 밖의 캐시 <small class="mute">합계 ${gb(r.ext_total)} · 위 합계에는 들어 있지 않아요</small></h4><p class="hint plain">다른 프로그램이나 파이썬이 컴퓨터 곳곳에 만들어 둔 캐시예요. 폴더가 안 보이면 [폴더 열기]를 누르세요(숨김·점(.)으로 시작하는 폴더는 윈도우 검색에 안 나와요).</p><table class="disktb"><tbody>${ext}</tbody></table>`:''}
+   ${r.llm_left&&r.llm_left.n?`<p class="warn">대화 모델이 남긴 조각이 ${r.llm_left.n}개(${gb(r.llm_left.bytes)}) 있어요 — 어떤 대화 모델도 쓰지 않는 파일(지운 모델의 남은 부분, 받다 만 부분)이에요. <button type="button" class="ghost cl" data-w="llm_orphans">남은 조각 지우기</button></p>`:''}
    ${r.parts.length?`<p class="warn">받다 만 파일이 ${r.parts.length}개(${gb(r.parts.reduce((a,f)=>a+f.size,0))}) 있어요. <button type="button" class="ghost cl" data-w="parts">받다 만 파일 지우기</button></p>`:''}
    ${dup?`<h4>같은 내용으로 보이는 파일 (둘 중 하나만 있어도 돼요)</h4><ul class="duplist">${dup}</ul>`:''}
    <h4>용량이 큰 모델 파일 순서</h4><table class="disktb"><tbody>${big}</tbody></table>`;
@@ -148,17 +154,18 @@ $('#tidy-scan').onclick=async()=>{const st=$('#disk-st'),T=$('#tidy');st.textCon
 $('#tidy').onchange=e=>{if(e.target.classList.contains('tk'))tidySum()};
 $('#tidy').onclick=async e=>{if(e.target.id!=='tidy-go')return;const ck=[...$$('#tidy .tk:checked')].map(c=>TIDY[+c.dataset.i]);if(!ck.length)return;
   if(!confirm(`선택한 ${ck.length}개 파일(${fmtSize(ck.reduce((a,f)=>a+f.size,0))})을 컴퓨터에서 지울까요?\n되돌릴 수 없어요.`))return;
-  e.target.disabled=true;let ok=0,bad=0;for(const f of ck){const r=await api('/api/delete',{kind:'file',dir:f.dir,name:f.name});r.error?bad++:ok++}
-  toast(`${ok}개를 지웠어요.`+(bad?` (${bad}개는 다른 프로그램이 쓰고 있어서 못 지웠어요)`:''));$('#tidy-scan').click();diskScan();loadManage();loadLists(true)};
+  e.target.disabled=true;let ok=0,bad=0,sum={freed:0,pending:0};for(const f of ck){const r=await api('/api/delete',{kind:'file',dir:f.dir,name:f.name});r.error?bad++:ok++;sum.freed+=r.freed||0;sum.pending+=r.pending||0}
+  toast(`${ok}개를 지웠어요.`+freedTxt(sum)+(bad?` (${bad}개는 다른 프로그램이 쓰고 있어서 못 지웠어요)`:''));freedCheck(sum);$('#tidy-scan').click();diskScan();loadManage();loadLists(true)};
 $('#disk').onclick=async e=>{
   const op=e.target.closest('.op');if(op){const r=await api('/api/disk/open',{key:op.dataset.k});toast(r.error||'폴더를 열었어요: '+r.path,5000);return}
   const c=e.target.closest('.cl');if(c){if((c.dataset.ext||c.dataset.w==='cache_in')&&!confirm('이 캐시를 모두 지울까요?\n다른 프로그램이 다시 받아야 할 수 있어서 처음 쓸 때 시간이 걸려요. 되돌릴 수 없어요.'))return;
     const ask={vrestore:'영상 복원 작업 파일을 지울까요?\n결과물은 그대로예요. 끊긴 복원을 이어서 하기만 안 돼요.',audio_work:'소리 분리 작업 파일을 지울까요?\n결과물은 그대로예요.',
+      llm_orphans:'어떤 대화 모델도 쓰지 않는 조각 파일을 지울까요?\n설치된 대화 모델은 그대로예요. 받다 멈춘 대화 모델은 처음부터 다시 받아야 해요.',
       m3d_old:'30일 넘게 손대지 않은 3D 만들기 작업(올린 사진·방향 그림)을 지울까요?\n만든 3D 파일(outputs)은 그대로예요. 되돌릴 수 없어요.'}[c.dataset.w];if(ask&&!confirm(ask))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
   const b=e.target.closest('.del');if(!b)return;
   if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;
   const r=await api('/api/delete',{kind:b.dataset.kind,dir:b.dataset.dir,name:b.dataset.name});
-  toast(r.error||'삭제했어요.');diskScan();loadManage();loadLists(true)};
+  toast(r.error||'삭제했어요.'+freedTxt(r));diskScan();loadManage();loadLists(true);freedCheck(r)};
 $('#manage').onchange=async e=>{const s=e.target.closest('.fam');if(!s)return;
   const r=await api('/api/family',{folder:s.dataset.dir,name:s.dataset.name,family:s.value});toast(r.error||'계열을 바꿨어요. 이미지 생성 탭 목록에 반영돼요.');loadManage();loadLists(true)};
 $('#manage').onclick=async e=>{
@@ -166,7 +173,7 @@ $('#manage').onclick=async e=>{
   if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;
   b.disabled=true;
   const r=await api('/api/delete',{kind:b.dataset.kind,dir:b.dataset.dir,name:b.dataset.name});
-  toast(r.error||'삭제했어요.');loadManage();loadLists(true);
+  toast(r.error||'삭제했어요.'+freedTxt(r));loadManage();loadLists(true);freedCheck(r);
 };
 
 /* ══════════ 다운로드 탭 ══════════ */
@@ -273,7 +280,7 @@ let dlBusy=false;
 document.addEventListener('click',async e=>{const b=e.target.closest('.cat-del');if(!b)return;e.preventDefault();e.stopPropagation();
   if(!confirm(`'${b.dataset.n}' 을(를) 컴퓨터에서 지울까요?${b.dataset.gb?`\n(약 ${b.dataset.gb}GB)`:''}\n다른 모델이 같이 쓰는 공용 파일은 남겨 둬요. 다시 쓰려면 새로 받아야 해요.`))return;
   b.disabled=true;let r;try{r=await api('/api/catalog/remove',{id:b.dataset.id})}catch{r={error:'지우지 못했어요.'}}
-  toast(r.error||(`지웠어요.`+((r.kept||[]).length?` 공용 파일 ${r.kept.length}개는 다른 모델이 써서 남겨 뒀어요.`:'')),6000);loadSetup();loadLists(true)});
+  toast(r.error||(`지웠어요.`+freedTxt(r)+((r.kept||[]).length?` 공용 파일 ${r.kept.length}개는 다른 모델이 써서 남겨 뒀어요.`:'')),6000);loadSetup();loadLists(true);freedCheck(r)});
 /* 음성 모델(XTTS·Chatterbox·Kokoro): 음성 만들기와 같은 설치·삭제 */
 async function catVoice(){const box=$('#cat-voice');if(!box)return;let M=[];try{M=await api('/api/tts/models')}catch{box.innerHTML='<p class="mute">읽지 못했어요.</p>';return}
   VOICE_NOW=M;const keep=new Set($$('#cat-voice .item input:checked').map(i=>i.value));

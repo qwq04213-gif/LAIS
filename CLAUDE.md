@@ -64,6 +64,7 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ### 다음 할 일
 
+0. 출시 전(4.3.1): 모델 지우기 용량 고침 — 지우기 전 엔진이 파일을 놓게 함(`delete_files`·`delete_llm`), 저장 공간 '대화 모델이 남긴 조각'(`llm_orphans`). README 변경 내역은 출시 때 넣기
 1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
 
 4.3 에서 넣은 것: 3D Pixal3D 사진 한 장 기본(`m3d_engine`, MoGe 화각)·캐릭터 텍스처 4096·16GB 이상 1536·작은 사진 자동 키우기(`m3d_enlarge`)·[업스케일로 키우기]·
