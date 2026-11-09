@@ -22,6 +22,24 @@ assert req("/api/disk/open", {"key": "x_hf"})["ok"] and opened[-1] == str(hf / "
 c = req("/api/clean", {"what": "x_hf"}); assert c["freed"] == 5000 and not any((hf / "hub").iterdir()) and (hf / "token").read_text() == "secret"; ok("cache clean empties the cache folder but never the login token")
 c = req("/api/clean", {"what": "cache"}); assert c["freed"] >= 5000 and not (hub.ROOT / "cache" / "thumbs" / "a.jpg").exists(); ok("work cache clean")
 assert req("/api/clean", {"what": "x_nothing"}).get("error"); ok("unknown clean target refused")
+# 4.3: 작업 폴더도 보이고 정리돼요(결과물은 그대로)
+import time as _t
+(hub.VR_WORK / "k1" / "chunks").mkdir(parents=True, exist_ok=True); (hub.VR_WORK / "k1" / "pre.mp4").write_bytes(b"V" * 4000); (hub.VR_WORK / "k1" / "chunks" / "c1.mp4").write_bytes(b"V" * 1000)
+hub.DEPTH_DIR.mkdir(parents=True, exist_ok=True); (hub.DEPTH_DIR / "a.png").write_bytes(b"D" * 500)
+old, new = hub.M3D_DIR / "aaaaaaaaaaaa", hub.M3D_DIR / "bbbbbbbbbbbb"
+for d in (old, new): d.mkdir(parents=True, exist_ok=True); (d / "meta.json").write_text("{}"); (d / "orig.png").write_bytes(b"P" * 800)
+for f in old.iterdir(): os.utime(f, (_t.time() - 40 * 86400,) * 2)
+(hub.COMFY / "input").mkdir(parents=True, exist_ok=True); (hub.COMFY / "input" / "hub_aaaa.mp4").write_bytes(b"M" * 900); (hub.COMFY / "input" / "mine.mp4").write_bytes(b"U" * 10)
+(hub.ROOT / "cache" / "gif_1234.gif").write_bytes(b"G" * 100)
+r = req("/api/disk"); keys = {i["key"]: i for i in r["items"]}
+assert keys["vrestore"]["bytes"] == 5000 and keys["depth"]["bytes"] == 500 and keys["m3d"]["bytes"] >= 1600 and keys["vrestore"]["clean"] == "vrestore" and keys["m3d"]["clean"] == "m3d_old"
+assert keys["cache"]["bytes"] < 5000                                   # 하위 작업 폴더는 두 번 세지 않아요
+c = req("/api/clean", {"what": "vrestore"}); assert c["freed"] == 5000 and not any(hub.VR_WORK.rglob("*.mp4"))
+c = req("/api/clean", {"what": "depth"}); assert c["freed"] == 500
+c = req("/api/clean", {"what": "m3d_old"}); assert not old.exists() and new.exists() and c["freed"] >= 800
+c = req("/api/clean", {"what": "input"}); assert not (hub.COMFY / "input" / "hub_aaaa.mp4").exists() and (hub.COMFY / "input" / "mine.mp4").exists()
+c = req("/api/clean", {"what": "cache"}); assert not (hub.ROOT / "cache" / "gif_1234.gif").exists()
+ok("work folders (video restore, depth, 3D sessions) listed separately and cleaned; only old 3D sessions; only our own temp inputs; leftover GIFs")
 # 깊은 경로(윈도우 260자 제한 대비): 접두 처리 함수가 일반 경로를 망가뜨리지 않는지
 assert hub._plain(hub._lp(str(hub.ROOT))) == os.path.abspath(str(hub.ROOT)); ok("long-path prefix helper round-trips")
 (hub.ROOT / "stray.bin").unlink()

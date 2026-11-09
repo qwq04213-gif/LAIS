@@ -116,7 +116,8 @@ async function diskScan(){
   const st=$('#disk-st');st.textContent='폴더를 훑는 중이에요… (몇 초에서 1분쯤 걸려요)';$('#disk-scan').disabled=true;
   let r;try{r=await api('/api/disk')}catch{st.textContent='확인하지 못했어요.';$('#disk-scan').disabled=false;return}
   $('#disk-scan').disabled=false;st.textContent='';
-  const gb=fmtSize,CL={temp:'임시 미리보기 지우기',input:'임시 입력 이미지 지우기',backup:'오래된 백업 지우기',logs:'로그 줄이기',cache:'작업용 캐시 지우기',x_hf:'캐시 지우기',x_torch:'캐시 지우기',x_pip:'캐시 지우기',x_pip2:'캐시 지우기',x_uv:'캐시 지우기',cache_in:'캐시 지우기'};
+  const gb=fmtSize,CL={temp:'임시 미리보기 지우기',input:'임시 입력 이미지 지우기',backup:'오래된 백업 지우기',logs:'로그 줄이기',cache:'작업용 캐시 지우기',x_hf:'캐시 지우기',x_torch:'캐시 지우기',x_pip:'캐시 지우기',x_pip2:'캐시 지우기',x_uv:'캐시 지우기',cache_in:'캐시 지우기',
+    vrestore:'작업 파일 지우기',audio_work:'작업 파일 지우기',depth:'저장분 지우기',m3d_old:'30일 넘은 작업 지우기'};
   const inside=r.items.filter(i=>i.inside),tot=r.used||1,big1=inside.filter(i=>i.bytes>=1e6||i.clean||i.key==='rest'),small=inside.filter(i=>!(i.bytes>=1e6||i.clean||i.key==='rest'));
   const nm=i=>i.key.startsWith('m_')&&DIRN[i.key.slice(2)]?'모델: '+DIRN[i.key.slice(2)]:i.label;
   const row=i=>`<tr><td>${esc(nm(i))}<small class="mute">${esc(i.note||'')}</small><small class="path"><code>${esc(i.path)}</code></small></td><td class="num">${gb(i.bytes)}</td><td class="bar"><i style="width:${Math.max(1,Math.round(i.bytes/tot*100))}%"></i></td><td class="act"><button type="button" class="ghost sm op" data-k="${esc(i.key)}">폴더 열기</button>${i.clean?` <button type="button" class="ghost sm cl" data-w="${i.clean}"${i.key.startsWith('x_')?' data-ext="1"':''}>${CL[i.clean]}</button>`:''}</td></tr>`;
@@ -149,7 +150,9 @@ $('#tidy').onclick=async e=>{if(e.target.id!=='tidy-go')return;const ck=[...$$('
   toast(`${ok}개를 지웠어요.`+(bad?` (${bad}개는 다른 프로그램이 쓰고 있어서 못 지웠어요)`:''));$('#tidy-scan').click();diskScan();loadManage();loadLists(true)};
 $('#disk').onclick=async e=>{
   const op=e.target.closest('.op');if(op){const r=await api('/api/disk/open',{key:op.dataset.k});toast(r.error||'폴더를 열었어요: '+r.path,5000);return}
-  const c=e.target.closest('.cl');if(c){if((c.dataset.ext||c.dataset.w==='cache_in')&&!confirm('이 캐시를 모두 지울까요?\n다른 프로그램이 다시 받아야 할 수 있어서 처음 쓸 때 시간이 걸려요. 되돌릴 수 없어요.'))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
+  const c=e.target.closest('.cl');if(c){if((c.dataset.ext||c.dataset.w==='cache_in')&&!confirm('이 캐시를 모두 지울까요?\n다른 프로그램이 다시 받아야 할 수 있어서 처음 쓸 때 시간이 걸려요. 되돌릴 수 없어요.'))return;
+    const ask={vrestore:'영상 복원 작업 파일을 지울까요?\n결과물은 그대로예요. 끊긴 복원을 이어서 하기만 안 돼요.',audio_work:'소리 분리 작업 파일을 지울까요?\n결과물은 그대로예요.',
+      m3d_old:'30일 넘게 손대지 않은 3D 만들기 작업(올린 사진·방향 그림)을 지울까요?\n만든 3D 파일(outputs)은 그대로예요. 되돌릴 수 없어요.'}[c.dataset.w];if(ask&&!confirm(ask))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
   const b=e.target.closest('.del');if(!b)return;
   if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;
   const r=await api('/api/delete',{kind:b.dataset.kind,dir:b.dataset.dir,name:b.dataset.name});

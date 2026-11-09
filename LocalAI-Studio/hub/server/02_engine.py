@@ -34,7 +34,7 @@ def tidy(logs=True, tmp=True):
                 f.replace(old)
     except OSError:
         pass
-    for folder, pat, age in (((COMFY / "input", "hub_*.png", 3600), (COMFY / "temp", "*", 2 * 86400)) if tmp else ()):
+    for folder, pat, age in (((COMFY / "input", "hub_*", 3600), (COMFY / "temp", "*", 2 * 86400), (ROOT / "cache", "gif_*.gif", 86400)) if tmp else ()):
         try:
             for f in folder.glob(pat):
                 if f.is_file() and now - f.stat().st_mtime > age:

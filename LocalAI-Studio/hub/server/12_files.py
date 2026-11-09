@@ -447,10 +447,18 @@ def disk_paths():
     rows += [("llm", "대화 모델 (Ollama)", ROOT / "models" / "llm", "쓰지 않는 대화 모델을 지우면 가장 크게 줄어요.", None, ()),
              ("outputs", "결과물 (outputs)", OUT, "직접 만든 결과물이라 자동으로 지우지 않아요. 필요 없는 건 폴더에서 직접 지워 주세요.", None, ()),
              ("temp", "임시 미리보기 (ComfyUI temp)", COMFY / "temp", "지워도 안전해요.", "temp", ()),
-             ("input", "임시 입력 이미지 (ComfyUI input)", COMFY / "input", "이 프로그램이 만든 hub_*.png 만 지워요.", "input", ()),
+             ("input", "임시 입력 파일 (ComfyUI input)", COMFY / "input", "이 프로그램이 넣은 hub_* 파일(그림·영상·소리)만 지워요.", "input", ()),
              ("backup", "업데이트 되돌리기용 백업", ROOT / "backup", "가장 최근 1개만 남기고 지워요.", "backup", ()),
              ("logs", "로그", LOGS, "지워도 안전해요.", "logs", ()),
-             ("cache", "작업용 캐시 (이 프로그램 폴더의 cache)", ROOT / "cache", "갤러리 미리보기, 내려받다 만 확장, 음성 임시 파일이에요. 지워도 다시 만들어져요.", "cache", ()),
+             ("cache", "작업용 캐시 (이 프로그램 폴더의 cache)", ROOT / "cache", "갤러리 미리보기, 내려받다 만 확장, 음성·GIF 임시 파일이에요. 지워도 다시 만들어져요.", "cache",
+              (VR_WORK, AU_WORK, DEPTH_DIR)),
+             ("vrestore", "영상 복원 작업 파일 (이어서 하기용)", VR_WORK, "끊긴 복원을 이어서 하려고 남겨 둔 중간 영상이에요. 지워도 결과물은 그대로예요(이어서 하기만 안 돼요).", "vrestore", ()),
+             ("audio_work", "소리 분리 작업 파일", AU_WORK, "소리 분리·복원의 중간 파일이에요. 지워도 결과물은 그대로예요.", "audio_work", ()),
+             ("depth", "깊이 지도 저장분", DEPTH_DIR, "같은 사진을 다시 쓸 때 빨리 하려고 둔 깊이 지도예요. 지워도 필요할 때 다시 만들어요.", "depth", ()),
+             ("m3d", "3D 만들기 작업 (사진·방향 그림)", M3D_DIR, "만든 3D 파일은 결과물(outputs)에 따로 있어요. 정리는 30일 넘게 손대지 않은 작업만 지워요.", "m3d_old", ()),
+             ("kept", "올려 둔 사진 (다시 켜도 불러오기)", KEEP_DIR, "위의 [올려 둔 사진 모두 지우기]로 지워요.", None, ()),
+             ("analysis", "영상 분석 기록", VANA_DIR, "영상 분석 화면의 이전 분석 목록에서 지울 수 있어요.", None, ()),
+             ("explore", "프롬프트 탐색 기록", EXP_DIR, "프롬프트 탐색 화면에서 지울 수 있어요.", None, ()),
              ("cache_in", "옮겨 둔 바깥 캐시 (engine\\cache)", CACHE_IN, "HuggingFace·PyTorch·pip 캐시를 이 폴더에 모아 둔 곳이에요. 지워도 다음에 필요할 때 다시 받아요.", "cache_in", ()),
              ("tts_env", "음성 모델 환경 (TTS)", ROOT / "engine" / "tts", "음성 만들기용 모델 엔진이에요. [설치한 확장·부품 관리]에서 지울 수 있어요.", None, ()),
              ("comfy_engine", "ComfyUI 엔진 (python_embeded)", HOME / "python_embeded", "엔진 본체라 지우면 안 돼요.", None, ()),
@@ -598,8 +606,10 @@ def clean_item(what):
             if f.is_file():
                 rm(f)
     elif what == "input":
-        for f in (COMFY / "input").glob("hub_*.png"):
-            rm(f)
+        busy = busy_count()
+        for f in (COMFY / "input").glob("hub_*"):
+            if f.is_file() and not (busy and time.time() - f.stat().st_mtime < 3600):      # 작업 중이면 방금 넣은 파일은 남겨요
+                rm(f)
     elif what == "logs":
         for f in LOGS.glob("*.old"):
             rm(f)
@@ -621,12 +631,33 @@ def clean_item(what):
     elif what == "cache":
         if any(t.get("state") in ("running", "queued") for t in TASKS) or busy_count():
             return {"error": "작업이 진행 중일 때는 캐시를 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
-        for sub in ("thumbs", "nodes", "tts", "vmix"):
+        for sub in ("thumbs", "nodes", "tts", "vmix", "batch-in"):
             d = ROOT / "cache" / sub
             for f in (d.rglob("*") if d.is_dir() else []):
                 if f.is_file():
                     rm(f)
+        for f in (ROOT / "cache").glob("gif_*.gif"):
+            rm(f)
         rm(ROOT / "cache" / "extension-node-map.json")
+    elif what in ("vrestore", "audio_work", "depth"):
+        if what != "depth" and (any(t.get("state") in ("running", "queued") for t in TASKS) or busy_count()):
+            return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
+        d = {"vrestore": VR_WORK, "audio_work": AU_WORK, "depth": DEPTH_DIR}[what]
+        for f in (d.rglob("*") if d.is_dir() else []):
+            if f.is_file():
+                rm(f)
+        for sub in sorted((x for x in d.rglob("*") if x.is_dir()), key=lambda x: -len(x.parts)) if d.is_dir() else []:
+            try:
+                sub.rmdir()
+            except OSError:
+                pass
+    elif what == "m3d_old":
+        old = time.time() - 30 * 86400
+        for s in (list(M3D_DIR.iterdir()) if M3D_DIR.is_dir() else []):
+            mf = s / "meta.json"
+            if s.is_dir() and mf.is_file() and max(f.stat().st_mtime for f in s.iterdir()) < old:
+                freed += dir_size(s)
+                shutil.rmtree(s, ignore_errors=True)
     elif what == "cache_in":
         if busy_count():
             return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
