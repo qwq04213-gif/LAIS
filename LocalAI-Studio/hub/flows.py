@@ -834,6 +834,8 @@ def wf_trellis(q):
         tpos, tneg = [up, 0], [up, 1]
     dec = w.add("VaeDecodeShapeTrellis", samples=shape, vae=sv)
     dense = [dec, 0]
+    if q.get("keep_hi"):                              # 원본 고밀도 메시(다시 짜기·면 줄이기 전)를 따로 저장 — 줄인 것과 섞이지 않게 이름을 달리해요
+        w.add("SaveGLB", mesh=dense, filename_prefix="3d/hub3d_hi")
     tx = w.add("Trellis2TextureStage", positive=tpos, negative=tneg, shape_latent=shape)
     tex = ks(model, [tx, 0], [tx, 1], [tx, 2], st[2], cf[2], 3)
     col = [w.add("VaeDecodeTextureTrellis", samples=tex, vae=tv, shape_subdivides=[dec, 1]), 0]

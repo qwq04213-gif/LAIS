@@ -159,7 +159,8 @@ def job_thread(J, p):
             dsub = dsub0 + "/" + jdir
             (OUT / dsub).mkdir(parents=True, exist_ok=True)
             if p["kind"] in ("vid", "vpost", "vmix", "vedit", "music", "tts") or isinstance(im, (bytes, bytearray, Path)):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
-                name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts", "audio", "m3d") else "m3d" if graph in (".glb", ".zip") else "vid"}-{i}{graph}'
+                tag = re.sub(r"[^0-9A-Za-z가-힣_]", "", str(info.get("_tag") or ""))[:20]      # 단계 이름(예: 엔진원본) — 같은 작업 폴더에서 알아보기 쉽게
+                name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts", "audio", "m3d") else "m3d" if graph in (".glb", ".zip") else "vid"}-{i}{"-" + tag if tag else ""}{graph}'
                 if isinstance(im, Path):                      # 큰 결과(복원한 영상 등)는 메모리에 올리지 않고 파일을 옮겨요
                     shutil.move(str(im), OUT / dsub / name)
                     try:
@@ -171,7 +172,7 @@ def job_thread(J, p):
                 (OUT / dsub / (name + ".json")).write_text(json.dumps({k: v for k, v in info.items() if k != "_extra"}, ensure_ascii=False), encoding="utf-8")
                 for xext, xdata in (info.get("_extra") or {}).items():      # 자막 파일(.srt) 같은 덧붙이는 파일
                     (OUT / dsub / (Path(name).stem + xext)).write_text(xdata, encoding="utf-8")
-                J["images"].append("/out/" + urllib.parse.quote(dsub0) + "/" + urllib.parse.quote(jdir) + "/" + name)
+                J["images"].append("/out/" + urllib.parse.quote(dsub0) + "/" + urllib.parse.quote(jdir) + "/" + urllib.parse.quote(name))
                 J.setdefault("used", []).append(info.get("prompt", ""))
                 continue
             if p["kind"] == "gen" and not p.get("init"):      # 모델은 8·16 배수 크기로만 그려서, 입력한 정확한 크기와 조금 다르면 그 크기로 맞춰 저장해요
@@ -183,7 +184,7 @@ def job_thread(J, p):
                     pass
             name = f'{stamp}-{uuid.uuid4().hex[:4]}-{"depth" if dsub0 == DEPTH_SUB else p["kind"]}-{i}.png'
             im.save(OUT / dsub / name, "PNG", pnginfo=meta.pnginfo(info, graph) if embed else None)
-            J["images"].append("/out/" + urllib.parse.quote(dsub0) + "/" + urllib.parse.quote(jdir) + "/" + name)
+            J["images"].append("/out/" + urllib.parse.quote(dsub0) + "/" + urllib.parse.quote(jdir) + "/" + urllib.parse.quote(name))
             J.setdefault("used", []).append(info.get("prompt", ""))
         J["state"], J["progress"] = "done", 1.0
     except Cancelled as e:

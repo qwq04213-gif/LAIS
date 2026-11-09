@@ -1,4 +1,4 @@
-"""4.6.1: 3D 얼굴 맞추기 — 3D 엔진이 만든 얼굴과 사진 속 얼굴의 각도·기울기가 다를 때(고개 돌린 사진) 사진 얼굴을 3D 얼굴 자리로 휘어 붙이기.
+"""4.6.1(4.7 부터 기본 꺼짐 — 켰을 때만): 3D 얼굴 맞추기 — 3D 엔진이 만든 얼굴과 사진 속 얼굴의 각도·기울기가 다를 때(고개 돌린 사진) 사진 얼굴을 3D 얼굴 자리로 휘어 붙이기.
 실제 얼굴 사진(우주비행사, NASA 퍼블릭 도메인)을 머리에 입힌 가짜 3D 로: 사진은 머리를 돌리고 기울여 찍고, 엔진 텍스처는 흐리게.
 그리고 노멀맵: 엔진이 준 접선(TANGENT)으로 읽어 머리 텍스처로 옮기고, 머리에도 접선을 적어요(화면에서 검은 얼룩·흰 반점이 생기던 문제)."""
 import os as _os; BASE = _os.environ.get("LAS_BASE") or _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))  # 저장소 맨 위 폴더
@@ -127,16 +127,17 @@ for yaw, roll in ((20, 8), (-30, -10), (0, 0)):
     R = np.array([[np.cos(a2), -np.sin(a2), 0], [np.sin(a2), np.cos(a2), 0], [0, 0, 1]]) @ np.array([[np.cos(a1), 0, np.sin(a1)], [0, 1, 0], [-np.sin(a1), 0, np.cos(a1)]])
     Pr = P.copy(); Pr[hd] = (P[hd] - c0) @ R.T + c0
     photo = shoot(Pr, F, P)
-    keep = photoproj.ALIGN_MIN_GAIN; photoproj.ALIGN_MIN_GAIN = 9
-    plain, _ = photoproj.project(glb, photo, head=fb, head_size=1024)
-    photoproj.ALIGN_MIN_GAIN = keep
-    al, info = photoproj.project(glb, photo, head=fb, head_size=1024)
+    plain, i0 = photoproj.project(glb, photo, head=fb, head_size=1024)                  # 기본: 휘지 않아요(원본 얼굴 그대로)
+    assert i0.get("align") is None, i0.get("align")
+    al, info = photoproj.project(glb, photo, head=fb, head_size=1024, align=True)       # [얼굴 각도 맞추기]를 켰을 때
     e0, e1 = err(plain), err(al)
+    fm = photoproj.engine_match(glb, photo, head=fb)["face"]                          # 4.7: 단계 비교의 '얼굴 자리 일치'
+    assert (fm > 0.7) if not (yaw or roll) else (fm < 0.5), (yaw, roll, fm)
     if yaw or roll:
         assert info["align"]["ok"] and e1 < e0 * 0.7, (yaw, roll, info["align"], e0, e1)
     else:
         assert not info["align"]["ok"] and abs(e1 - e0) < 0.5, (info["align"], e0, e1)
-    ok(f"head turned {yaw}° / tilted {roll}°: face error {e0:.1f} → aligned {e1:.1f} ({'bent' if info['align']['ok'] else 'left as is'})")
+    ok(f"head turned {yaw}° / tilted {roll}°: face match {fm:.2f}, face error {e0:.1f} → aligned {e1:.1f} ({'bent' if info['align']['ok'] else 'left as is'})")
 
 # 노멀맵: 엔진이 준 접선(TANGENT)이 우리가 계산하는 방향과 반대(손잡이 w=-1 쪽)인 3D — 엔진 방향으로 읽어야 해요
 e1_, e2_ = P[F[:, 1]] - P[F[:, 0]], P[F[:, 2]] - P[F[:, 0]]

@@ -14,6 +14,7 @@ def wait(jid):
         if j["state"] in ("done", "error", "cancelled"): return j
         time.sleep(0.1)
 def job(o): return wait(post("/api/job", o)["id"])
+def core(j): return [u for u in j["images"] if not any(t in urllib.parse.unquote(u) for t in ("-4방향.png", "-원본고밀도.glb", "-비교표.png"))]   # 3D 본 결과(캡처·원본 메시 빼고)
 def cls(c): return [v["inputs"] for v in SUBMITTED[-1].values() if v["class_type"] == c]
 def touch(*fs):
     for f in fs: (M / f).parent.mkdir(parents=True, exist_ok=True); (M / f).write_bytes(b"x")
@@ -73,12 +74,13 @@ touch("diffusion_models/trellis_2_int8_convrot.safetensors", "diffusion_models/t
 assert hub.m3d_ready() == {"trellis": True, "multiview": False, "pixal": False}
 # 한 장(방향 그림은 골랐지만 Pixal3D 없음 → 경고하고 앞 사진만)
 j = job({"kind": "m3d", "op": "build", "id": sid, "sides": ["left", "back"], "res": "1024", "faces": "50000", "tex": "4096", "blender": False, "seed": 7})
-assert j["state"] == "done" and len(j["images"]) == 1 and j["images"][0].endswith(".glb") and "/3D/" in j["images"][0], j
+assert j["state"] == "done" and len(core(j)) == 1 and j["images"][0].endswith(".glb") and "/3D/" in j["images"][0], j
+assert any(urllib.parse.unquote(u).endswith("-4방향.png") for u in j["images"]) and any(urllib.parse.unquote(u).endswith("-원본고밀도.glb") for u in j["images"]), j["images"]   # 4.7: 4방향 캡처·원본 고밀도 메시
 assert any("Pixal3D" in w for w in j["warn"]) and not any("Blender" in w for w in j["warn"]), j["warn"]
 assert cls("UNETLoader")[0]["unet_name"] == "trellis_2_int8_convrot.safetensors" and cls("Trellis2Conditioning") and not cls("Pixal3DMultiViewConditioning")
 assert [x["seed"] for x in cls("KSampler")] == [7, 8, 9, 10] and cls("Trellis2UpsampleStage")[0]["target_resolution"] == 1024
 assert cls("DecimateMesh")[0]["target_face_count"] == 50000 and cls("BakeTextureFromVoxel")[0]["texture_size"] == 4096 and cls("RemeshMesh")[0]["resolution"] == 768
-assert cls("SaveGLB")[0]["filename_prefix"] == "3d/hub3d" and len(cls("LoadImage")) == 1 and cls("VAELoader")[0]["vae_name"].startswith("trellis_2_shape")
+assert sorted(x["filename_prefix"] for x in cls("SaveGLB")) == ["3d/hub3d", "3d/hub3d_hi"] and len(cls("LoadImage")) == 1 and cls("VAELoader")[0]["vae_name"].startswith("trellis_2_shape")
 assert urllib.request.urlopen(B + j["images"][0]).read()[:4] == b"glTF"
 # 4.1: 공식 예시와 같은 샘플링 — 구조/모양 단계는 앞쪽에만 cfg(CFGOverride)·RescaleCFG, 구조는 shift 5, 모양 512 는 20단계, 닫힌 몸체(solid)로 다시 짜기
 co = sorted((x["start_percent"], x["cfg"]) for x in cls("CFGOverride")); assert co == [(0.667, 1.0), (0.769, 1.0)], co
@@ -109,7 +111,7 @@ STATE["missing"].discard("Trellis2ShapeStage"); hub._CAPS["t"] = 0
 ok("missing ComfyUI 3D nodes → tells to update ComfyUI")
 # Blender 없음 → 경고하고 GLB 만
 assert get("/api/blender")["installed"] is False and "error" in post("/api/blender/check", {})
-j = job({"kind": "m3d", "op": "build", "id": sid, "blender": True}); assert j["state"] == "done" and len(j["images"]) == 1 and any("Blender 가 없어" in w for w in j["warn"]), j
+j = job({"kind": "m3d", "op": "build", "id": sid, "blender": True}); assert j["state"] == "done" and len(core(j)) == 1 and any("Blender 가 없어" in w for w in j["warn"]), j
 r = post("/api/blender/install", {}); assert "윈도우" in r.get("error", ""), r
 ok("no Blender → GLB only with a hint; auto install is Windows-only")
 # 가짜 Blender 로 마무리
@@ -117,7 +119,7 @@ fb = BASE + "/test/fake_blender.py"; os.chmod(fb, 0o755); os.environ["BLENDER_EX
 st = get("/api/blender"); assert st["installed"] and st["version"] == "4.5.15" and post("/api/blender/check", {})["ok"]
 j = job({"kind": "m3d", "op": "build", "id": sid, "sides": [], "blender": "on", "height": "1.8", "rotate": "450", "lods": True, "fmt_glb": True, "fmt_fbx": True, "fmt_obj": True})
 assert j["state"] == "done" and not [w for w in j.get("warn", []) if "업스케일로 키워" not in w], j
-glb, z = j["images"]; assert glb.endswith(".glb") and z.endswith(".zip") and "-m3d-" in z
+glb, z = j["images"][:2]; assert glb.endswith(".glb") and z.endswith(".zip") and "-m3d-" in z
 assert urllib.request.urlopen(B + glb).read().endswith(b"LOD0")
 names = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(B + z).read())).namelist()
 assert {"기사_캐릭터_LOD0.glb", "기사_캐릭터_LOD1.fbx", "기사_캐릭터_LOD2.obj", "기사_캐릭터.blend", "textures/base.png"} <= set(names) and "result.json" not in names, names
@@ -130,7 +132,7 @@ assert len(j["m3d_stats"]["lods"]) == 1 and j["m3d_stats"]["size_m"][2] == 1.7  
 assert hub.m3d_opts({"rotate": "450"}, {})["rotate"] == 90 and hub.m3d_opts({"fmt_glb": "", "fmt_fbx": ""}, {})["formats"] == ["glb"]
 ok("Blender options: no LODs, glb only, default height by kind, rotation snapped to 90°")
 open("/tmp/claude-0/fail_bl", "w").close(); os.environ["FAKE_BLENDER_FAIL"] = "/tmp/claude-0/fail_bl"
-j = job({"kind": "m3d", "op": "build", "id": sid}); assert j["state"] == "done" and len(j["images"]) == 1 and j["images"][0].endswith(".glb"), j
+j = job({"kind": "m3d", "op": "build", "id": sid}); assert j["state"] == "done" and len(core(j)) == 1 and j["images"][0].endswith(".glb"), j
 assert any("Blender 마무리 실패" in w and "메시" in w for w in j["warn"]) and "lods" not in (j.get("m3d_stats") or {}), j
 os.remove("/tmp/claude-0/fail_bl")
 ok("Blender failure → reason shown, ComfyUI GLB still saved")

@@ -29,6 +29,7 @@ with sync_playwright() as p:
     pg.select_option("#m3-kind", "object"); assert not pg.is_checked("#m3-rig")
     pg.select_option("#m3-kind", "character"); assert pg.is_checked("#m3-rig")
     pg.set_input_files("#m3-file", str(D / "hero.png")); pg.wait_for_function("!document.querySelector('#m3-go').disabled", timeout=15000)
+    pg.select_option("#m3-mode", "multi")                                              # 방향 그림·T자 자세는 AI 멀티뷰 보조 칸에 있어요
     assert pg.is_visible("#m3-tpose") and not pg.is_visible("#m3-tundo") and "왼쪽" in pg.inner_text(".m3-dir") and "얼굴" in pg.inner_text(".m3-dir")
     ok("character: rig on by default (off for objects), T-pose button, direction rule shown")
     pg.click("#m3-views"); pg.wait_for_function("document.querySelectorAll('#m3-slots .m3-slot img').length==4", timeout=30000)

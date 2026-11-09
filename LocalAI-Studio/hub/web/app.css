@@ -773,3 +773,9 @@ model-viewer:fullscreen{width:100vw!important;height:100vh!important;background:
 .m3-size{font-size:calc(13px*var(--ui,1));margin:-4px 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.m3-size .okc{color:var(--okt)}
 .m3-dir{font-size:calc(12.5px*var(--ui,1))}.m3-rig{margin:8px 0;font-size:calc(13px*var(--ui,1))}
 #m3-bl{margin-bottom:8px;font-size:calc(13px*var(--ui,1))}#m3-bl .bad{color:var(--bad)}
+
+/* 3D: 접는 칸(장면 전체)·검사·4방향 캡처·단계 파일 */
+details.m3-fold>summary{cursor:pointer;font-weight:600;padding:2px 0}details.m3-fold[open]>summary{margin-bottom:8px}
+.m3-mesh.ok{color:var(--ok,#2e7d32)}.m3-mesh.no{color:var(--warn,#b26a00)}
+.m3-sheet{margin:8px 0}.m3-sheet img{width:100%;border-radius:8px;cursor:zoom-in;background:#16161a}
+.m3-files{margin:6px 0;padding-left:18px}.m3-files li{margin:3px 0}

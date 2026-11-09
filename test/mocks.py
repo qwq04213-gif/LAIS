@@ -265,13 +265,16 @@ class Comfy(BaseHTTPRequestHandler):
             if not h: return self.j({})
             if h.get("slow") and not h.get("interrupted"): return self.j({})
             if h["polls"] < 1: h["polls"] += 1; return self.j({})
-            if h.get("glb"): return self.j({pid: {"outputs": {"99": {"3d": [{"filename": pid + ".glb", "subfolder": "3d", "type": "output"}]}, **({"98": {"text": [STATE.get("fov_text", "38.5")]}} if h.get("txt") else {})}, "status": {"status_str": "success", "messages": []}}})
+            if h.get("glb"):                       # SaveGLB 마다 결과 하나(이름에 저장 이름을 붙여요 — 원본 고밀도 메시 hub3d_hi 와 구분)
+                outs = {str(90 - i): {"3d": [{"filename": pid + "-" + pre.split("/")[-1] + ".glb", "subfolder": "3d", "type": "output"}]} for i, pre in enumerate(h["glb"])}
+                return self.j({pid: {"outputs": {**outs, **({"98": {"text": [STATE.get("fov_text", "38.5")]}} if h.get("txt") else {})}, "status": {"status_str": "success", "messages": []}}})
             if h.get("audio"): return self.j({pid: {"outputs": {"99": {"audio": [{"filename": pid + ".mp3", "subfolder": "audio", "type": "output"}]}}, "status": {"status_str": "success", "messages": []}}})
             if h.get("webp"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".webp", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
             if h.get("video"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".mp4", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
             return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".png", "subfolder": "", "type": "temp"}]}}, "status": {"status_str": "success", "messages": []}}})
         if u == "/view" and ".glb" in self.path:
-            self.send_response(200); self.send_header("Content-Type", "model/gltf-binary"); self.end_headers(); self.wfile.write(STATE.get("glb") or tiny_glb()); return
+            self.send_response(200); self.send_header("Content-Type", "model/gltf-binary"); self.end_headers()
+            self.wfile.write((STATE.get("glb_hi") or STATE.get("glb") or tiny_glb()) if "hub3d_hi" in self.path else (STATE.get("glb") or tiny_glb())); return
         if u == "/view" and ".mp3" in self.path:
             self.send_response(200); self.send_header("Content-Type", "audio/mpeg"); self.end_headers(); self.wfile.write(b"ID3\x04\x00\x00\x00\x00\x00\x00" + bytes(range(256)) * 4); return
         if u == "/view" and ".webp" in self.path:
@@ -298,7 +301,7 @@ class Comfy(BaseHTTPRequestHandler):
             except AssertionError as e:
                 return self.j({"error": {"message": "Prompt outputs failed validation"}, "node_errors": {"1": {"class_type": "X", "errors": [{"message": str(e), "details": ""}]}}}, 400)
             pid = f"p{len(SUBMITTED)}"; SUBMITTED.append(wf)
-            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": any(n["class_type"] == "SaveGLB" for n in wf.values()), "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "face_img": next((n["inputs"].get("image") for n in wf.values() if n["class_type"] == "LoadImage"), None), "txt": any(n["class_type"] == "PreviewAny" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
+            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": [n["inputs"].get("filename_prefix", "3d/hub3d") for n in wf.values() if n["class_type"] == "SaveGLB"], "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "face_img": next((n["inputs"].get("image") for n in wf.values() if n["class_type"] == "LoadImage"), None), "txt": any(n["class_type"] == "PreviewAny" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
             if STATE["ws"] and WS_CLIENTS and not HIST[pid]["slow"]: HIST[pid]["polls"] = -14; threading.Thread(target=ws_progress, args=(pid, 5, 0.35, wf), daemon=True).start()
             return self.j({"prompt_id": pid, "number": 1, "node_errors": {}})
         if self.path == "/free": STATE["freed"] += 1; return self.j({})

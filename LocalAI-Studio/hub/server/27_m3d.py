@@ -636,7 +636,13 @@ def m3d_opts(p, m):
             "remesh": (1024 if res >= 1536 else M3D_REMESH) if flag(p, "remesh", True) else 0, "blender": flag(p, "blender", True), "height": clamp(num(p, "height", kind["height"]), 0.0, 500.0),
             "rotate": int(num(p, "rotate", 0, int)) % 360 // 90 * 90, "lods": flag(p, "lods", True),
             "formats": [x for x in ("glb", "fbx", "obj") if flag(p, "fmt_" + x, x != "obj")] or ["glb"],
-            "rig": flag(p, "rig", m.get("kind") == "character"), "photo": flag(p, "photo", True), "head": flag(p, "head", True)}
+            "rig": flag(p, "rig", m.get("kind") == "character"), "photo": flag(p, "photo", True), "head": flag(p, "head", True),
+            # 만드는 방식: 사진 한 장(기본) / AI 멀티뷰 보조. 예전 호출(방향만 보냄)은 멀티뷰로 알아들어요
+            "mode": p.get("mode") if p.get("mode") in ("single", "multi") else ("multi" if p.get("sides") else "single"),
+            "align": flag(p, "align", False),        # 사진 얼굴을 3D 얼굴 각도에 맞춰 휘기 — 기본 꺼짐(원본 얼굴 비율·눈코입 자리 보존)
+            "compare": flag(p, "compare", False),    # 단계별 결과(A~E)·비교표 저장
+            "keep_hi": flag(p, "keep_hi", True),     # 원본 고밀도 메시(면 줄이기 전)를 따로 저장
+            "capture": flag(p, "capture", True)}     # 앞·왼쪽·오른쪽·뒤 캡처 그림
 
 
 def m3d_engine(p):
@@ -684,10 +690,40 @@ M3D_GOOD = 1024                                     # 3D 모델이 보는 크기
 M3D_SMALL = 768                                     # 이보다 작으면 만들기 전에 키워요
 
 
-def m3d_upscaler():
-    """작은 사진을 키울 업스케일 모델: SeedVR2(복원까지) → 일반 업스케일 모델. 없으면 None."""
+def m3d_upscaler(redraw_ok=True):
+    """3D 용 업스케일 모델: 다시 그리지 않는 일반 업스케일(Real-ESRGAN 등)이 먼저예요 — SeedVR2 는 AI 복원이라
+    얼굴의 눈·코·입을 조금씩 새로 그릴 수 있어요. redraw_ok=False 면 SeedVR2 는 쓰지 않아요(얼굴 확대). 없으면 None."""
+    up = (files("upscale_models") or [None])[0]
+    if up or not redraw_ok:
+        return up
     sv = seedvr_names()
-    return sv[0] if sv else (files("upscale_models") or [None])[0]
+    return sv[0] if sv else None
+
+
+def m3d_keep_face(orig, big, J):
+    """SeedVR2(다시 그리는 업스케일)로 키운 그림에 원래 얼굴을 되돌려 놓아요(단순 확대 — 눈·코·입이 바뀌지 않게). 얼굴을 못 찾으면 그대로."""
+    try:
+        box = m3d_face_box(orig, J) if m3d_face_model() else None
+    except Exception:  # noqa: BLE001
+        box = None
+    if not box:
+        return big, False
+    kx, ky = big.width / orig.width, big.height / orig.height
+    x0, y0, x1, y1 = box
+    w, h = x1 - x0, y1 - y0
+    bx = (max(0, round((x0 - 0.15 * w) * kx)), max(0, round((y0 - 0.2 * h) * ky)), min(big.width, round((x1 + 0.15 * w) * kx)), min(big.height, round((y1 + 0.1 * h) * ky)))
+    if bx[2] - bx[0] < 8 or bx[3] - bx[1] < 8:
+        return big, False
+    plain = orig.convert("RGB").resize(big.size, RS.LANCZOS).crop(bx)
+    mk = Image.new("L", plain.size, 0)
+    pad = max(2, round(min(plain.size) * 0.12))
+    mk.paste(255, (pad, pad, plain.width - pad, plain.height - pad))
+    mk = mk.filter(ImageFilter.GaussianBlur(pad / 2))
+    rgb = big.convert("RGB")
+    rgb.paste(plain, bx[:2], mk)
+    if big.mode == "RGBA":
+        rgb.putalpha(big.getchannel("A"))
+    return rgb, True
 
 
 def m3d_enlarge(img, J, target=M3D_GOOD, force=False):
@@ -708,6 +744,10 @@ def m3d_enlarge(img, J, target=M3D_GOOD, force=False):
     J["msg"] = f"사진이 작아서 키우는 중 ({side}px → 약 {round(side * k)}px)"
     big = upscale(c.convert("RGB"), J, model, k).convert("RGBA")
     big.putalpha(c.getchannel("A").resize(big.size, RS.LANCZOS))
+    if seedvr_of(model):                               # 다시 그리는 업스케일이었으면 얼굴은 원래 것으로(단순 확대)
+        big, kept = m3d_keep_face(c.convert("RGBA"), big, J)
+        if kept:
+            warn(J, "SeedVR2 로 키웠어요. 얼굴은 눈·코·입이 바뀌지 않게 원래 얼굴을 그대로 확대해 넣었어요(Real-ESRGAN 이 있으면 그걸 먼저 써요).")
     return big, k
 
 
@@ -739,8 +779,9 @@ def m3d_defringe(img):
     return o
 
 
-def m3d_glb(imgs, mv, f, o, seed, J, label=None):
-    """사진(배경 지운 RGBA, {방향: 그림}) → ComfyUI TRELLIS.2/Pixal3D → 텍스처 입힌 GLB 바이트."""
+def m3d_glb(imgs, mv, f, o, seed, J, label=None, stages=None):
+    """사진(배경 지운 RGBA, {방향: 그림}) → ComfyUI TRELLIS.2/Pixal3D → 텍스처 입힌 GLB 바이트.
+    stages(dict) 를 주면 단계별 결과를 담아요: A 엔진 원본, B 사진 붙이기(얼굴 텍스처 없이 — 비교할 때만), C 최종, hi 원본 고밀도 메시."""
     grown = []
     for sd in list(imgs):                              # 물체가 작게 나온 사진은 먼저 키워요(3D 모델은 물체를 1024px 로 봐요)
         imgs[sd], k = m3d_enlarge(imgs[sd], J)
@@ -762,7 +803,8 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     q = {"files": f, "views": views, "multiview": mv, "pixal1": bool(f.get("pixal")) and not mv, "moge": f.get("moge"), "framed": mv, "seed": seed,
          "fov_out": not nodes0 or "PreviewAny" in nodes0,
          "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
-         "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"], "cfg_override": co}
+         "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"], "cfg_override": co,
+         "keep_hi": stages is not None and o.get("keep_hi")}
     if not co:
         warn(J, "이 ComfyUI 에는 CFGOverride 노드가 없어서 원본 설정 일부(앞쪽 단계에만 가이드 걸기) 없이 만들었어요. "
                 "ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 모양이 더 좋아져요.")
@@ -773,9 +815,14 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     if any(x.startswith("RemeshMesh.") for x in fixed):
         warn(J, "이 ComfyUI 는 '닫힌 몸체로 다시 짜기(solid)'를 몰라서 예전 방식(udf + 안쪽 껍질 지우기)으로 만들었어요. "
                 "ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트하면 더 고르게 나와요.")
-    glb = next((dat for n, dat in res if n.lower().endswith(".glb")), None)
+    glbs = [(n, dat) for n, dat in res if n.lower().endswith(".glb")]
+    glb = next((dat for n, dat in glbs if "hub3d_hi" not in n), None)
     if not glb:
         raise RuntimeError("3D 결과(GLB)를 받지 못했어요.")
+    if stages is not None:
+        hi = next((dat for n, dat in glbs if "hub3d_hi" in n), None)
+        if hi:
+            stages["hi"] = hi
     _clean_tmp(J)
     glb = photoproj.fix_samplers(glb)
     # 사진 붙이기 원근: Pixal3D 는 정해진 화각으로 만들어서 계산할 수 있어요(카메라 거리 = 0.5/tan(화각/2), 물체는 화면의 1/1.1 → 긴 변 기준 0.55/tan)
@@ -796,8 +843,18 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
             (Path(J["_m3d_dir"]) / "engine_last.glb").write_bytes(glb)
         except OSError:
             pass
+    o = {**o, "_pixal": bool(f.get("pixal")) or mv}
+    if stages is not None:
+        stages["A"] = glb
+        stages["_dist"], stages["_pixal"], stages["_front"] = dist_e, o["_pixal"], imgs["front"]
     if o.get("photo", True):
+        if stages is not None and o.get("compare") and o.get("head", True):   # 비교용 B: 얼굴 전용 텍스처 없이
+            stages["B"] = m3d_photo(glb, imgs["front"], J, {**o, "head": False}, dist_e)
         glb = m3d_photo(glb, imgs["front"], J, o, dist_e)
+        if stages is not None and "B" not in stages and o.get("compare"):
+            stages["B"] = glb
+    if stages is not None:
+        stages["C"] = glb
     return glb
 
 
@@ -924,9 +981,10 @@ def m3d_face_up(photo, b, J):
     side = max(x1 - x0, y1 - y0)
     if side >= M3D_FACE_GOOD or side < 24:
         return None
-    up = m3d_upscaler()
+    up = m3d_upscaler(redraw_ok=False)                 # 얼굴은 다시 그리는 업스케일(SeedVR2)을 쓰지 않아요 — 원래 얼굴 그대로
     if not up:
-        warn(J, f"얼굴 부분이 {side}px 로 작아요. '설치와 모델'에서 업스케일 모델(SeedVR2 또는 Real-ESRGAN)을 받으면 얼굴을 키워서 더 선명하게 붙여요.")
+        warn(J, f"얼굴 부분이 {side}px 로 작아요. '설치와 모델'에서 일반 업스케일 모델(Real-ESRGAN)을 받으면 얼굴을 키워서 더 선명하게 붙여요"
+                "(SeedVR2 는 얼굴을 조금 새로 그릴 수 있어 얼굴 확대에는 쓰지 않아요).")
         return None
     J["msg"] = f"얼굴 부분을 키우는 중 ({side}px → 약 {min(4 * side, 1536)}px)"
     crop = photo.crop((x0, y0, x1, y1)).convert("RGB")
@@ -942,9 +1000,12 @@ def m3d_photo(glb, photo, J, o=None, dist_e=None):
             box, face = m3d_face(photo, J)
         except Exception as e:  # noqa: BLE001
             quiet_log("[3D 얼굴 키우기 실패]", repr(e))
+    if box:
+        J["_m3d_face"] = list(box)
     J["msg"] = "사진을 3D 에 붙이는 중 — 얼굴·무늬를 사진 그대로" + (" · 머리 전용 텍스처" if box else "")
     try:
-        new, info = photoproj.project(glb, photo, face, log=quiet_log, head=box, head_size=max(2048, int(o.get("tex") or 4096)), dist_e=dist_e)
+        new, info = photoproj.project(glb, photo, face, log=quiet_log, head=box, head_size=max(2048, int(o.get("tex") or 4096)), dist_e=dist_e,
+                                      align=bool(o.get("align")), cam_hint=photoproj.PIXAL_CAM if o.get("_pixal") else None)
     except ValueError as e:              # 붙일 수 없는 모양(텍스처 없음 등) — 원래 색 그대로
         quiet_log("[3D 사진 붙이기 건너뜀]", e)
         J["m3d_photo_res"] = {"done": False, "text": f"이 3D 에는 붙일 수 없었어요({e})"}
@@ -977,15 +1038,60 @@ def m3d_photo(glb, photo, J, o=None, dist_e=None):
     return new
 
 
+M3D_STAGE = {"A": ("A 엔진 원본", "A engine", "엔진원본"), "B": ("B 사진 붙이기", "B photo", "사진붙이기"), "C": ("C 얼굴 텍스처", "C head", "얼굴텍스처"),
+             "D": ("D Blender 마무리", "D Blender", "Blender"), "E": ("E AI 멀티뷰", "E multiview", "멀티뷰")}
+M3D_HEAD_TRIS = 3000         # 사람 캐릭터의 머리(위쪽 13%)가 이보다 면이 적으면 얼굴 굴곡이 뭉개져요
+
+
+def m3d_mv_check(d, sides, J=None):
+    """AI 방향 그림이 앞 사진과 자세·비율이 맞는지(실루엣) — 맞는 방향만 돌려줘요. 안 맞는 그림은 3D 모양을 비틀어요."""
+    vc = m3d_vcheck(d)
+    bad = [s for s in sides if s in vc and not vc[s]["ok"]]
+    if bad and J is not None:
+        warn(J, "AI 멀티뷰 보조: " + ", ".join(f"{M3D_SIDE_KO[s]}(맞음 {vc[s]['score']:.0%})" for s in bad)
+             + " 그림은 앞 사진과 자세·비율이 달라서 빼고 만들었어요. 서로 다른 그림이 섞이면 3D 모양이 비틀어져요.")
+    return [s for s in sides if s not in bad]
+
+
+def m3d_check_mesh(glb, kind, J):
+    """그물망 검사(구멍·떨어진 조각·납작함·머리 부분 면 수) → 결과 dict(화면 표시용). 문제가 있으면 알려 줘요."""
+    try:
+        rep = photoproj.mesh_report(glb)
+    except Exception as e:  # noqa: BLE001 — 검사는 덤
+        quiet_log("[3D 검사 실패]", repr(e))
+        return None
+    if kind == "character":
+        try:
+            sc = photoproj._scene(glb, tex_max=16)
+            P = np.concatenate([x[0] for x in sc])
+            F = np.concatenate([x[1] + o for x, o in zip(sc, np.cumsum([0] + [len(x[0]) for x in sc])[:-1])])
+            ys = P[F].mean(1)[:, 1]
+            top = ys > P[:, 1].max() - 0.13 * np.ptp(P[:, 1])
+            rep["head_tris"] = int(top.sum())
+            if top.sum() < M3D_HEAD_TRIS:
+                rep["notes"].append(f"머리 부분 면이 {int(top.sum()):,}개뿐이라 얼굴 굴곡이 뭉개질 수 있어요(면 수 20만 권장)")
+        except Exception:  # noqa: BLE001
+            pass
+    if rep["notes"]:
+        quiet_log("[3D 검사]", rep)
+    return rep
+
+
 def m3d_build(p, J):
-    """3D 만들기: 사진(+고른 방향 그림) → 텍스처 입힌 게임용 GLB → (Blender) 크기·LOD·FBX/OBJ 묶음."""
+    """3D 만들기: 사진 한 장(기본) 또는 AI 멀티뷰 보조 → 텍스처 입힌 GLB → (Blender) 크기·LOD·FBX/OBJ 묶음.
+    언제나: 4방향 캡처(앞·왼쪽·오른쪽·뒤), 그물망 검사, (켜 두면) 원본 고밀도 메시. 비교를 켜면 단계별 결과(A~E)와 비교표도 남겨요."""
     sid = p.get("id")
     m = m3d_meta(sid)
     J["out_label"] = m.get("name") or ""                 # 결과 폴더 이름에 3D 이름을 붙여요
     d = M3D_DIR / sid
     J["_m3d_dir"] = str(d)
     o = m3d_opts(p, m)
-    use = [s for s in M3D_SIDES if s in (p.get("sides") or []) and (d / f"view_{s}.png").is_file()]
+    have = [s for s in M3D_SIDES if (d / f"view_{s}.png").is_file()]
+    use = []
+    if o["mode"] == "multi":
+        use = m3d_mv_check(d, [s for s in have if s in (p.get("sides") or have)], J)
+        if not use:
+            warn(J, "AI 멀티뷰 보조로 쓸 수 있는 방향 그림이 없어 사진 한 장으로 만들었어요.")
     mv = bool(use)
     f, mv = m3d_need(mv, J, m3d_engine(p))
     if not mv:
@@ -994,11 +1100,13 @@ def m3d_build(p, J):
     for sd in use:
         imgs[sd] = Image.open(d / f"view_{sd}.png").convert("RGBA")
     q = {"seed": seed_of(p)}
-    glb = m3d_glb(imgs, mv, f, o, q["seed"], J)
+    stages = {}
+    glb = m3d_glb(imgs, mv, f, o, q["seed"], J, stages=stages)
     if J.get("m3d_photo_res"):
         J.setdefault("m3d_stats", {})["photo"] = J["m3d_photo_res"]
-    base_info = {"kind": "3d", "photo": bool(J.get("m3d_photo")), "face": any(x.get("face") for x in J.get("m3d_photo") or []), "engine": "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2", "views": ["front"] + use, "res": o["res"], "faces": o["faces"],
-                 "tex": o["tex"], "seed": q["seed"], "name": m["name"], "_sub": M3D_SUB}
+    engine = "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2"
+    base_info = {"kind": "3d", "photo": bool(J.get("m3d_photo")), "face": any(x.get("face") for x in J.get("m3d_photo") or []), "engine": engine, "views": ["front"] + use,
+                 "mode": "multi" if mv else "single", "res": o["res"], "faces": o["faces"], "tex": o["tex"], "seed": q["seed"], "name": m["name"], "_sub": M3D_SUB}
     items = []
     if o["blender"] and blender3d.exe(ROOT):
         work = d / f"build_{uuid.uuid4().hex[:6]}"
@@ -1031,7 +1139,10 @@ def m3d_build(p, J):
                 J["m3d_stats"]["rig"] = rg
                 for w in rg.get("warn") or []:
                     warn(J, w)
-            items.append((lod0.read_bytes() if lod0.is_file() and lod0.suffix == ".glb" else glb, info, ".glb"))
+            main = lod0.read_bytes() if lod0.is_file() and lod0.suffix == ".glb" else glb
+            if main is not glb:
+                stages["D"] = main
+            items.append((main, info, ".glb"))
             items.append((z, {**info, "pack": True}, ".zip"))
             J["msg"] = f"3D 를 만들었어요 — LOD {len(r['lods'])}단계 · " + " / ".join(f"{x['tris']:,}면" for x in r["lods"])
         except InterruptedError:
@@ -1046,6 +1157,61 @@ def m3d_build(p, J):
     if not items:
         items.append((glb, base_info, ".glb"))
         J["msg"] = f"3D 를 만들었어요 — 면 약 {o['faces']:,}개 · 텍스처 {o['tex']}px"
+    final = items[0][0]
+    done_msg = J["msg"]
+    # E: 비교할 때, 사진 한 장으로 만들었고 방향 그림이 있으면 AI 멀티뷰로도 하나 더(같은 씨앗·설정, GPU 는 차례로)
+    if o["compare"] and not mv and have:
+        good = m3d_mv_check(d, have, J)
+        try:
+            if good and all(trellis_files(True).values()):
+                fE, mvE = m3d_need(True, J, m3d_engine(p))
+                if mvE:
+                    imE = {"front": Image.open(d / "view_front.png").convert("RGBA"), **{sd: Image.open(d / f"view_{sd}.png").convert("RGBA") for sd in good}}
+                    sE = {}
+                    stages["E"] = m3d_glb(imE, True, fE, {**o, "compare": False, "keep_hi": False}, q["seed"], J, label="비교용 AI 멀티뷰(E) 만드는 중", stages=sE)
+                    stages["_E"] = sE
+            elif good:
+                warn(J, "비교용 AI 멀티뷰(E)는 'Pixal3D 멀티뷰' 모델이 없어 건너뛰었어요.")
+        except Cancelled:
+            raise
+        except Exception as e:  # noqa: BLE001
+            warn(J, f"비교용 AI 멀티뷰(E)를 만들지 못했어요({str(e)[:80]}).")
+    # 검사·4방향 캡처
+    J["msg"] = "그물망 검사·4방향 캡처 중"
+    rep = m3d_check_mesh(final, m.get("kind"), J)
+    if rep:
+        J.setdefault("m3d_stats", {})["mesh"] = rep
+    rows = [(M3D_STAGE[k][0], M3D_STAGE[k][1], stages[k]) for k in "ABCDE" if k in stages] if o["compare"] else [("최종 결과", "final", final)]
+    try:
+        if not (o["capture"] or o["compare"]):
+            raise StopIteration
+        bio = io.BytesIO()
+        photoproj.sheet(rows, 320 if o["compare"] else 384).save(bio, "PNG")
+        items.append((bio.getvalue(), {**base_info, "kind": "3d-views", "_tag": "비교표" if o["compare"] else "4방향",
+                                       "stages": [r[0] for r in rows]}, ".png"))
+    except StopIteration:
+        pass
+    except Exception as e:  # noqa: BLE001 — 캡처는 덤
+        quiet_log("[3D 캡처 실패]", repr(e))
+    if o["compare"]:
+        st = []
+        for k in "ABCDE":
+            if k in stages and k not in ("D",) and not (k == "C" and stages[k] is final):
+                rk = m3d_check_mesh(stages[k], m.get("kind"), None) if k in ("A", "E") else None
+                mt = None
+                if k in ("A", "E"):                    # 엔진 결과가 사진과 맞는 정도(실루엣·얼굴 자리) — 멀티뷰가 정면을 망치는지 숫자로
+                    src = stages if k == "A" else stages.get("_E") or {}
+                    try:
+                        mt = photoproj.engine_match(src.get("A", stages[k]), src.get("_front") or imgs["front"], J.get("_m3d_face"), src.get("_dist"),
+                                                    photoproj.PIXAL_CAM if src.get("_pixal") else None)
+                    except Exception as e:  # noqa: BLE001
+                        quiet_log("[3D 단계 비교 실패]", repr(e))
+                items.append((stages[k], {**base_info, "stage": k, "_tag": M3D_STAGE[k][2], "match": mt}, ".glb"))
+                st.append({"stage": k, "name": M3D_STAGE[k][0], "mesh": rk, "match": mt})
+        J.setdefault("m3d_stats", {})["stages"] = st
+    if stages.get("hi"):
+        items.append((stages["hi"], {**base_info, "hi": True, "_tag": "원본고밀도"}, ".glb"))
+    J["msg"] = done_msg
     m["builds"] = m.get("builds", 0) + 1
     m3d_save_meta(sid, m)
     return items
@@ -1056,7 +1222,8 @@ def m3d_quick(img, p, J):
     J2 = J
     m3d_prep({"image": img, "kind": p.get("kind") or "object"}, J2)
     sid = J2.pop("m3d")["id"]
-    q = {"id": sid, "res": p.get("res") or 1024, "faces": p.get("faces") or 20000, "tex": p.get("tex") or 2048, "blender": p.get("blender") or "", "seed": p.get("seed", -1)}
+    q = {"id": sid, "res": p.get("res") or 1024, "faces": p.get("faces") or 20000, "tex": p.get("tex") or 2048, "blender": p.get("blender") or "", "seed": p.get("seed", -1),
+         "keep_hi": "", "capture": ""}                 # 빠른 3D(이미지 기능 메뉴)는 결과 하나만
     return m3d_build(q, J2)
 
 

@@ -27,11 +27,13 @@ with sync_playwright() as p:
     pg.goto(B + "/"); pg.wait_for_timeout(700)
     pg.click("nav button[data-v=m3d]"); pg.wait_for_timeout(300); assert not pg.is_visible("#m3-sceneset")
     pg.set_input_files("#m3-file", str(D / "room.png")); pg.wait_for_function("!document.querySelector('#m3-go').disabled", timeout=15000)
-    pg.locator("#m3-sceneset").scroll_into_view_if_needed(); assert pg.is_visible("#m3-sorig") and pg.is_disabled("#m3-sgo") and "아직" in pg.inner_text("#m3-sobjs")
+    pg.locator("#m3-sceneset").scroll_into_view_if_needed(); assert not pg.is_visible("#m3-sorig")      # 4.7: 접혀서 맨 아래
+    assert pg.evaluate("[...document.querySelectorAll('#v-m3d form > *')].pop().id") == "m3-sceneset"
+    pg.click("#m3-sceneset > summary"); assert pg.is_visible("#m3-sorig") and pg.is_disabled("#m3-sgo") and "아직" in pg.inner_text("#m3-sobjs")
     pg.wait_for_function("document.querySelector('#m3-sorig').naturalWidth===600", timeout=5000)
     ok("scene panel appears with the original photo once a photo is picked")
     def click_at(fx, fy, shift=False):
-        bb = pg.locator("#m3-sorig").bounding_box(); pg.mouse.click(bb["x"] + bb["width"] * fx, bb["y"] + bb["height"] * fy) if not shift else (pg.keyboard.down("Shift"), pg.mouse.click(bb["x"] + bb["width"] * fx, bb["y"] + bb["height"] * fy), pg.keyboard.up("Shift"))
+        pg.locator("#m3-sorig").scroll_into_view_if_needed(); bb = pg.locator("#m3-sorig").bounding_box(); pg.mouse.click(bb["x"] + bb["width"] * fx, bb["y"] + bb["height"] * fy) if not shift else (pg.keyboard.down("Shift"), pg.mouse.click(bb["x"] + bb["width"] * fx, bb["y"] + bb["height"] * fy), pg.keyboard.up("Shift"))
     click_at(0.23, 0.6); pg.wait_for_selector("#m3-ssam:not([hidden])", timeout=5000); assert "선택 도구" in pg.inner_text("#m3-st")
     (hub.MODELS / "sam").mkdir(exist_ok=True); hub.sam_run_install = fake_install; hub.SAM["factory"] = fake_sam.factory; hub.SAM["engine"] = None; hub.sam.have_ort = lambda: True
     pg.click("#m3-ssam"); pg.wait_for_selector("#m3-ssam", state="hidden", timeout=20000)

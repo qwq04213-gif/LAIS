@@ -24,7 +24,7 @@ document.addEventListener('click',async e=>{const id=e.target.id;
 async function m3Sessions(sel){let r;try{r=await api('/api/m3d')}catch{return}const s=$('#m3-sess');
   s.innerHTML='<option value="">새로 시작…</option>'+(r.items||[]).map(x=>`<option value="${x.id}">${esc(x.name)} · ${new Date(x.time*1000).toLocaleDateString()}</option>`).join('');
   if(sel)s.value=sel}
-function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$('#m3-viewset').hidden=!S;$('#m3-sceneset').hidden=!S?.orig;if(!S){$('#m3-check').innerHTML='';return}
+function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$('#m3-viewset').hidden=!S||$('#m3-mode').value!=='multi';$('#m3-sceneset').hidden=!S?.orig;if(!S){$('#m3-check').innerHTML='';return}
   const st=S.stats||{},lg=st.long||0,gd=st.good||1024;
   $('#m3-check').innerHTML=`<ul class="m3-checks">${(S.checks||[]).map(c=>`<li class="lv-${c.level}">${esc(c.text)}</li>`).join('')}</ul>`+(lg?`<p class="m3-size">물체 크기 <b>${lg}px</b> · 권장 ${gd}px 이상 ${lg>=gd?'<span class="okc">✓ 충분해요</span>':`<button type="button" class="ghost sm" id="m3-enlarge" title="업스케일 모델(SeedVR2 가 있으면 SeedVR2)로 물체 부분을 ${gd}px 로 키워요">업스케일로 키우기</button>`}</p>`:'')
     +(st.face?`<p class="m3-size">얼굴 크기 <b>${st.face}px</b> · 권장 ${st.face_rec||512}px 이상 ${st.face>=(st.face_rec||512)?'<span class="okc">✓ 충분해요</span>':'<span class="mute">— 얼굴·상반신이 크게 나온 사진이 얼굴이 가장 선명해요(만들 때 얼굴 부분은 자동으로 키워 붙여요)</span>'}</p>`:'');
@@ -34,12 +34,14 @@ function m3Paint(){const S=M3.S;$('#m3-go').disabled=!S;$('#m3-del').hidden=!S;$
       ${u?`<img src="${u}" alt="${M3_SIDE[k]}">`:`<div class="m3-ph">${M3_SIDE[k]}</div>`}${sus?`<span class="m3-sus" title="${esc(c.text)}">맞지 않아요</span>`:''}
       <figcaption>${k==='front'?'<b>앞</b>':`<label class="chk" title="${esc(c?.text||'')}"><input type="checkbox" data-use="${k}" ${u?(sus?'':'checked'):'disabled'}> ${M3_SIDE[k]}</label>`}
         <span>${k!=='front'?`<button type="button" class="ghost sm" data-slotdraw="${k}" title="${M3_SIDE[k]} 모습만 그려요(Qwen-Image 2.1)">그리기</button>`:''}<button type="button" class="ghost sm" data-slotup="${k}" title="내 사진으로 바꾸기">사진</button>${k!=='front'&&u?`<button type="button" class="ghost sm" data-slotclr="${k}" title="비우기">×</button>`:''}</span></figcaption></figure>`}).join('');
-  $('#m3-mvnote').textContent=mv?'고른 방향 그림을 함께 써서 Pixal3D 멀티뷰로 만들어요. 앞 사진과 모양이 다른 그림은 체크를 풀어 주세요.'
+  $('#m3-mvnote').textContent=mv?'AI 가 그린 방향 그림은 실제 사진이 아니라 추정이에요. 고른 그림 중 앞 사진과 자세·비율이 다른 것은 만들 때 자동으로 빼요.'
     :"방향 그림을 함께 쓰려면 '설치와 모델'에서 'Pixal3D 멀티뷰'를 받아 주세요. 없으면 앞 사진 한 장으로 만들어요.";
   if(S.kind&&$('#m3-kind').value!==S.kind){$('#m3-kind').value=S.kind;$('#m3-kind').onchange()}$('#m3-name').value=S.name||'';
   $('#m3-tposebox').hidden=S.kind!=='character';$('#m3-tundo').hidden=!S.front_orig;m3sPaint()}
 async function m3Open(id){if(!id){M3.S=null;m3Paint();return}const r=await api('/api/m3d/'+id);if(r.error){toast(r.error);return}M3.S=r;m3Paint()}
 $('#m3-sess').onchange=e=>m3Open(e.target.value);
+$('#m3-mode').onchange=()=>{$('#m3-modenote').textContent=$('#m3-mode').value==='multi'?'AI 가 그린 왼쪽·뒤·오른쪽 그림을 함께 넣어요. 그림이 앞 사진과 맞지 않으면 그 그림은 빼고 만들어요. 정면 품질이 떨어지면 사진 한 장으로 만들어 비교해 보세요.'
+  :'사진에 없는 옆·뒤는 3D 엔진이 추정해요. 실제와 같다고 보장하지는 않아요.';m3Paint()};
 $('#m3-del').onclick=async()=>{if(!M3.S||!confirm(`'${M3.S.name}' 작업(사진·방향 그림)을 지울까요? 만든 3D 파일은 그대로 남아요.`))return;
   const r=await api('/api/m3d/delete',{id:M3.S.id});if(r.error)return toast(r.error);M3.S=null;m3Paint();m3Sessions()};
 $('#m3-up').onclick=()=>$('#m3-file').click();
@@ -63,24 +65,35 @@ $('#m3-slots').addEventListener('click',async e=>{const up=e.target.closest('[da
 $('#m3-views').onclick=async()=>{if(!M3.S)return toast('먼저 사진을 골라 주세요.');
   const j=await m3Job({kind:'m3d',op:'views',id:M3.S.id,sides:['left','back','right'],fast:$('#m3-vfast').checked?'on':''},'여러 방향 그림 만드는 중');if(j?.m3d){M3.S=j.m3d;m3Paint()}};
 $('#m3-go').onclick=async()=>{if(!M3.S)return;
-  const sides=$$('#m3-slots [data-use]').filter(x=>x.checked).map(x=>x.dataset.use);
-  const p={kind:'m3d',op:'build',id:M3.S.id,sides,engine3:$('#m3-engine').value,res:$('#m3-res').value,faces:$('#m3-faces').value,tex:$('#m3-tex').value,remesh:$('#m3-remesh').checked,photo:$('#m3-photo').checked,head:$('#m3-head').checked,
+  const mode=$('#m3-mode').value,sides=mode==='multi'?$$('#m3-slots [data-use]').filter(x=>x.checked).map(x=>x.dataset.use):[];
+  const p={kind:'m3d',op:'build',id:M3.S.id,sides,mode,align:$('#m3-align').checked,compare:$('#m3-compare').checked,keep_hi:$('#m3-keephi').checked,engine3:$('#m3-engine').value,res:$('#m3-res').value,faces:$('#m3-faces').value,tex:$('#m3-tex').value,remesh:$('#m3-remesh').checked,photo:$('#m3-photo').checked,head:$('#m3-head').checked,
     blender:$('#m3-blender').checked,height:$('#m3-height').value,rotate:$('#m3-rot').value,lods:$('#m3-lods').checked,rig:$('#m3-rig').checked,
     fmt_glb:$('#m3-fmt-glb').checked,fmt_fbx:$('#m3-fmt-fbx').checked,fmt_obj:$('#m3-fmt-obj').checked};
   const j=await m3Job(p,'3D 만드는 중');if(!j)return;m3Show(j)};
+const M3_TAG={'엔진원본':'A 엔진 원본','사진붙이기':'B 사진 붙이기','얼굴텍스처':'C 얼굴 텍스처','멀티뷰':'E AI 멀티뷰','원본고밀도':'원본 고밀도 메시(색 없음)'};
+function m3Extra(j,glb){const png=j.images.find(u=>/\.png$/i.test(u)),ms=j.m3d_stats?.mesh,
+    more=j.images.filter(u=>/\.glb$/i.test(u)&&u!==glb).map(u=>{const n=decodeURIComponent(u.split('/').pop()),t=Object.keys(M3_TAG).find(k=>n.includes('-'+k+'.'));return {u,n,label:t?M3_TAG[t]:n}});
+  return (ms?`<p class="m3-mesh ${ms.notes?.length?'no':'ok'}">${ms.notes?.length?'⚠':'✓'} 그물망 검사: 면 ${ms.tris.toLocaleString()}개 · 구멍 ${ms.holes}곳 · 떨어진 조각 ${Math.max(0,ms.parts-1)}개 · 두께÷너비 ${ms.depth_ratio}${ms.head_tris!=null?` · 머리 부분 면 ${ms.head_tris.toLocaleString()}개`:''}${ms.notes?.length?`<br><span class="mute">${ms.notes.map(esc).join(' · ')}</span>`:''}</p>`:'')
+    +(png?`<figure class="m3-sheet"><img src="${png}" alt="앞·왼쪽·오른쪽·뒤" data-m3sheet="${png}" title="크게 보기"><figcaption class="mute">앞·왼쪽·오른쪽·뒤 캡처${more.some(x=>x.label.startsWith('A '))?' — 단계별(A 엔진 원본 → B 사진 붙이기 → C 얼굴 텍스처 → D Blender → E AI 멀티뷰)':''} · 눌러서 크게 보기</figcaption></figure>`:'')
+    +(j.m3d_stats?.stages?.some(x=>x.match)?`<table class="m3-stat"><thead><tr><th>단계</th><th title="사진 실루엣과 겹치는 정도(1 이 같음)">실루엣 겹침</th><th title="3D 엔진이 칠한 얼굴이 사진 얼굴과 같은 자리에 있는 정도(1 이 같음). 낮으면 3D 의 고개 각도·얼굴 자리가 사진과 달라요">얼굴 자리 일치</th><th>구멍·조각</th></tr></thead><tbody>${j.m3d_stats.stages.filter(x=>x.match).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.match.iou}</td><td>${x.match.face!=null?x.match.face:'—'}</td><td>${x.mesh?`${x.mesh.holes} · ${Math.max(0,x.mesh.parts-1)}`:'—'}</td></tr>`).join('')}</tbody></table>
+      <p class="mute">A 는 사진 한 장, E 는 AI 멀티뷰로 만든 3D 엔진 결과(사진 붙이기 전)예요. 얼굴 자리 일치가 E 에서 많이 낮으면 멀티뷰가 정면을 망친 거예요.</p>`:'')
+    +(more.length?`<ul class="m3-files">${more.map(x=>`<li>${esc(x.label)} <button type="button" class="ghost sm" data-m3view="${x.u}">돌려 보기</button> <a class="ghost sm" href="${x.u}" download>저장</a></li>`).join('')}</ul>`:'')}
 function m3Show(j){const glb=j.images.find(u=>/\.glb$/i.test(u)),zip=j.images.find(u=>/\.zip$/i.test(u)),st=j.m3d_stats,rg=st?.rig;loadMV();M3.glb=glb;M3.pv=rg?.preview||'';
   $('#m3-out').innerHTML=`<div class="va-tool"><div class="m3-viewer"><model-viewer id="m3-mv" src="${glb}" camera-controls auto-rotate shadow-intensity="0.7" exposure="1.05" environment-image="neutral"></model-viewer></div>
     <div class="vbtns m3-bar"><button type="button" class="ghost sm" id="m3-clay" title="색을 빼고 모양만 봐요">모양만 보기</button><button type="button" class="ghost sm" id="m3-spin">회전 멈추기</button><button type="button" class="ghost sm" id="m3-full" title="갤러리처럼 크게 봐요(Esc 로 닫아요)">크게 보기</button>
       ${M3.pv?'<button type="button" class="ghost sm" id="m3-move" title="팔 들기·고개 끄덕임으로 뼈대·가중치를 확인해요(게임용 파일에는 안 들어가요)">움직임 미리보기</button>':''}
       <a class="ghost sm" href="${glb}" download>GLB 저장</a>${zip?`<a class="go sm" href="${zip}" download>게임용 묶음 저장 (.zip)</a>`:''}</div>
     ${st?.photo?`<p class="m3-photo ${st.photo.done?'ok':'no'}">${st.photo.done?'✓':'⚠'} 사진 붙이기: ${esc(st.photo.text)}</p>`:''}
+    ${m3Extra(j,glb)}
     ${st?.scene?`<table class="m3-stat"><thead><tr><th>물체</th><th>키</th><th>거리</th><th>면(삼각형)</th></tr></thead><tbody>${st.scene.map((x,i)=>`<tr><td>물체 ${i+1}</td><td>${x.height.toFixed(2)} m</td><td>${x.dist.toFixed(1)} m</td><td>${x.tris.toLocaleString()}</td></tr>`).join('')}</tbody></table>
       <p class="mute">위치·크기는 AI 가 사진 한 장과 깊이 추정으로 어림한 값이에요. 묶음에는 장면 GLB, 물체별 GLB, 배치 정보(layout.json)${st.blender?', Blender 로 만든 장면 파일(.blend·FBX)':''}이 들어 있어요.</p>`:''}
     ${st?.lods?`<table class="m3-stat"><thead><tr><th>LOD</th><th>면(삼각형)</th><th>정점</th><th>파일</th></tr></thead><tbody>${st.lods.map(l=>`<tr><td>${l.lod} (${Math.round(l.ratio*100)}%)</td><td>${l.tris.toLocaleString()}</td><td>${l.verts.toLocaleString()}</td><td class="mute">${['glb','fbx','obj'].filter(k=>l[k]).join(' · ')}</td></tr>`).join('')}</tbody></table>
       <p class="mute">크기 ${st.size_m.map(v=>v.toFixed(2)).join(' × ')} m · 묶음에는 LOD 별 파일, 텍스처(textures 폴더), Blender 파일(.blend)이 들어 있어요.</p>`:''}
     ${rg?`<p class="m3-rig">뼈대 ${rg.bones}개 · 자세 ${({T:'T자',A:'A자',down:'팔 내림'})[rg.pose]||esc(rg.pose)}${rg.legs?'':' · 다리를 못 찾아 다리 뼈는 어림'}${rg.fixed?` · 가중치를 못 받은 정점 ${rg.fixed.toLocaleString()}개는 가장 가까운 뼈에 붙였어요`:''}
       <br><span class="mute">뼈 이름이 Mixamo 와 같아서 Unity·Unreal 의 사람형(Humanoid)에 자동으로 맞고, Mixamo 동작을 그대로 입힐 수 있어요.</span></p>`:''}</div>`}
-$('#m3-out').addEventListener('click',async e=>{const mv=$('#m3-mv');if(!mv)return;
+$('#m3-out').addEventListener('click',async e=>{const sh=e.target.closest('[data-m3sheet]');if(sh){lbOpen([{url:sh.dataset.m3sheet,name:'4방향 캡처'}],0);return}
+  const vb=e.target.closest('[data-m3view]');if(vb){const u=vb.dataset.m3view;lbOpen([{url:u,name:decodeURIComponent(u.split('/').pop()),type:'3d'}],0);return}
+  const mv=$('#m3-mv');if(!mv)return;
   if(e.target.id==='m3-move'&&M3.pv){const on=!mv.dataset.move;mv.dataset.move=on?'1':'';mv.setAttribute('src',on?M3.pv:M3.glb);
     if(on){mv.setAttribute('autoplay','');mv.addEventListener('load',()=>mv.play({repetitions:Infinity}),{once:true})}else mv.removeAttribute('autoplay');
     e.target.textContent=on?'움직임 끄기':'움직임 미리보기'}

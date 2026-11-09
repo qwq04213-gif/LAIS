@@ -27,6 +27,8 @@ with sync_playwright() as p:
     pg.select_option("#m3-kind", "character"); assert pg.input_value("#m3-height") == "1.7" and pg.input_value("#m3-faces") == "200000" and pg.is_checked("#m3-photo") and pg.locator("#m3-faces option[value='700000']").count() == 1
     pg.fill("#m3-name", "knight")
     pg.set_input_files("#m3-file", str(D / "knight.png")); pg.wait_for_function("!document.querySelector('#m3-go').disabled", timeout=15000)
+    assert pg.input_value("#m3-mode") == "single" and not pg.is_visible("#m3-viewset") and not pg.is_checked("#m3-align") and pg.is_checked("#m3-keephi") and not pg.is_checked("#m3-compare")
+    pg.select_option("#m3-mode", "multi"); assert pg.is_visible("#m3-viewset"); ok("4.7: single photo is the default mode; AI direction views only in the multiview-assist mode")
     assert pg.locator("#m3-check li").count() >= 1 and pg.locator("#m3-slots .m3-slot").count() == 4 and pg.locator("#m3-slots .m3-slot img").count() == 1
     assert pg.locator("#m3-slots input[data-use]:disabled").count() == 3 and "Pixal3D" in pg.inner_text("#m3-mvnote")
     assert pg.input_value("#m3-sess") != "" and "knight" in pg.inner_text("#m3-sess") and pg.is_visible("#m3-del")
@@ -42,7 +44,7 @@ with sync_playwright() as p:
     pg.check("#m3-fmt-obj"); pg.select_option("#m3-tex", "1024")
     pg.click("#m3-go"); pg.wait_for_selector("#m3-mv", timeout=30000)
     s = SUBMITTED[-1]; assert any(v["class_type"] == "UnwrapMesh" and v["inputs"]["resolution"] == 1024 for v in s.values())
-    assert pg.locator(".m3-stat tbody tr").count() == 3 and pg.locator("#m3-out a[href$='.zip']").count() == 1 and pg.locator("#m3-out a[href$='.glb']").count() == 1
+    assert pg.locator(".m3-stat tbody tr").count() == 3 and pg.locator("#m3-out a[href$='.zip']").count() == 1 and pg.locator("#m3-out .m3-bar a[href$='.glb']").count() == 1
     assert pg.locator("#m3-out .m3-photo").count() == 1 and "사진 붙이기" in pg.inner_text("#m3-out .m3-photo")
     assert "1.70" in pg.inner_text("#m3-out") and "obj" in pg.inner_text(".m3-stat") and pg.get_attribute("#m3-mv", "src").endswith(".glb")
     pg.click("#m3-spin"); assert pg.inner_text("#m3-spin") == "회전하기"

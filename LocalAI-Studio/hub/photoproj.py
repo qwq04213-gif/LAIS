@@ -296,8 +296,13 @@ def _sil(cam, P, F, scale, W, H, z=False):
     return raster(xy, F, W, H, d if z else None)
 
 
-def fit(P, F, UV, tex, alpha, rgb, log=None, dist_e=None):
-    """사진 실루엣(alpha, 0~1)과 가장 잘 맞는 카메라 → (Cam, 겹침, 무늬 겹침)"""
+PIXAL_CAM = "up+y back(0, 0, 1)"   # Pixal3D 결과의 카메라 방향(y 위, +z 쪽에서 봄) — 실제 결과 두 개에서 확인
+
+
+def fit(P, F, UV, tex, alpha, rgb, log=None, dist_e=None, cam_hint=None):
+    """사진 실루엣(alpha, 0~1)과 가장 잘 맞는 카메라 → (Cam, 겹침, 무늬 겹침)
+    cam_hint: 3D 엔진이 쓴 카메라 방향 이름(예: PIXAL_CAM) — 주면 그 방향을 그대로 써요(다시 찾다가 어긋나지 않게).
+    그 방향으로 실루엣이 거의 안 겹칠 때만(엔진 판이 바뀐 경우) 다시 찾아요."""
     L = 192
     H0, W0 = alpha.shape
     sc = L / max(H0, W0)
@@ -337,18 +342,27 @@ def fit(P, F, UV, tex, alpha, rgb, log=None, dist_e=None):
         a, b = a.mean(1) - a.mean(), b.mean(1) - b.mean()
         return float((a * b).sum() / max(1e-9, math.sqrt((a * a).sum() * (b * b).sum())))
 
-    tried = sorted(((iou(Cam(c, P, abox)), c) for c in _cams()), key=lambda x: -x[0])
-    top = [x for x in tried if x[0] >= tried[0][0] - 0.03]
-    if len(top) > 1:                                  # 실루엣만으로 앞·뒤를 못 가리면 색으로
-        top.sort(key=lambda x: diff(Cam(x[1], P, abox)) - x[0])
-    v, c = top[0]
+    fit.fixed = False
+    hint = next((c for c in _cams() if c["name"] == cam_hint), None) if cam_hint else None
+    hv = iou(Cam(hint, P, abox)) if hint else 0.0
+    if hint and hv >= MIN_IOU_PAT[0] - 0.1:           # 엔진 카메라 방향 그대로
+        v, c = hv, hint
+        fit.fixed = True
+    else:
+        if hint and log:
+            log(f"[사진 붙이기] 엔진 카메라 방향으로는 겹침 {hv:.3f} — 다시 찾아요")
+        tried = sorted(((iou(Cam(c, P, abox)), c) for c in _cams()), key=lambda x: -x[0])
+        top = [x for x in tried if x[0] >= tried[0][0] - 0.03]
+        if len(top) > 1:                              # 실루엣만으로 앞·뒤를 못 가리면 색으로
+            top.sort(key=lambda x: diff(Cam(x[1], P, abox)) - x[0])
+        v, c = top[0]
     if dist_e:                                        # 3D 엔진이 쓴 카메라(화각)를 알면 원근은 계산으로 — 정확해요
         cands = [(ncc(cam), cam) for cam in (Cam(c, P, abox, dist_e=dist_e),)]
     else:                                             # 모르면 무늬가 가장 잘 겹치는 원근으로(어림)
         cands = [(ncc(cam), cam) for cam in (Cam(c, P, abox, k) for k in DIST)]
     pat, cam = max(cands, key=lambda x: x[0])
     if log:
-        log(f"[사진 붙이기] 카메라 {cam.name} 거리 {cam.dist} 겹침 {v:.3f} 무늬 {pat:.3f}")
+        log(f"[사진 붙이기] 카메라 {cam.name}{' (엔진 방향 그대로)' if fit.fixed else ''} 거리 {cam.dist} 겹침 {v:.3f} 무늬 {pat:.3f}")
     return cam, float(v), float(pat)
 
 
@@ -428,15 +442,18 @@ def _adjust_orm(M, wmap, skin):
     return out
 
 
-def project(glb, photo, face=None, log=None, progress=None, head=None, head_size=4096, dist_e=None):
+def project(glb, photo, face=None, log=None, progress=None, head=None, head_size=4096, dist_e=None, align=False, cam_hint=None):
     """photo: 배경 지운 앞 사진(RGBA PIL). face: (x0, y0, x1, y1, 확대한 RGBA PIL) — 사진 좌표의 얼굴 상자와 그 확대본.
     head: (x0, y0, x1, y1) 사진 속 얼굴 상자 — 주면 머리를 따로 떼어 자기 텍스처(head_size)를 줘요(얼굴 해상도 여러 배).
+    align: 사진 얼굴을 3D 얼굴 각도에 맞춰 휘기(기본 꺼짐 — 원본 얼굴의 비율·눈코입 자리를 그대로 두는 게 먼저예요).
+    cam_hint: 3D 엔진의 카메라 방향(fit 참고).
     → (새 GLB 바이트, 정보 dict). 맞지 않으면 (원래 GLB, {"skip": 이유})"""
     M = load(glb)
     P, F, UV, tex = M["P"], M["F"], M["UV"], M["tex"]
     ph = np.asarray(photo.convert("RGBA")).astype(np.float64) / 255
     alpha, rgb = ph[..., 3], ph[..., :3]
-    cam, v, pat = fit(P, F, UV, tex, alpha, rgb, log, dist_e)
+    cam, v, pat = fit(P, F, UV, tex, alpha, rgb, log, dist_e, cam_hint)
+    cam_fixed = fit.fixed
     if not (v >= MIN_IOU or (v >= MIN_IOU_PAT[0] and pat >= MIN_IOU_PAT[1])):
         return glb, {"skip": "shape", "iou": round(v, 3), "pat": round(pat, 3)}
     if progress:
@@ -477,8 +494,8 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     T = np.asarray(tex.convert("RGB")).astype(np.float32)
     TH, TW = T.shape[:2]
     sel = np.nonzero(pick)[0]
-    align = None
-    if head is not None:                     # 3D 얼굴과 사진 얼굴의 각도·자리가 다르면 사진 얼굴을 3D 쪽으로 휘어요
+    align_on, align = bool(align), None
+    if head is not None and align_on:        # (켰을 때만) 3D 얼굴과 사진 얼굴의 각도·자리가 다르면 사진 얼굴을 3D 쪽으로 휘어요
         try:
             rgb, alpha, face, align = _align_face(P, F, UV, tex, cam, head, rgb, alpha, face, log)
         except Exception as e:  # noqa: BLE001 — 맞추기는 덤: 실패하면 그대로
@@ -555,7 +572,7 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
         new = replace_image(g, b, ii, data)
         g, b = glbscene.read(new)
     info = {"iou": round(v, 3), "pat": round(pat, 3), "cam": cam.name, "dist": str(cam.dist), "texels": int((w[:, 0] > 0.5).sum()), "face": bool(fbox),
-            "skin": round(float(sk.mean()), 3), "align": align}
+            "skin": round(float(sk.mean()), 3), "align": align, "cam_fixed": cam_fixed}
     if head is not None:
         try:
             new, hi = head_split(new, cam, head, head_size, n, visible, soft, photo_rgb, fbox, (W0, H0), x, y, d, log)
@@ -1112,3 +1129,194 @@ def preview(glb, size=640, bg=(30, 30, 36)):
         out[pix] = col * sh[:, None]
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8).reshape(size, size, 3))
 
+
+
+# ───────────────────────── 4방향 캡처 · 비교표 · 메시 검사 ─────────────────────────
+VIEWS4 = (("앞", "front", 0.0), ("왼쪽", "left", -90.0), ("오른쪽", "right", 90.0), ("뒤", "back", 180.0))   # 캐릭터 기준 방향(앞이 +z)
+
+
+def _scene(glb, tex_max=2048):
+    """GLB → [(P 세상 좌표, F, UV 또는 None, N 또는 None, 텍스처 배열 또는 None, 기본색)]"""
+    g, b = glbscene.read(glb)
+    out, texs = [], {}
+    for ni, nd in enumerate(g.get("nodes") or []):
+        if "mesh" not in nd:
+            continue
+        m = _world(g, ni)
+        for pr in (g.get("meshes") or [])[nd["mesh"]].get("primitives") or []:
+            at = pr.get("attributes") or {}
+            if "POSITION" not in at or pr.get("mode", 4) != 4:
+                continue
+            P = _acc(g, b, at["POSITION"])[:, :3] @ m[:3, :3].T + m[:3, 3]
+            F = _acc(g, b, pr["indices"]).astype(np.int64).reshape(-1, 3) if "indices" in pr else np.arange(len(P)).reshape(-1, 3)
+            N = _acc(g, b, at["NORMAL"])[:, :3] @ m[:3, :3].T if "NORMAL" in at else None
+            mat = (g.get("materials") or [{}])[pr.get("material", 0)] if g.get("materials") else {}
+            pbr = mat.get("pbrMetallicRoughness") or {}
+            fac = np.array((pbr.get("baseColorFactor") or [1, 1, 1, 1])[:3], np.float32) * 255
+            bt, T = pbr.get("baseColorTexture"), None
+            if bt and "TEXCOORD_0" in at:
+                ti = bt["index"]
+                if ti not in texs:
+                    try:
+                        im = _img_of(g, b, ti).convert("RGB")
+                        im.thumbnail((tex_max, tex_max))
+                        texs[ti] = np.asarray(im).astype(np.float32)
+                    except Exception:  # noqa: BLE001
+                        texs[ti] = None
+                T = texs[ti]
+            UV = _acc(g, b, at["TEXCOORD_0"])[:, :2] if T is not None else None
+            out.append((P, F, UV, N, T, fac))
+    if not out:
+        raise ValueError("그릴 그물망이 없어요")
+    return out
+
+
+def capture(glb, yaw=0.0, size=512, bg=(34, 34, 40), scene=None):
+    """GLB 를 캐릭터 둘레로 yaw 도 돌아간 자리에서 본 그림(정사영, 텍스처 화소 그대로 + 약한 음영) → PIL.
+    yaw: 0 앞, -90 왼쪽(캐릭터의 왼쪽), 90 오른쪽, 180 뒤. 방향마다 같은 배율이라 크기·두께를 비교할 수 있어요."""
+    sc = scene or _scene(glb)
+    allP = np.concatenate([x[0] for x in sc])
+    lo, hi = allP.min(0), allP.max(0)
+    ctr = (lo + hi) / 2
+    ext = max(hi[1] - lo[1], np.hypot(hi[0] - lo[0], hi[2] - lo[2]), 1e-9)
+    a = math.radians(yaw)
+    R = np.array([[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]])
+    k = size * 0.92 / ext
+    Ps, Fs, starts, off, n0 = [], [], [0], 0, 0
+    for P, F, *_ in sc:
+        Q = (P - ctr) @ R.T
+        Ps.append(Q)
+        Fs.append(F + off)
+        off += len(P)
+        n0 += len(F)
+        starts.append(n0)
+    Q, FF = np.concatenate(Ps), np.concatenate(Fs)
+    xy = np.stack([size / 2 + k * Q[:, 0], size / 2 - k * Q[:, 1]], 1)
+    pix, fid, b0, b1 = raster(xy, FF, size, size, -Q[:, 2])
+    out = np.zeros((size * size, 3), np.float32)
+    out[:] = bg
+    L = np.array([0.35, 0.45, 0.82])
+    L /= np.linalg.norm(L)
+    for i, (P, F, UV, N, T, fac) in enumerate(sc):
+        m = (fid >= starts[i]) & (fid < starts[i + 1])
+        if not m.any():
+            continue
+        f = fid[m] - starts[i]
+        c = np.stack([b0[m], b1[m], 1 - b0[m] - b1[m]], 1)
+        if N is not None:
+            nn = ((N[F[f]] @ R.T) * c[..., None]).sum(1)
+        else:
+            Pr = P @ R.T
+            nn = np.cross(Pr[F[f, 1]] - Pr[F[f, 0]], Pr[F[f, 2]] - Pr[F[f, 0]])
+        nn /= np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-12)
+        sh = 0.45 + 0.55 * np.abs(nn @ L)
+        if T is not None:
+            uv = (UV[F[f]] * c[..., None]).sum(1)
+            col = _sample(T, (uv[:, 0] % 1.0) * T.shape[1], np.clip(uv[:, 1], 0, 1) * T.shape[0]) * fac / 255
+        else:
+            col = np.tile(np.array([[200.0, 200, 205]]) * fac / 255, (len(f), 1))
+        out[pix[m]] = col * sh[:, None]
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8).reshape(size, size, 3))
+
+
+def _font(px):
+    from PIL import ImageFont
+    for nm in ("malgun.ttf", "C:/Windows/Fonts/malgun.ttf", "NanumGothic.ttf", "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+               "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"):
+        try:
+            return ImageFont.truetype(nm, px), True
+        except Exception:  # noqa: BLE001
+            continue
+    return ImageFont.load_default(), False
+
+
+def sheet(rows, size=320):
+    """비교표: rows = [(한국어 이름, 영어 이름, GLB)] → 줄마다 앞·왼쪽·오른쪽·뒤 캡처를 붙인 그림(PIL). 못 그린 칸은 비워요."""
+    from PIL import ImageDraw
+    head, lab = 34, 210
+    W, H = lab + size * 4, head + size * len(rows)
+    im = Image.new("RGB", (W, H), (22, 22, 26))
+    dr = ImageDraw.Draw(im)
+    fnt, ko = _font(20)
+    for j, (k_, e_, _) in enumerate(VIEWS4):
+        dr.text((lab + j * size + 8, 6), k_ if ko else e_, fill=(230, 230, 235), font=fnt)
+    for i, (kname, ename, glb) in enumerate(rows):
+        y = head + i * size
+        dr.text((8, y + 8), kname if ko else ename, fill=(240, 240, 245), font=fnt)
+        try:
+            sc = _scene(glb)
+        except Exception:  # noqa: BLE001
+            dr.text((8, y + 40), "-", fill=(200, 120, 120), font=fnt)
+            continue
+        for j, (_, _, yaw) in enumerate(VIEWS4):
+            im.paste(capture(glb, yaw, size, scene=sc), (lab + j * size, y))
+    return im
+
+
+def mesh_report(glb):
+    """그물망 검사: 구멍(테두리 모서리), 떨어진 조각, 납작함(두께 비율), 크기. 모든 그물망을 합쳐서 봐요(머리 전용 부분 포함 — 위치로 이어 붙여 봐요).
+    → dict(tris, verts, holes, hole_edges, parts, main_share, size(w,h,d), depth_ratio, flat, notes)"""
+    sc = _scene(glb, tex_max=16)
+    P = np.concatenate([x[0] for x in sc])
+    offs = np.cumsum([0] + [len(x[0]) for x in sc])
+    F = np.concatenate([x[1] + offs[i] for i, x in enumerate(sc)])
+    lo, hi = P.min(0), P.max(0)
+    ext = float(np.linalg.norm(hi - lo)) or 1.0
+    key = np.round((P - lo) / (ext * 1e-5)).astype(np.int64)            # 같은 자리 정점은 하나로(이음새·머리 경계)
+    _, wid = np.unique(key, axis=0, return_inverse=True)
+    wid = wid.ravel()
+    W = wid[F]
+    ok = (W[:, 0] != W[:, 1]) & (W[:, 1] != W[:, 2]) & (W[:, 0] != W[:, 2])
+    W = W[ok]
+    e = np.sort(np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]]), 1)
+    ue, cnt = np.unique(e, axis=0, return_counts=True)
+    bnd = ue[cnt == 1]
+    nv = int(wid.max()) + 1
+
+    def comps(edges, n):
+        par = np.arange(n)
+        def root(x):
+            while par[x] != x:
+                par[x] = par[par[x]]
+                x = par[x]
+            return x
+        for a_, b_ in edges:
+            ra, rb = root(a_), root(b_)
+            if ra != rb:
+                par[ra] = rb
+        return np.array([root(i) for i in range(n)])
+
+    lab = comps(ue, nv)
+    used = np.unique(W)
+    parts, sizes = np.unique(lab[used], return_counts=True)
+    holes = 0
+    if len(bnd):
+        bl = comps(bnd, nv)
+        holes = int(len(np.unique(bl[np.unique(bnd)])))
+    w_, h_, d_ = (hi - lo).tolist()
+    dr = d_ / max(w_, 1e-9)
+    notes = []
+    if holes:
+        notes.append(f"구멍 {holes}곳(테두리 모서리 {len(bnd):,}개)")
+    if len(parts) > 1:
+        notes.append(f"떨어진 조각 {len(parts) - 1}개(큰 덩어리 밖 {1 - sizes.max() / sizes.sum():.1%})")
+    if dr < 0.25:
+        notes.append(f"납작해요(두께 ÷ 너비 {dr:.2f})")
+    return {"tris": int(len(F)), "verts": int(nv), "holes": holes, "hole_edges": int(len(bnd)), "parts": int(len(parts)),
+            "main_share": round(float(sizes.max() / sizes.sum()), 4), "size": [round(w_, 4), round(h_, 4), round(d_, 4)],
+            "depth_ratio": round(float(dr), 3), "flat": bool(dr < 0.25), "notes": notes}
+
+
+def engine_match(glb, photo, head=None, dist_e=None, cam_hint=None):
+    """3D 엔진 결과(사진 붙이기 전)가 사진과 얼마나 맞나: 실루엣 겹침, (얼굴 상자가 있으면) 엔진이 칠한 얼굴과 사진 얼굴의 자리 일치(NCC, 1 이 같음).
+    멀티뷰가 정면을 망치는지(고개 각도가 사진과 달라지는지) 비교하는 데 써요. → dict"""
+    M = load(glb)
+    ph = np.asarray(photo.convert("RGBA")).astype(np.float64) / 255
+    alpha, rgb = ph[..., 3], ph[..., :3]
+    cam, v, pat = fit(M["P"], M["F"], M["UV"], M["tex"], alpha, rgb, None, dist_e, cam_hint)
+    out = {"iou": round(float(v), 3), "pattern": round(float(pat), 3)}
+    if head is not None:
+        info = _align_face(M["P"], M["F"], M["UV"], M["tex"], cam, head, rgb, alpha, None)[3]
+        if info.get("ncc"):
+            out["face"] = info["ncc"][0]
+    return out

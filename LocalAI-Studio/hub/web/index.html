@@ -788,6 +788,8 @@
     <div class="row"><label class="f">종류<select id="m3-kind"><option value="character">사람·캐릭터</option><option value="object" selected>물건·소품</option><option value="big">건물·탈것 등 큰 것</option></select></label>
       <label class="f">이름<input id="m3-name" placeholder="예: 기사_캐릭터"></label></div>
     <div id="m3-check"></div>
+    <label class="f" title="사진 한 장: 정면을 원본 그대로 살리고, 옆·뒤는 3D 엔진이 학습한 형태로 추정해요(권장). AI 멀티뷰 보조: AI 가 그린 왼쪽·뒤·오른쪽 그림을 함께 넣어요 — 그림이 앞 사진과 자세·비율이 다르면 그 그림은 빼고 만들어요.">만드는 방식<select id="m3-mode"><option value="single" selected>사진 한 장 (기본 · 정면에 가장 충실)</option><option value="multi">AI 멀티뷰 보조 (방향 그림 함께)</option></select></label>
+    <p class="mute" id="m3-modenote">사진에 없는 옆·뒤는 3D 엔진이 추정해요. 실제와 같다고 보장하지는 않아요.</p>
     <fieldset class="vset" id="m3-viewset" hidden><legend>여러 방향 <span class="mute">선택 · 뒷모습까지 정확하게</span></legend>
       <div class="m3-slots" id="m3-slots"></div>
       <div class="vbtns"><button type="button" class="ghost" id="m3-views" title="앞 사진을 보고 왼쪽·뒤·오른쪽 모습을 그려요(Qwen-Image 2.1)">왼쪽·뒤·오른쪽 그리기</button>
@@ -796,15 +798,6 @@
       <p class="mute" id="m3-mvnote"></p>
       <div class="vbtns" id="m3-tposebox" hidden><button type="button" class="ghost" id="m3-tpose" title="앞 사진의 캐릭터를 양팔을 옆으로 편 T자 자세로 다시 그려요(Qwen-Image 2.1) — 뼈대·가중치가 더 잘 맞아요">T자 자세로 바꾸기</button>
         <button type="button" class="ghost" id="m3-tundo" title="T자로 바꾸기 전 앞 사진으로 되돌려요" hidden>원래 자세로</button></div>
-    </fieldset>
-    <fieldset class="vset" id="m3-sceneset" hidden><legend>장면 전체 <span class="mute">선택 · 사진 속 여러 물체를 한 장면으로</span></legend>
-      <p class="mute">원본 사진에서 물체를 눌러 고르고 [이 물체 넣기]를 눌러요(Shift+클릭은 빼기). 물체마다 3D 를 만들어 사진 속 자리에 놓아요. 위치·크기는 AI 어림값이에요.</p>
-      <div class="m3-sbox" id="m3-sbox" title="물체를 눌러 고르기 · Shift+클릭은 빼기"><img id="m3-sorig" alt="원본 사진"><canvas id="m3-smask"></canvas></div>
-      <div class="vbtns"><button type="button" class="ghost" id="m3-sadd" disabled>이 물체 넣기</button><button type="button" class="ghost sm" id="m3-sreset" disabled>다시 고르기</button>
-        <button type="button" class="ghost" id="m3-ssam" hidden>선택 도구 설치 (약 45MB)</button></div>
-      <div class="m3-sobjs" id="m3-sobjs"></div>
-      <label class="chk" title="다른 물체에 가려졌거나 사진 가장자리에서 잘린 부분을 AI 편집(Qwen-Image 2.1)으로 그려 넣은 뒤 3D 로 만들어요"><input type="checkbox" id="m3-sfill"> 가려진 부분 채우기 <span class="mute">물체마다 AI 편집 · 느려요</span></label>
-      <button type="button" class="go wide" id="m3-sgo" disabled>장면 만들기</button>
     </fieldset>
     <fieldset class="vset"><legend>모양·텍스처</legend>
       <label class="f" title="Pixal3D 는 사진 화소를 3D 에 그대로 맞춰 붙여 얼굴·무늬가 사진에 더 가까워요(ComfyUI 공식 예시의 기본)">3D 엔진 (사진 한 장)<select id="m3-engine"><option value="auto" selected>자동 — Pixal3D 가 있으면 Pixal3D</option><option value="pixal">Pixal3D — 사진에 충실(얼굴·무늬)</option><option value="trellis">TRELLIS.2</option></select></label>
@@ -815,6 +808,9 @@
       <label class="chk" title="그물망을 고르게 다시 짜서 구멍·뾰족한 면을 줄여요"><input type="checkbox" id="m3-remesh" checked> 그물망 고르게 다시 짜기</label>
       <label class="chk" title="3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요. 얼굴·무늬가 사진처럼 나와요. 사진과 3D 가 안 맞으면 자동으로 건너뛰어요."><input type="checkbox" id="m3-photo" checked> 사진 그대로 붙이기(얼굴·무늬)</label>
       <label class="chk" title="사진에서 얼굴을 찾아 얼굴 부분을 키워 붙이고, 머리를 따로 떼어 전용 텍스처를 줘요(게임 회사 방식 — 얼굴 해상도가 여러 배). 얼굴 찾기(MediaPipe) 모델이 필요해요. 만화 그림체에서 얼굴을 엉뚱하게 잡으면 꺼 보세요."><input type="checkbox" id="m3-head" checked> 얼굴 고해상도(머리 전용 텍스처)</label>
+      <label class="chk" title="사진 속 얼굴의 각도가 3D 얼굴과 다를 때 사진 얼굴을 3D 쪽으로 휘어 붙여요. 원본 얼굴의 비율·눈코입 자리가 조금 바뀌어서 기본은 꺼져 있어요."><input type="checkbox" id="m3-align"> 얼굴 각도 맞추기(사진 휘기) <span class="mute">기본 꺼짐</span></label>
+      <label class="chk" title="면을 줄이기 전, 3D 엔진이 만든 원래의 촘촘한 그물망을 따로 저장해요(색 없음 · 파일이 커요). 나중에 다시 다듬을 때 써요."><input type="checkbox" id="m3-keephi" checked> 원본 고밀도 메시도 저장</label>
+      <label class="chk" title="A 엔진 원본 · B 사진 붙이기 · C 얼굴 텍스처 · D Blender 마무리 · E AI 멀티뷰(방향 그림이 있을 때)를 각각 저장하고, 앞·왼쪽·오른쪽·뒤 비교표를 만들어요. E 는 3D 를 한 번 더 만들어서 시간이 더 걸려요."><input type="checkbox" id="m3-compare"> 단계별 결과·비교표 저장 <span class="mute">A~E · 느려요</span></label>
     </fieldset>
     <fieldset class="vset"><legend>Blender 마무리 <span class="mute">크기·LOD·FBX/OBJ</span></legend>
       <div id="m3-bl" class="lo-eng"></div>
@@ -825,6 +821,15 @@
       <label class="chk" title="사람형 캐릭터에 뼈대(Mixamo 이름 — Unity·Unreal 사람형 자동 매핑)와 가중치를 넣어요. 양팔을 편 T자·A자 자세일 때 가장 잘 맞아요"><input type="checkbox" id="m3-rig"> 뼈대 넣기 <span class="mute">사람형 캐릭터</span></label>
       <div class="vbtns"><label class="chk"><input type="checkbox" id="m3-fmt-glb" checked> GLB</label><label class="chk"><input type="checkbox" id="m3-fmt-fbx" checked> FBX</label><label class="chk"><input type="checkbox" id="m3-fmt-obj"> OBJ</label></div>
     </fieldset>
+    <details class="vset m3-fold" id="m3-sceneset" hidden><summary>장면 전체 — 이 물체 넣기 <span class="mute">선택 · 사진 속 여러 물체를 한 장면으로</span></summary>
+      <p class="mute">원본 사진에서 물체를 눌러 고르고 [이 물체 넣기]를 눌러요(Shift+클릭은 빼기). 물체마다 3D 를 만들어 사진 속 자리에 놓아요. 위치·크기는 AI 어림값이에요.</p>
+      <div class="m3-sbox" id="m3-sbox" title="물체를 눌러 고르기 · Shift+클릭은 빼기"><img id="m3-sorig" alt="원본 사진"><canvas id="m3-smask"></canvas></div>
+      <div class="vbtns"><button type="button" class="ghost" id="m3-sadd" disabled>이 물체 넣기</button><button type="button" class="ghost sm" id="m3-sreset" disabled>다시 고르기</button>
+        <button type="button" class="ghost" id="m3-ssam" hidden>선택 도구 설치 (약 45MB)</button></div>
+      <div class="m3-sobjs" id="m3-sobjs"></div>
+      <label class="chk" title="다른 물체에 가려졌거나 사진 가장자리에서 잘린 부분을 AI 편집(Qwen-Image 2.1)으로 그려 넣은 뒤 3D 로 만들어요"><input type="checkbox" id="m3-sfill"> 가려진 부분 채우기 <span class="mute">물체마다 AI 편집 · 느려요</span></label>
+      <button type="button" class="go wide" id="m3-sgo" disabled>장면 만들기</button>
+    </details>
   </form>
   <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
   <div class="col">
