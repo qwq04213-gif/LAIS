@@ -520,6 +520,8 @@ def run_wf(wf, J, raw=False):
                     raise RuntimeError(msg)
             imgs = []
             for o in h.get("outputs", {}).values():
+                if o.get("text"):                     # '값 미리보기' 노드의 글(예: 어림한 화각)
+                    J.setdefault("wf_text", []).extend(str(x) for x in o["text"])
                 for im in (o.get("images", []) + (o.get("audio", []) + o.get("3d", []) if raw else [])):
                     with urllib.request.urlopen(CUI + "/view?" + urllib.parse.urlencode(im), timeout=300 if raw else 60) as f:
                         data = f.read()

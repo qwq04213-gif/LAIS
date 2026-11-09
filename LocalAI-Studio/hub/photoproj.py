@@ -230,23 +230,30 @@ def _cams():
     return out
 
 
-def _bbox(mask, keep=0.001):
-    ys, xs = np.nonzero(mask)
-    if len(xs) < 16:
+def _bbox(mask, keep=None):
+    """물체 범위(x0, y0, x1, y1). 튀는 점은 빼되(줄·칸마다 2화소 이상 있어야 물체로 봐요), 좁은 머리 꼭대기 같은 진짜 끝은 자르지 않아요."""
+    rows, cols = mask.sum(1), mask.sum(0)
+    ry, rx = np.nonzero(rows >= 2)[0], np.nonzero(cols >= 2)[0]
+    if len(ry) < 4 or len(rx) < 4 or mask.sum() < 16:
         return None
-    return (np.quantile(xs, keep), np.quantile(ys, keep), np.quantile(xs, 1 - keep) + 1, np.quantile(ys, 1 - keep) + 1)
+    return (float(rx[0]), float(ry[0]), float(rx[-1] + 1), float(ry[-1] + 1))
 
 
 class Cam:
     """3D → 사진 화소 좌표. 사진 실루엣 상자에 3D 상자를 맞춰요."""
 
-    def __init__(self, c, P, abox, dist=None):
+    def __init__(self, c, P, abox, dist=None, dist_e=None):
+        """dist: 카메라 거리 ÷ 물체 대각선(찾아볼 때). dist_e: 카메라 거리 ÷ 앞에서 본 물체의 긴 변(3D 엔진이 쓴 카메라를 알 때)."""
         self.r, self.u, self.b = c["r"], c["u"], c["b"]
-        self.name, self.dist = c["name"], dist
+        self.name, self.dist = c["name"], dist if dist_e is None else f"e{dist_e:.2f}"
         self.ctr = (P.min(0) + P.max(0)) / 2
         ext = float(np.linalg.norm(P.max(0) - P.min(0))) or 1.0
         self.ext = ext
-        self.D = None if dist is None else dist * ext
+        if dist_e is not None:
+            q = P - self.ctr
+            self.D = dist_e * max(float(np.ptp(q @ self.r)), float(np.ptp(q @ self.u)), 1e-9)
+        else:
+            self.D = None if dist is None else dist * ext
         X, Y, _ = self._proj(P)
         mx, my, Mx, My = X.min(), -Y.max(), X.max(), -Y.min()
         ax0, ay0, ax1, ay1 = abox
@@ -281,7 +288,7 @@ def _sil(cam, P, F, scale, W, H, z=False):
     return raster(xy, F, W, H, d if z else None)
 
 
-def fit(P, F, UV, tex, alpha, rgb, log=None):
+def fit(P, F, UV, tex, alpha, rgb, log=None, dist_e=None):
     """사진 실루엣(alpha, 0~1)과 가장 잘 맞는 카메라 → (Cam, 겹침, 무늬 겹침)"""
     L = 192
     H0, W0 = alpha.shape
@@ -327,7 +334,10 @@ def fit(P, F, UV, tex, alpha, rgb, log=None):
     if len(top) > 1:                                  # 실루엣만으로 앞·뒤를 못 가리면 색으로
         top.sort(key=lambda x: diff(Cam(x[1], P, abox)) - x[0])
     v, c = top[0]
-    cands = [(ncc(cam), cam) for cam in (Cam(c, P, abox, k) for k in DIST)]      # 원근은 무늬로 골라요
+    if dist_e:                                        # 3D 엔진이 쓴 카메라(화각)를 알면 원근은 계산으로 — 정확해요
+        cands = [(ncc(cam), cam) for cam in (Cam(c, P, abox, dist_e=dist_e),)]
+    else:                                             # 모르면 무늬가 가장 잘 겹치는 원근으로(어림)
+        cands = [(ncc(cam), cam) for cam in (Cam(c, P, abox, k) for k in DIST)]
     pat, cam = max(cands, key=lambda x: x[0])
     if log:
         log(f"[사진 붙이기] 카메라 {cam.name} 거리 {cam.dist} 겹침 {v:.3f} 무늬 {pat:.3f}")
@@ -409,7 +419,7 @@ def _adjust_orm(M, wmap, skin):
     return out
 
 
-def project(glb, photo, face=None, log=None, progress=None, head=None, head_size=4096):
+def project(glb, photo, face=None, log=None, progress=None, head=None, head_size=4096, dist_e=None):
     """photo: 배경 지운 앞 사진(RGBA PIL). face: (x0, y0, x1, y1, 확대한 RGBA PIL) — 사진 좌표의 얼굴 상자와 그 확대본.
     head: (x0, y0, x1, y1) 사진 속 얼굴 상자 — 주면 머리를 따로 떼어 자기 텍스처(head_size)를 줘요(얼굴 해상도 여러 배).
     → (새 GLB 바이트, 정보 dict). 맞지 않으면 (원래 GLB, {"skip": 이유})"""
@@ -417,7 +427,7 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     P, F, UV, tex = M["P"], M["F"], M["UV"], M["tex"]
     ph = np.asarray(photo.convert("RGBA")).astype(np.float64) / 255
     alpha, rgb = ph[..., 3], ph[..., :3]
-    cam, v, pat = fit(P, F, UV, tex, alpha, rgb, log)
+    cam, v, pat = fit(P, F, UV, tex, alpha, rgb, log, dist_e)
     if not (v >= MIN_IOU or (v >= MIN_IOU_PAT[0] and pat >= MIN_IOU_PAT[1])):
         return glb, {"skip": "shape", "iou": round(v, 3), "pat": round(pat, 3)}
     if progress:
@@ -526,7 +536,7 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     for ii, data in pics:
         new = replace_image(g, b, ii, data)
         g, b = glbscene.read(new)
-    info = {"iou": round(v, 3), "pat": round(pat, 3), "cam": cam.name, "texels": int((w[:, 0] > 0.5).sum()), "face": bool(fbox),
+    info = {"iou": round(v, 3), "pat": round(pat, 3), "cam": cam.name, "dist": str(cam.dist), "texels": int((w[:, 0] > 0.5).sum()), "face": bool(fbox),
             "skin": round(float(sk.mean()), 3)}
     if head is not None:
         try:

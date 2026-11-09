@@ -55,6 +55,7 @@ touch(*files_of("pixal3d"))
 assert get("/api/m3d/" + sid)["ready"]["pixal"]
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "", "res": "1536", "tex": "4096"}); assert j["state"] == "done", j      # 자동 → Pixal3D
 pc = cls("Pixal3DConditioning")[0]; assert node(pc["camera_angle_x"]) == "MoGeGeometryToFOV" and node(pc["image"]) == "ImageCropToMask"
+assert node(cls("PreviewAny")[0]["source"]) == "MoGeGeometryToFOV"                          # 어림한 화각을 글로 돌려받아 사진 붙이기 원근에 써요
 assert cls("ImageCropToMask")[0]["pad_factor"] == 1.1 and cls("MoGeGeometryToFOV")[0]["axis"] == "horizontal" and cls("LoadMoGeModel")[0]["model_name"].startswith("moge")
 assert cls("UNETLoader")[0]["unet_name"] == "pixal3d_int8_convrot.safetensors" and cls("CLIPVisionLoader")[0]["clip_name"] == "dino_v3_L_naf_fp32.safetensors"
 assert cls("Trellis2UpsampleStage")[0]["target_resolution"] == 1536 and cls("BakeTextureFromVoxel")[0]["texture_size"] == 4096 and not cls("Trellis2Conditioning")

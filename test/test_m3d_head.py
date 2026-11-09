@@ -171,4 +171,16 @@ assert any("얼굴 부분이" in w and "업스케일" in w for w in j.get("warn"
 j = job({"kind": "m3d", "op": "build", "id": sid, "blender": "", "tex": "2048", "head": False}); assert j["state"] == "done", j
 assert len(glbscene.read(urllib.request.urlopen(B + j["images"][0]).read())[0]["meshes"][0]["primitives"]) == 1 and not j["m3d_stats"]["photo"].get("head")
 ok("3D build: face found → head texture on by default (shown on the result), off with the option")
+
+# Pixal3D 화각 → 사진 붙이기 원근을 계산으로(카메라 거리 = 0.55/tan(화각/2) × 긴 변)
+CAT = {m["id"]: m for m in json.loads((Path(BASE) / "LocalAI-Studio/hub/models.json").read_text(encoding="utf-8"))["image"]}
+for f in CAT["pixal3d"]["files"]:
+    (M / f["dir"] / f["url"].rsplit("/", 1)[1]).parent.mkdir(parents=True, exist_ok=True); (M / f["dir"] / f["url"].rsplit("/", 1)[1]).write_bytes(b"x")
+STATE["fov_text"] = "38.5"
+jid = post("/api/job", {"kind": "m3d", "op": "build", "id": sid, "blender": "", "tex": "2048", "head": False})["id"]; j = wait(jid); assert j["state"] == "done", j
+assert hub.JOBS[jid]["m3d_photo"][-1]["dist"] == f"e{0.55 / np.tan(np.radians(38.5) / 2):.2f}", hub.JOBS[jid]["m3d_photo"]
+(M / CAT["pixal3d"]["files"][-1]["dir"] / CAT["pixal3d"]["files"][-1]["url"].rsplit("/", 1)[1]).unlink()           # MoGe 없음 → 기본 화각 49.13
+jid = post("/api/job", {"kind": "m3d", "op": "build", "id": sid, "blender": "", "tex": "2048", "head": False})["id"]; j = wait(jid)
+assert hub.JOBS[jid]["m3d_photo"][-1]["dist"] == f"e{0.55 / np.tan(np.radians(49.13) / 2):.2f}", hub.JOBS[jid]["m3d_photo"]
+ok("Pixal3D: field of view read back from MoGe (or the 49.13 default) sets the projection perspective exactly")
 print("ALL OK")

@@ -755,7 +755,9 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     # 단계 수(구조, 모양 512, 재질, 모양 올려 그리기)·cfg — 원본 TRELLIS.2 기본값
     nodes = caps()["nodes"]
     co = not nodes or "CFGOverride" in nodes
+    nodes0 = caps()["nodes"]
     q = {"files": f, "views": views, "multiview": mv, "pixal1": bool(f.get("pixal")) and not mv, "moge": f.get("moge"), "framed": mv, "seed": seed,
+         "fov_out": not nodes0 or "PreviewAny" in nodes0,
          "steps": (12, 20, 12, 12), "cfg": (7.5, 7.5, 1.0),
          "res": o["res"], "remesh": o["remesh"], "faces": o["faces"], "tex": o["tex"], "cfg_override": co}
     if not co:
@@ -773,8 +775,21 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
         raise RuntimeError("3D 결과(GLB)를 받지 못했어요.")
     _clean_tmp(J)
     glb = photoproj.fix_samplers(glb)
+    # 사진 붙이기 원근: Pixal3D 는 정해진 화각으로 만들어서 계산할 수 있어요(카메라 거리 = 0.5/tan(화각/2), 물체는 화면의 1/1.1 → 긴 변 기준 0.55/tan)
+    dist_e = None
+    texts = J.pop("wf_text", None) or []
+    if mv:
+        bb = fr["front"].convert("L").point(lambda x: 255 if x > 8 else 0).getbbox()
+        if bb:
+            dist_e = 0.5 / math.tan(math.radians(20.0) / 2) * fr["front"].width / max(bb[2] - bb[0], bb[3] - bb[1])
+    elif q["pixal1"]:
+        fov = 49.13
+        if q.get("moge"):
+            fov = next((float(t) for t in texts if re.fullmatch(r"\s*\d+(\.\d+)?\s*", str(t)) and 5 < float(t) < 170), None)
+        if fov:
+            dist_e = 0.55 / math.tan(math.radians(fov) / 2)
     if o.get("photo", True):
-        glb = m3d_photo(glb, imgs["front"], J, o)
+        glb = m3d_photo(glb, imgs["front"], J, o, dist_e)
     return glb
 
 
@@ -873,7 +888,7 @@ def m3d_face_up(photo, b, J):
     return (x0, y0, x1, y1, big)
 
 
-def m3d_photo(glb, photo, J, o=None):
+def m3d_photo(glb, photo, J, o=None, dist_e=None):
     """사진 붙이기: 3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요(얼굴·무늬가 사진처럼). 안 맞으면 원래 색 그대로."""
     box, face = None, None
     if o.get("head", True):
@@ -883,7 +898,7 @@ def m3d_photo(glb, photo, J, o=None):
             quiet_log("[3D 얼굴 키우기 실패]", repr(e))
     J["msg"] = "사진을 3D 에 붙이는 중 — 얼굴·무늬를 사진 그대로" + (" · 머리 전용 텍스처" if box else "")
     try:
-        new, info = photoproj.project(glb, photo, face, log=quiet_log, head=box, head_size=max(2048, int(o.get("tex") or 4096)))
+        new, info = photoproj.project(glb, photo, face, log=quiet_log, head=box, head_size=max(2048, int(o.get("tex") or 4096)), dist_e=dist_e)
     except ValueError as e:              # 붙일 수 없는 모양(텍스처 없음 등) — 원래 색 그대로
         quiet_log("[3D 사진 붙이기 건너뜀]", e)
         J["m3d_photo_res"] = {"done": False, "text": f"이 3D 에는 붙일 수 없었어요({e})"}

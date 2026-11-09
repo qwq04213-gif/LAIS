@@ -151,7 +151,7 @@ REQ.update({"LTXVDualCFGGuider": ["model", "positive", "negative", "video_cfg", 
             "SamplerCustomAdvanced": ["noise", "guider", "sampler", "sigmas", "latent_image"], "RandomNoise": ["noise_seed"],
             "VAEDecodeTiled": ["samples", "vae", "tile_size", "overlap", "temporal_size", "temporal_overlap"]})
 REQ.update({"LoadMediaPipeFaceLandmarker": ["model_name"], "MediaPipeFaceLandmarker": ["face_detection_model", "image", "detector_variant", "num_faces"],
-            "MediaPipeFaceMask": ["face_landmarks", "regions"]})
+            "MediaPipeFaceMask": ["face_landmarks", "regions"], "PreviewAny": ["source"]})
 REQ.update({"LoadBackgroundRemovalModel": ["bg_removal_name"], "RemoveBackground": ["bg_removal_model", "image"], "MaskToImage": ["mask"]})
 REQ.update({"InvertMask": ["mask"], "ImageCropToMask": ["images", "masks"], "Trellis2Conditioning": ["clip_vision_model", "image"],
             "Pixal3DMultiViewConditioning": ["clip_vision_model", "front"], "Pixal3DConditioning": ["clip_vision_model", "image", "camera_angle_x"], "LoadMoGeModel": ["model_name"], "MoGeInference": ["moge_model", "image"], "MoGeGeometryToFOV": ["moge_geometry"], "EmptyTrellis2LatentStructure": ["batch_size"],
@@ -265,7 +265,7 @@ class Comfy(BaseHTTPRequestHandler):
             if not h: return self.j({})
             if h.get("slow") and not h.get("interrupted"): return self.j({})
             if h["polls"] < 1: h["polls"] += 1; return self.j({})
-            if h.get("glb"): return self.j({pid: {"outputs": {"99": {"3d": [{"filename": pid + ".glb", "subfolder": "3d", "type": "output"}]}}, "status": {"status_str": "success", "messages": []}}})
+            if h.get("glb"): return self.j({pid: {"outputs": {"99": {"3d": [{"filename": pid + ".glb", "subfolder": "3d", "type": "output"}]}, **({"98": {"text": [STATE.get("fov_text", "38.5")]}} if h.get("txt") else {})}, "status": {"status_str": "success", "messages": []}}})
             if h.get("audio"): return self.j({pid: {"outputs": {"99": {"audio": [{"filename": pid + ".mp3", "subfolder": "audio", "type": "output"}]}}, "status": {"status_str": "success", "messages": []}}})
             if h.get("webp"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".webp", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
             if h.get("video"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".mp4", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
@@ -294,7 +294,7 @@ class Comfy(BaseHTTPRequestHandler):
             except AssertionError as e:
                 return self.j({"error": {"message": "Prompt outputs failed validation"}, "node_errors": {"1": {"class_type": "X", "errors": [{"message": str(e), "details": ""}]}}}, 400)
             pid = f"p{len(SUBMITTED)}"; SUBMITTED.append(wf)
-            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": any(n["class_type"] == "SaveGLB" for n in wf.values()), "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
+            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": any(n["class_type"] == "SaveGLB" for n in wf.values()), "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "txt": any(n["class_type"] == "PreviewAny" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
             if STATE["ws"] and WS_CLIENTS and not HIST[pid]["slow"]: HIST[pid]["polls"] = -14; threading.Thread(target=ws_progress, args=(pid, 5, 0.35, wf), daemon=True).start()
             return self.j({"prompt_id": pid, "number": 1, "node_errors": {}})
         if self.path == "/free": STATE["freed"] += 1; return self.j({})

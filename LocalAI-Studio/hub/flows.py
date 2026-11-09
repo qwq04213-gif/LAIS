@@ -812,6 +812,8 @@ def wf_trellis(q):
             geo = w.add("MoGeInference", moge_model=[w.add("LoadMoGeModel", model_name=q["moge"]), 0], image=img, resolution_level=9, fov_x_degrees=0.0,
                         batch_size=4, force_projection=True, apply_mask=True, refine_steps=3)
             fov = [w.add("MoGeGeometryToFOV", moge_geometry=[geo, 0], axis="horizontal", unit="degrees"), 0]
+            if q.get("fov_out"):                      # 어림한 화각을 글로 돌려받아요(사진 붙이기가 원근을 정확히 맞추게)
+                w.add("PreviewAny", source=fov)
         cond = w.add("Pixal3DConditioning", clip_vision_model=cv, image=img, camera_angle_x=fov)
     else:
         cond = w.add("Trellis2Conditioning", clip_vision_model=cv, image=prep(v["front"]))
