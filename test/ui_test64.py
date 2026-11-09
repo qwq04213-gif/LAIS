@@ -24,7 +24,7 @@ with sync_playwright() as p:
     pg.click("nav button[data-v=m3d]"); pg.wait_for_timeout(500)
     assert pg.is_disabled("#m3-go") and not pg.is_visible("#m3-viewset") and "Blender 설치" in pg.inner_text("#m3-bl") and not pg.is_visible("#m3-del")
     ok("3D view: empty state, build disabled, Blender install offered")
-    pg.select_option("#m3-kind", "character"); assert pg.input_value("#m3-height") == "1.7" and pg.input_value("#m3-faces") == "20000"
+    pg.select_option("#m3-kind", "character"); assert pg.input_value("#m3-height") == "1.7" and pg.input_value("#m3-faces") == "200000" and pg.is_checked("#m3-photo") and pg.locator("#m3-faces option[value='700000']").count() == 1
     pg.fill("#m3-name", "knight")
     pg.set_input_files("#m3-file", str(D / "knight.png")); pg.wait_for_function("!document.querySelector('#m3-go').disabled", timeout=15000)
     assert pg.locator("#m3-check li").count() >= 1 and pg.locator("#m3-slots .m3-slot").count() == 4 and pg.locator("#m3-slots .m3-slot img").count() == 1

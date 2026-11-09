@@ -4,6 +4,7 @@
 
 import blender3d
 import glbscene
+import photoproj
 
 M3D_DIR = ROOT / "m3d_work"
 M3D_SUB = "3D"
@@ -19,11 +20,11 @@ M3D_SIDE_EN = {"left": "the exact left side profile of the subject (the camera o
                "right": "the exact right side profile of the subject (the camera orbits 270 degrees around it). Seen strictly from its own right side: "
                         "the subject's front and face point toward the RIGHT edge of the image, its back toward the left edge, only its right arm and right side are visible"}
 M3D_RES = (512, 1024, 1536)
-M3D_REMESH = 768                                     # 다시 짜기 해상도(공식 예시와 같게)
+M3D_REMESH = 768                                     # 다시 짜기 해상도(공식 예시와 같게) — 세밀함 1536 이면 1024 로 올려 얼굴 굴곡을 살려요
 M3D_VFIT = 0.6                                       # 실루엣 맞춤 기준(아래면 '의심' — 기본으로 체크를 풀어요)
-M3D_FACES = (5000, 20000, 50000, 200000)
+M3D_FACES = (5000, 20000, 50000, 200000, 700000)        # 70만 = 공식 예시 값
 M3D_TEX = (1024, 2048, 4096)
-M3D_KIND = {"character": {"faces": 20000, "height": 1.7}, "object": {"faces": 20000, "height": 0}, "big": {"faces": 50000, "height": 0}}
+M3D_KIND = {"character": {"faces": 200000, "height": 1.7}, "object": {"faces": 50000, "height": 0}, "big": {"faces": 200000, "height": 0}}
 
 
 def trellis_files(multiview=False):
@@ -383,7 +384,7 @@ def m3d_scene(p, J):
             "axes": "x 오른쪽 · y 앞쪽(카메라에서 멀어짐) · z 위 (Blender 기준), 위치는 물체 바닥 가운데",
             "objects": [{"name": pt["name"], "file": pt["name"] + ".glb", "pos": pt["pos"], "height": pt["height"], "size_m": inf["size_m"],
                          "tris": inf["tris"]} for pt, inf in zip(parts, info)]}
-    base_info = {"kind": "3d", "engine": ("Pixal3D" if f.get("pixal") else "TRELLIS.2") + " 장면", "objects": len(parts), "res": o["res"], "faces": o["faces"], "tex": o["tex"],
+    base_info = {"kind": "3d", "photo": bool(J.get("m3d_photo")), "face": any(x.get("face") for x in J.get("m3d_photo") or []), "engine": ("Pixal3D" if f.get("pixal") else "TRELLIS.2") + " 장면", "objects": len(parts), "res": o["res"], "faces": o["faces"], "tex": o["tex"],
                  "seed": seed, "name": m["name"], "_sub": M3D_SUB, "fill": fill}
     work = d / f"scene_{uuid.uuid4().hex[:6]}"
     (work / "pack").mkdir(parents=True, exist_ok=True)
@@ -619,11 +620,12 @@ def m3d_opts(p, m):
     res = int(num(p, "res", 1024, int))
     faces = int(num(p, "faces", kind["faces"], int))
     tex = int(num(p, "tex", 2048, int))
-    return {"res": res if res in M3D_RES else 1024, "faces": faces if faces in M3D_FACES else 20000, "tex": tex if tex in M3D_TEX else 2048,
-            "remesh": M3D_REMESH if flag(p, "remesh", True) else 0, "blender": flag(p, "blender", True), "height": clamp(num(p, "height", kind["height"]), 0.0, 500.0),
+    res = res if res in M3D_RES else 1024
+    return {"res": res, "faces": faces if faces in M3D_FACES else kind["faces"], "tex": tex if tex in M3D_TEX else 2048,
+            "remesh": (1024 if res >= 1536 else M3D_REMESH) if flag(p, "remesh", True) else 0, "blender": flag(p, "blender", True), "height": clamp(num(p, "height", kind["height"]), 0.0, 500.0),
             "rotate": int(num(p, "rotate", 0, int)) % 360 // 90 * 90, "lods": flag(p, "lods", True),
             "formats": [x for x in ("glb", "fbx", "obj") if flag(p, "fmt_" + x, x != "obj")] or ["glb"],
-            "rig": flag(p, "rig", m.get("kind") == "character")}
+            "rig": flag(p, "rig", m.get("kind") == "character"), "photo": flag(p, "photo", True)}
 
 
 def m3d_engine(p):
@@ -732,7 +734,79 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None):
     if not glb:
         raise RuntimeError("3D 결과(GLB)를 받지 못했어요.")
     _clean_tmp(J)
+    if o.get("photo", True):
+        glb = m3d_photo(glb, imgs["front"], J)
     return glb
+
+
+M3D_FACE_GOOD = 1024      # 얼굴 부분이 이보다 작으면 키워서 붙여요
+
+
+def m3d_face(photo, J):
+    """사진에서 얼굴을 찾아(MediaPipe) 그 부분을 업스케일로 키워요 → (x0, y0, x1, y1, 키운 그림) 또는 None.
+    얼굴 찾기 모델·노드·업스케일 모델이 없거나, 얼굴이 없거나, 이미 충분히 크면 None."""
+    model = next((n for n in files("detection") if "mediapipe_face" in n.lower()), None)
+    nodes = caps()["nodes"]
+    if not model or (nodes and not all(x in nodes for x in ("LoadMediaPipeFaceLandmarker", "MediaPipeFaceLandmarker", "MediaPipeFaceMask"))):
+        J.setdefault("m3d_notes", []).append("face_model")
+        return None
+    k = min(1.0, 1536 / max(photo.size))
+    small = photo.resize((max(1, round(photo.width * k)), max(1, round(photo.height * k))), RS.LANCZOS) if k < 1 else photo
+    bg = Image.new("RGB", small.size, (128, 128, 128))
+    bg.paste(small.convert("RGB"), mask=small.getchannel("A") if small.mode == "RGBA" else None)
+    try:
+        res = run_wf(flows.wf_face_mask(model, put_input(bg, J)), J, raw=True)
+    except Exception as e:  # noqa: BLE001 — 얼굴 찾기는 덤이라 실패해도 3D 는 계속
+        quiet_log("[3D 얼굴 찾기 실패]", repr(e))
+        return None
+    mk = next((dat for n, dat in res if n.lower().endswith(".png")), None)
+    box = Image.open(io.BytesIO(mk)).convert("L").point(lambda v: 255 if v > 127 else 0).getbbox() if mk else None
+    if not box:
+        return None
+    x0, y0, x1, y1 = (v / k for v in box)
+    cx, cy, side = (x0 + x1) / 2, (y0 + y1) / 2, max(x1 - x0, y1 - y0) * 1.5
+    x0, y0 = max(0, round(cx - side / 2)), max(0, round(cy - side / 2))
+    x1, y1 = min(photo.width, round(cx + side / 2)), min(photo.height, round(cy + side / 2))
+    side = max(x1 - x0, y1 - y0)
+    if side >= M3D_FACE_GOOD or side < 24:
+        return None
+    up = m3d_upscaler()
+    if not up:
+        warn(J, f"얼굴 부분이 {side}px 로 작아요. '설치와 모델'에서 업스케일 모델(SeedVR2 또는 Real-ESRGAN)을 받으면 얼굴을 키워서 더 선명하게 붙여요.")
+        return None
+    J["msg"] = f"얼굴 부분을 키우는 중 ({side}px → 약 {min(4 * side, 1536)}px)"
+    crop = photo.crop((x0, y0, x1, y1)).convert("RGB")
+    big = upscale(crop, J, up, round(min(4.0, 1536 / side), 2))
+    return (x0, y0, x1, y1, big)
+
+
+def m3d_photo(glb, photo, J):
+    """사진 붙이기: 3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요(얼굴·무늬가 사진처럼). 안 맞으면 원래 색 그대로."""
+    face = None
+    try:
+        face = m3d_face(photo, J)
+    except Exception as e:  # noqa: BLE001
+        quiet_log("[3D 얼굴 키우기 실패]", repr(e))
+    J["msg"] = "사진을 3D 에 붙이는 중 — 얼굴·무늬를 사진 그대로"
+    try:
+        new, info = photoproj.project(glb, photo, face, log=quiet_log)
+    except ValueError as e:              # 붙일 수 없는 모양(텍스처 없음 등) — 원래 색 그대로
+        quiet_log("[3D 사진 붙이기 건너뜀]", e)
+        return glb
+    except Exception as e:  # noqa: BLE001
+        quiet_log("[3D 사진 붙이기 실패]", repr(e))
+        warn(J, f"사진 붙이기를 하지 못해 3D 엔진이 칠한 색 그대로예요({str(e)[:80]}).")
+        return glb
+    if info.get("skip") == "shape":
+        warn(J, f"사진과 3D 모양이 충분히 겹치지 않아(겹침 {info['iou']:.0%}) 사진 붙이기는 건너뛰었어요. 어긋나게 붙으면 번져 보여서요.")
+        return glb
+    if info.get("skip"):
+        return glb
+    J.setdefault("m3d_photo", []).append(info)
+    if "face_model" in (J.get("m3d_notes") or []) and not J.get("_face_noted"):
+        J["_face_noted"] = 1
+        warn(J, "얼굴 찾기 모델이 없어 얼굴 확대는 건너뛰었어요. '설치와 모델'의 3D 분류에서 '얼굴 찾기(MediaPipe)'를 받으면 얼굴이 더 선명해져요.")
+    return new
 
 
 def m3d_build(p, J):
@@ -751,7 +825,7 @@ def m3d_build(p, J):
         imgs[sd] = Image.open(d / f"view_{sd}.png").convert("RGBA")
     q = {"seed": seed_of(p)}
     glb = m3d_glb(imgs, mv, f, o, q["seed"], J)
-    base_info = {"kind": "3d", "engine": "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2", "views": ["front"] + use, "res": o["res"], "faces": o["faces"],
+    base_info = {"kind": "3d", "photo": bool(J.get("m3d_photo")), "face": any(x.get("face") for x in J.get("m3d_photo") or []), "engine": "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2", "views": ["front"] + use, "res": o["res"], "faces": o["faces"],
                  "tex": o["tex"], "seed": q["seed"], "name": m["name"], "_sub": M3D_SUB}
     items = []
     if o["blender"] and blender3d.exe(ROOT):

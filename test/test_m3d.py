@@ -93,7 +93,7 @@ side = json.loads(next((hub.OUT / "3D").glob("*.glb.json")).read_text(encoding="
 ok("build (single view): TRELLIS.2 graph — seeds, upsample to 1024, remesh, faces, texture size; Pixal3D fallback warned; saved in 3D/")
 # 빠르게(512) + 다시 짜기 끔 → 올려 그리기·다시 짜기 없음, 이상한 값은 기본값
 j = job({"kind": "m3d", "op": "build", "id": sid, "res": "512", "remesh": False, "faces": "123", "tex": "9999", "blender": False}); assert j["state"] == "done", j
-assert not cls("Trellis2UpsampleStage") and not cls("RemeshMesh") and cls("DecimateMesh")[0]["target_face_count"] == 20000 and cls("UnwrapMesh")[0]["resolution"] == 2048
+assert not cls("Trellis2UpsampleStage") and not cls("RemeshMesh") and cls("DecimateMesh")[0]["target_face_count"] == hub.M3D_KIND[hub.m3d_meta(sid)["kind"]]["faces"] and cls("UnwrapMesh")[0]["resolution"] == 2048
 ok("build options: 512 skips upsample, remesh off, invalid faces/tex fall back")
 # Pixal3D 멀티뷰
 touch("diffusion_models/pixal3d_multiview_int8_convrot.safetensors", "clip_vision/dino_v3_L_naf_fp32.safetensors")

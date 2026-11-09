@@ -54,6 +54,42 @@ def tiny_glb(w=0.6, h=1.0, d=0.4):
     return _st.pack("<4sII", b"glTF", 2, 12 + len(body)) + body
 
 
+def uv_glb(w=0.75, h=1.0, d=0.5, color=(60, 60, 200), n=12, tex=256):
+    """텍스처 좌표가 있는 상자(면마다 n×n 칸, 텍스처는 3×2 칸에 나눠 펼침) — 사진 붙이기 확인용. 앞(+z) 면은 왼쪽 위 칸."""
+    import struct as _st
+    P, UV, F = [], [], []
+    faces = [((0, 0, d / 2), (w, 0, 0), (0, h, 0)), ((0, 0, -d / 2), (-w, 0, 0), (0, h, 0)), ((w / 2, 0, 0), (0, 0, -d), (0, h, 0)),
+             ((-w / 2, 0, 0), (0, 0, d), (0, h, 0)), ((0, h / 2, 0), (w, 0, 0), (0, 0, -d)), ((0, -h / 2, 0), (w, 0, 0), (0, 0, d))]
+    for k, (c, a, b) in enumerate(faces):
+        cu, cv = k % 3, k // 3
+        base = len(P)
+        for j in range(n + 1):
+            for i in range(n + 1):
+                s_, t_ = i / n - 0.5, j / n - 0.5
+                P.append(tuple(c[q] + a[q] * s_ + b[q] * t_ for q in range(3)))
+                UV.append(((cu + 0.05 + 0.9 * i / n) / 3, (cv + 0.05 + 0.9 * (1 - j / n)) / 2))
+        for j in range(n):
+            for i in range(n):
+                q0 = base + j * (n + 1) + i
+                F += [(q0, q0 + 1, q0 + n + 2), (q0, q0 + n + 2, q0 + n + 1)]
+    bi = io.BytesIO(); (color if isinstance(color, Image.Image) else Image.new("RGB", (tex, tex), color)).save(bi, "PNG"); png = bi.getvalue()
+    pb = b"".join(_st.pack("<3f", *p) for p in P); ub = b"".join(_st.pack("<2f", *u) for u in UV); ib = b"".join(_st.pack("<3I", *f) for f in F)
+    parts, views, bin_ = [pb, ub, ib, png], [], b""
+    for x in parts:
+        bin_ += b"\0" * (-len(bin_) % 4); views.append({"buffer": 0, "byteOffset": len(bin_), "byteLength": len(x)}); bin_ += x
+    mn = [min(p[q] for p in P) for q in range(3)]; mx = [max(p[q] for p in P) for q in range(3)]
+    g = {"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0}],
+         "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "TEXCOORD_0": 1}, "indices": 2, "material": 0}]}],
+         "materials": [{"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}], "textures": [{"source": 0}],
+         "images": [{"bufferView": 3, "mimeType": "image/png"}], "buffers": [{"byteLength": len(bin_)}], "bufferViews": views,
+         "accessors": [{"bufferView": 0, "componentType": 5126, "count": len(P), "type": "VEC3", "min": mn, "max": mx},
+                       {"bufferView": 1, "componentType": 5126, "count": len(UV), "type": "VEC2"},
+                       {"bufferView": 2, "componentType": 5125, "count": len(F) * 3, "type": "SCALAR"}]}
+    js = json.dumps(g).encode(); js += b" " * (-len(js) % 4); bin_ += b"\0" * (-len(bin_) % 4)
+    body = _st.pack("<II", len(js), 0x4E4F534A) + js + _st.pack("<II", len(bin_), 0x004E4942) + bin_
+    return _st.pack("<4sII", b"glTF", 2, 12 + len(body)) + body
+
+
 REQ = {"CheckpointLoaderSimple": ["ckpt_name"], "LoraLoader": ["model", "clip", "lora_name", "strength_model", "strength_clip"],
        "LoraLoaderModelOnly": ["model", "lora_name", "strength_model"], "CLIPSetLastLayer": ["clip", "stop_at_clip_layer"],
        "CLIPTextEncode": ["text", "clip"], "EmptyLatentImage": ["width", "height", "batch_size"],
@@ -114,6 +150,8 @@ REQ.update({"LTXVDualCFGGuider": ["model", "positive", "negative", "video_cfg", 
             "LatentUpscaleModelLoader": ["model_name"], "LTXVAudioVAEDecode": ["samples", "audio_vae"], "ManualSigmas": ["sigmas"],
             "SamplerCustomAdvanced": ["noise", "guider", "sampler", "sigmas", "latent_image"], "RandomNoise": ["noise_seed"],
             "VAEDecodeTiled": ["samples", "vae", "tile_size", "overlap", "temporal_size", "temporal_overlap"]})
+REQ.update({"LoadMediaPipeFaceLandmarker": ["model_name"], "MediaPipeFaceLandmarker": ["face_detection_model", "image", "detector_variant", "num_faces"],
+            "MediaPipeFaceMask": ["face_landmarks", "regions"]})
 REQ.update({"LoadBackgroundRemovalModel": ["bg_removal_name"], "RemoveBackground": ["bg_removal_model", "image"], "MaskToImage": ["mask"]})
 REQ.update({"InvertMask": ["mask"], "ImageCropToMask": ["images", "masks"], "Trellis2Conditioning": ["clip_vision_model", "image"],
             "Pixal3DMultiViewConditioning": ["clip_vision_model", "front"], "Pixal3DConditioning": ["clip_vision_model", "image", "camera_angle_x"], "LoadMoGeModel": ["model_name"], "MoGeInference": ["moge_model", "image"], "MoGeGeometryToFOV": ["moge_geometry"], "EmptyTrellis2LatentStructure": ["batch_size"],
@@ -233,7 +271,7 @@ class Comfy(BaseHTTPRequestHandler):
             if h.get("video"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".mp4", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
             return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".png", "subfolder": "", "type": "temp"}]}}, "status": {"status_str": "success", "messages": []}}})
         if u == "/view" and ".glb" in self.path:
-            self.send_response(200); self.send_header("Content-Type", "model/gltf-binary"); self.end_headers(); self.wfile.write(tiny_glb()); return
+            self.send_response(200); self.send_header("Content-Type", "model/gltf-binary"); self.end_headers(); self.wfile.write(STATE.get("glb") or tiny_glb()); return
         if u == "/view" and ".mp3" in self.path:
             self.send_response(200); self.send_header("Content-Type", "audio/mpeg"); self.end_headers(); self.wfile.write(b"ID3\x04\x00\x00\x00\x00\x00\x00" + bytes(range(256)) * 4); return
         if u == "/view" and ".webp" in self.path:
@@ -242,7 +280,10 @@ class Comfy(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "video/mp4"); self.end_headers(); self.wfile.write(STATE.get("mp4") or b"\x00\x00\x00\x18ftypmp42" + bytes(range(256)) * 8); return
         if u == "/view":
             pid = self.path.split("filename=")[1].split(".png")[0]
-            w, h = HIST[pid]["size"]; im = Image.new("RGB", (w, h), (255, 0, 0)); b = io.BytesIO(); im.save(b, "PNG")
+            w, h = HIST[pid]["size"]; im = Image.new("RGB", (w, h), (255, 0, 0))
+            if HIST[pid].get("face") and STATE.get("face_box"):        # 얼굴 찾기: (그림 크기, 얼굴 상자) → 흰 상자 마스크
+                (w, h), box = STATE["face_box"]; im = Image.new("RGB", (w, h), 0); im.paste((255, 255, 255), box)
+            b = io.BytesIO(); im.save(b, "PNG")
             self.send_response(200); self.send_header("Content-Type", "image/png"); self.end_headers(); self.wfile.write(b.getvalue()); return
         self.j({}, 404)
     def do_POST(self):
@@ -253,7 +294,7 @@ class Comfy(BaseHTTPRequestHandler):
             except AssertionError as e:
                 return self.j({"error": {"message": "Prompt outputs failed validation"}, "node_errors": {"1": {"class_type": "X", "errors": [{"message": str(e), "details": ""}]}}}, 400)
             pid = f"p{len(SUBMITTED)}"; SUBMITTED.append(wf)
-            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": any(n["class_type"] == "SaveGLB" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
+            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": any(n["class_type"] == "SaveGLB" for n in wf.values()), "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
             if STATE["ws"] and WS_CLIENTS and not HIST[pid]["slow"]: HIST[pid]["polls"] = -14; threading.Thread(target=ws_progress, args=(pid, 5, 0.35, wf), daemon=True).start()
             return self.j({"prompt_id": pid, "number": 1, "node_errors": {}})
         if self.path == "/free": STATE["freed"] += 1; return self.j({})

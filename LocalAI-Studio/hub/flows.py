@@ -760,6 +760,18 @@ def wf_da3_depth(model, img, resolution=1008):
     return w.n
 
 
+def wf_face_mask(model, img):
+    """사진에서 얼굴 찾기(MediaPipe) → 얼굴 모양 흰색 마스크 그림(못 찾으면 검은 그림)."""
+    w = WF()
+    im = w.add("LoadImage", image=img)
+    fd = w.add("LoadMediaPipeFaceLandmarker", model_name=model)
+    lm = w.add("MediaPipeFaceLandmarker", face_detection_model=[fd, 0], image=[im, 0], detector_variant="both", num_faces=1,
+               min_confidence=0.5, missing_frame_fallback="empty")
+    mk = w.add("MediaPipeFaceMask", face_landmarks=[lm, 0], regions="all")
+    w.add("PreviewImage", images=[w.add("MaskToImage", mask=[mk, 0]), 0])
+    return w.n
+
+
 def wf_trellis(q):
     """사진 → 게임용 3D(GLB). TRELLIS.2(사진 한 장) 또는 Pixal3D 멀티뷰(앞·왼쪽·뒤·오른쪽).
     ComfyUI 공식 예시(3d_pixal3d_trellis2_image_to_model)와 같은 설정이에요:

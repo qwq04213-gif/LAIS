@@ -218,7 +218,7 @@ def cat_of(m):
         return "video"
     if re.search(r"ace-step|stable-audio|audio", i):
         return "audio"
-    if "3d" in i or "trellis" in i:
+    if "3d" in i or "trellis" in i or "mediapipe" in i:
         return "d3"
     return "image"
 

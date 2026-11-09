@@ -810,9 +810,10 @@
       <label class="f" title="Pixal3D 는 사진 화소를 3D 에 그대로 맞춰 붙여 얼굴·무늬가 사진에 더 가까워요(ComfyUI 공식 예시의 기본)">3D 엔진 (사진 한 장)<select id="m3-engine"><option value="auto" selected>자동 — Pixal3D 가 있으면 Pixal3D</option><option value="pixal">Pixal3D — 사진에 충실(얼굴·무늬)</option><option value="trellis">TRELLIS.2</option></select></label>
       <p class="mute" id="m3-engnote" hidden></p>
       <div class="row"><label class="f">세밀함<select id="m3-res"><option value="512">빠르게 (512)</option><option value="1024" selected>보통 (1024)</option><option value="1536">아주 촘촘하게 (1536)</option></select></label>
-        <label class="f">면 수<select id="m3-faces"><option value="5000">5천 (모바일)</option><option value="20000" selected>2만 (게임)</option><option value="50000">5만 (고품질)</option><option value="200000">20만 (원본에 가깝게)</option></select></label>
+        <label class="f">면 수<select id="m3-faces"><option value="5000">5천 (모바일)</option><option value="20000">2만 (게임)</option><option value="50000" selected>5만 (고품질)</option><option value="200000">20만 (원본에 가깝게)</option><option value="700000">70만 (최고 · 파일이 커요)</option></select></label>
         <label class="f">텍스처<select id="m3-tex"><option value="1024">1024px</option><option value="2048" selected>2048px</option><option value="4096">4096px</option></select></label></div>
       <label class="chk" title="그물망을 고르게 다시 짜서 구멍·뾰족한 면을 줄여요"><input type="checkbox" id="m3-remesh" checked> 그물망 고르게 다시 짜기</label>
+      <label class="chk" title="3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요. 얼굴·무늬가 사진처럼 나와요. 사진과 3D 가 안 맞으면 자동으로 건너뛰어요."><input type="checkbox" id="m3-photo" checked> 사진 그대로 붙이기(얼굴·무늬)</label>
     </fieldset>
     <fieldset class="vset"><legend>Blender 마무리 <span class="mute">크기·LOD·FBX/OBJ</span></legend>
       <div id="m3-bl" class="lo-eng"></div>

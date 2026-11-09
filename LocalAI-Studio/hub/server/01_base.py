@@ -24,7 +24,7 @@ HFURL = os.environ.get("HF_URL", "https://huggingface.co")
 GHURL = os.environ.get("GITHUB_URL", "https://github.com")
 NODEMAP_URL = os.environ.get("NODEMAP_URL", "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json")
 PROFILES = json.loads((HUB / "profiles.json").read_text(encoding="utf-8"))
-FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg", "background_removal", "latent_upscale_models", "geometry_estimation", "ultralytics/bbox", "ipadapter", "clip_vision", "style_models", "audio_encoders"}
+FOLDERS = {"checkpoints", "loras", "diffusion_models", "text_encoders", "vae", "upscale_models", "controlnet", "embeddings", "sam", "rmbg", "background_removal", "latent_upscale_models", "geometry_estimation", "detection", "ultralytics/bbox", "ipadapter", "clip_vision", "style_models", "audio_encoders"}
 EXT = (".safetensors", ".ckpt", ".pth", ".pt", ".gguf", ".bin")
 DEFAULT_NEG = ("lowres, bad anatomy, bad hands, extra digits, missing fingers, worst quality, "
                "jpeg artifacts, watermark, text, signature")
