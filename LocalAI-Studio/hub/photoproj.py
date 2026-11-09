@@ -455,7 +455,10 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     n = np.cross(e1, e2)
     n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
     cen = P[F].mean(1)
-    cosf = np.abs((n * cam.view(cen)).sum(1))
+    nv = (n * cam.view(cen)).sum(1)
+    if (nv[fid] < 0).mean() > 0.5:          # 면 감는 방향이 거꾸로 된 3D: 바깥쪽이 되게 뒤집어요(머리 고르기에서 안쪽 면을 가려내요)
+        n, nv = -n, -nv
+    cosf = np.abs(nv)
     vv = visible(x, y, d)
     cx, cy, cd = cam.px(cen)
     pick = (cosf >= FACING[0]) & (vv[F].any(1) | visible(cx, cy, cd))
@@ -631,7 +634,9 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     cen = P[F].mean(1)
     cx, cy, cd = cam.px(cen)
     sel = (cx > hx0) & (cx < hx1) & (cy > hy0) & (cy < hy1) & (cd > zf - HEAD_DEPTH[0] * zr) & (cd < zf + HEAD_DEPTH[1] * zr)
-    sel &= np.linalg.norm(cen - ctr, axis=1) < HEAD_R * fw     # 머리 가운데에서 머리 크기 안쪽만(어깨·목둘레는 빼요)
+    # 머리 가운데에서 머리 크기 안쪽만(어깨·목둘레는 빼요). 앞뒤로 긴 머리는 얼굴 앞면·볼까지 반드시 들어가게 넓혀요
+    hr = max(HEAD_R * fw, 1.1 * float(np.linalg.norm(P[inf] - ctr, axis=1).max()))
+    sel &= np.linalg.norm(cen - ctr, axis=1) < hr
     if sel.sum() < 50 or sel.mean() > 0.85:
         raise ValueError("머리 부분을 고르지 못했어요")
     hf = np.nonzero(sel)[0]
@@ -652,13 +657,20 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     auv = np.abs((U3[:, 1] - U3[:, 0]) * (V3[:, 2] - V3[:, 0]) - (U3[:, 2] - U3[:, 0]) * (V3[:, 1] - V3[:, 0])) / 2
     ratio = auv / np.maximum(a3, 1e-15)
     keep_h = ratio > np.median(ratio[a3 > 0]) / 25 if (a3 > 0).any() else np.ones(len(hf), bool)
+    # 안쪽을 보는 면(얇은 곳의 이중 껍질 안쪽·머리카락 뒷면)은 머리에서 빼요 — 머리 가운데에 더 가까워서 진짜 얼굴을 밀어내요
+    rc = P3.mean(1) - ctr
+    keep_h &= (rc * n_face[hf]).sum(1) > 0
     LS = 2048
     pxy = np.stack([U3, V3], -1) * LS
-    dupe = np.nonzero(seam)[0]
-    oxy = np.concatenate([pxy.reshape(-1, 2), (pxy[dupe] - [LS, 0]).reshape(-1, 2)])
-    own = np.concatenate([np.arange(len(hf)), dupe])
+    oi = np.nonzero(keep_h)[0]
+    dupe = oi[seam[oi]]
+    oxy = np.concatenate([pxy[oi].reshape(-1, 2), (pxy[dupe] - [LS, 0]).reshape(-1, 2)])
+    own = np.concatenate([oi, dupe])
     dz = np.linalg.norm(P3 - ctr, axis=2)
-    oz = np.concatenate([dz.reshape(-1), dz[dupe].reshape(-1)])
+    seen = visible(cx[hf], cy[hf], cd[hf]) | visible(px[FH].ravel(), py[FH].ravel(), pd[FH].ravel()).reshape(-1, 3).any(1)
+    # 같은 자리면: 사진에서 보이는 면이 먼저(그중에선 카메라에 가까운 면 — 실제로 보이는 겉면), 안 보이는 곳(뒤통수)은 머리 가운데에 가까운 면
+    dz = np.where(seen[:, None], pd[FH] - zf, dz + 10.0 * hr)
+    oz = np.concatenate([dz[oi].reshape(-1), dz[dupe].reshape(-1)])
     OF = np.arange(len(oxy)).reshape(-1, 3)
     _, tall, _, _ = raster(oxy, OF, LS, LS)
     _, twin, _, _ = raster(oxy, OF, LS, LS, oz)          # 같은 자리면 머리 가운데에 더 가까운 면이 차지해요
@@ -902,3 +914,4 @@ def preview(glb, size=640, bg=(30, 30, 36)):
         sh = 0.6 + 0.4 * np.abs(n @ light)
         out[pix] = col * sh[:, None]
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8).reshape(size, size, 3))
+

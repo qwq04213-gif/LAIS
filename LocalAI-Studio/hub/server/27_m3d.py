@@ -285,7 +285,8 @@ def m3d_frame(ims, size=1024, pad=1.1):
 M3D_SCENE_MAX = 12
 M3D_FILL = ("This picture shows one object cut out of a photo. Parts of it may be hidden behind other things or cut off at the edge. "
             "Redraw the complete, whole object alone with every hidden or missing part filled in naturally. Keep exactly the same design, shape, "
-            "proportions, colors, materials, details and viewing angle. Whole object in frame, plain pure white background, soft even lighting, no shadow, nothing else.")
+            "proportions, colors, materials, details and viewing angle. Whole object in frame, plain pure white background, soft even lighting, no shadow, nothing else. "
+            "Glossy surfaces show only their own true color, without reflections or color tints from the original floor, lights or surroundings.")
 
 
 def m3d_scene_obj(p):
@@ -512,7 +513,8 @@ def m3d_views(p, J):
         J["msg"], J["progress"] = f"{M3D_SIDE_KO[s]} 모습 그리는 중 ({i + 1}/{len(sides)})", i / len(sides)
         text = (f"Turnaround view: show {M3D_SIDE_EN[s]}, of the same {what}. Orthographic-like eye-level view, no camera tilt. "
                 "Keep exactly the same design, shape, proportions, colors, materials and details, and exactly the same pose as the reference — do not move the arms, legs or head. "
-                "Full body / whole object in frame, same height and scale as the reference, plain pure white background, soft even studio lighting, no shadow.")
+                "Full body / whole object in frame, same height and scale as the reference, plain pure white background, soft even studio lighting, no shadow. "
+                "Glossy surfaces (shoes, leather, metal) show only their own true color — no reflections or color tints from the original floor, lights or surroundings.")
         res = do_edit({"kind": "edit", "engine": "qwen", "image": src, "prompt": text, "seed": seed_of(p) + i, "fast": p.get("fast") or "", "translate": ""}, J)
         cut = m3d_cut(res[0][0].convert("RGB"), J)
         cut.save(d / f"view_{s}.png")

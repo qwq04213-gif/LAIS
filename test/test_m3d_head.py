@@ -134,6 +134,29 @@ hm = ps[1]["mat"]; smp = g2["samplers"][g2["textures"][hm["pbrMetallicRoughness"
 assert smp["wrapS"] == 10497 and smp["minFilter"] == 9987 and hm["occlusionTexture"]["index"] == hm["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"]
 ok("head split into its own primitive + material (base/normal/ORM, 2048px, wraps around the back)")
 
+# 4.6: 3D 엔진(UDF 다시 짜기)은 얇은 곳·겉면마다 안쪽 껍질(뒤집힌 면)을 하나 더 만들어요. 안쪽 껍질이 머리 가운데에 더 가까워
+#      진짜 얼굴을 밀어내고 머리 텍스처가 흩어진 조각에만 가던 문제 — 머리 모양도 앞뒤로 길게(실제 결과처럼)
+hd = P[:, 1] > 1.42
+P2 = P.copy(); P2[hd, 2] = P2[hd, 2] * 1.5 + 0.04                                     # 앞뒤로 긴 머리
+inner = np.nonzero(hd)[0]; remap = -np.ones(len(P), int); remap[inner] = len(P) + np.arange(len(inner))
+Pi = P2[inner].copy(); Pi[:, 1] = 1.55 + (Pi[:, 1] - 1.55) * 0.97; Pi[:, 0] *= 0.97; Pi[:, 2] = 0.04 + (Pi[:, 2] - 0.04) * 0.97
+Fh = F[hd[F].all(1)]; Fi = remap[Fh][:, ::-1]
+P3, UV3, F3 = np.concatenate([P2, Pi]), np.concatenate([UV, UV[inner]]), np.concatenate([F, Fi])
+N3 = np.concatenate([N, -N[inner]])
+glb3 = glb_of(P3, UV3, F3, N3, [bake(P3, UV3, F3, 512), nmap, orm]); photo3 = shoot(P3, F3)
+th, i3 = photoproj.project(glb3, photo3, head=fb, head_size=1024)
+assert i3.get("head") and not i3.get("head_error"), i3
+_, ps3 = prims_of(th)
+allP = np.concatenate([ps3[0]["P"], ps3[1]["P"]]); allF = np.concatenate([ps3[0]["F"], ps3[1]["F"] + len(ps3[0]["P"])])
+xy, z = proj(allP); pix, fid, _, _ = photoproj.raster(xy, allF, S, S, z)
+own = np.zeros(S * S, int) - 1; own[pix] = (fid >= len(ps3[0]["F"])).astype(int)
+fpx = own.reshape(S, S)[y0:y1, x0:x1]; frac = (fpx == 1).sum() / max(1, (fpx >= 0).sum())
+assert frac > 0.9, frac
+ink = {tuple(v) for v in Pi.round(4)}
+inner_in_head = float(np.mean([tuple(v) in ink for v in ps3[1]["P"].round(4)]))
+assert inner_in_head < 0.05, inner_in_head
+ok(f"double-shell (UDF) head: the real outer face gets the head texture ({frac:.0%} of the face), hidden inner shell stays on the body")
+
 # 노멀맵: 같은 3D 지점에서 원래 덩어리로 본 굴곡 방향 = 머리 덩어리로 본 굴곡 방향
 def world_n(p, f, c, T, nm_override=None):
     P3, UV3 = p["P"][p["F"][f]], p["UV"][p["F"][f]]
