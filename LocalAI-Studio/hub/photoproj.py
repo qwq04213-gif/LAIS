@@ -634,58 +634,64 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     xy = np.concatenate([tri_xy.reshape(-1, 2), (tri_xy[extra] - [TS, 0]).reshape(-1, 2)])
     owner = np.concatenate([ids, extra])
     FF = np.arange(len(xy)).reshape(-1, 3)
-    tp, tf, c0, c1 = raster(xy, FF, TS, TS)
-    t = owner[tf]
-    c = np.stack([c0, c1, 1 - c0 - c1], 1)
-    X = (P3[t] * c[..., None]).sum(1)
-    ouv = (OUV3[t] * c[..., None]).sum(1)
-    Nn = (N3[t] * c[..., None]).sum(1)
-    Nn /= np.maximum(np.linalg.norm(Nn, axis=1, keepdims=True), 1e-12)
-    ty, tx = np.divmod(tp, TS)
-    # 색: 원래 텍스처(사진을 이미 붙인 것)에서 옮기고, 사진에서 보이는 곳은 사진·얼굴 확대본에서 다시(이번엔 머리 텍스처 해상도로)
-    base = np.asarray(M["tex"].convert("RGB")).astype(np.float32)
-    BH, BW = base.shape[:2]
-    col = _sample(base, ouv[:, 0] * BW, ouv[:, 1] * BH)
-    sx, sy, sd = cam.px(X)
-    ok = visible(sx, sy, sd) & (sx >= 0) & (sy >= 0) & (sx < W0) & (sy < H0)
-    if ok.any():
-        cs = np.abs((n_face[hf][t[ok]] * cam.view(X[ok])).sum(1))
-        w = np.clip((cs - FACING[0]) / (FACING[1] - FACING[0]), 0, 1)
-        w = (w * w * (3 - 2 * w))[:, None].astype(np.float32) * _sample(soft, sx[ok], sy[ok])
-        pc = _sample(photo_rgb, sx[ok], sy[ok])
-        if fbox:
-            fx0, fy0, fx1, fy1, fa = fbox
-            q = (sx[ok] > fx0) & (sx[ok] < fx1) & (sy[ok] > fy0) & (sy[ok] < fy1)
-            if q.any():
-                kx, ky = fa.shape[1] / (fx1 - fx0), fa.shape[0] / (fy1 - fy0)
-                fc = _sample(fa, (sx[ok][q] - fx0) * kx, (sy[ok][q] - fy0) * ky)
-                ex = np.minimum.reduce([sx[ok][q] - fx0, fx1 - sx[ok][q], sy[ok][q] - fy0, fy1 - sy[ok][q]]) / max(1.0, 0.08 * (fx1 - fx0))
-                fwq = np.clip(ex, 0, 1)[:, None].astype(np.float32)
-                pc[q] = pc[q] * (1 - fwq) + fc * fwq
-        col[ok] = col[ok] + (pc - col[ok]) * w
-    tex = np.zeros((TS, TS, 3), np.float32)
-    done = np.zeros((TS, TS), bool)
-    tex[ty, tx], done[ty, tx] = col, True
-    tex, done = _spread(tex, done, 3)
     mat = dict(M["mat"] or {})
     pbr = dict(mat.get("pbrMetallicRoughness") or {})
-    imgs = [("base", tex)]
-    # 노멀맵: 원래 텍스처 방향 → 세상 방향 → 새 텍스처 방향으로 옮겨요
-    if mat.get("normalTexture") is not None:
+    base = np.asarray(M["tex"].convert("RGB")).astype(np.float32)
+    BH, BW = base.shape[:2]
+    has_nm = mat.get("normalTexture") is not None
+    if has_nm:
         nm = np.asarray(_img_of(g, b, mat["normalTexture"]["index"]).convert("RGB")).astype(np.float32)
-        ns = _sample(nm, ouv[:, 0] * nm.shape[1], ouv[:, 1] * nm.shape[0]) / 127.5 - 1
         To, Bo = _frames(P3, OUV3, None)
         Tn, Bn = _frames(P3, NUV3, None)
-        T1, B1 = _tbn(To[t], Bo[t], Nn)
-        T2, B2 = _tbn(Tn[t], Bn[t], Nn)
-        wv = ns[:, 0:1] * T1 + ns[:, 1:2] * B1 + ns[:, 2:3] * Nn
-        nn = np.stack([(wv * T2).sum(1), (wv * B2).sum(1), (wv * Nn).sum(1)], 1)
-        nn /= np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-12)
         nt = np.zeros((TS, TS, 3), np.float32)
         nt[...] = (127.5, 127.5, 255)
-        dn = np.zeros((TS, TS), bool)
-        nt[ty, tx], dn[ty, tx] = (nn + 1) * 127.5, True
-        nt, _ = _spread(nt, dn, 3)
+    tex = np.zeros((TS, TS, 3), np.float32)
+    done = np.zeros((TS, TS), bool)
+    CH = 20000                                         # 삼각형을 나눠 처리해요(4096 텍스처도 메모리를 적게)
+    for k0 in range(0, len(FF), CH):
+        tp, tf, c0, c1 = raster(xy, FF[k0:k0 + CH], TS, TS)
+        if not len(tp):
+            continue
+        t = owner[tf + k0]
+        c = np.stack([c0, c1, 1 - c0 - c1], 1)
+        X = (P3[t] * c[..., None]).sum(1)
+        ouv = (OUV3[t] * c[..., None]).sum(1)
+        Nn = (N3[t] * c[..., None]).sum(1)
+        Nn /= np.maximum(np.linalg.norm(Nn, axis=1, keepdims=True), 1e-12)
+        ty, tx = np.divmod(tp, TS)
+        # 색: 원래 텍스처(사진을 이미 붙인 것)에서 옮기고, 사진에서 보이는 곳은 사진·얼굴 확대본에서 다시(이번엔 머리 텍스처 해상도로)
+        col = _sample(base, ouv[:, 0] * BW, ouv[:, 1] * BH)
+        sx, sy, sd = cam.px(X)
+        ok = visible(sx, sy, sd) & (sx >= 0) & (sy >= 0) & (sx < W0) & (sy < H0)
+        if ok.any():
+            cs = np.abs((n_face[hf][t[ok]] * cam.view(X[ok])).sum(1))
+            w = np.clip((cs - FACING[0]) / (FACING[1] - FACING[0]), 0, 1)
+            w = (w * w * (3 - 2 * w))[:, None].astype(np.float32) * _sample(soft, sx[ok], sy[ok])
+            pc = _sample(photo_rgb, sx[ok], sy[ok])
+            if fbox:
+                fx0, fy0, fx1, fy1, fa = fbox
+                q = (sx[ok] > fx0) & (sx[ok] < fx1) & (sy[ok] > fy0) & (sy[ok] < fy1)
+                if q.any():
+                    kx, ky = fa.shape[1] / (fx1 - fx0), fa.shape[0] / (fy1 - fy0)
+                    fc = _sample(fa, (sx[ok][q] - fx0) * kx, (sy[ok][q] - fy0) * ky)
+                    ex = np.minimum.reduce([sx[ok][q] - fx0, fx1 - sx[ok][q], sy[ok][q] - fy0, fy1 - sy[ok][q]]) / max(1.0, 0.08 * (fx1 - fx0))
+                    fwq = np.clip(ex, 0, 1)[:, None].astype(np.float32)
+                    pc[q] = pc[q] * (1 - fwq) + fc * fwq
+            col[ok] = col[ok] + (pc - col[ok]) * w
+        tex[ty, tx], done[ty, tx] = col, True
+        if has_nm:                                     # 노멀맵: 원래 텍스처 방향 → 세상 방향 → 새 텍스처 방향으로 옮겨요
+            ns = _sample(nm, ouv[:, 0] * nm.shape[1], ouv[:, 1] * nm.shape[0]) / 127.5 - 1
+            T1, B1 = _tbn(To[t], Bo[t], Nn)
+            T2, B2 = _tbn(Tn[t], Bn[t], Nn)
+            wv = ns[:, 0:1] * T1 + ns[:, 1:2] * B1 + ns[:, 2:3] * Nn
+            nn = np.stack([(wv * T2).sum(1), (wv * B2).sum(1), (wv * Nn).sum(1)], 1)
+            nn /= np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-12)
+            nt[ty, tx] = (nn + 1) * 127.5
+    del base
+    tex, dn = _spread(tex, done.copy(), 3)
+    imgs = [("base", tex)]
+    if has_nm:
+        nt, _ = _spread(nt, done, 3)
         imgs.append(("normal", nt))
     # 그늘·거칠기·금속(ORM) 은 같은 자리 값을 옮겨요
     mrt = (pbr.get("metallicRoughnessTexture") or {}).get("index")
@@ -699,15 +705,17 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         pic = np.asarray(_img_of(g, b, next(ti for ti in (mrt, occ) if ti is not None and g["textures"][ti]["source"] == ii)).convert("RGB")).astype(np.float32)
         hs = max(1024, TS // 2)
         k = hs / TS
-        tp2, tf2, d0, d1 = raster(xy * k, FF, hs, hs)
-        t2 = owner[tf2]
-        cc = np.stack([d0, d1, 1 - d0 - d1], 1)
-        o2 = (OUV3[t2] * cc[..., None]).sum(1)
-        val = _sample(pic, o2[:, 0] * pic.shape[1], o2[:, 1] * pic.shape[0])
         arr = np.zeros((hs, hs, 3), np.float32)
         dd = np.zeros((hs, hs), bool)
-        y2, x2 = np.divmod(tp2, hs)
-        arr[y2, x2], dd[y2, x2] = val, True
+        for k0 in range(0, len(FF), CH):
+            tp2, tf2, d0, d1 = raster(xy * k, FF[k0:k0 + CH], hs, hs)
+            if not len(tp2):
+                continue
+            t2 = owner[tf2 + k0]
+            cc = np.stack([d0, d1, 1 - d0 - d1], 1)
+            o2 = (OUV3[t2] * cc[..., None]).sum(1)
+            y2, x2 = np.divmod(tp2, hs)
+            arr[y2, x2], dd[y2, x2] = _sample(pic, o2[:, 0] * pic.shape[1], o2[:, 1] * pic.shape[0]), True
         arr, _ = _spread(arr, dd, 3)
         orm_new[ii] = ("orm" + str(ii), arr, keys)
         imgs.append(("orm" + str(ii), arr))

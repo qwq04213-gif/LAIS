@@ -64,6 +64,7 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ### 다음 할 일
 
+0. 출시 전(4.5 에 함께): 3D 밉맵(`photoproj.fix_samplers`)·사진 점검 얼굴 크기(`m3d_face_stats`)·가장자리 손질(`m3d_defringe`)·사진 붙인 곳 그늘 줄이기·피부 거칠기·색감 맞추기(`_adjust_orm`·`_color_match`)·붙이기 결과 표시(`m3d_photo_res`)·머리 전용 텍스처(`photoproj.head_split`, 옵션 `head`). README 는 출시 때(미검증: 실제 Pixal3D 결과에서 머리 고르기·노멀맵 방향·피부 판정)
 1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
 
 4.4.1: 남은 시간을 작업 전체 진행률로 한 곳에서 어림(`08_jobs.py` `eta_update`·`eta_loop` 1초마다, 같은 종류 작업의 진행 곡선 `eta_history.json` — `eta_key`/`eta_learn`), 화면 표시는 `00-core.js` 의 `fmtEta`·`fmtEl`·`etaTxt` 하나로
