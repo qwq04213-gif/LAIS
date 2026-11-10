@@ -90,7 +90,7 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 - 자세: 기존 LAIS 에는 관절 좌표를 파일로 내는 기능이 없어(DWPose 는 ControlNet 그림용 노드 이름뿐) worker 안에서 rtmlib(DWPose/RTMPose 133점) → `preprocess.wholebody_to_openpose`
 - 빌드: `build_update.py` 가 `engine/human3d` 만 예외로 넣음(`KEEP_ENGINE`). `.gitignore` 도 `engine/*` 중 `human3d` 만 허용
 - 시험: `test/test_human3d.py`·`ui_test69.py`(가짜 엔진). **실제 SiTH·GPU·WSL 로는 한 번도 못 돌림** — 지시서 14번의 3단계(실제 사진 추론)부터는 사용자 PC 결과가 있어야 진행
-- 4.9 시험판 업데이트 파일을 이 브랜치에서 만들어 사용자에게 줌(커밋 `v4.9 시험판`, main 은 아직 4.8). 적용기(`safe_rel`)는 `engine/human3d/{worker,scripts}/*.py|.sh` 만 예외로 허용 —
+- 4.9 시험판(커밋 `v4.9 시험판`) → 고침판 4.9.1(커밋 `v4.9.1 시험판`, 설치 순서·GPU 혼자 쓰기·재시도)을 이 브랜치에서 만들어 사용자에게 줌(main 은 아직 4.8). 4.9 의 설치 스크립트는 nvdiffrast 에서 실패하니 4.9.1 로 설치. 적용기(`safe_rel`)는 `engine/human3d/{worker,scripts}/*.py|.sh` 만 예외로 허용 —
   4.8 에 깔린 앱 안 업데이트(옛 `updater.py`)는 이 경로를 막으니 **.bat 으로 설치**해야 해요(.bat 은 안에 든 새 적용기를 씀)
 - 남은 일(지시서 순서): ② WSL 설치 스크립트 실제 실행 확인 → ③ 실제 사진 한 장 전체 추론 → ④ 10~12GB 에서 VRAM 최대값 재고 낮추기 → ⑤⑥ 실제 메시로 검사·사진 붙이기 위치 확인 → ⑨ 회귀. ECON 은 `providers/econ.py` 빈 어댑터(준비 안 됨으로만 알림)
 
