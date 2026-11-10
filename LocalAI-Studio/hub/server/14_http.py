@@ -183,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "image failed"}, 500)
         if u.startswith("/thumb/"):
             fp = out_path(u[7:])
-            if fp.suffix.lower() not in GAL_IMG or not fp.is_file():
+            if (fp.suffix.lower() not in GAL_IMG and fp.suffix.lower() != ".glb") or not fp.is_file():
                 return self.send_json({"error": "not found"}, 404)
             try:
                 return self.send_bytes(thumb_bytes(fp), "image/jpeg", extra={"Cache-Control": "max-age=3600"})
@@ -258,6 +258,13 @@ class Handler(BaseHTTPRequestHandler):
             if not fp:
                 return self.send_json({"error": "없어요"}, 404)
             return self.send_file(fp, "image/png" if fp.suffix.lower() == ".png" else "image/jpeg")
+        if u == "/api/keep":
+            return self.send_json({**keep_list(), **keep_size()})
+        if u.startswith("/kept/"):
+            fp = keep_file(u[6:])
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_file(fp, KEEP_TYPE[fp.suffix])
         if u == "/api/m3d":
             return self.send_json(m3d_list())
         if u.startswith("/api/m3d/"):
@@ -362,6 +369,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(lora_train.install(ROOT))
         if u == "/api/lora/engine/uninstall":
             return self.send_json(lora_train.uninstall(ROOT))
+        if u == "/api/keep":
+            return self.send_json(keep_post(p))
+        if u == "/api/m3d/scene":
+            try:
+                return self.send_json(m3d_scene_obj(p))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
         if u in ("/api/m3d/slot", "/api/m3d/delete"):
             try:
                 return self.send_json((m3d_slot if u.endswith("slot") else m3d_delete)(p))
@@ -527,6 +541,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(delete_item(p))
         if u == "/api/photo/save":
             return self.send_json(photo_save(p))
+        if u == "/api/superseded/remove":
+            return self.send_json(superseded_remove(p))
         if u == "/api/catalog/remove":
             return self.send_json(catalog_remove(p))
         if u == "/api/meta":

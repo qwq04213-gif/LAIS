@@ -141,8 +141,8 @@ function imgView(id){
     rsave.href=url;rsave.download=url.split('/').pop()||'result.png';
     out.hidden=false;work.classList.add('two');cs.value=50;cmpSet(false)};
   v.hideResult=()=>{v.res=v.before=null;out.hidden=true;work.classList.remove('two');ri.removeAttribute('src');oi.removeAttribute('src');cmpSet(false)};
-  v.set=url=>{v.img=url;im.src=url;drop.hidden=true;work.hidden=false;tools.hidden=false;v.hideResult()};
-  v.reset=()=>{v.img=null;drop.hidden=false;work.hidden=true;tools.hidden=true;v.hideResult()};
+  v.set=(url,quiet)=>{v.img=url;im.src=url;drop.hidden=true;work.hidden=false;tools.hidden=false;v.hideResult();if(quiet!==true)keepPut(id,url)};
+  v.reset=()=>{v.img=null;drop.hidden=false;work.hidden=true;tools.hidden=true;v.hideResult();keepPut(id,null)};
   ct.onclick=()=>cmpSet(!v.cmp);cs.oninput=cmpApply;
   $('.rzoom',out).onclick=()=>v.res&&lbOpen([{url:v.res,before:v.before,name:v.res.split('/').pop()}],0,v.cmp);
   const rc=$('.rcont',out);
@@ -198,7 +198,7 @@ function addTtsResults(sec,j){
 }
 function add3dResults(sec,j){
   const glb=j.images.filter(u=>/\.glb$/i.test(u));
-  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${glb.map(u=>`<figure class="vfig m3d"><model-viewer src="${u}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1" style="width:100%;height:420px;background:var(--raised);border-radius:8px"></model-viewer><figcaption><a href="${u}" download>저장 (.glb)</a> <span class="mute">마우스로 돌리고 휠로 확대해요. 화면에 안 보이면 저장해서 Windows 3D 뷰어나 Blender 로 열어 주세요.</span></figcaption></figure>`).join('')}</div>`);
+  $('.res',sec).insertAdjacentHTML('afterbegin',`<div class="batch">${glb.map(u=>`<figure class="vfig m3d"><model-viewer src="${u}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1" style="width:100%;height:420px;background:var(--raised);border-radius:8px"></model-viewer><figcaption><a href="${u}" download>저장 (.glb)</a> <button type="button" class="ghost sm mv-full" title="갤러리처럼 크게 봐요(Esc 로 닫아요)">크게 보기</button> <span class="mute">마우스로 돌리고 휠로 확대해요. 화면에 안 보이면 저장해서 Windows 3D 뷰어나 Blender 로 열어 주세요.</span></figcaption></figure>`).join('')}</div>`);
   if(!window.customElements||customElements.get('model-viewer'))return;
   const sc=document.createElement('script');sc.type='module';sc.src='https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js';document.head.appendChild(sc)}
 function addResults(sec,j,kind){
@@ -255,7 +255,7 @@ async function run(kind,form,extra={}){
         setBar(view,'완료'+(j.warn&&j.warn.length?'. 참고: '+j.warn.join(' '):''),'ok');break}
       const idle=j.phase==='load'||j.phase==='wait',pc=!idle&&typeof j.progress==='number'?Math.round(j.progress*100)+'%'+(j.pest?' 쯤':'')+'  ':'';
       const label=j.phase==='load'?'모델 불러오는 중… (처음 한 번은 오래 걸려요)':j.phase==='wait'?'준비 중…':(j.msg||'처리 중');
-      setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');
+      setBar(view,wantStop?'중단하는 중이에요…':`${pc}${label}${idle?'':etaTxt(j)}${elTxt(j)}`,'run');
       if(!wantStop)setProg(view,j);
     }
   }catch(e){setBar(view,e.message,'bad');if(e.pymod)pymodHelp($('.jobbar .st',view),e.pymod);if(e.oom)oomHelp(view,e.oom);if(e.need?.length)$('.jobbar .st',view).insertAdjacentHTML('afterend',needBox(e.need))}
@@ -286,13 +286,14 @@ const W5MSG=($('#w-vid')||{}).innerHTML||'';
     $('#vid-fast-hint').textContent=fs.disabled?"(4단계 가속 LoRA 가 없어요 — 설치와 모델 > 영상의 'Wan 2.2 4단계 가속 LoRA')":(s2v?'(약 5~10배 빨라요. 움직임·화질이 조금 줄어요)':'');if(fs.disabled)fs.checked=false;
     for(const n of ['steps','cfg'])f.elements[n].disabled=(big||s2v)&&fs.checked;
     {const lw=$('#vid-long-warn'),sec=+f.elements.sec.value;if(lw){lw.hidden=!(s2v&&sec>=15);lw.textContent=`말하는 영상 ${sec}초는 약 5초씩 ${Math.ceil(sec/4.8-0.05)}번 나눠 그려요. ${fs.checked?'빠른 모드라도 10분 이상':'빠른 모드를 끄면 1시간 이상'} 걸릴 수 있어요. 10초 안팎으로 나눠 만든 뒤 [영상 편집]으로 이어 붙이면 더 빨라요.`}}
-    const ver=f.elements.wan_ver.value,more={ltx:'LTX-Video 는 몇십 초 안에 영상이 나와요. 사진을 올리면 그 사진에서 시작해요. 모델은 설치와 모델 > 영상에서 받아요.',vace:'올린 사진 속 인물·사물·스타일을 유지하면서 프롬프트대로 영상을 만들어요(사진 필수). 약 5초까지.',s2v:'올린 인물 사진이 목소리에 맞춰 말하는 영상을 만들어요(사진·소리 필수). 길이는 아래 "길이"로 정해요(최대 30초, 5초씩 이어 그려서 길수록 오래 걸려요).'}[ver];
-    $('#vid-more-note').hidden=!more;$('#vid-more-note').textContent=more||'';$('#vid-audio-row').hidden=ver!=='s2v';$$('#f-vid .s2v-only').forEach(o=>{o.hidden=o.disabled=ver!=='s2v'});if(ver!=='s2v'&&+f.elements.sec.value>8)f.elements.sec.value='5';if(more){const st=(LISTS.vidmore||{})[ver],nm={ltx:'LTX-Video',vace:'Wan VACE',s2v:'Wan 2.2 S2V'}[ver],w=$('#w-vid');w.hidden=!!st;if(!st)w.innerHTML=`${nm} 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a> > 영상에서 '${nm}'을 설치해 주세요.`}
+    const ver=f.elements.wan_ver.value,more={ltx25:'LTX-2.5 는 최신 영상 모델이에요. 영상에 어울리는 소리(효과음·분위기)까지 함께 만들어요. 사진을 올리면 그 사진에서 시작해요. VRAM 24GB·RAM 64GB 이상이 필요해요(16GB 이하는 Wan 2.2 를 쓰세요).',ltx:'LTX-Video 0.9.8 은 몇십 초 안에 영상이 나와요(예전 판, 가벼움). 사진을 올리면 그 사진에서 시작해요. 모델은 설치와 모델 > 영상에서 받아요.',vace:'올린 사진 속 인물·사물·스타일을 유지하면서 프롬프트대로 영상을 만들어요(사진 필수). 약 5초까지.',s2v:'올린 인물 사진이 목소리에 맞춰 말하는 영상을 만들어요(사진·소리 필수). 길이는 아래 "길이"로 정해요(최대 30초, 5초씩 이어 그려서 길수록 오래 걸려요).'}[ver];
+    $('#vid-more-note').hidden=!more;$('#vid-more-note').textContent=more||'';$('#vid-audio-row').hidden=ver!=='s2v';$$('#f-vid .s2v-only').forEach(o=>{o.hidden=o.disabled=ver!=='s2v'});if(ver!=='s2v'&&+f.elements.sec.value>8)f.elements.sec.value='5';if(more){const st=(LISTS.vidmore||{})[ver],nm={ltx25:'LTX-2.5',ltx:'LTX-Video',vace:'Wan VACE',s2v:'Wan 2.2 S2V'}[ver],w=$('#w-vid');w.hidden=!!st;if(!st)w.innerHTML=`${nm} 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a> > 영상에서 '${nm}'을 설치해 주세요.`}
     else $('#w-vid').innerHTML=W5MSG};
   window.vidSync=vidSync;
   f.elements.wan_ver.addEventListener('change',()=>{const v=f.elements.wan_ver.value,d=v==='14b'||v==='vace'||v==='s2v'?W14:W5;for(const[k,v]of Object.entries(d))f.elements[k].value=v;vidSync()});
   f.elements.fast.addEventListener('change',vidSync);f.elements.sec.addEventListener('change',vidSync);
-  const setImg=u=>{VID_IMG=u;$('#vid-thumb').hidden=$('#vid-clear').hidden=$('#vid-ratio-row').hidden=!u;if(u)$('#vid-thumb').src=u;vidSync()};
+  const setImg=(u,quiet)=>{VID_IMG=u;$('#vid-thumb').hidden=$('#vid-clear').hidden=$('#vid-ratio-row').hidden=!u;if(u)$('#vid-thumb').src=u;vidSync();if(quiet!==true)keepPut('vid',u)};
+  window.vidSetImg=setImg;
   $('#vid-file').onchange=async e=>{const fl=e.target.files[0];if(fl)setImg(await toDataURL(fl));e.target.value=''};
   $('#vid-clear').onclick=()=>setImg(null);
   let VID_AUD=null;const setAud=u=>{VID_AUD=u;$('#vid-audio-clear').hidden=$('#vid-audio-pv').hidden=!u;if(u)$('#vid-audio-pv').src=u;else{$('#vid-audio').value='';$('#vid-audio-pv').removeAttribute('src')}};
@@ -303,3 +304,5 @@ const W5MSG=($('#w-vid')||{}).innerHTML||'';
 })();
 const need=(f,t)=>setBar(f.closest('.view'),t,'bad');
 
+document.addEventListener('click',e=>{const b=e.target.closest('.mv-full');if(!b)return;const mv=b.closest('figure')?.querySelector('model-viewer');
+  if(mv){const u=mv.getAttribute('src');lbOpen([{url:u,name:u.split('/').pop(),type:'3d'}],0)}});

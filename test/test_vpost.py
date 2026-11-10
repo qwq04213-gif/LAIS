@@ -25,7 +25,7 @@ j = job({"kind": "vpost", "op": "bogus", "video": url}); assert j["state"] == "e
 j = job({"kind": "vpost", "op": "webp", "video": "/out/영상/nope.mp4"}); assert j["state"] == "error" and "찾을 수 없" in j["error"]; ok("bad op / missing video -> clear errors")
 j = job({"kind": "vpost", "op": "interp", "video": url}); assert j["state"] == "done", j; g = SUBMITTED[-1]
 r = nodes(g, "RIFE VFI")[0]; assert r["multiplier"] == 2 and r["ckpt_name"] == "rife47.pth"; assert nodes(g, "CreateVideo")[0]["fps"] == 32, nodes(g, "CreateVideo")
-assert j["images"][0].endswith(".mp4") and "/영상/" in urllib.parse.unquote(j["images"][0]); sv = hub.OUT / "영상" / urllib.parse.unquote(j["images"][0]).split("/")[-1]
+assert j["images"][0].endswith(".mp4") and "/영상/" in urllib.parse.unquote(j["images"][0]); sv = hub.out_path(j["images"][0][5:])
 meta = json.loads(open(str(sv) + ".json", encoding="utf-8").read()); assert meta["fps"] == 32 and meta["post"] == "프레임 늘리기" and meta["prompt"] == "cat" and meta["source"] == v.name, meta
 assert not list((hub.COMFY / "input").glob("hub_*.mp4")), "temp video copied into ComfyUI input must be removed"
 ok("interpolation: LoadVideo → GetVideoComponents → RIFE x2 → CreateVideo at double fps; settings json carries over; temp copy cleaned")
@@ -33,6 +33,11 @@ ok("interpolation: LoadVideo → GetVideoComponents → RIFE x2 → CreateVideo 
 j = job({"kind": "vpost", "op": "upscale", "video": url}); assert j["state"] == "done", j; g = SUBMITTED[-1]
 assert nodes(g, "UpscaleModelLoader")[0]["model_name"] == "RealESRGAN_x2.pth" and nodes(g, "ImageUpscaleWithModel") and nodes(g, "CreateVideo")[0]["fps"][1] == 2
 ok("upscale: model loader + ImageUpscaleWithModel on the frames, fps link kept")
+for f in ("diffusion_models/seedvr2_7b_int8_convrot.safetensors", "vae/seedvr2_ema_vae_fp16.safetensors"):
+    (hub.MODELS / f).parent.mkdir(parents=True, exist_ok=True); (hub.MODELS / f).write_bytes(b"x")
+j = job({"kind": "vpost", "op": "upscale", "video": url, "upm": "SeedVR2 7B (AI 복원)"}); assert j["state"] == "done", j; g = SUBMITTED[-1]
+assert not nodes(g, "UpscaleModelLoader") and nodes(g, "ImageScaleBy")[0]["scale_by"] == 2.0 and nodes(g, "UNETLoader")[0]["unet_name"].startswith("seedvr2_7b") and any("SeedVR2" in w for w in j["warn"])
+ok("upscale with SeedVR2 7B: frames doubled then restored")
 j = job({"kind": "vpost", "op": "webp", "video": url}); assert j["state"] == "done", j; g = SUBMITTED[-1]
 assert nodes(g, "SaveAnimatedWEBP")[0]["fps"][1] == 2 and not nodes(g, "SaveVideo") and j["images"][0].endswith(".webp"); ok("webp: SaveAnimatedWEBP, saved as .webp in the video folder")
 STATE["missing"].add("RIFE VFI"); hub.caps(force=True)

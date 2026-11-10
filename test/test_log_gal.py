@@ -15,7 +15,7 @@ v2 = c["versions"][-1]; assert v2["title"] == "새 기능" and v2["items"] == ["
 assert all("변경 사항이 아니에요" not in t for v in c["versions"] for t in v["items"]) and c["current"] == hub.VERSION
 ok("changelog: README [버전] sections parsed newest-first (numeric order), wrapped lines joined, other sections ignored")
 real = open(BASE + "/LocalAI-Studio/README.txt", encoding="utf-8-sig").read(); (hub.ROOT / "README.txt").write_text(real, encoding="utf-8")
-c = get("/api/changelog"); assert c["versions"][0]["version"] == "4.0.1" and len(c["versions"]) >= 13 and all(v["items"] for v in c["versions"]), [(v["version"], len(v["items"])) for v in c["versions"]]
+c = get("/api/changelog"); assert c["versions"][0]["version"] == (Path(BASE) / "LocalAI-Studio/VERSION.txt").read_text(encoding="utf-8").strip() and len(c["versions"]) >= 13 and all(v["items"] for v in c["versions"]), [(v["version"], len(v["items"])) for v in c["versions"]]
 ok("changelog: the real README yields every released version with items")
 # ── 갤러리 날짜
 G = hub.OUT / "생성"; G.mkdir(parents=True, exist_ok=True)

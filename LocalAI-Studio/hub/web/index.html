@@ -166,10 +166,14 @@
     <label class="f">편집 방식
       <select name="engine">
         <option value="qwen">말로 편집 (Qwen-Image 2.1)</option>
+        <option value="moss">말로 편집 (MOSS-Image, 시험 중)</option>
+        <option value="flux3k">말로 편집 (FLUX 3 Klein · 가벼움, 8GB)</option>
         <option value="sdxl">칠해서 편집 (SDXL 인페인트)</option>
         <option value="flux">칠해서 편집 (FLUX · Krea · Krea 2 · Chroma)</option>
       </select></label>
     <label class="f">원하는 변화<textarea name="prompt" rows="4"></textarea></label>
+    <p class="hint fk">문장으로 지시하세요. 예: <b>귀걸이를 큰 금속 장식 귀걸이로 바꾸고 나머지는 그대로</b><br>이미지 생성에서 받은 FLUX 3 Klein 모델을 그대로 써요(그래픽카드 8GB 에서도 돼요). 칠한 영역이 있으면 그 부분만 바뀌어요.</p>
+    <p class="hint moss">문장으로 지시하세요. 예: <b>분홍 재킷만 검은 울 코트로 바꾸고 얼굴·배경은 그대로</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 바꿀 것과 그대로 둘 것을 함께 적으면 잘 돼요.</p>
     <p class="hint qwen">문장으로 지시하세요. 예: <b>재킷을 붉은 가죽으로 바꿔줘</b><br>칠한 영역이 있으면 그 부분만 바뀌어요. 참조 이미지는 <b>이미지 2의 옷을 입혀줘</b>처럼 번호로 불러요.</p>
     <p class="hint sdxl">칠한 영역에 그릴 내용만 영어 태그로 적어요. 예: <b>black silk robe, natural skin texture</b></p>
     <p class="hint fxe">칠한 영역에 그릴 내용을 문장으로 적어요. 예: <b>black silk robe, natural skin texture</b><br>모델 파일에 <b>FLUX Kontext</b>를 고르면 칠하지 않아도 <b>재킷을 붉은 가죽으로 바꿔줘</b>처럼 말로 지시해서 고칠 수 있어요.</p>
@@ -329,12 +333,14 @@
         <option value="sd35">Stable Diffusion 3.5</option>
         <option value="qwenimg">Qwen-Image 2.1 (글자·포스터, 편집과 같은 모델)</option>
         <option value="moss">MOSS-Image (배치 지정·긴 글자, 시험 중)</option>
+        <option value="zimage">Z-Image-Turbo (빠른 실사·글자, 8단계)</option>
+        <option value="flux3k">FLUX 3 Klein (새 모델, 사실적인 사진)</option>
       </select></label>
     <div data-for="sdxl" data-blk="sd-main"></div>
-    <div data-for="flux chroma krea2 sd35 qwenimg moss">
+    <div data-for="flux chroma krea2 sd35 qwenimg moss zimage flux3k">
       <label class="f">모델 파일<select name="fx_model"></select></label>
       <p class="hint plain"><button type="button" class="link" data-open="diffusion_models">모델 폴더 열기</button> <span data-for="sd35"><button type="button" class="link" data-open="checkpoints">체크포인트 폴더 열기</button></span></p>
-      <p class="hint plain" data-for="sd35 qwenimg moss">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 문장형 프롬프트가 잘 맞아요.</p>
+      <p class="hint plain" data-for="sd35 qwenimg moss zimage flux3k">텍스트 인코더·VAE는 설치된 파일에서 자동으로 찾아요. 문장형 프롬프트가 잘 맞아요.</p>
       <p class="hint plain" data-for="qwenimg">단계를 8 이하로 두면 Lightning LoRA(있으면)로 4단계에 그려요.</p>
       <p class="hint plain" data-for="moss">배치 지정: 프롬프트에 JSON 을 그대로 써요. 예: {"caption":"카페 포스터","layout":[{"bbox":[0.1,0.05,0.9,0.25],"text":"OPEN"}]}</p>
       <details data-for="flux chroma krea2"><summary>모델 파일 직접 고르기 (VAE · 텍스트 인코더)</summary>
@@ -352,7 +358,7 @@
       <p class="hint" id="wcs"></p>
     </details>
     <p class="hint" data-for="flux chroma krea2">FLUX·Krea 계열은 태그 대신 <b>문장</b>으로 써요. 예: A woman in a red leather jacket on a rainy street at night, cinematic lighting.<br>성인 캐릭터는 <b>adult woman</b>처럼 나이를 분명히 적어요.</p>
-    <label class="f" data-for="sdxl chroma krea2 sd35 qwenimg moss">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
+    <label class="f" data-for="sdxl chroma krea2 sd35 qwenimg moss zimage flux3k">제외할 요소<textarea name="negative" rows="2" placeholder="비워 두면 기본값을 써요"></textarea></label>
     <label class="f">시드 (-1은 무작위)<span class="seedrow"><input type="number" name="seed" value="-1"><button type="button" class="ghost seed-rand" title="-1로 되돌려요 (매번 새로운 무작위 값)">-1</button><button type="button" class="ghost seed-pick" title="무작위 숫자를 하나 골라 고정해요">🎲</button></span></label>
     <div class="row">
       <label class="f">가로<input type="number" name="w" value="1024" step="1" min="256" max="2048"></label>
@@ -397,11 +403,11 @@
       </div>
     </details>
     <details data-for="sdxl"><summary>샘플링 (고급)</summary><div data-blk="sd-sampling"></div></details>
-    <details data-for="flux chroma krea2 sd35 qwenimg moss" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
+    <details data-for="flux chroma krea2 sd35 qwenimg moss zimage flux3k" open><summary>FLUX·Krea·SD3.5 등 샘플링</summary>
       <div class="row">
         <label class="f">단계 수<input type="number" name="fx_steps" value="20" min="1" max="100"></label>
         <label class="f" data-for="flux">가이던스<input type="number" name="fx_guidance" value="3.5" step="0.1" min="0" max="20"></label>
-        <label class="f" data-for="chroma krea2 sd35 qwenimg moss">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
+        <label class="f" data-for="chroma krea2 sd35 qwenimg moss zimage flux3k">CFG<input type="number" name="fx_cfg" value="4" step="0.1" min="0" max="20"></label>
       </div>
       <div class="row">
         <label class="f">샘플러<select name="fx_sampler" data-def="euler"></select></label>
@@ -430,7 +436,7 @@
     <button class="go">업스케일 실행</button>
     <p class="warn" id="w-up" hidden>업스케일 모델이 아직 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 Real-ESRGAN을 설치해 주세요.</p>
     <label class="f">방식
-      <select name="mode"><option value="esrgan">빠른 업스케일 (Real-ESRGAN)</option><option value="refine">디테일 재생성 (업스케일 + 타일 리파인)</option></select></label>
+      <select name="mode"><option value="esrgan">빠른 업스케일 (업스케일 모델 — SeedVR2 를 고르면 AI 복원)</option><option value="refine">디테일 재생성 (업스케일 + 타일 리파인)</option></select></label>
     <div class="row">
       <label class="f">업스케일 모델<select name="upm"></select></label>
       <label class="f">배율<input type="number" name="scale" value="4" min="0.1" max="8" step="0.01" inputmode="decimal"></label>
@@ -473,7 +479,7 @@
 <section class="view split" id="v-vid">
   <form id="f-vid" autocomplete="off" novalidate>
     <button class="go">영상 만들기</button>
-    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx">LTX-Video — 아주 빠름</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
+    <label class="f">영상 모델<select name="wan_ver"><option value="5b">Wan 2.2 5B — 가볍고 빠름 (기본)</option><option value="14b">Wan 2.2 14B — 고화질·느림</option><option value="ltx25">LTX-2.5 — 최신 · 소리까지 (VRAM 24GB)</option><option value="ltx">LTX-Video 0.9.8 — 아주 빠름 · 가벼움</option><option value="vace">Wan VACE — 사진 속 인물·사물 유지</option><option value="s2v">Wan 2.2 S2V — 사진 + 목소리 → 말하는 영상</option></select></label>
     <p class="hint plain" id="vid-more-note" hidden></p>
     <div class="f" id="vid-audio-row" hidden><span>목소리 (소리 파일 — 고른 길이만큼, 최대 30초)</span><span class="seedrow"><label class="ghost vpick">소리 파일 고르기<input type="file" id="vid-audio" accept="audio/*" hidden></label><button type="button" class="ghost sm" id="vid-audio-clear" hidden>빼기</button></span><audio id="vid-audio-pv" controls hidden></audio></div>
     <p class="hint plain" id="vid-14-note" hidden>14B 는 고노이즈·저노이즈 두 모델이 차례로 그려서 5B 보다 선명하고 자연스럽지만 훨씬 오래 걸리고 VRAM 16GB 이상이 좋아요. 안 되면 5B 를 쓰세요.</p>
@@ -527,7 +533,7 @@
     <label class="chk mu-ace"><input type="checkbox" name="instrumental"> 가사 없이 연주곡으로</label>
     <label class="f mu-ace" id="mu-lyr">가사 (선택)<textarea name="lyrics" rows="6" placeholder="[verse]&#10;첫 줄 가사&#10;&#10;[chorus]&#10;후렴 가사"></textarea></label>
     <div class="row">
-      <label class="f mu-sfx" hidden>길이(초, 최대 47)<input type="number" name="sfx_seconds" value="10" min="1" max="47" step="0.1"></label>
+      <label class="f mu-sfx" hidden title="Stable Audio Open 은 47초, Stable Audio 3 는 180초까지">길이(초, 최대 180)<input type="number" name="sfx_seconds" value="10" min="1" max="180" step="0.1"></label>
       <label class="f mu-ace">길이<select name="seconds"><option value="30">30초</option><option value="60" selected>1분</option><option value="120">2분</option><option value="180">3분</option><option value="240">4분</option></select></label>
       <label class="f">파일 형식<select name="format"><option value="mp3">MP3 (작아요)</option><option value="flac">FLAC (무손실)</option></select></label>
     </div>
@@ -782,17 +788,30 @@
     <div class="row"><label class="f">종류<select id="m3-kind"><option value="character">사람·캐릭터</option><option value="object" selected>물건·소품</option><option value="big">건물·탈것 등 큰 것</option></select></label>
       <label class="f">이름<input id="m3-name" placeholder="예: 기사_캐릭터"></label></div>
     <div id="m3-check"></div>
+    <figure class="m3-front" id="m3-front" hidden><img alt="올린 사진(배경 지운 것)" title="크게 보기"><figcaption class="mute">올린 사진(배경 지운 것) · 눌러서 크게 보기 <button type="button" class="ghost sm" id="m3-frontup" title="앞 사진을 다른 사진으로 바꿔요">사진 바꾸기</button></figcaption></figure>
+    <label class="f" title="사진 한 장: 정면을 원본 그대로 살리고, 옆·뒤는 3D 엔진이 학습한 형태로 추정해요(권장). AI 멀티뷰 보조: AI 가 그린 왼쪽·뒤·오른쪽 그림을 함께 넣어요 — 그림이 앞 사진과 자세·비율이 다르면 그 그림은 빼고 만들어요.">만드는 방식<select id="m3-mode"><option value="single" selected>사진 한 장 (기본 · 정면에 가장 충실)</option><option value="multi">AI 멀티뷰 보조 (방향 그림 함께)</option></select></label>
+    <p class="mute" id="m3-modenote">사진에 없는 옆·뒤는 3D 엔진이 추정해요. 실제와 같다고 보장하지는 않아요.</p>
     <fieldset class="vset" id="m3-viewset" hidden><legend>여러 방향 <span class="mute">선택 · 뒷모습까지 정확하게</span></legend>
       <div class="m3-slots" id="m3-slots"></div>
       <div class="vbtns"><button type="button" class="ghost" id="m3-views" title="앞 사진을 보고 왼쪽·뒤·오른쪽 모습을 그려요(Qwen-Image 2.1)">왼쪽·뒤·오른쪽 그리기</button>
         <label class="chk" title="Lightning LoRA 로 4단계"><input type="checkbox" id="m3-vfast"> 빠르게</label></div>
+      <p class="mute m3-dir">방향 약속: <b>왼쪽</b> 그림은 얼굴(앞)이 그림의 <b>왼쪽</b>을, <b>오른쪽</b> 그림은 그림의 <b>오른쪽</b>을 봐요. <b>뒤</b> 그림에는 얼굴이 안 보여야 해요. 다르면 체크를 풀어 주세요.</p>
       <p class="mute" id="m3-mvnote"></p>
+      <div class="vbtns" id="m3-tposebox" hidden><button type="button" class="ghost" id="m3-tpose" title="앞 사진의 캐릭터를 양팔을 옆으로 편 T자 자세로 다시 그려요(Qwen-Image 2.1) — 뼈대·가중치가 더 잘 맞아요">T자 자세로 바꾸기</button>
+        <button type="button" class="ghost" id="m3-tundo" title="T자로 바꾸기 전 앞 사진으로 되돌려요" hidden>원래 자세로</button></div>
     </fieldset>
     <fieldset class="vset"><legend>모양·텍스처</legend>
+      <label class="f" title="Pixal3D 는 사진 화소를 3D 에 그대로 맞춰 붙여 얼굴·무늬가 사진에 더 가까워요(ComfyUI 공식 예시의 기본)">3D 엔진 (사진 한 장)<select id="m3-engine"><option value="auto" selected>자동 — Pixal3D 가 있으면 Pixal3D</option><option value="pixal">Pixal3D — 사진에 충실(얼굴·무늬)</option><option value="trellis">TRELLIS.2</option></select></label>
+      <p class="mute" id="m3-engnote" hidden></p>
       <div class="row"><label class="f">세밀함<select id="m3-res"><option value="512">빠르게 (512)</option><option value="1024" selected>보통 (1024)</option><option value="1536">아주 촘촘하게 (1536)</option></select></label>
-        <label class="f">면 수<select id="m3-faces"><option value="5000">5천 (모바일)</option><option value="20000" selected>2만 (게임)</option><option value="50000">5만 (고품질)</option><option value="200000">20만 (원본에 가깝게)</option></select></label>
+        <label class="f">면 수<select id="m3-faces"><option value="5000">5천 (모바일 게임)</option><option value="20000">2만 (게임 · 가벼움)</option><option value="50000" selected>5만 (게임 주인공급)</option><option value="200000">20만 (보기용 · 원본에 가깝게)</option><option value="700000">70만 (최고 · 파일이 커요)</option></select></label>
         <label class="f">텍스처<select id="m3-tex"><option value="1024">1024px</option><option value="2048" selected>2048px</option><option value="4096">4096px</option></select></label></div>
       <label class="chk" title="그물망을 고르게 다시 짜서 구멍·뾰족한 면을 줄여요"><input type="checkbox" id="m3-remesh" checked> 그물망 고르게 다시 짜기</label>
+      <label class="chk" title="3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요. 얼굴·무늬가 사진처럼 나와요. 사진과 3D 가 안 맞으면 자동으로 건너뛰어요."><input type="checkbox" id="m3-photo" checked> 사진 그대로 붙이기(얼굴·무늬)</label>
+      <label class="chk" title="사진에서 얼굴을 찾아 얼굴 부분을 키워 붙이고, 머리를 따로 떼어 전용 텍스처를 줘요(게임 회사 방식 — 얼굴 해상도가 여러 배). 얼굴 찾기(MediaPipe) 모델이 필요해요. 만화 그림체에서 얼굴을 엉뚱하게 잡으면 꺼 보세요."><input type="checkbox" id="m3-head" checked> 얼굴 고해상도(머리 전용 텍스처)</label>
+      <label class="chk" title="사진 속 얼굴의 각도가 3D 얼굴과 다를 때 사진 얼굴을 3D 쪽으로 휘어 붙여요. 원본 얼굴의 비율·눈코입 자리가 조금 바뀌어서 기본은 꺼져 있어요."><input type="checkbox" id="m3-align"> 얼굴 각도 맞추기(사진 휘기) <span class="mute">기본 꺼짐</span></label>
+      <label class="chk" title="면을 줄이기 전, 3D 엔진이 만든 원래의 촘촘한 그물망을 따로 저장해요(색 없음 · 파일이 커요). 나중에 다시 다듬을 때 써요."><input type="checkbox" id="m3-keephi" checked> 원본 고밀도 메시도 저장</label>
+      <label class="chk" title="A 엔진 원본 · B 사진 붙이기 · C 얼굴 텍스처 · D Blender 마무리 · E AI 멀티뷰(방향 그림이 있을 때)를 각각 저장하고, 앞·왼쪽·오른쪽·뒤 비교표를 만들어요. E 는 3D 를 한 번 더 만들어서 시간이 더 걸려요."><input type="checkbox" id="m3-compare"> 단계별 결과·비교표 저장 <span class="mute">A~E · 느려요</span></label>
     </fieldset>
     <fieldset class="vset"><legend>Blender 마무리 <span class="mute">크기·LOD·FBX/OBJ</span></legend>
       <div id="m3-bl" class="lo-eng"></div>
@@ -800,8 +819,18 @@
       <div class="row"><label class="f" title="0 이면 크기를 바꾸지 않아요">키(m)<input type="number" id="m3-height" value="0" min="0" max="500" step="0.01"></label>
         <label class="f">앞 방향 돌리기<select id="m3-rot"><option value="0">그대로</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label></div>
       <label class="chk" title="가까이(원본)·중간(50%)·멀리(20%) 3단계"><input type="checkbox" id="m3-lods" checked> LOD 3단계 만들기</label>
+      <label class="chk" title="사람형 캐릭터에 뼈대(Mixamo 이름 — Unity·Unreal 사람형 자동 매핑)와 가중치를 넣어요. 양팔을 편 T자·A자 자세일 때 가장 잘 맞아요"><input type="checkbox" id="m3-rig"> 뼈대 넣기 <span class="mute">사람형 캐릭터</span></label>
       <div class="vbtns"><label class="chk"><input type="checkbox" id="m3-fmt-glb" checked> GLB</label><label class="chk"><input type="checkbox" id="m3-fmt-fbx" checked> FBX</label><label class="chk"><input type="checkbox" id="m3-fmt-obj"> OBJ</label></div>
     </fieldset>
+    <details class="vset m3-fold" id="m3-sceneset" hidden><summary>장면 전체 — 이 물체 넣기 <span class="mute">선택 · 사진 속 여러 물체를 한 장면으로</span></summary>
+      <p class="mute">원본 사진에서 물체를 눌러 고르고 [이 물체 넣기]를 눌러요(Shift+클릭은 빼기). 물체마다 3D 를 만들어 사진 속 자리에 놓아요. 위치·크기는 AI 어림값이에요.</p>
+      <div class="m3-sbox" id="m3-sbox" title="물체를 눌러 고르기 · Shift+클릭은 빼기"><img id="m3-sorig" alt="원본 사진"><canvas id="m3-smask"></canvas></div>
+      <div class="vbtns"><button type="button" class="ghost" id="m3-sadd" disabled>이 물체 넣기</button><button type="button" class="ghost sm" id="m3-sreset" disabled>다시 고르기</button>
+        <button type="button" class="ghost" id="m3-ssam" hidden>선택 도구 설치 (약 45MB)</button></div>
+      <div class="m3-sobjs" id="m3-sobjs"></div>
+      <label class="chk" title="다른 물체에 가려졌거나 사진 가장자리에서 잘린 부분을 AI 편집(Qwen-Image 2.1)으로 그려 넣은 뒤 3D 로 만들어요"><input type="checkbox" id="m3-sfill"> 가려진 부분 채우기 <span class="mute">물체마다 AI 편집 · 느려요</span></label>
+      <button type="button" class="go wide" id="m3-sgo" disabled>장면 만들기</button>
+    </details>
   </form>
   <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
   <div class="col">
@@ -1000,7 +1029,8 @@
     <label class="chk"><input type="checkbox" id="gal-fav"> ★ 즐겨찾기만</label>
     <span class="mute" id="gal-n"></span>
     <button type="button" class="ghost sm" data-open="outputs" title="결과 파일이 저장된 outputs 폴더를 탐색기로 열어요">outputs 폴더 열기</button>
-    <button type="button" class="ghost sm" id="gal-sel" title="보이는 칸을 모두 고르거나, 고른 것을 모두 풀어요">모두 선택</button>
+    <button type="button" class="ghost sm" id="gal-sel" title="지금 화면에 표시된 칸을 모두 골라요">보이는 것 전체 선택</button>
+    <button type="button" class="ghost sm" id="gal-unsel" hidden title="고른 것을 모두 풀어요">선택 해제</button>
     <button type="button" class="ghost sm" id="gal-cmp" hidden title="선택한 이미지 두 장을 겹쳐서 슬라이더로 비교해요">두 장 비교</button>
     <button type="button" class="ghost sm" id="gal-lora" hidden title="고른 사진을 LoRA 만들기의 학습 사진으로 넣어요">LoRA 학습 사진으로 (0)</button>
     <button type="button" class="ghost sm" id="gal-delsel" hidden>선택한 파일 삭제 (0)</button>
@@ -1070,7 +1100,7 @@
 <div class="cpane" id="fold-i2p"><div class="card"><h3>이미지에서 프롬프트 뽑기</h3>
     <p class="hint plain">사진을 올리면 이미지를 볼 수 있는 대화 모델이 그림을 설명해서 프롬프트로 만들어 줘요. 마음에 드는 그림의 분위기를 따라 만들고 싶을 때 써요.</p>
     <p class="warn" id="w-i2p" hidden>이미지를 볼 수 있는 대화 모델이 없어요. <a href="#" data-go="setup">설치와 모델</a>에서 'Qwen2.5-VL 7B'를 설치해 주세요.</p>
-    <div class="vdrop"><label class="ghost vpick">이미지 고르기<input type="file" accept="image/*" hidden id="i2p-file"></label><img id="i2p-thumb" alt="" hidden></div>
+    <div class="vdrop"><label class="ghost vpick">이미지 고르기<input type="file" accept="image/*" hidden id="i2p-file"></label><img id="i2p-thumb" alt="" hidden><button type="button" class="ghost" id="i2p-clear" hidden>지우기</button></div>
     <div class="row"><label class="f">만들 형식<select id="i2p-style"><option value="sentence">문장형 (FLUX·Krea·Qwen 계열)</option><option value="tags">태그형 (NoobAI·Illustrious 계열)</option><option value="video">영상용 (움직임 포함)</option></select></label>
     <label class="f">사용할 모델<select id="i2p-model"></select></label></div>
     <div class="actions"><button class="go" type="button" id="i2p-go">프롬프트 만들기</button><span class="mute" id="i2p-st"></span></div>
@@ -1236,7 +1266,7 @@
       <label class="f">뒤집기<select name="flip"><option value="none">뒤집지 않음</option><option value="h">좌우 뒤집기</option><option value="v">상하 뒤집기</option></select></label>
     </div>
     <div data-op="rmbg" class="bt-opts" hidden>
-      <label class="f">정확도<select name="rmodel"><option value="fast">빠름 (가볍고 대충)</option><option value="normal" selected>보통 (추천)</option><option value="precise">정밀 (머리카락까지, 느림)</option></select></label>
+      <label class="f">정확도<select name="rmodel"><option value="fast">빠름 (가볍고 대충)</option><option value="normal">보통</option><option value="precise">정밀 (머리카락까지, 느림)</option><option value="best" selected>최고 (BiRefNet · 그래픽카드)</option></select></label>
       <label class="f">배경 처리<select name="bg"><option value="">투명하게 (PNG)</option><option value="white">흰색으로</option><option value="black">검정으로</option></select></label>
       <p class="hint plain" id="bt-rm-note"></p>
       <div class="actions"><button type="button" class="ghost" id="bt-rm-install" hidden>배경 지우기 도구 설치</button></div>
@@ -1328,6 +1358,8 @@
 <div class="recbar"><div class="actions"><button class="ghost" id="rec" type="button">내 GPU에 맞춰 고르기</button><button class="go" id="inst" type="button">선택한 항목 설치</button></div>
 <div id="sel-sum" class="selsum" aria-live="polite"></div>
 <div id="tasks-wrap" hidden><h4>받는 중</h4><div id="tasks"></div></div></div>
+<div id="oldbox" class="oldbox" hidden></div>
+<details class="tierbox" open><summary>그래픽카드 메모리(VRAM)별 추천</summary><div id="tiers"></div></details>
     <h4>대화 모델</h4><div id="cat-llm"></div>
     <h4>이미지 모델</h4><div id="cat-img"></div>
     <h4>영상 모델</h4><div id="cat-vid"></div>
@@ -1363,6 +1395,7 @@
     <p class="hint plain">어디에서 용량을 쓰는지 폴더별로 보여 주고, 지워도 안전한 임시 파일만 골라서 정리해 줘요. 모델과 결과 이미지는 자동으로 지우지 않아요.</p>
     <div class="diskbar"><button type="button" class="ghost" id="disk-scan">용량 확인하기</button> <button type="button" class="ghost" id="tidy-scan" title="받다 만 파일, 같은 파일이 두 곳에 있는 경우, 오래된 큰 모델을 찾아 줘요">정리할 모델 찾기</button><span class="mute" id="disk-st"></span></div>
     <div id="tidy"></div>
+    <div class="keepbox" id="keepbox"><span class="mute" id="keep-st">화면에 올려 둔 사진은 다시 켜도 그대로 불러와요.</span> <button type="button" class="ghost sm" id="keep-clr" hidden>올려 둔 사진 모두 지우기</button></div>
     <div id="cachein" class="cachein"></div>
     <div id="disk"></div>
   

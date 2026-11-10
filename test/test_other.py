@@ -15,7 +15,7 @@ def mk(d, n): (M / d).mkdir(parents=True, exist_ok=True); (M / d / n).write_byte
 def cls(wf, c): return [v["inputs"] for v in wf.values() if v["class_type"] == c]
 lst = lambda: json.load(urllib.request.urlopen(B + "/api/lists"))
 # ── 모델이 없을 때
-L = lst(); assert L["oxmodels"]["sd35"] == [] and set(L["oxmodels"]) == {"sd35", "qwenimg", "moss"} and L["oxmodels"]["moss"] == []; ok("no SD3.5/MOSS models → empty lists (HiDream·Lumina removed)")
+L = lst(); assert L["oxmodels"]["sd35"] == [] and set(L["oxmodels"]) == {"sd35", "qwenimg", "moss", "zimage", "flux3k"} and L["oxmodels"]["moss"] == []; ok("no SD3.5/MOSS models → empty lists (HiDream·Lumina removed)")
 j = wait(post("/api/job", {"kind": "gen", "gengine": "moss", "prompt": "a cat", "w": 512, "h": 512})["id"]); assert j["state"] == "error" and "MOSS-Image" in j["error"] and "설치" in j["error"], j; ok("missing model → explains where to install")
 # ── SD3.5 Medium (인코더 내장)
 mk("checkpoints", "sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors")
@@ -30,7 +30,7 @@ for n in ("clip_g.safetensors",): mk("text_encoders", n)
 SUBMITTED.clear(); j = wait(post("/api/job", {"kind": "gen", "gengine": "sd35", "fx_model": "sd3.5_large_fp8_scaled.safetensors", "prompt": "a cat", "w": 512, "h": 512})["id"]); assert j["state"] == "done", j
 t = cls(SUBMITTED[-1], "TripleCLIPLoader")[0]; assert t == {"clip_name1": "clip_l.safetensors", "clip_name2": "clip_g.safetensors", "clip_name3": "t5xxl_fp8_e4m3fn_scaled.safetensors"}, t; ok("SD3.5 Large: TripleCLIPLoader with clip_l + clip_g + T5")
 # ── 저장된 메타데이터 · 계열 이름
-img = sorted((hub.OUT / "생성").glob("*.png"))[-1]
+img = sorted(hub.out_files(hub.OUT / "생성", {".png"}))[-1]
 from PIL import Image as I
 assert "gen-" in str(I.open(img).text.get("parameters", I.open(img).info)) or True
 import modelinfo

@@ -73,7 +73,7 @@ def sorted_models():
         info["diffusion_models/" + n] = dict(family=fam, all_in_one=allin, how=how)
         if fam == "krea2":
             krea2.append(n)
-        elif fam in ("hidden", "qwen", "moss", "sd15", "sdxl", "sd3", "hidream", "lumina") or re.search(r"trellis|pixal3d", n.lower()) or (fam == "unknown" and re.search(r"qwen|moss", n.lower())):
+        elif fam in ("hidden", "qwen", "moss", "sd15", "sdxl", "sd3", "hidream", "lumina") or re.search(r"trellis|pixal3d|ltx|seedvr|flux[_-]?3.*klein|z[_-]?image", n.lower()) or (fam == "unknown" and re.search(r"qwen|moss", n.lower())):
             continue
         else:
             (chroma if fam == "chroma" or (fam == "unknown" and "chroma" in n.lower()) else flux).append(n)
@@ -122,7 +122,7 @@ def _lists_build():
     return {"llm": [], "checkpoints": sdxl, "loras": loras, "families": info,
             "lora_info": {n: (lu.get(n) or {}).get("family") or modelinfo.lora_family(MODELS / "loras" / n)["family"] for n in loras}, "lora_kind": lora_kinds(),
             "lora_alias": {n: (lu.get(n) or {}).get("alias") for n in loras if (lu.get(n) or {}).get("alias")},
-            "upscalers": files("upscale_models"), "controlnets": files("controlnet"),
+            "upscalers": files("upscale_models") + seedvr_names(), "controlnets": files("controlnet"),
             "vaes": files("vae"), "text_encoders": files("text_encoders"), "diffusion": files("diffusion_models"),
             "fluxmodels": flux, "chromamodels": chroma, "krea2models": krea2, "anymodels": sdxl + flux + chroma + krea2,
             "flux_ready": bool(fp["t5"] and fp["clip_l"] and fp["vae"]),
@@ -148,7 +148,67 @@ def catalog():
         inst = img_installed(m)
         sz = sum(fsize(MODELS / f["dir"] / cat_name(f)) for f in m["files"]) if inst else 0
         img.append({**m, "installed": inst, "cat": cat_of(m), "disk_gb": round(sz / 1e9, 1) if inst else None})
-    return {"llm": llm, "image": img}
+    return {"llm": llm, "image": img, "superseded": superseded(llm, img)}
+
+
+# 새 엔진으로 바뀐 예전 모델: (예전 id, 이 중 하나라도 설치돼 있으면 정리를 권해요, 이유). 자동으로 지우지 않고 목록만 보여 줘요.
+SUPERSEDED = [
+    ("ltx-video", ("ltx25",), "LTX-2.5 가 영상을 대신 만들어요(소리까지)"),
+    ("stable-audio-open", ("stable-audio-3",), "효과음은 Stable Audio 3 를 먼저 써요"),
+    ("sd35-large", ("flux3-klein", "flux3-klein-base", "z-image-turbo"), "FLUX 3 Klein · Z-Image-Turbo 가 더 새롭고 빨라요"),
+    ("sd35-medium", ("flux3-klein", "flux3-klein-base", "z-image-turbo"), "FLUX 3 Klein · Z-Image-Turbo 가 더 새롭고 빨라요"),
+    ("qwen25vl-7b", ("qwen35-9b", "qwen35-27b", "gemma4-e4b", "gemma4-26b", "qwen35-9b-abl", "qwen35-27b-abl", "gemma4-12b-abl", "gemma4-26b-abl"),
+     "새 대화 모델(Qwen3.5 · Gemma 4)이 사진도 볼 수 있어요"),
+    # 제한 해제판은 제한 해제판으로만 대신해요(공식판은 성인 대화를 거절할 수 있어서)
+    ("qwen3-8b", ("qwen35-9b-abl", "gemma4-12b-abl"), "Qwen3.5 · Gemma 4 제한 해제판이 더 새것이에요"),
+    ("qwen3-14b", ("qwen35-9b-abl", "gemma4-12b-abl", "gemma4-26b-abl", "qwen35-27b-abl"), "Qwen3.5 · Gemma 4 제한 해제판이 더 새것이에요"),
+    ("qwen3-32b", ("qwen35-27b-abl", "gemma4-26b-abl"), "Qwen3.5 27B · Gemma 4 26B 제한 해제판이 더 새것이에요"),
+    ("mistral-small-24b", ("qwen35-27b-abl", "gemma4-26b-abl"), "Qwen3.5 27B · Gemma 4 26B 제한 해제판이 더 새것이에요"),
+]
+
+
+def superseded(llm, img):
+    """설치된 예전 모델 중 새 엔진이 있는 것 → [{id, name, gb, why, new}] (배경 지우기 예전 모델 포함)."""
+    by = {m["id"]: m for m in llm + img}
+    out = []
+    for old, news, why in SUPERSEDED:
+        o = by.get(old)
+        have = [by[n]["name"] for n in news if by.get(n, {}).get("installed")]
+        if o and o.get("installed") and have:
+            out.append({"id": old, "name": o["name"], "gb": o.get("disk_gb") or o.get("gb"), "why": why, "new": have[0], "kind": "llm" if "ollama" in o else "image"})
+    if rmbg_best_ready():
+        for k, m in bgremove.MODELS.items():
+            f = MODELS / "rmbg" / m["file"]
+            if f.is_file():
+                out.append({"id": "rmbg:" + k, "name": f"배경 지우기 모델 '{m['label']}' ({m['file']})", "gb": round(f.stat().st_size / 1e9, 2),
+                            "why": "배경 지우기는 BiRefNet(최고)을 먼저 써요", "new": "BiRefNet", "kind": "rmbg"})
+    return out
+
+
+def superseded_remove(p):
+    """예전 모델 지우기(사용자가 확인한 뒤에만 불려요). {id} 하나 또는 {all: 1, ids: [...]}(화면에 보인 것만)."""
+    ids = [str(x) for x in (p.get("ids") or [])] if p.get("all") else [str(p.get("id") or "")]
+    allowed = {x["id"] for x in catalog()["superseded"]}
+    done, errs, freed, pending = [], [], 0, 0
+    for i in ids:
+        if i not in allowed:
+            errs.append(f"{i}: 지울 수 있는 예전 모델이 아니에요")
+            continue
+        if i.startswith("rmbg:"):
+            f = MODELS / "rmbg" / bgremove.MODELS[i[5:]]["file"]
+            try:
+                RM["engine"] = None
+                sz = fsize(f)
+                f.unlink()
+                freed += sz
+                done.append(i)
+            except OSError as e:
+                errs.append(f"{f.name}: {e.strerror or e}")
+            continue
+        r = catalog_remove({"id": i})
+        (errs.append(f"{i}: {r['error']}") if r.get("error") else done.append(i))
+        freed, pending = freed + (r.get("freed") or 0), pending + (r.get("pending") or 0)
+    return {"ok": not errs, "removed": done, "freed": freed, "pending": pending, **({"error": "일부를 지우지 못했어요: " + "; ".join(errs)} if errs else {})}
 
 
 def cat_of(m):
@@ -158,7 +218,7 @@ def cat_of(m):
         return "video"
     if re.search(r"ace-step|stable-audio|audio", i):
         return "audio"
-    if "3d" in i or "trellis" in i:
+    if "3d" in i or "trellis" in i or "mediapipe" in i:
         return "d3"
     return "image"
 
@@ -177,23 +237,12 @@ def catalog_remove(p):
     for o in CATALOG["image"]:
         if o["id"] != mid and img_installed(o):
             shared |= mine & {(f["dir"], cat_name(f)) for f in o["files"]}
-    gone, kept, errs = [], [], []
-    for d, n in sorted(mine):
-        f = MODELS / d / n
-        if not f.is_file():
-            continue
-        if (d, n) in shared:
-            kept.append(n)
-            continue
-        try:
-            f.unlink()
-            gone.append(n)
-        except OSError as e:
-            errs.append(f"{n}: {e.strerror or e}")
+    kept = [n for d, n in sorted(mine) if (d, n) in shared and (MODELS / d / n).is_file()]
+    gone, errs, size, pending = delete_files([MODELS / d / n for d, n in sorted(mine) if (d, n) not in shared])
     _LC["key"] = None
     if errs:
         return {"error": "일부를 지우지 못했어요(ComfyUI 가 쓰는 중일 수 있어요): " + "; ".join(errs), "removed": gone, "kept": kept}
-    return {"ok": True, "removed": gone, "kept": kept}
+    return {"ok": True, "removed": gone, "kept": kept, "freed": size - pending, "pending": pending}
 
 
 # ───────────────────────── 내 PC 점검 (기능별로 빠진 부품 찾기) ─────────────────────────

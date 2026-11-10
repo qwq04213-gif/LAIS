@@ -118,6 +118,6 @@ with sync_playwright() as p:
     pg.click("nav button[data-v=setup]"); pg.click("#setup-nav button[data-pane=disk]"); pg.click("#disk-scan"); pg.wait_for_selector("#disk .disktb", timeout=20000)
     txt = pg.inner_text("#disk"); assert "디스크 여유" in txt and "dupA.safetensors" in txt and "dupB.safetensors" in txt and "임시 미리보기" in txt, txt[:600]
     pg.locator("#disk .cl[data-w=temp]").click(); pg.wait_for_timeout(800); assert not (INPUT.parent / "temp/old.png").exists(); ok("setup tab: disk check lists folders, duplicate files, biggest files; the 'temp previews' button frees the space")
-    pg.locator("#disk .del[data-name='dupB.safetensors']").first.click(); pg.wait_for_timeout(800); assert not (M / "checkpoints/dupB.safetensors").exists(); ok("delete a duplicate from the disk panel")
+    pg.locator("#disk .del[data-name='dupB.safetensors']").first.click(); [pg.wait_for_timeout(300) for _ in range(20) if (M / "checkpoints/dupB.safetensors").exists()]; assert not (M / "checkpoints/dupB.safetensors").exists(); ok("delete a duplicate from the disk panel")
     print("page errors:", errs); assert not errs
 print("UI9 TESTS PASSED")

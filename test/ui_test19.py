@@ -23,7 +23,7 @@ with sync_playwright() as p:
     pg.locator("#gal-grid .gt").first.hover(); n0 = pg.locator("#gal-grid [data-del]").count(); assert n0 == 4, n0
     name = pg.locator("#gal-grid .gt").first.get_attribute("data-u"); fn = G / __import__("urllib.parse").parse.unquote(name).split("/")[-1]; assert fn.exists()
     pg.locator("#gal-grid .gt [data-del]").first.click(force=True); pg.wait_for_function("document.querySelectorAll('#gal-grid .gt').length==3"); assert not fn.exists(); ok("trash button on a card deletes that file after a confirm")
-    pg.click("#gal-sel"); assert "선택 해제" in pg.inner_text("#gal-sel") and pg.locator("#gal-delsel").is_visible(); pg.click("#gal-sel"); assert pg.locator("#gal-delsel").is_hidden()
+    pg.click("#gal-sel"); assert "선택 해제" in pg.inner_text("#gal-unsel") and pg.locator("#gal-delsel").is_visible(); pg.click("#gal-unsel"); assert pg.locator("#gal-delsel").is_hidden()
     ts = pg.locator("#gal-grid .gt"); ts.nth(0).hover(); ts.nth(0).locator("[data-pick]").check(); ts.nth(1).click(); pg.wait_for_function("document.querySelector('#gal-delsel').textContent.includes('(2)')"); assert pg.locator("#gal-grid .gt.picked").count() == 2; ok("select mode: clicking cards picks them and the count follows")
     ts.nth(1).click(); pg.wait_for_function("document.querySelector('#gal-delsel').textContent.includes('(1)')")
     pg.click("#gal-delsel"); pg.wait_for_function("document.querySelectorAll('#gal-grid .gt').length==2"); ok("delete selected removes only the picked ones")

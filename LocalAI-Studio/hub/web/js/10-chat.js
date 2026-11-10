@@ -155,11 +155,10 @@ function planCard(P,i){const act=P.state==='wait'?`<button type="button" class="
   return `<div class="plan" data-st="${P.state}"><b>실행 계획</b><ol>${P.steps.map(s=>`<li data-st="${s.state}"><span class="ps">${esc(s.summary)}</span> <small class="pst">${s.state==='running'&&s.queued?(s.ahead>1?`대기열 ${s.ahead}번째`:'곧 시작'):AG_ST[s.state]||s.state}</small>${agRun(s)}${
     s.error?`<div class="st bad">${esc(s.error)}</div>${needBox(s.need)}`:''}<details><summary>보낼 값</summary><pre>${esc(JSON.stringify(s.args,null,1))}</pre></details>${
     s.images?.length?`<div class="cthumbs pimgs">${s.images.map(u=>/\.(png|jpe?g|webp|gif)$/i.test(u)?`<img src="${u}" data-pimg="${u}" alt="결과 (누르면 크게 보기)">`:`<a href="${u}" target="_blank">${esc(decodeURIComponent(u.split('/').pop()))}</a>`).join('')}</div>`:''}${s.explore?`<a href="#" class="pxp" data-xp="${esc(s.explore)}">프롬프트 탐색 화면에서 비교·고르기 →</a>`:''}${s.vana?`<a href="#" class="pxp" data-vana="${esc(s.vana)}">영상 분석 화면에서 하이라이트 만들기 →</a>`:''}</li>`).join('')}</ol><div class="pa">${act}</div></div>`}
-const fmtEta=t=>t==null?'':t<60?'1분 안':t<3600?`약 ${Math.round(t/60)}분`:`약 ${Math.floor(t/3600)}시간 ${Math.round(t%3600/60)}분`;
 function agRun(s){const ms=s.models?.length?`<div class="pmod" title="${esc(s.models.join('\n'))}">모델: ${esc(s.models[0])}${s.models.length>1?` <span class="mute">+ ${esc(s.models.slice(1).join(', '))}</span>`:''}</div>`:'';
   if(s.state!=='running'||s.queued)return ms;const pc=typeof s.progress==='number'?Math.round(s.progress*100):null;
   if(s.all_n)return ms+`<div class="prun"><progress max="${s.all_n}" value="${s.done_n||0}"></progress><b>${s.done_n||0}/${s.all_n}</b><small>후보를 차례로 그리는 중${pc!==null?` · 지금 후보 ${pc}%`:''}${s.eta?' · 남은 시간 '+fmtEta(s.eta):''}</small></div>`;
-  return ms+`<div class="prun">${pc!==null?`<progress max="100" value="${pc}"></progress><b>${pc}%</b>`:'<progress></progress>'}<small>${[s.msg&&esc(s.msg.split(' · ')[0]),s.elapsed?s.elapsed+'초째':'',s.eta?'남은 시간 '+fmtEta(s.eta):''].filter(Boolean).join(' · ')}</small></div>`}
+  return ms+`<div class="prun">${pc!==null?`<progress max="100" value="${pc}"></progress><b>${pc}%</b>`:'<progress></progress>'}<small>${[s.msg&&esc(s.msg.split(' · ')[0]),s.elapsed?fmtEl(s.elapsed)+' 지남':'',s.eta?'남은 시간 '+fmtEta(s.eta):''].filter(Boolean).join(' · ')}</small></div>`}
 async function agentSend(text,pics){
   const ce=$('#cerr');
   if(pics.length>1)toast('실행 모드에서는 붙인 사진 중 첫 장만 써요.');

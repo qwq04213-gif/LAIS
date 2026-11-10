@@ -185,13 +185,13 @@ def resize_steps(img, p):
 
 def feat_rmbg(p, J):
     """배경 지우기: 사람·물체만 남기고 배경을 투명(또는 고른 색)으로. ComfyUI 없이 바로 처리해요."""
-    key = p.get("rmodel") if p.get("rmodel") in bgremove.MODELS else "normal"
-    if not bgremove.have_ort() or not bgremove.installed(MODELS / "rmbg", key):
+    key = p.get("rmodel") if p.get("rmodel") in RM_KEYS else rmbg_default()
+    if not rmbg_ready(key):
         r = rmbg_install({"key": key})
-        label = bgremove.MODELS[key]["label"]
+        info = RM_BEST if key == "best" else bgremove.MODELS[key]
         if r.get("error") and "이미" not in r["error"]:
             raise RuntimeError(r["error"])
-        raise RuntimeError(f"배경 지우기 모델({label}, 약 {bgremove.MODELS[key]['mb']}MB)을 받기 시작했어요. 설치와 모델의 진행 목록에서 끝난 걸 확인한 뒤 다시 눌러 주세요.")
+        raise RuntimeError(f"배경 지우기 모델({info['label']}, 약 {info['mb']}MB)을 받기 시작했어요. 설치와 모델의 진행 목록에서 끝난 걸 확인한 뒤 다시 눌러 주세요.")
     img = load_img(p["image"])
     bg = str(p.get("bg") or "transparent")
     color = {"white": (255, 255, 255), "black": (0, 0, 0)}.get(bg)
@@ -199,7 +199,7 @@ def feat_rmbg(p, J):
         m = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(p.get("bgcolor") or "").strip())
         color = tuple(int(m.group(1)[i:i + 2], 16) for i in (0, 2, 4)) if m else (255, 255, 255)
     J["msg"] = "배경 지우는 중"
-    res = rmbg_engine(key).cut(img, color)
+    res = rmbg_cut(key, img, color, J)
     if p.get("crop") and res.mode == "RGBA":      # 남은 부분에 맞춰 빈 테두리 잘라내기
         box = res.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
         if box:

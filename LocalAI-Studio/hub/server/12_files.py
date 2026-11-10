@@ -238,31 +238,162 @@ def manage():
     return out
 
 
+# ───────────────────────── 모델 지우기 (용량이 실제로 줄도록) ─────────────────────────
+# 윈도우에서는 엔진이 열어 둔(메모리에 올린) 모델 파일을 지우면 목록에서만 사라지고, 엔진이 파일을 놓을 때까지 디스크 용량이 그대로예요.
+# ComfyUI 는 모델을 mmap 으로 열어 두고, Ollama 는 올려 둔 모델의 조각(blob)을 지우지 못하면 조용히 남겨 둬요.
+# 그래서 지우기 전에 엔진이 파일을 놓게 하고, 지운 뒤에 정말 비워졌는지 확인해요.
+LLM_DIR = ROOT / "models" / "llm"
+RELEASE_WAIT = 2.0          # ComfyUI 가 모델을 내리고 정리(gc)할 때까지 기다리는 시간(초)
+
+
+def _disk_free(p):
+    try:
+        return shutil.disk_usage(p).free
+    except OSError:
+        return 0
+
+
+def img_busy():
+    return bool(QUEUE) or any(J.get("state") == "running" for J in list(JOBS.values()))
+
+
+def release_comfy():
+    """이미지 엔진이 잡고 있는 모델 파일을 놓게 해요(모델 내리기 + 캐시 비우기). 엔진이 꺼져 있으면 바로 돌아와요."""
+    if not alive(CUI + "/system_stats"):
+        return False
+    used = STATE.get("last") == "image"         # 마지막으로 내린 뒤 이미지 엔진을 썼을 때만 모델이 올라가 있어요
+    free_comfy()
+    STATE["last"] = None
+    LAST_MODEL["key"] = None
+    if used:
+        time.sleep(RELEASE_WAIT)
+    return True
+
+
+def release_llm(name):
+    """대화 모델을 메모리에서 내려요(올라가 있을 때만). 내려가야 Ollama 가 모델 파일을 지울 수 있어요."""
+    try:
+        if not any(m.get("name") == name or m.get("model") == name for m in http(OLLAMA + "/api/ps", timeout=3).get("models", [])):
+            return
+        http(OLLAMA + "/api/generate", {"model": name, "keep_alive": 0}, 30)
+        for _ in range(20):
+            if not any(m.get("name") == name or m.get("model") == name for m in http(OLLAMA + "/api/ps", timeout=3).get("models", [])):
+                return
+            time.sleep(0.5)
+    except Exception:
+        pass
+
+
+def llm_blobs():
+    """Ollama 조각 파일 {이름: 크기}"""
+    b = LLM_DIR / "blobs"
+    return {f.name: fsize(f) for f in b.iterdir() if f.is_file()} if b.is_dir() else {}
+
+
+def llm_manifests():
+    """대화 모델 목록 파일 → 그 모델이 쓰는 조각 이름들. 하나라도 못 읽으면 None(그땐 아무것도 지우지 않아요)."""
+    man = LLM_DIR / "manifests"
+    out = {}
+    for f in (man.rglob("*") if man.is_dir() else []):
+        if not f.is_file():
+            continue
+        try:
+            m = json.loads(f.read_text(encoding="utf-8"))
+            out[str(f)] = {x["digest"].replace(":", "-") for x in [m.get("config") or {}] + list(m.get("layers") or []) if x.get("digest")}
+        except Exception:
+            return None
+    return out
+
+
+def llm_orphans(min_age=600):
+    """어떤 대화 모델도 쓰지 않는 Ollama 조각 파일(지우다 남은 것, 받다 만 것). 받는 중인 대화 모델이 있거나 min_age 초 안에 바뀐 파일은 빼요."""
+    blobs, mf = LLM_DIR / "blobs", llm_manifests()
+    if mf is None or not blobs.is_dir() or any(t.get("kind") == "ollama" and t["state"] in ("queued", "running") for t in TASKS):
+        return []
+    used = set().union(*mf.values()) if mf else set()
+    now, out = time.time(), []
+    for f in blobs.iterdir():
+        try:
+            if f.is_file() and f.name.startswith("sha256-") and f.name not in used and now - f.stat().st_mtime >= min_age:
+                out.append(f)
+        except OSError:
+            pass
+    return out
+
+
+def _unlink_all(fs):
+    n = 0
+    for f in fs:
+        try:
+            sz = fsize(f)
+            f.unlink()
+            n += sz
+        except OSError:
+            pass
+    return n
+
+
+def delete_llm(name):
+    before, mf0 = sum(llm_blobs().values()), llm_manifests()
+    release_llm(name)
+    req = urllib.request.Request(OLLAMA + "/api/delete", data=json.dumps({"model": name, "name": name}).encode(), method="DELETE",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=30).close()
+    except urllib.error.HTTPError as e:
+        return {"error": f"삭제하지 못했어요 (HTTP {e.code})"}
+    except Exception:
+        return {"error": "대화 엔진(Ollama)에 연결하지 못했어요."}
+    mf1 = llm_manifests()       # 지운 모델만 쓰던 조각인데 Ollama 가 지우지 못하고 남긴 것(올라가 있던 모델 등)
+    if mf0 is not None and mf1 is not None:
+        gone = set().union(*(v for k, v in mf0.items() if k not in mf1)) if any(k not in mf1 for k in mf0) else set()
+        left = gone - (set().union(*mf1.values()) if mf1 else set())
+        _unlink_all([LLM_DIR / "blobs" / b for b in left if (LLM_DIR / "blobs" / b).is_file()])
+    return {"ok": True, "freed": max(0, before - sum(llm_blobs().values()))}
+
+
+def delete_files(fs):
+    """모델 파일 지우기(이미지 엔진이 놓게 한 뒤) → (지운 이름, 오류, 비운 바이트, 아직 안 비워진 바이트)"""
+    fs = [f for f in fs if f.is_file()]
+    if not fs:
+        return [], [], 0, 0
+    if img_busy():
+        return [], ["이미지 작업이 도는 중이에요. 작업이 끝난 뒤 지워 주세요(쓰는 중인 모델은 지워도 용량이 줄지 않아요)."], 0, 0
+    release_comfy()
+    gone, errs, size = [], [], 0
+    free0 = _disk_free(fs[0].parent)
+    for f in fs:
+        sz = fsize(f)
+        try:
+            f.unlink()
+            gone.append(f.name)
+            size += sz
+        except OSError as e:
+            errs.append(f"{f.name}: {e.strerror or e}")
+    gain = _disk_free(fs[0].parent) - free0 if free0 else size
+    pending = size - gain if size > (200 << 20) and gain < size // 2 else 0
+    if pending:
+        log("[모델 지우기] 지웠지만 용량이 아직 안 줄었어요(엔진이 파일을 잡고 있음):", ", ".join(gone), f"{pending / 1e9:.1f}GB")
+    return gone, errs, size, max(0, pending)
+
+
 def delete_item(p):
     if p.get("kind") == "ollama":
         name = str(p.get("name", "")).strip()
         if not name:
             return {"error": "이름이 없어요."}
-        req = urllib.request.Request(OLLAMA + "/api/delete", data=json.dumps({"model": name, "name": name}).encode(), method="DELETE",
-                                     headers={"Content-Type": "application/json"})
-        try:
-            urllib.request.urlopen(req, timeout=30).close()
-        except urllib.error.HTTPError as e:
-            return {"error": f"삭제하지 못했어요 (HTTP {e.code})"}
-        except Exception:
-            return {"error": "대화 엔진(Ollama)에 연결하지 못했어요."}
-        return {"ok": True}
+        return delete_llm(name)
     d, name = p.get("dir"), str(p.get("name", ""))
     if d not in FOLDERS or not name or Path(name).name != name:
         return {"error": "삭제할 수 없는 항목이에요."}
     f = MODELS / d / name
     if not f.is_file():
         return {"error": "파일을 찾을 수 없어요."}
-    try:
-        f.unlink()
-    except OSError as e:
-        return {"error": f"삭제하지 못했어요: {e.strerror or e}. 다른 프로그램(ComfyUI 등)이 사용 중일 수 있어요."}
-    return {"ok": True}
+    gone, errs, size, pending = delete_files([f])
+    _LC["key"] = None
+    if errs:
+        return {"error": f"삭제하지 못했어요: {errs[0]}" + ("" if "작업이" in errs[0] else " 다른 프로그램(ComfyUI 등)이 사용 중일 수 있어요.")}
+    return {"ok": True, "freed": size - pending, "pending": pending}
 
 
 # ───────────────────────── 저장 공간 점검 / 정리 ─────────────────────────
@@ -447,10 +578,18 @@ def disk_paths():
     rows += [("llm", "대화 모델 (Ollama)", ROOT / "models" / "llm", "쓰지 않는 대화 모델을 지우면 가장 크게 줄어요.", None, ()),
              ("outputs", "결과물 (outputs)", OUT, "직접 만든 결과물이라 자동으로 지우지 않아요. 필요 없는 건 폴더에서 직접 지워 주세요.", None, ()),
              ("temp", "임시 미리보기 (ComfyUI temp)", COMFY / "temp", "지워도 안전해요.", "temp", ()),
-             ("input", "임시 입력 이미지 (ComfyUI input)", COMFY / "input", "이 프로그램이 만든 hub_*.png 만 지워요.", "input", ()),
+             ("input", "임시 입력 파일 (ComfyUI input)", COMFY / "input", "이 프로그램이 넣은 hub_* 파일(그림·영상·소리)만 지워요.", "input", ()),
              ("backup", "업데이트 되돌리기용 백업", ROOT / "backup", "가장 최근 1개만 남기고 지워요.", "backup", ()),
              ("logs", "로그", LOGS, "지워도 안전해요.", "logs", ()),
-             ("cache", "작업용 캐시 (이 프로그램 폴더의 cache)", ROOT / "cache", "갤러리 미리보기, 내려받다 만 확장, 음성 임시 파일이에요. 지워도 다시 만들어져요.", "cache", ()),
+             ("cache", "작업용 캐시 (이 프로그램 폴더의 cache)", ROOT / "cache", "갤러리 미리보기, 내려받다 만 확장, 음성·GIF 임시 파일이에요. 지워도 다시 만들어져요.", "cache",
+              (VR_WORK, AU_WORK, DEPTH_DIR)),
+             ("vrestore", "영상 복원 작업 파일 (이어서 하기용)", VR_WORK, "끊긴 복원을 이어서 하려고 남겨 둔 중간 영상이에요. 지워도 결과물은 그대로예요(이어서 하기만 안 돼요).", "vrestore", ()),
+             ("audio_work", "소리 분리 작업 파일", AU_WORK, "소리 분리·복원의 중간 파일이에요. 지워도 결과물은 그대로예요.", "audio_work", ()),
+             ("depth", "깊이 지도 저장분", DEPTH_DIR, "같은 사진을 다시 쓸 때 빨리 하려고 둔 깊이 지도예요. 지워도 필요할 때 다시 만들어요.", "depth", ()),
+             ("m3d", "3D 만들기 작업 (사진·방향 그림)", M3D_DIR, "만든 3D 파일은 결과물(outputs)에 따로 있어요. 정리는 30일 넘게 손대지 않은 작업만 지워요.", "m3d_old", ()),
+             ("kept", "올려 둔 사진 (다시 켜도 불러오기)", KEEP_DIR, "위의 [올려 둔 사진 모두 지우기]로 지워요.", None, ()),
+             ("analysis", "영상 분석 기록", VANA_DIR, "영상 분석 화면의 이전 분석 목록에서 지울 수 있어요.", None, ()),
+             ("explore", "프롬프트 탐색 기록", EXP_DIR, "프롬프트 탐색 화면에서 지울 수 있어요.", None, ()),
              ("cache_in", "옮겨 둔 바깥 캐시 (engine\\cache)", CACHE_IN, "HuggingFace·PyTorch·pip 캐시를 이 폴더에 모아 둔 곳이에요. 지워도 다음에 필요할 때 다시 받아요.", "cache_in", ()),
              ("tts_env", "음성 모델 환경 (TTS)", ROOT / "engine" / "tts", "음성 만들기용 모델 엔진이에요. [설치한 확장·부품 관리]에서 지울 수 있어요.", None, ()),
              ("comfy_engine", "ComfyUI 엔진 (python_embeded)", HOME / "python_embeded", "엔진 본체라 지우면 안 돼요.", None, ()),
@@ -504,6 +643,8 @@ def disk_report():
                 if sz > (50 << 20):
                     sigs.setdefault(sz, []).append((d, f))
     big.sort(key=lambda x: -x["size"])
+    lo = llm_orphans()
+    llm_left = {"n": len(lo), "bytes": sum(fsize(f) for f in lo)}
     dups = []
     for sz, fs in sigs.items():
         if len(fs) > 1:
@@ -517,7 +658,7 @@ def disk_report():
         free, total = du.free, du.total
     except OSError:
         free = total = 0
-    return dict(items=items, ext=ext, big=big[:15], dups=dups, parts=parts, free=free, total=total, root=str(ROOT),
+    return dict(items=items, ext=ext, big=big[:15], dups=dups, parts=parts, llm_left=llm_left, free=free, total=total, root=str(ROOT),
                 used=root_total, listed=sum(i["bytes"] for i in items if i["inside"]), outside=[i["key"] for i in outside_in_root],
                 ext_total=sum(i["bytes"] for i in ext))
 
@@ -598,8 +739,10 @@ def clean_item(what):
             if f.is_file():
                 rm(f)
     elif what == "input":
-        for f in (COMFY / "input").glob("hub_*.png"):
-            rm(f)
+        busy = busy_count()
+        for f in (COMFY / "input").glob("hub_*"):
+            if f.is_file() and not (busy and time.time() - f.stat().st_mtime < 3600):      # 작업 중이면 방금 넣은 파일은 남겨요
+                rm(f)
     elif what == "logs":
         for f in LOGS.glob("*.old"):
             rm(f)
@@ -621,12 +764,33 @@ def clean_item(what):
     elif what == "cache":
         if any(t.get("state") in ("running", "queued") for t in TASKS) or busy_count():
             return {"error": "작업이 진행 중일 때는 캐시를 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
-        for sub in ("thumbs", "nodes", "tts", "vmix"):
+        for sub in ("thumbs", "nodes", "tts", "vmix", "batch-in"):
             d = ROOT / "cache" / sub
             for f in (d.rglob("*") if d.is_dir() else []):
                 if f.is_file():
                     rm(f)
+        for f in (ROOT / "cache").glob("gif_*.gif"):
+            rm(f)
         rm(ROOT / "cache" / "extension-node-map.json")
+    elif what in ("vrestore", "audio_work", "depth"):
+        if what != "depth" and (any(t.get("state") in ("running", "queued") for t in TASKS) or busy_count()):
+            return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
+        d = {"vrestore": VR_WORK, "audio_work": AU_WORK, "depth": DEPTH_DIR}[what]
+        for f in (d.rglob("*") if d.is_dir() else []):
+            if f.is_file():
+                rm(f)
+        for sub in sorted((x for x in d.rglob("*") if x.is_dir()), key=lambda x: -len(x.parts)) if d.is_dir() else []:
+            try:
+                sub.rmdir()
+            except OSError:
+                pass
+    elif what == "m3d_old":
+        old = time.time() - 30 * 86400
+        for s in (list(M3D_DIR.iterdir()) if M3D_DIR.is_dir() else []):
+            mf = s / "meta.json"
+            if s.is_dir() and mf.is_file() and max(f.stat().st_mtime for f in s.iterdir()) < old:
+                freed += dir_size(s)
+                shutil.rmtree(s, ignore_errors=True)
     elif what == "cache_in":
         if busy_count():
             return {"error": "작업이 진행 중일 때는 지우지 않아요. 끝난 뒤에 다시 눌러 주세요."}
@@ -653,6 +817,10 @@ def clean_item(what):
             except OSError:
                 pass
         freed -= dir_size(tgt)
+    elif what == "llm_orphans":         # 어떤 대화 모델도 쓰지 않는 Ollama 조각(지우다 남은 것·받다 만 것)
+        if any(t.get("kind") == "ollama" and t.get("state") in ("running", "queued") for t in TASKS):
+            return {"error": "대화 모델을 받는 중일 때는 남은 조각을 지우지 않아요."}
+        freed += _unlink_all(llm_orphans())
     elif what == "parts":
         if any(t.get("state") in ("running", "queued") for t in TASKS):
             return {"error": "설치·다운로드가 진행 중일 때는 받다 만 파일을 지우지 않아요."}

@@ -4,7 +4,6 @@
 
 # ───────────────────────── 작업 (편집 / 생성 / 업스케일 / 워크플로) ─────────────────────────
 QWEN21_RX = re.compile(r"qwen[_-]?image[_-]?2[._]1")
-QWEN_NC = "Qwen-Image 2.1 은 비상업(연구용) 라이선스예요."
 
 
 def _qlow(n):
@@ -105,12 +104,48 @@ def scale_check(size, scale):
     return out
 
 
+SEEDVR_NAME = {"3b": "SeedVR2 3B (AI 복원)", "7b": "SeedVR2 7B (AI 복원)"}
+SEEDVR_MAX = 4096                                    # SeedVR2 결과 긴 변 상한(메모리)
+
+
+def seedvr_names():
+    """업스케일 모델 목록에 함께 보여 줄 SeedVR2 이름(설치된 것만)."""
+    dm, va = files("diffusion_models"), files("vae")
+    if not any("seedvr2" in n.lower() and "vae" in n.lower() for n in va):
+        return []
+    return [SEEDVR_NAME[k] for k in ("3b", "7b") if any("seedvr2" in n.lower() and f"_{k}" in n.lower() for n in dm)]
+
+
+def seedvr_of(name, seed=0):
+    """업스케일 모델 이름이 SeedVR2 면 {unet, vae, seed}, 아니면 None. 파일이 없으면 안내 오류."""
+    k = next((k for k, v in SEEDVR_NAME.items() if v == name), None) or (("7b" if "7b" in str(name).lower() else "3b") if str(name or "").lower().startswith("seedvr2") else None)
+    if not k:
+        return None
+    unet = next((n for n in files("diffusion_models") if "seedvr2" in n.lower() and f"_{k}" in n.lower()), None)
+    vae = next((n for n in files("vae") if "seedvr2" in n.lower()), None)
+    if not unet or not vae:
+        raise RuntimeError(f"SeedVR2 {k.upper()} 파일이 없어요. '설치와 모델' 탭의 이미지 분류에서 'SeedVR2'를 설치해 주세요.")
+    miss = [n for n in flows.SEEDVR_NODES if caps()["nodes"] and n not in caps()["nodes"]]
+    if miss:
+        raise RuntimeError("이 ComfyUI 에는 SeedVR2 노드(" + ", ".join(miss) + ")가 없어요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트해 주세요.")
+    return {"unet": unet, "vae": vae, "seed": int(seed) if seed and int(seed) >= 0 else 0}
+
+
 def upscale(img, J, model, scale):
     """scale > 1: 업스케일 모델로 키운 뒤 원하는 배율에 맞춰요(모델이 4배라면 2배·1.5배·6배도 가능). scale <= 1: 모델 없이 줄이기(Lanczos)."""
     scale = float(scale)
     target = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
     if scale <= 1.0:
         return img if target == img.size else img.resize(target, RS.LANCZOS)
+    sv = seedvr_of(model)
+    if sv:                                            # AI 복원 업스케일(SeedVR2): 원하는 크기로 바로 만들어요
+        k = min(1.0, SEEDVR_MAX / max(target))
+        if k < 1.0:
+            warn(J, f"SeedVR2 는 메모리 때문에 결과 긴 변을 {SEEDVR_MAX}px 까지만 만들어요. 더 크게는 Real-ESRGAN 으로 한 번 더 키워 주세요.")
+        tw, th = (max(16, int(round(v * k / 2)) * 2) for v in target)
+        J["msg"] = f"AI 복원 업스케일 중 (SeedVR2, {tw}×{th})"
+        res = run_wf(flows.wf_seedvr2_image(sv, put_input(img, J), tw, th), J)[0]
+        return res if res.size == (tw, th) else res.resize((tw, th), RS.LANCZOS)
     model = model or (files("upscale_models") or [None])[0]
     if not model:
         raise RuntimeError("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.")
@@ -187,6 +222,66 @@ def edit_flux(p, J, img, mask, grow, feather, rng):
     return [(out, flux_info(q, out, "edit-flux", **{"Denoising strength": q["denoise"], "Mask grow": grow}), None)]
 
 
+MOSS_EDIT_NODES = ("TextEncodeMOSSImageEdit", "EmptyFlux2LatentImage")
+
+
+def moss_edit_files():
+    """MOSS-Image 편집에 쓸 파일: SFT 모델(없으면 다른 MOSS 모델)·편집 LoRA·텍스트 인코더·FLUX.2 VAE(small 우선)."""
+    dm = [n for n in files("diffusion_models") if MOSS_RX.search(n.lower())]
+    return {"unet": next((n for n in dm if "sft" in n.lower()), dm[0] if dm else None),
+            "lora": next((n for n in files("loras") if "moss" in n.lower() and "edit" in n.lower()), None),
+            "te": moss_te(), "vae": _pick(files("vae"), ("flux2", "small"), ("flux2", "vae"), ("flux2",))}
+
+
+def edit_moss(p, J, img, mask, grow, feather, rng):
+    """말로 편집 (MOSS-Image): 사진 전체를 다시 그리고, 칠한 영역이 있으면 그 부분만 바꿔요."""
+    f = moss_edit_files()
+    if not all(f.values()):
+        names = {"unet": "MOSS-Image 모델", "lora": "MOSS-Image 편집 LoRA", "te": "텍스트 인코더(Qwen3.5 9B)", "vae": "FLUX.2 VAE"}
+        raise RuntimeError("없는 파일: " + ", ".join(names[k] for k, v in f.items() if not v) + ". '설치와 모델' 탭에서 'MOSS-Image 편집'을 설치해 주세요.")
+    miss = [n for n in MOSS_EDIT_NODES if not has_node(n)]
+    if miss or not moss_ctype():
+        raise RuntimeError("이 ComfyUI 는 MOSS-Image 편집을 아직 지원하지 않아요" + (f"({', '.join(miss)})" if miss else "") +
+                           ". ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    text, tags = prep(p, J, "sentence", rng)
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    mp = clamp(num(p, "q_mp", 1.0), 0.3, 4.0)
+    s = (mp * 1e6 / (img.width * img.height)) ** 0.5
+    w, h = max(256, round(img.width * s / 16) * 16), max(256, round(img.height * s / 16) * 16)
+    q = dict(unet=f["unet"], lora=f["lora"], te=f["te"], vae=f["vae"], ctype=moss_ctype(), loras=collect_loras(p, tags, J),
+             prompt=text, negative="", seed=seed_of(p), steps=clamp(num(p, "moss_steps", 30, int), 1, 100), cfg=clamp(num(p, "moss_cfg", 4.0), 0.0, 20.0),
+             w=w, h=h, slg=has_node("SkipLayerGuidanceDiTSimple"))
+    J["msg"] = "편집 중 (MOSS-Image)"
+    res = run_wf(flows.wf_moss_edit(q, put_input(img.resize((w, h), RS.LANCZOS), J)), J)[0]
+    if mask:
+        res = Image.composite(res.resize(img.size, RS.LANCZOS), img, grow_feather(mask, grow, feather))
+    info = dict(kind="edit-moss", prompt=text, negative="", steps=q["steps"], cfg=q["cfg"], sampler="euler", scheduler="normal", seed=q["seed"],
+                w=res.width, h=res.height, model=f["unet"], loras=[[f["lora"], 1.0]] + [[n, w_] for n, w_ in q["loras"]], extra={"Engine": "MOSS-Image"})
+    return [(res, info, None)]
+
+
+def edit_flux3k(p, J, img, mask, grow, feather, rng):
+    """말로 편집 (FLUX 3 Klein): 생성용 모델을 그대로 써요. INT8 이면 VRAM 8GB 에서도 돌아요."""
+    p2 = dict(p, fx_model=p.get("k_model") or "")
+    sel, te, vae = ox_setup(p2, J, "flux3k")
+    if not has_node("ReferenceMultiLatent"):
+        raise RuntimeError("이 ComfyUI 는 FLUX 3 Klein 편집(ReferenceMultiLatent)을 아직 지원하지 않아요. ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 을 실행해 업데이트해 주세요.")
+    text, tags = prep(p, J, "sentence", rng)
+    if blocked(text):
+        raise ValueError(BLOCK_MSG)
+    base = "base" in sel.lower()
+    q = dict(unet=sel, te=te["qwen3vl"], vae=vae, loras=collect_loras(p, tags, J), prompt=text, seed=seed_of(p),
+             steps=50 if base else 16, cfg=3.5 if base else 1.0, mp=clamp(num(p, "q_mp", 1.0), 0.3, 4.0))
+    J["msg"] = "편집 중 (FLUX 3 Klein)"
+    res = run_wf(flows.wf_flux3k_edit(q, put_input(img, J)), J)[0]
+    if mask:
+        res = Image.composite(res.resize(img.size, RS.LANCZOS), img, grow_feather(mask, grow, feather))
+    info = dict(kind="edit-flux3k", prompt=text, negative="", steps=q["steps"], cfg=q["cfg"], sampler="euler", scheduler="simple", seed=q["seed"],
+                w=res.width, h=res.height, model=sel, loras=[[n, w_] for n, w_ in q["loras"]], extra={"Engine": "FLUX 3 Klein"})
+    return [(res, info, None)]
+
+
 def do_edit(p, J):
     img = load_img(p["image"])
     mask = load_mask(p.get("mask"), img.size)
@@ -219,6 +314,10 @@ def do_edit(p, J):
         J["msg"] = "인페인트 생성 중"
         out = finish(img, pos, crop, soft, run_wf(flows.wf_inpaint(q, a, b), J)[0])
         return [(out, info_sd(q, out.size, "edit-sdxl", **extra), None)]
+    if p.get("engine") == "moss":
+        return edit_moss(p, J, img, mask, grow, feather, rng)
+    if p.get("engine") == "flux3k":
+        return edit_flux3k(p, J, img, mask, grow, feather, rng)
     text, tags = prep(p, J, "sentence", rng)
     q = qwen_params(p, text, tags, J)
     refs = [load_img(p[k]) for k in ("ref1", "ref2") if p.get(k)]

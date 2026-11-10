@@ -343,7 +343,8 @@ function featForm(id,keep){
     <input type="hidden" name="feature" value="${esc(id)}">
     ${main.map(fieldHTML).join('')}
     ${adv.length?`<details><summary>고급 설정</summary>${adv.map(fieldHTML).join('')}</details>`:''}`;
-  $$('#feat-form .mini[data-img]').forEach(b=>{mini(b);if(keepImgs[b.dataset.img])b.set(keepImgs[b.dataset.img])});
+  $$('#feat-form .mini[data-img]').forEach(b=>{b.dataset.keep=`feat.${id}.${b.dataset.img}`;mini(b);if(keepImgs[b.dataset.img])b.set(keepImgs[b.dataset.img],true);
+    else if(KEPT[b.dataset.keep])keepGet(b.dataset.keep).then(d=>{if(d&&!b.value&&featId===id)b.set(d,true)})});
   {const fl=$('#feat-form .fn-list');if(fl)nodeHelp(f.missing_nodes,fl)}
   if($('#swapm'))swapPanel();
   {const lb=$('#feat-form .loras');if(lb){if(mem&&Object.keys(keepVals).some(k=>/^lora\d+$/.test(k)))setLoras($('#f-feat'),keepVals);else addLora(lb)}}

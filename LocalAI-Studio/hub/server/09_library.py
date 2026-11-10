@@ -86,13 +86,34 @@ def batch_upload(p):
     return {"stage": sid, "count": len(list(d.iterdir()))}
 
 
+RM_BEST = {"label": "최고(BiRefNet)", "mb": 424, "file": "birefnet.safetensors", "id": "birefnet"}
+RM_KEYS = tuple(bgremove.MODELS) + ("best",)
+
+
+def rmbg_best_ready():
+    return (MODELS / "background_removal" / RM_BEST["file"]).is_file()
+
+
+def rmbg_ready(key):
+    return rmbg_best_ready() if key == "best" else bgremove.have_ort() and bgremove.installed(MODELS / "rmbg", key)
+
+
+def rmbg_default():
+    """고르지 않았을 때: BiRefNet 이 있으면 그걸, 없으면 '보통'."""
+    return "best" if rmbg_best_ready() else "normal"
+
+
 def rmbg_status():
-    busy = any(t.get("kind") == "rmbg" and t["state"] in ("queued", "running") for t in TASKS)
+    busy = any((t.get("kind") == "rmbg" or t.get("mid") == RM_BEST["id"]) and t["state"] in ("queued", "running") for t in TASKS)
     ort = bgremove.have_ort()
-    return {"ort": ort, "busy": busy, "models": {k: {"label": m["label"], "mb": m["mb"], "installed": bgremove.installed(MODELS / "rmbg", k)} for k, m in bgremove.MODELS.items()}}
+    ms = {k: {"label": m["label"], "mb": m["mb"], "installed": bgremove.installed(MODELS / "rmbg", k)} for k, m in bgremove.MODELS.items()}
+    ms["best"] = {"label": RM_BEST["label"], "mb": RM_BEST["mb"], "installed": rmbg_best_ready(), "comfy": True}
+    return {"ort": ort, "busy": busy, "models": ms, "default": rmbg_default()}
 
 
 def rmbg_install(p):
+    if p.get("key") == "best":
+        return install({"ids": [RM_BEST["id"]]})
     key = p.get("key") if p.get("key") in bgremove.MODELS else "normal"
     if any(t.get("kind") == "rmbg" and t["state"] in ("queued", "running") for t in TASKS):
         return {"ok": True}
@@ -124,7 +145,34 @@ def rmbg_run_install(t):
     RM["engine"] = None
 
 
+class RmbgComfy:
+    """배경 지우기 '최고': ComfyUI 의 BiRefNet(그래픽카드). 경계는 bgremove.refine 으로 색 번짐만 걷어내요."""
+
+    def mask(self, img, J=None):
+        J = J if J is not None else {"tmp": []}
+        J.setdefault("tmp", [])
+        wait_comfy()
+        claim("image")
+        name = put_input(img.convert("RGB"), J)
+        try:
+            res = run_wf(flows.wf_rmbg({"image": name, "model": RM_BEST["file"]}), J)
+        finally:
+            _clean_tmp(J)
+        return res[0].convert("L").resize(img.size, RS.LANCZOS)
+
+    def cut(self, img, bg=None, J=None, refine_edges=True):
+        return bgremove.compose(img, self.mask(img, J), bg, refine_edges, coarse=False)
+
+
+def rmbg_cut(key, img, bg=None, J=None):
+    """배경 지우기 한 장(엔진 종류와 상관없이)."""
+    eng = rmbg_engine(key)
+    return eng.cut(img, bg, J=J) if isinstance(eng, RmbgComfy) else eng.cut(img, bg)
+
+
 def rmbg_engine(key):
+    if key == "best":
+        return RmbgComfy()
     with RM_LOCK:
         if RM["engine"] is None or RM["key"] != key:
             RM["engine"] = bgremove.Remover(MODELS / "rmbg", key, RM.get("factory"))
@@ -157,8 +205,8 @@ def do_batch(p, J):
             raise RuntimeError("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.")
         suffix = f"_업스케일x{scale:g}" if scale > 1 else f"_축소x{scale:g}"
     elif op == "rmbg":
-        rm_key = p.get("rmodel") if p.get("rmodel") in bgremove.MODELS else "normal"
-        if not bgremove.have_ort() or not bgremove.installed(MODELS / "rmbg", rm_key):
+        rm_key = p.get("rmodel") if p.get("rmodel") in RM_KEYS else rmbg_default()
+        if not rmbg_ready(rm_key):
             raise RuntimeError("배경 지우기 모델이 아직 설치되지 않았어요. 일괄 처리 화면의 [설치] 버튼을 눌러 주세요.")
         rm_bg = {"white": (255, 255, 255), "black": (0, 0, 0)}.get(p.get("bg"))
         jpg = jpg and rm_bg is not None          # 투명 배경은 PNG 만 가능해요
@@ -168,7 +216,7 @@ def do_batch(p, J):
         if not steps:
             raise ValueError("하나 이상 골라 주세요. (자를 비율, 회전, 뒤집기, 긴 변 크기)")
         suffix = "_크기변경"
-    out_dir = OUT / OUT_SUB["batch"]
+    out_dir = OUT / OUT_SUB["batch"] / job_dir_name(time.strftime("%Y%m%d-%H%M%S"), op)      # 작업 한 번 = 폴더 하나
     out_dir.mkdir(parents=True, exist_ok=True)
     n, fails = len(imgs), []
     J["batch"] = {"total": n, "ok": 0, "failed": fails}
@@ -182,7 +230,7 @@ def do_batch(p, J):
                 scale_check(img.size, scale)
                 res = upscale(img, J, model, scale)
             elif op == "rmbg":
-                res = rmbg_engine(rm_key).cut(img, rm_bg)
+                res = rmbg_cut(rm_key, img, rm_bg, J)
             else:
                 res, _ = resize_steps(img, p)
             ext = ".jpg" if jpg else ".png"
@@ -190,7 +238,7 @@ def do_batch(p, J):
                 res = res.convert("RGB")
             dst = _unique(out_dir / (f.stem + suffix + ext))
             res.save(dst, "JPEG", quality=95) if jpg else res.save(dst, "PNG")
-            J["images"].append("/out/" + urllib.parse.quote(OUT_SUB["batch"]) + "/" + urllib.parse.quote(dst.name))
+            J["images"].append("/out/" + urllib.parse.quote(OUT_SUB["batch"]) + "/" + urllib.parse.quote(out_dir.name) + "/" + urllib.parse.quote(dst.name))
             J["batch"]["ok"] += 1
         except Cancelled:
             raise
@@ -334,8 +382,16 @@ def gal_type(f):
 
 
 def gal_sides(f):
-    """결과 파일 옆에 붙는 설정(.json)·자막(.srt) 파일"""
-    return [x for x in (f.with_name(f.name + ".json"), f.with_suffix(".srt")) if x != f and x.is_file()]
+    """결과 파일 옆에 붙는 설정(.json)·자막(.srt) 파일. 3D(.glb)는 같은 작업에서 함께 만든 게임용 묶음(.zip)과 그 설정 파일까지."""
+    out = [x for x in (f.with_name(f.name + ".json"), f.with_suffix(".srt")) if x != f and x.is_file()]
+    m = re.match(r"^(\d{8}-\d{6})-[0-9a-f]{4}-m3d-\d+\.glb$", f.name)
+    if m:
+        for z in f.parent.glob(m.group(1) + "-*-m3d-*.zip"):
+            if z.is_file():
+                out.append(z)
+                if z.with_name(z.name + ".json").is_file():
+                    out.append(z.with_name(z.name + ".json"))
+    return out
 _GMETA = {}
 
 
@@ -349,7 +405,7 @@ def gal_favs():
 def gal_fav(p):
     rel = str(p.get("file") or "")
     parts = [x for x in urllib.parse.unquote(rel[5:] if rel.startswith("/out/") else rel).split("/") if x]
-    if len(parts) not in (2, 3) or parts[0] not in OUT_SUB.values() or (len(parts) == 3 and not DATE_RX.match(parts[1])):
+    if len(parts) not in (2, 3) or parts[0] not in OUT_SUB.values() or (len(parts) == 3 and not (DATE_RX.match(parts[1]) or JOB_RX.match(parts[1]))):
         return {"error": "알 수 없는 파일"}
     key = parts[0] + "/" + Path(parts[-1]).name
     with _PLOCK:
@@ -385,14 +441,14 @@ def gal_prompt(path, mtime):
 
 
 def out_files(d, exts=None):
-    """결과 하위 폴더(예: 생성)의 이미지·영상 파일. 날짜별로 정리한 폴더(2026-10-18)도 한 단계 들여다봐요."""
+    """결과 하위 폴더(예: 생성)의 이미지·영상 파일. 날짜별로 정리한 폴더(2026-10-18)·작업 폴더(작업 한 번 = 폴더 하나)도 한 단계 들여다봐요."""
     exts = exts or GAL_EXT
     try:
         for f in d.iterdir():
             if f.is_file():
                 if f.suffix.lower() in exts:
                     yield f
-            elif f.is_dir() and DATE_RX.match(f.name):
+            elif f.is_dir() and (DATE_RX.match(f.name) or JOB_RX.match(f.name)):
                 for g in f.iterdir():
                     if g.is_file() and g.suffix.lower() in exts:
                         yield g
@@ -403,7 +459,7 @@ def out_files(d, exts=None):
 def gal_delete(p):
     """갤러리에서 고른 파일을 컴퓨터에서 지워요(영상의 설정 파일·즐겨찾기 표시도 함께). 복구할 수 없어요."""
     gone, bad = 0, 0
-    keys = []
+    keys, done = [], []
     for rel in [str(x) for x in (p.get("files") or [])][:200]:
         if not rel.startswith("/out/"):
             bad += 1
@@ -420,10 +476,15 @@ def gal_delete(p):
                 side.unlink()
             keys.append(parts[0] + "/" + fp.name)
             gone += 1
+            done.append(rel)
         except OSError:
             bad += 1
-        if len(parts) == 3:      # 비어 버린 날짜 폴더는 치워요
+        if len(parts) == 3:      # 비어 버린 날짜·작업 폴더는 치워요(작업 폴더에 남은 게 설정·묶음 파일뿐이면 그것도 함께)
             try:
+                if JOB_RX.match(fp.parent.name) and not any(x.suffix.lower() in GAL_EXT for x in fp.parent.iterdir() if x.is_file()):
+                    for x in fp.parent.iterdir():
+                        if x.is_file() and (x.suffix.lower() in (".json", ".srt", ".zip")):
+                            x.unlink()
                 fp.parent.rmdir()
             except OSError:
                 pass
@@ -432,7 +493,7 @@ def gal_delete(p):
             fav = gal_favs()
             if fav & set(keys):
                 GAL_FILE.write_text(json.dumps({"favs": sorted(fav - set(keys))}, ensure_ascii=False), encoding="utf-8")
-    return {"ok": True, "deleted": gone, "failed": bad}
+    return {"ok": True, "deleted": gone, "failed": bad, "urls": done}
 
 
 def organize_outputs(p):
@@ -466,7 +527,12 @@ def organize_outputs(p):
                     sides = gal_sides(f)
                     f.rename(dst)
                     for side in sides:
-                        side.rename(dst.with_name(dst.name + ".json") if side.suffix == ".json" else dst.with_suffix(".srt"))
+                        if side.name == f.name + ".json":
+                            side.rename(dst.with_name(dst.name + ".json"))
+                        elif side.suffix == ".srt" and side.stem == f.stem:
+                            side.rename(dst.with_suffix(".srt"))
+                        else:                                  # 3D 게임용 묶음(.zip)·그 설정 파일은 이름 그대로 같은 날짜 폴더로
+                            side.rename(_unique(dd / side.name))
                     moved += 1
                 except OSError:
                     failed += 1

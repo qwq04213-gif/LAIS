@@ -17,12 +17,12 @@ function qRender(q){const L=$('#qlist');if(!L)return;
   if(!q.items.length){L.innerHTML='<p class="mute">지금 진행 중이거나 기다리는 작업이 없어요.</p>';return}
   L.innerHTML=q.items.map(r=>{const act=r.state==='running'||r.state==='queued',pc=typeof r.progress==='number'&&r.state==='running'?Math.round(r.progress*100):null,
     ic={running:'▶',queued:r.pos+'',done:'✔',error:'⚠',cancelled:'■'}[r.state];
-    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}" data-view="${esc(QVIEW[r.kind]||'')}" data-feature="${esc(r.feature||'')}" data-qv="${esc(r.view||'')}" data-xp="${esc(r.xp||'')}" title="누르면 이 작업의 화면으로 이동해요"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}</small>${r.state==='running'&&r.model?`<small class="qmod" title="${esc(r.model)}">모델: ${esc(r.model)}</small>`:''}${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
+    return `<div class="qrow s-${r.state}" data-id="${esc(r.id)}" data-view="${esc(QVIEW[r.kind]||'')}" data-feature="${esc(r.feature||'')}" data-qv="${esc(r.view||'')}" data-xp="${esc(r.xp||'')}" title="누르면 이 작업의 화면으로 이동해요"><span class="qs" title="${QST[r.state]}">${ic}</span><div class="qm"><b>${esc(r.label)}</b><small>${esc(r.state==='error'?r.error||'실패':r.state==='cancelled'?'중단했어요':r.msg||QST[r.state])}${pc!==null?` · ${pc}%`:''}${r.state==='running'?esc(etaTxt(r)):''}</small>${r.state==='running'&&r.model?`<small class="qmod" title="${esc(r.model)}">모델: ${esc(r.model)}</small>`:''}${pc!==null?`<progress max="100" value="${pc}"></progress>`:''}</div>
     <div class="qb">${r.state==='queued'?`<button type="button" data-q="top" title="맨 앞으로">⤒</button><button type="button" data-q="up" title="한 칸 앞으로">▲</button><button type="button" data-q="down" title="한 칸 뒤로">▼</button>`:''}${act?`<button type="button" data-q="cancel" title="${r.state==='running'?'중단':'대기열에서 빼기'}">✕</button>`:''}</div></div>`}).join('')}
 async function qPoll(){let q;try{q=await api('/api/queue')}catch{return}QLAST=q;
   const n=q.running+q.queued,c=$('#qcount');c.hidden=!n;c.textContent=n;$('#qbtn').classList.toggle('busy',n>0);
   {const run=q.items.find(r=>r.state==='running'),pc=run&&typeof run.progress==='number'?Math.round(run.progress*100):null,F=$('#qfloat');
-   F.classList.toggle('busy',n>0);$('#qftext').textContent=run?`${run.label}${pc!==null?' · '+pc+'%':''}`:n?`대기 ${q.queued}개`:'작업 대기열';
+   F.classList.toggle('busy',n>0);$('#qftext').textContent=run?`${run.label}${pc!==null?' · '+pc+'%':''}${etaTxt(run)}`:n?`대기 ${q.queued}개`:'작업 대기열';
    $('#qstext').textContent=$('#qftext').textContent;$('#qsbar').hidden=pc===null;$('#qsbar').style.width=(pc||0)+'%';
    $('#qfcount').hidden=n<2;$('#qfcount').textContent=n;$('#qfbar').hidden=pc===null;$('#qfbar').style.width=(pc||0)+'%'}
   for(const r of q.items){const was=QSEEN.get(r.id);
@@ -88,8 +88,8 @@ async function cnPack(box,node){const n=$('.cn-node',box);let r;try{r=await api(
   const sync=()=>{$$('[data-src]',f).forEach(e=>e.hidden=e.dataset.src!==mode());$$('[data-op]',f).forEach(e=>e.hidden=e.dataset.op!==op());
     $$('.bt-op',f).forEach(l=>l.classList.toggle('on',l.querySelector('input').checked));info.textContent='';rmNote()};
   async function rmNote(){if(op()!=='rmbg')return;let st;try{st=await api('/api/rmbg/status')}catch{return}
-    const k=f.elements.rmodel.value,m=st.models[k],ok=st.ort&&m.installed;
-    $('#bt-rm-note').textContent=ok?`✔ 설치됨 — ${m.label} 모델을 써요.`:`아직 설치되지 않았어요. 아래 버튼을 누르면 ${m.label} 모델(약 ${m.mb}MB)을 받아요.`+(st.ort?'':' (분석 엔진도 함께 설치돼요)');
+    const k=f.elements.rmodel.value,m=st.models[k],ok=m.comfy?m.installed:st.ort&&m.installed;
+    $('#bt-rm-note').textContent=ok?`✔ 설치됨 — ${m.label} 모델을 써요.`:`아직 설치되지 않았어요. 아래 버튼을 누르면 ${m.label} 모델(약 ${m.mb}MB)을 받아요.`+(st.ort||m.comfy?'':' (분석 엔진도 함께 설치돼요)');
     const b=$('#bt-rm-install');b.hidden=ok;b.disabled=st.busy;b.textContent=st.busy?'설치하는 중…':`배경 지우기 도구 설치 (${m.mb}MB)`;return ok}
   f.addEventListener('change',e=>{if(e.target.name==='srcm'||e.target.name==='op')sync();else if(e.target.name==='rmodel')rmNote()});
   $('#bt-rm-install').onclick=async()=>{const r=await api('/api/rmbg/install',{key:f.elements.rmodel.value});if(r.error)return toast(r.error);
@@ -125,7 +125,7 @@ async function cnPack(box,node){const n=$('.cn-node',box);let r;try{r=await api(
         if(j.state==='error')throw new Error(j.error);
         if(j.state==='cancelled'){bar(j.msg||'중단했어요.','ok');btResult(j);break}
         if(j.state==='done'){bar('완료 — '+(j.msg||''),'ok');btResult(j);break}
-        bar(wantStop?'중단하는 중이에요…':`${j.msg||'처리 중'}${j.elapsed?'  '+j.elapsed+'초 경과':''}`,'run');if(!wantStop)setProg(view,j)}
+        bar(wantStop?'중단하는 중이에요…':`${j.msg||'처리 중'}${etaTxt(j)}${elTxt(j)}`,'run');if(!wantStop)setProg(view,j)}
     }catch(e){bar(e.message,'bad')}
     go.disabled=false};
   function btResult(j){const b=j.batch||{ok:0,failed:[]},R=$('#bt-res'),u=j.images||[];
@@ -596,7 +596,7 @@ function hwRender(v){const g=v.live,j=v.job,row=(t,sub,btn)=>`<div class="hwr"><
   fb=(what,t,tip)=>`<button type="button" class="ghost sm" data-hw="${esc(what)}"${tip?` title="${esc(tip)}"`:''}>${t}</button>`;
   const mine=(v.comfy?.vram_mb||0)+v.ollama.reduce((a,m)=>a+(m.vram_mb||0),0)+v.others.reduce((a,o)=>a+(o.mb||0),0);
   let h=`<div class="hwsum">스튜디오가 쓰는 그래픽 메모리 약 <b>${hwGB(mine)}</b>${g?` <span class="mute">(${v.gpu?esc(v.gpu.name)+' · ':''}전체 ${hwGB(g.total_mb)})</span>`:''}</div>`;
-  h+='<h4>지금 하는 작업</h4>'+(j?row(esc(j.label),[j.model&&('모델: '+esc(j.model)),typeof j.progress==='number'&&Math.round(j.progress*100)+'%',j.msg&&esc(j.msg),j.elapsed+'초째',j.eta&&typeof fmtEta==='function'&&('남은 시간 '+fmtEta(j.eta))].filter(Boolean).join(' · '),fb('job:'+j.id,'중단','이 작업만 멈춰요'))
+  h+='<h4>지금 하는 작업</h4>'+(j?row(esc(j.label),[j.model&&('모델: '+esc(j.model)),typeof j.progress==='number'&&Math.round(j.progress*100)+'%',j.msg&&esc(j.msg),j.elapsed!=null&&fmtEl(j.elapsed)+' 지남',j.eta!=null&&('남은 시간 '+fmtEta(j.eta))].filter(Boolean).join(' · '),fb('job:'+j.id,'중단','이 작업만 멈춰요'))
     :`<p class="mute">실행 중인 작업이 없어요.</p>`)+(v.queued?`<p class="mute">기다리는 작업 ${v.queued}개 · <a href="#" id="hw-q">작업 대기열 보기</a></p>`:'');
   h+='<h4>불러와 있는 모델</h4>';
   h+=row('이미지·영상 엔진 (ComfyUI)',!v.comfy_on?'꺼져 있어요':v.comfy?`그래픽 메모리 ${hwGB(v.comfy.vram_mb)} 사용${v.last_model?' · 마지막 모델: '+esc(v.last_model):''}`:'사용량을 읽지 못했어요',

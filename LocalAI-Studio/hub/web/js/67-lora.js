@@ -51,7 +51,7 @@ async function loJob(p,label){if(LO.job)return toast('진행 중인 작업이 �
     if(j.samples?.length)$('#lo-samples').innerHTML=`<b>미리보기</b><div>${j.samples.map(u=>`<img src="${u}" alt="학습 중 미리보기">`).join('')}</div>`;
     if(j.state==='done'){loSt(j.msg||'끝났어요.',null);return j}
     if(j.state==='error'||j.state==='cancelled'){loSt(j.error||'중단했어요.',null,j.state==='error');if(j.need)$('#lo-st').insertAdjacentHTML('beforeend',needBox(j.need));if(j.pymod)pymodHelp($('#lo-st'),j.pymod);return null}
-    loSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':`${j.msg||label}${j.eta?' · 남은 시간 '+fmtEta(j.eta):''}`,typeof j.progress==='number'?j.progress:null)}}
+    loSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':`${j.msg||label}${etaTxt(j)}`,typeof j.progress==='number'?j.progress:null)}}
   finally{LO.job=null;$('#lo-stop').hidden=true}}
 $('#lo-stop').onclick=()=>{if(LO.job)api('/api/job/cancel',{id:LO.job})};
 $('#lo-cap').onclick=async()=>{if(!LO.S?.images.length)return toast('먼저 사진을 넣어 주세요.');if(LO.dirty.size)await $('#lo-capsave').onclick();

@@ -43,7 +43,9 @@ $('#wc-form').onsubmit=async e=>{e.preventDefault();const f=e.target,n=f.name.va
 $('#wc-del').onclick=async()=>{const n=$('#wc-form').name.value.trim();if(!n||!confirm(`와일드카드 '${n}' 을(를) 지울까요?`))return;
   const r=await api('/api/wildcards',{action:'delete',name:n});if(r.error)return toast(r.error);$('#wc-form').reset();wcLoad();listsAt=0;loadLists(true)};
 let I2P=null;
-$('#i2p-file').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;I2P=await toDataURL(fl);$('#i2p-thumb').src=I2P;$('#i2p-thumb').hidden=false;e.target.value=''};
+function i2pSet(d,quiet){I2P=d;$('#i2p-thumb').hidden=$('#i2p-clear').hidden=!d;if(d)$('#i2p-thumb').src=d;if(quiet!==true)keepPut('i2p',d)}
+$('#i2p-file').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;i2pSet(await toDataURL(fl));e.target.value=''};
+$('#i2p-clear').onclick=()=>i2pSet(null);
 async function i2pInit(){let m=[];try{m=(await api('/api/vision')).models}catch{}
   $('#w-i2p').hidden=m.length>0;$('#i2p-model').innerHTML=m.map(x=>`<option>${esc(x)}</option>`).join('')}
 $('#i2p-go').onclick=async()=>{if(!I2P)return toast('먼저 이미지를 골라 주세요.');const b=$('#i2p-go'),st=$('#i2p-st');
@@ -72,14 +74,15 @@ async function galLoad(more){
   const same=$('#gal-same').checked,grouped=$('#gal-group').checked&&!same;
   const fmt=t=>new Date(t*1000).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   $('#gal-grid').insertAdjacentHTML('beforeend',r.items.map(x=>{const tn=x.url.replace('/out/','/thumb/');
-    let head='';if(same&&x.g&&x.g!==GAL.lastg){GAL.lastg=x.g;head=`<h3 class="gday" data-g="${x.g}">${x.gp?'같은 프롬프트':'프롬프트 정보 없음'} · ${x.gn}장 <small title="${esc(x.gp||'')}">${esc((x.gp||'').slice(0,60))}</small></h3>`}
-    else if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small></h3>`}
+    let head='';if(same&&x.g&&x.g!==GAL.lastg){GAL.lastg=x.g;head=`<h3 class="gday" data-g="${x.g}">${x.gp?'같은 프롬프트':'프롬프트 정보 없음'} · ${x.gn}장 <small title="${esc(x.gp||'')}">${esc((x.gp||'').slice(0,60))}</small> <button type="button" class="ghost sm gday-all" data-g="1">이 묶음 전체 선택</button></h3>`}
+    else if(grouped&&x.day!==GAL.last){GAL.last=x.day;head=`<h3 class="gday" data-day="${x.day}">${x.day} (${wd(x.day)})${x.day===today?' · 오늘':''} <small>${dmap[x.day]||''}개</small> <button type="button" class="ghost sm gday-all" title="이 날짜에 표시된 칸을 모두 골라요">이 날짜 전체 선택</button></h3>`}
     const noprev=D.dataset.galprev==='off',ty=galType(x),ic={video:'▶ ',audio:'♪ ','3d':'🧊 '}[ty]||'';
     const media=ty==='audio'?`<div class="gnoimg gaud" title="${esc(x.prompt||x.name)}"><b>♪ ${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span><audio src="${x.url}" controls preload="none"></audio></div>`
-      :ty==='3d'?`<div class="gnoimg g3d" title="${esc(x.prompt||x.name)}"><b>🧊 3D 모델</b><span>${esc(x.name)}</span><span class="row"><button type="button" class="ghost sm" data-g3d="${x.url}">미리보기</button><a class="ghost sm" href="${x.url}" download>내려받기</a></span></div>`
+      :ty==='3d'?(noprev||!/\.glb$/i.test(x.url)?`<div class="gnoimg g3d" title="${esc(x.prompt||x.name)}"><b>🧊 3D 모델</b><span>${esc(x.name)}</span><span class="row"><button type="button" class="ghost sm" data-g3d="${x.url}">미리보기</button><a class="ghost sm" href="${x.url}" download>내려받기</a></span></div>`
+        :`<div class="g3d g3dimg" title="${esc(x.prompt||x.name)}"><img loading="lazy" src="${tn}" alt="3D 미리보기 ${esc(x.name)}"><span class="g3dbar"><b>🧊 3D</b><button type="button" class="ghost sm" data-g3d="${x.url}" title="돌려 보기">돌려 보기</button><a class="ghost sm" href="${x.url}" download>내려받기</a></span></div>`)
       :noprev?`<div class="gnoimg" title="${esc(x.prompt||x.name)}"><b>${ic}${esc(x.name)}</b><span>${esc((x.prompt||'').slice(0,90))}</span></div>`
       :ty==='video'?`<video data-src="${x.url}" controls muted loop playsinline preload="none"></video>`:`<img loading="lazy" src="${tn}" alt="${esc(x.prompt||x.name)}" title="${esc(x.prompt||x.name)}">`;
-    return head+`<figure class="gt${noprev||ty==='audio'||ty==='3d'?' noprev':''}${GPICK.has(x.url)?' picked':''}" data-u="${x.url}" data-type="${ty}"><label class="gpick" title="선택 (여러 개 고를 수 있어요)"><input type="checkbox" data-pick="${x.url}"${GPICK.has(x.url)?' checked':''} aria-label="선택"></label>${media}
+    return head+`<figure class="gt${noprev||ty==='audio'||(ty==='3d'&&!/\.glb$/i.test(x.url))?' noprev':''}${GPICK.has(x.url)?' picked':''}" data-u="${x.url}" data-type="${ty}"><label class="gpick" title="선택 (여러 개 고를 수 있어요)"><input type="checkbox" data-pick="${x.url}"${GPICK.has(x.url)?' checked':''} aria-label="선택"></label>${media}
     <button type="button" class="star${x.fav?' on':''}" data-star="${x.url}" title="즐겨찾기" aria-label="즐겨찾기">${x.fav?'★':'☆'}</button>
     <figcaption><span>${esc(x.kind)} · ${fmt(x.time)}</span><span class="gb2">${ty!=='image'?`<button type="button" data-gview="${x.url}" title="크게 보기 (전체 화면·보내기 메뉴)">⤢</button>`:''}${ty==='audio'||ty==='3d'?'':ty==='video'?`<button type="button" data-u="${x.url}" data-to="vmix" title="이 영상에 소리·자막 넣기">♪</button>`:`<button type="button" data-u="${x.url}" data-to="regen" title="이미지 생성으로 보내기 (이 그림의 설정을 생성 화면에 채워요)">↻</button><button type="button" data-u="${x.url}" data-to="again" title="같은 설정으로 새 시드 4장 바로 만들기">⟳</button><button type="button" data-u="${x.url}" data-to="edit" title="편집으로 보내기">✎</button><button type="button" data-u="${x.url}" data-to="up" title="업스케일로 보내기">⤢</button><button type="button" data-u="${x.url}" data-to="vid" title="영상으로 만들기">▶</button>`}<button type="button" data-u="${x.url}" data-to="folder" title="폴더 열기">📁</button><button type="button" data-del="${x.url}" title="삭제(컴퓨터에서 지워요)" aria-label="삭제">🗑</button><details class="more gmore"><summary title="보내기·편집 전체 메뉴" aria-label="보내기·편집 전체 메뉴">⋯</summary><div class="menu">${sendMenu(ty,x.url)}</div></details></span></figcaption></figure>`}).join(''));
   galLazyVideos();
@@ -90,16 +93,22 @@ $('#gal-sort').value=ls.get('gal:sort','new');if(!$('#gal-sort').value)$('#gal-s
 $('#gal-sort').onchange=()=>{ls.set('gal:sort',$('#gal-sort').value);galLoad()};$('#gal-same').onchange=()=>{ls.set('gal:same',$('#gal-same').checked);$('#gal-group').disabled=$('#gal-same').checked;galLoad()};$('#gal-group').disabled=$('#gal-same').checked;
 $('#gal-group').checked=!!ls.get('gal:group',false);$('#gal-group').onchange=()=>{ls.set('gal:group',$('#gal-group').checked);galLoad()};$('#gal-more').onclick=()=>galLoad(true);
 let GSEL=false,GPICK=new Set();
-const galSelUi=()=>{GSEL=GPICK.size>0;$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-sel').textContent=GSEL?`선택 해제 (${GPICK.size})`:'모두 선택';$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
+const galSelUi=()=>{GSEL=GPICK.size>0;$('#gal-grid').classList.toggle('sel',GSEL);$('#gal-unsel').hidden=!GSEL;$('#gal-unsel').textContent=`선택 해제 (${GPICK.size})`;
+  $$('#gal-grid .gday-all').forEach(b=>{const ts=galGroup(b.closest('.gday'));b.textContent=ts.length&&ts.every(t=>GPICK.has(t.dataset.u))?(b.dataset.g?'이 묶음 선택 풀기':'이 날짜 선택 풀기'):(b.dataset.g?'이 묶음 전체 선택':'이 날짜 전체 선택')});$('#gal-delsel').hidden=!GSEL;$('#gal-delsel').textContent=`선택한 파일 삭제 (${GPICK.size})`;
   {const two=[...GPICK].filter(u=>/\.(png|jpe?g)$/i.test(u));$('#gal-cmp').hidden=!(GSEL&&GPICK.size===2&&two.length===2)}
   {const im=[...GPICK].filter(u=>/\.(png|jpe?g|webp)$/i.test(u));const b=$('#gal-lora');if(b){b.hidden=!im.length;b.textContent=`LoRA 학습 사진으로 (${im.length})`}}
   $$('#gal-grid .gt').forEach(t=>{const on=GPICK.has(t.dataset.u);t.classList.toggle('picked',on);const c=$('[data-pick]',t);if(c)c.checked=on})};
 async function galDelete(urls){if(!urls.length)return;
   if(!confirm(urls.length===1?'이 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)':`선택한 ${urls.length}개 파일을 컴퓨터에서 지울까요?\n(휴지통을 거치지 않아 되돌릴 수 없어요)`))return;
   const r=await api('/api/gallery/delete',{files:urls});if(r.error)return toast(r.error);
-  const set=new Set(urls);$$('#gal-grid .gt').forEach(t=>{if(set.has(t.dataset.u))t.remove()});GAL.items=GAL.items.filter(x=>!set.has(x.url));urls.forEach(u=>GPICK.delete(u));
+  const set=new Set(r.urls||urls);urls=[...set];      /* 실제로 지운 것만 갤러리에서 빼요(못 지운 건 남겨 둬요) */$$('#gal-grid .gt').forEach(t=>{if(set.has(t.dataset.u))t.remove()});GAL.items=GAL.items.filter(x=>!set.has(x.url));urls.forEach(u=>GPICK.delete(u));
   $$('#gal-grid .gday').forEach(h=>{if(!(h.nextElementSibling&&h.nextElementSibling.classList.contains('gt')))h.remove()});$('#gal-n').textContent=$$('#gal-grid .gt').length+'개 표시 중';galSelUi();toast(`${r.deleted}개를 지웠어요.`+(r.failed?` (${r.failed}개는 지우지 못했어요)`:''))}
-$('#gal-sel').onclick=()=>{if(GPICK.size)GPICK.clear();else $$('#gal-grid .gt').forEach(g=>GPICK.add(g.dataset.u));galSelUi()};
+$('#gal-sel').onclick=()=>{$$('#gal-grid .gt').forEach(g=>GPICK.add(g.dataset.u));galSelUi()};
+$('#gal-unsel').onclick=()=>{GPICK.clear();galSelUi()};
+/* 날짜(또는 같은 프롬프트 묶음) 제목 아래 칸들 */
+function galGroup(h){const out=[];let n=h&&h.nextElementSibling;while(n&&!n.classList.contains('gday')){if(n.classList.contains('gt'))out.push(n);n=n.nextElementSibling}return out}
+$('#gal-grid').addEventListener('click',e=>{const b=e.target.closest('.gday-all');if(!b)return;e.preventDefault();e.stopPropagation();
+  const ts=galGroup(b.closest('.gday')),all=ts.length&&ts.every(t=>GPICK.has(t.dataset.u));ts.forEach(t=>{if(all)GPICK.delete(t.dataset.u);else GPICK.add(t.dataset.u)});galSelUi()},true);
 $('#gal-delsel').onclick=()=>galDelete([...GPICK]);
 $('#gal-cmp').onclick=()=>{const [a,b]=[...GPICK];if(a&&b)lbOpen([{url:b,before:a,name:b.split('/').pop()}],0,true)};
 $('#org-prev').onclick=async()=>{const r=await api('/api/gallery/organize',{mode:'preview',keep_today:$('#org-today').checked}),I=$('#org-info');
@@ -120,7 +129,7 @@ $('#gal-grid').addEventListener('click',async e=>{
   if(GSEL){const t=e.target.closest('.gt');if(t&&!e.target.closest('button,a,audio,video,model-viewer,summary')){e.preventDefault();const u=t.dataset.u;GPICK.has(u)?GPICK.delete(u):GPICK.add(u);galSelUi();return}}
   const st=e.target.closest('[data-star]');if(st){const on=!st.classList.contains('on'),r=await api('/api/gallery/fav',{file:st.dataset.star,on});
     if(r.error)return toast(r.error);st.classList.toggle('on',on);st.textContent=on?'★':'☆';if($('#gal-fav').checked&&!on)st.closest('.gt').remove();return}
-  const g3=e.target.closest('[data-g3d]');if(g3){const box=g3.closest('.g3d');loadMV();box.outerHTML=`<model-viewer class="gmv" src="${g3.dataset.g3d}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer>`;return}
+  const g3=e.target.closest('[data-g3d]');if(g3){const box=g3.closest('.g3d');loadMV();box.outerHTML=`<div class="gmvbox"><model-viewer class="gmv" src="${g3.dataset.g3d}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer><button type="button" class="ghost sm gmv-full" title="화면 가득 크게 봐요(Esc 로 나가요)">전체화면</button></div>`;return}
   if(e.target.closest('audio,a,model-viewer,video'))return;
   const t=e.target.closest('.gt');if(!t||e.target.closest('figcaption'))return;
   const it=GAL.items.find(x=>x.url===t.dataset.u);if(!it)return;
@@ -350,3 +359,7 @@ $('#bk-go').onclick=async()=>{if(!BK)return;const mode=$('input[name=bkmode]:che
   $$('form[id^=f-]').forEach(f=>{try{const sel=$('.pre-sel',f);if(sel&&f.id){const a=ls.get('preset:'+f.id,{});const v=sel.value;sel.innerHTML='<option value="">내 프리셋 불러오기</option>'+Object.keys(a).map(n=>`<option>${esc(n)}</option>`).join('');sel.value=v}}catch{}});
   const c=r.counts;BK=null;$('#bk-box').hidden=true;
   toast(`되살렸어요: 프롬프트 ${c.prompts} · 와일드카드 ${c.wildcards} · 즐겨찾기 ${c.favs} · LoRA 정보 ${c.lora_user} · 프리셋 ${np} · 대화 ${c.chats||0}`,9000);loadLists()};
+
+/* 갤러리 3D 미리보기·크게 보기 화면의 3D 를 전체화면으로(Esc 로 나가요) */
+document.addEventListener('click',async e=>{const b=e.target.closest('.gmv-full');if(!b)return;e.preventDefault();e.stopPropagation();
+  const mv=b.parentElement.querySelector('model-viewer');if(!mv)return;try{await (mv.requestFullscreen||mv.webkitRequestFullscreen).call(mv)}catch{toast('전체화면을 열 수 없어요.')}});

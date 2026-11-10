@@ -19,7 +19,7 @@ async function vrRun(p,label){if(VR.job)return toast('복원 작업이 진행 �
   try{for(;;){await sleep(1000);const j=await api('/api/job/'+r.id);
     if(j.state==='done'){vrSt(j.msg||'끝났어요.',null);(j.warn||[]).forEach(w=>toast(w,6000));return j}
     if(j.state==='error'||j.state==='cancelled'){vrSt(j.error||'중단했어요.',null,j.state==='error');if(j.need)$('#vr-st').insertAdjacentHTML('beforeend',needBox(j.need));return null}
-    vrSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label),typeof j.progress==='number'?j.progress:0)}}
+    vrSt(j.state==='queued'?'대기열에서 차례를 기다리는 중':(j.msg||label)+etaTxt(j),typeof j.progress==='number'?j.progress:0)}}
   finally{VR.job=null;$('#vr-stop').hidden=true}}
 $('#vr-stop').onclick=async()=>{if(VR.job)await api('/api/job/cancel',{id:VR.job})};
 function vrApply(rec){$('#vr-deint').checked=!!rec.deint;$('#vr-denoise').value=rec.denoise||'off';$('#vr-deflicker').checked=!!rec.deflicker;$('#vr-color').checked=!!rec.color;

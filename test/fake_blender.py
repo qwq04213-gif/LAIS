@@ -2,6 +2,7 @@
 """테스트용 가짜 blender: 허브가 넘기는 인자(-b ... --python blender_game.py -- {json})를 확인하고 결과 묶음을 흉내 내요.
 FAKE_BLENDER_FAIL 파일이 있으면 HUBERR 로 실패해요."""
 import json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # humanoid.py
 a = sys.argv
 assert a[1] == "-b" and "--factory-startup" in a and "--python-exit-code" in a and a[a.index("--python") + 1].endswith("blender_game.py"), a
 j = json.loads(a[a.index("--") + 1])
@@ -14,6 +15,13 @@ if j.get("selftest"):
     json.dump({"ok": True, "blender": "4.5.15"}, open(os.path.join(j["selftest"], "result.json"), "w")); sys.exit(0)
 out, name = j["out"], j["name"]
 assert open(j["glb"], "rb").read(4) == b"glTF"
+if j.get("scene"):          # 장면 전체: 합친 장면 GLB → .blend·GLB·FBX
+    os.makedirs(out, exist_ok=True)
+    data = open(j["glb"], "rb").read(); res = {"ok": True, "blender": "4.5.15", "name": name, "blend": name + ".blend", "glb": name + ".glb", "args": j}
+    open(os.path.join(out, name + ".blend"), "wb").write(b"BLENDER"); open(os.path.join(out, name + ".glb"), "wb").write(data)
+    for f in j.get("formats") or []:
+        if f != "glb": open(os.path.join(out, name + "." + f), "wb").write(f.encode()); res[f] = name + "." + f
+    json.dump(res, open(os.path.join(out, "result.json"), "w", encoding="utf-8"), ensure_ascii=False); print("fake blender scene done"); sys.exit(0)
 os.makedirs(os.path.join(out, "textures"), exist_ok=True)
 open(os.path.join(out, "textures", "base.png"), "wb").write(b"png")
 open(os.path.join(out, name + ".blend"), "wb").write(b"BLENDER")
@@ -24,6 +32,14 @@ for i, r in enumerate(j["lods"]):
         fn = f"{name}_LOD{i}.{f}"; open(os.path.join(out, fn), "wb").write(b"glTF\x02\x00\x00\x00LOD" + str(i).encode() if f == "glb" else f.encode()); rec[f] = fn
     lods.append(rec)
 h = float(j.get("height") or 0)
+rig = None
+if j.get("rig"):            # 진짜 blender_game.rig() 처럼: 관절 어림(rig_fit) → 뼈 개수·자세 → 확인용 움직임 GLB
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(a[a.index("--python") + 1]))))
+    import rig_fit, humanoid
+    fit = rig_fit.fit(humanoid.person(os.environ.get("FAKE_BLENDER_POSE", "T")))
+    open(os.path.join(out, name + "_rig_preview.glb"), "wb").write(b"glTF\x02\x00\x00\x00RIGPREVIEW")
+    rig = {"bones": len(rig_fit.BONES), "pose": fit["pose"], "legs": fit["legs"], "warn": fit["warn"], "fixed": 12, "preview": name + "_rig_preview.glb"}
 json.dump({"ok": True, "blender": "4.5.15", "name": name, "lods": lods, "blend": name + ".blend", "size_m": [0.6, 0.4, h or 1.0],
-           "scale": 1.0, "textures": ["base.png"], "args": j}, open(os.path.join(out, "result.json"), "w", encoding="utf-8"), ensure_ascii=False)
+           "scale": 1.0, "textures": ["base.png"], "args": j, **({"rig": rig} if rig else {})},
+          open(os.path.join(out, "result.json"), "w", encoding="utf-8"), ensure_ascii=False)
 print("fake blender done")

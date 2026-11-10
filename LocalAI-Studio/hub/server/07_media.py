@@ -3,6 +3,13 @@
 # ruff: noqa: F821
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+JOB_RX = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}(?:-[0-9A-Za-z가-힣_.-]{1,40})?$")     # 작업 한 번 = 폴더 하나(예: 20261109-223645-d1ad-모델이름)
+
+
+def job_dir_name(stamp, label=""):
+    """작업 한 번의 결과를 모으는 폴더 이름(날짜-시간-구분자[-이름])."""
+    lab = re.sub(r"[^0-9A-Za-z가-힣_.-]+", "_", str(label or "")).strip("_.")[:40]
+    return f"{stamp}-{uuid.uuid4().hex[:4]}" + (f"-{lab}" if lab else "")
 OUT_SUB = {"edit": "편집", "gen": "생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상", "batch": "일괄", "music": "음악", "tts": "음성", "photo": "사진 편집", "etc": "기타", "depth": "깊이 맵", "vrestore": "영상 복원", "audio": "소리 분리·복원", "m3d": "3D"}
 
 
@@ -11,7 +18,7 @@ def out_path(rel):
     parts = [x for x in urllib.parse.unquote(rel).split("/") if x]
     if len(parts) == 2 and parts[0] in OUT_SUB.values() or parts[:1] == ["기타"] and len(parts) == 2:
         return OUT / parts[0] / Path(parts[1]).name
-    if len(parts) == 3 and parts[0] in OUT_SUB.values() and DATE_RX.match(parts[1]):      # 날짜별로 정리한 폴더
+    if len(parts) == 3 and parts[0] in OUT_SUB.values() and (DATE_RX.match(parts[1]) or JOB_RX.match(parts[1])):      # 날짜별로 정리한 폴더 · 작업 폴더
         return OUT / parts[0] / parts[1] / Path(parts[2]).name
     return OUT / Path(parts[-1] if parts else "x").name
 
@@ -130,8 +137,8 @@ def music_models():
 
 
 def sfx_models():
-    """checkpoints 폴더의 Stable Audio Open 파일."""
-    return [n for n in files("checkpoints") if re.search(r"stable[_-]?audio", n.lower())]
+    """checkpoints 폴더의 Stable Audio 파일 — Stable Audio 3 가 있으면 앞에(먼저 써요)."""
+    return sorted((n for n in files("checkpoints") if re.search(r"stable[_-]?audio", n.lower())), key=lambda n: (not re.search(r"audio[_-]?3", n.lower()), n))
 
 
 SFX_NODES = ("EmptyLatentAudio", "ConditioningStableAudio", "VAEDecodeAudio")
@@ -144,15 +151,26 @@ def do_sfx(p, J):
         raise RuntimeError(f"이 ComfyUI 에는 효과음에 필요한 노드({', '.join(gone)})가 없어요. ComfyUI 를 업데이트해 주세요.")
     models = sfx_models()
     if not models:
-        raise RuntimeError("Stable Audio 모델이 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 설치해 주세요.")
-    te = _pick(files("text_encoders"), "t5_base", "t5-base", ("t5", "base"))
+        raise RuntimeError("Stable Audio 모델이 없어요. '설치와 모델' 탭에서 'Stable Audio 3'(또는 가벼운 Stable Audio Open 1.0)을 설치해 주세요.")
+    sa3 = bool(re.search(r"audio[_-]?3", models[0].lower()))
+    te = _pick(files("text_encoders"), "t5gemma") if sa3 else _pick(files("text_encoders"), "t5_base", "t5-base", ("t5", "base"))
     if not te:
-        raise RuntimeError("T5-base 텍스트 인코더가 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 다시 설치해 주세요.")
+        raise RuntimeError("T5Gemma 텍스트 인코더가 없어요. '설치와 모델' 탭에서 'Stable Audio 3'을 다시 설치해 주세요." if sa3 else
+                           "T5-base 텍스트 인코더가 없어요. '설치와 모델' 탭에서 'Stable Audio Open 1.0'을 다시 설치해 주세요.")
     text = (p.get("tags") or "").strip()
     if not text:
         raise ValueError("어떤 소리인지 적어 주세요. 예: heavy rain on a tin roof")
     if blocked(text):
         raise ValueError(BLOCK_MSG)
+    if sa3:
+        sec = clamp(num(p, "sfx_seconds", 10.0), 1.0, 180.0)
+        q = dict(ckpt=models[0], te=te, prompt=text, seed=seed_of(p), seconds=sec, steps=8, fmt=p.get("format") if p.get("format") in ("mp3", "flac") else "mp3")
+        J["msg"] = f"효과음 만드는 중 (Stable Audio 3, {sec:.0f}초)"
+        res = run_wf(flows.wf_sa3(q), J, raw=True)
+        info = dict(kind="sfx", prompt=text, seed=q["seed"], seconds=sec, steps=8, model=q["ckpt"])
+        return [(data, info, Path(name).suffix.lower() or ".mp3") for name, data in res[:1]]
+    if num(p, "sfx_seconds", 10.0) > 47:
+        warn(J, "Stable Audio Open 은 47초까지라 47초로 만들었어요. 더 길게는 'Stable Audio 3'을 설치해 주세요.")
     sec = clamp(num(p, "sfx_seconds", 10.0), 1.0, 47.0)
     q = dict(ckpt=models[0], te=te, prompt=text, negative="low quality, distorted, noise", seed=seed_of(p), seconds=sec,
              steps=clamp(num(p, "sfx_steps", 50, int), 10, 150), cfg=7.0,
@@ -292,7 +310,7 @@ def do_tts_model(p, J, engine, text, speed):
 def do_vid(p, J):
     if p.get("wan_ver") == "14b":
         return do_vid14(p, J)
-    if p.get("wan_ver") in ("ltx", "vace", "s2v"):
+    if p.get("wan_ver") in ("ltx", "ltx25", "vace", "s2v"):
         return do_vid_more(p, J)
     """Wan 2.2 5B 로 영상 만들기(글→영상, 이미지를 올리면 그 이미지에서 시작). 결과: [(바이트, 확장자, 정보)]"""
     for node, why in (("Wan22ImageToVideoLatent", "Wan 2.2 영상 노드"), ("CreateVideo", "영상 만들기 노드"), ("SaveVideo", "영상 저장 노드")):
@@ -362,6 +380,9 @@ def put_audio(data_url, J):
 
 
 VID_MORE = {"ltx": ("LTX-Video", ("LTXVConditioning", "LTXVScheduler", "EmptyLTXVLatentVideo", "SamplerCustom")),
+            "ltx25": ("LTX-2.5", ("LTXVConditioning", "LTXVDualCFGGuider", "LTXVImgToVideoInplace", "LTXVPreprocess", "LTXVEmptyLatentAudio",
+                                  "LTXVConcatAVLatent", "LTXVSeparateAVLatent", "LTXVLatentUpsampler", "LatentUpscaleModelLoader", "LTXVAudioVAEDecode",
+                                  "ManualSigmas", "SamplerCustomAdvanced", "RandomNoise", "VAEDecodeTiled")),
             "vace": ("Wan VACE", ("WanVaceToVideo", "TrimVideoLatent")),
             "s2v": ("Wan 2.2 S2V", ("WanSoundImageToVideo", "WanSoundImageToVideoExtend", "LatentConcat", "AudioEncoderLoader", "AudioEncoderEncode", "LoadAudio"))}
 
@@ -373,11 +394,19 @@ def s2v_fast_lora():
     return pick("lightx2v", "t2v", "high") or pick("lightning", "t2v", "high") or pick("lightx2v", "high") or pick("lightx2v")
 
 
+def ltx25_files():
+    """LTX-2.5 파일(없으면 None)."""
+    dm, te, va, lu = files("diffusion_models"), files("text_encoders"), files("vae"), files("latent_upscale_models")
+    f = lambda L, *k: next((n for n in L if all(x in n.lower() for x in k)), None)    # noqa: E731
+    return {"unet": f(dm, "ltx-2.5", "transformer") or f(dm, "ltx-2.5"), "te": f(te, "gemma4", "ltx-2.5") or f(te, "ltx-2.5"),
+            "vae": f(va, "ltx-2.5", "video"), "avae": f(va, "ltx-2.5", "audio"), "upscaler": f(lu, "ltx-2.5", "upscal") or f(lu, "ltx-2.5")}
+
+
 def vid_more_state():
     """LTX-Video · Wan VACE · Wan S2V 모델이 있는지(화면 안내용)."""
     dm, te, va = files("diffusion_models"), files("text_encoders"), files("vae")
     wan = bool(_pick(te, "umt5")) and bool(_pick(va, "wan_2.1_vae", "wan2.1", ("wan", "2.1")))
-    return {"ltx": bool(ltx_models()) and bool(_pick(te, "t5xxl")), "vace": wan and any("vace" in n.lower() for n in dm),
+    return {"ltx": bool(ltx_models()) and bool(_pick(te, "t5xxl")), "ltx25": all(ltx25_files().values()), "vace": wan and any("vace" in n.lower() for n in dm),
             "s2v": wan and any("s2v" in n.lower() for n in dm) and bool(_pick(files("audio_encoders"), "wav2vec")), "s2v_fast": bool(s2v_fast_lora())}
 
 
@@ -419,6 +448,22 @@ def do_vid_more(p, J):
         start = put_input(ImageOps.fit(img, (w, h), RS.LANCZOS), J) if img is not None else None
         J["msg"] = f"LTX-Video 로 영상 만드는 중 ({w}×{h}, {frames}프레임)"
         g, model = flows.wf_ltx(q, start), ms[0]
+    elif ver == "ltx25":
+        lf = ltx25_files()
+        names = {"unet": "LTX-2.5 모델", "te": "Gemma 4 텍스트 인코더(LTX-2.5용)", "vae": "LTX-2.5 영상 VAE", "avae": "LTX-2.5 소리 VAE", "upscaler": "LTX-2.5 키우기 모델"}
+        miss = [names[k] for k, v in lf.items() if not v]
+        if miss:
+            raise RuntimeError("없는 파일: " + ", ".join(miss) + ". '설치와 모델' 탭의 영상 분류에서 'LTX-2.5'를 설치해 주세요.")
+        fps = clamp(num(p, "fps", 24, int), 12, 30)
+        frames = clamp(int(round(clamp(num(p, "sec", 5.0), 1.0, 10.0) * fps / 8)) * 8 + 1, 9, 249)
+        w, h = (clamp(int(round(x / 64)) * 64, 256, 1920) for x in (w, h))      # 절반 크기도 32의 배수가 되게
+        q = dict(lf, prompt=text, negative=neg or flows.LTX25_NEG, seed=seed, w=w, h=h, frames=frames, fps=fps, steps=11, cfg=1.0)
+        start = None
+        if img is not None:
+            s = 1536 / max(w, h) if max(w, h) > 1536 else 1.0
+            start = put_input(ImageOps.fit(img, (round(w * s), round(h * s)), RS.LANCZOS), J)
+        J["msg"] = f"LTX-2.5 로 영상·소리 만드는 중 ({w}×{h}, {frames}프레임)"
+        g, model = flows.wf_ltx25(q, start), lf["unet"]
     else:
         unet = vace_model() if ver == "vace" else next((n for n in files("diffusion_models") if ver in n.lower()), None)
         umt5 = _pick(te, "umt5")
@@ -504,7 +549,7 @@ def do_vpost(p, J):
     if op == "gif":
         return vpost_gif(src, p, J)
     node, pack, title = VPOST[op]
-    need = ["LoadVideo", "GetVideoComponents", node] + (["CreateVideo", "SaveVideo"] if op != "webp" else []) + (["UpscaleModelLoader"] if op == "upscale" else [])
+    need = ["LoadVideo", "GetVideoComponents", node] + (["CreateVideo", "SaveVideo"] if op != "webp" else []) + (["UpscaleModelLoader"] if op == "upscale" and not str(p.get("upm") or "").startswith("SeedVR2") else [])
     miss = [n for n in need if caps()["nodes"] and n not in caps()["nodes"]]
     if miss:
         raise RuntimeError("이 ComfyUI 에는 필요한 노드가 없어요: " + ", ".join(miss) + ". " +
@@ -514,7 +559,10 @@ def do_vpost(p, J):
     except (OSError, ValueError):
         base = {}
     q = dict(fps=clamp(int(num(base, "fps", 24, int)), 1, 60))
-    if op == "upscale":
+    if op == "upscale" and seedvr_of(p.get("upm")):
+        q["seedvr"] = seedvr_of(p.get("upm"))
+        warn(J, "SeedVR2 로 2배 키우며 복원해요. 영상이 길면 오래 걸리고 메모리가 많이 들어요(길면 '영상 복원'에서 조각으로 나눠 처리하는 게 좋아요).")
+    elif op == "upscale":
         q["model"] = p.get("upm") or (files("upscale_models") or [None])[0]
         if not q["model"]:
             raise RuntimeError("업스케일 모델이 없어요. '설치와 모델' 탭에서 업스케일 모델을 설치해 주세요.")

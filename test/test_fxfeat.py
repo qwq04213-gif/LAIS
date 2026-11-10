@@ -48,9 +48,9 @@ def run_batch(o):
         j = req("/api/job/" + r["id"])
         if j["state"] in ("done", "error", "cancelled"): return j
         _t.sleep(0.25)
-n0 = len(SUBMITTED); j = run_batch({"op": "upscale", "folder": str(SRCD), "scale": "0.5"}); outs = list((hub.OUT / "일괄").glob("a_축소x0.5*.png"))
+n0 = len(SUBMITTED); j = run_batch({"op": "upscale", "folder": str(SRCD), "scale": "0.5"}); outs = list((hub.OUT / "일괄").rglob("a_축소x0.5*.png"))
 assert j["state"] == "done" and j["batch"]["ok"] == 1 and outs and Image.open(outs[0]).size == (200, 150) and len(SUBMITTED) == n0, j
-j = run_batch({"op": "upscale", "folder": str(SRCD), "scale": "1.5"}); outs = list((hub.OUT / "일괄").glob("a_업스케일x1.5*.png")); assert j["state"] == "done" and outs and Image.open(outs[0]).size == (600, 450), j
+j = run_batch({"op": "upscale", "folder": str(SRCD), "scale": "1.5"}); outs = list((hub.OUT / "일괄").rglob("a_업스케일x1.5*.png")); assert j["state"] == "done" and outs and Image.open(outs[0]).size == (600, 450), j
 ok("batch: shrinking (no engine) and a fractional enlarge both name files by factor and give the right size")
 
 # ───────────────── 2. 얼굴·손 보정: FLUX.1 · Krea 2 · Chroma ─────────────────

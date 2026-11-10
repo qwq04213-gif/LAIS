@@ -22,7 +22,7 @@ g = SUBMITTED[-1]; t = cls(g, "TextEncodeAceStepAudio1.5")[0]
 assert t["tags"].startswith("k-pop") and t["lyrics"].startswith("[verse]") and t["duration"] == 45 and t["bpm"] == 128 and t["language"] == "ko" and t["keyscale"] == "A minor" and t["timesignature"] == "4" and t["generate_audio_codes"] is True, t
 assert cls(g, "EmptyAceStep1.5LatentAudio")[0]["seconds"] == 45; ks = cls(g, "KSampler")[0]; assert (ks["steps"], ks["cfg"], ks["sampler_name"], ks["scheduler"]) == (8, 1.0, "euler", "simple")
 sv = cls(g, "SaveAudioAdvanced")[0]; assert sv["format"] == "mp3" and sv["format.quality"] == "V0", sv; ok("graph: tags/lyrics/length/BPM/key/language wired; turbo defaults 8 steps CFG 1; mp3 with dotted quality key")
-f = hub.OUT / "음악" / j["images"][0].split("/")[-1]; assert f.is_file() and f.read_bytes().startswith(b"ID3") and (f.parent / (f.name + ".json")).is_file()
+f = hub.out_path(j["images"][0][5:]); assert f.is_file() and f.read_bytes().startswith(b"ID3") and (f.parent / (f.name + ".json")).is_file()
 info = json.loads((f.parent / (f.name + ".json")).read_text(encoding="utf-8")); assert info["prompt"].startswith("k-pop") and info["seconds"] == 45; ok("file and settings saved in outputs/음악")
 r = urllib.request.urlopen(B + j["images"][0]); assert r.headers["Content-Type"] == "audio/mpeg" and r.read().startswith(b"ID3"); ok("served with an audio content type (the browser can play it)")
 SUBMITTED.clear(); wait(post("/api/job", {"kind": "music", "tags": "piano", "instrumental": True, "lyrics": "should be ignored", "format": "flac", "no_codes": True})["id"]); g = SUBMITTED[-1]

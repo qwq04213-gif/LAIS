@@ -1406,9 +1406,13 @@
      [
       "precise",
       "정밀 (179MB, 머리카락 등 가장자리가 깔끔)"
+     ],
+     [
+      "best",
+      "최고 (BiRefNet 424MB, 그래픽카드 — 가장 또렷해요)"
      ]
     ],
-    "default": "normal"
+    "default": "best"
    },
    {
     "name": "crop",

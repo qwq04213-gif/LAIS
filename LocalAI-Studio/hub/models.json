@@ -1,60 +1,124 @@
 {
  "llm": [
   {
+   "id": "qwen35-9b-abl",
+   "name": "Qwen3.5 9B Abliterated (제한 해제)",
+   "gb": 6.6,
+   "ollama": "huihui_ai/qwen3.5-abliterated:9b",
+   "nsfw": "ok",
+   "desc": "Qwen3.5 9B 의 제한 해제판 — 성인 대화·프롬프트 번역도 거절하지 않아요. 사진도 볼 수 있어요. VRAM 8GB 이상. Ollama 0.17.4 이상이 필요해요(안 되면 Ollama 를 업데이트해 주세요). 커뮤니티 모델."
+  },
+  {
+   "id": "qwen35-27b-abl",
+   "name": "Qwen3.5 27B Abliterated (제한 해제 · 똑똑함)",
+   "gb": 17,
+   "ollama": "huihui_ai/qwen3.5-abliterated:27b",
+   "nsfw": "ok",
+   "desc": "Qwen3.5 27B 의 제한 해제판. 가장 똑똑한 성인 대화·번역용. VRAM 24GB 권장. Ollama 0.17.4 이상. 커뮤니티 모델."
+  },
+  {
+   "id": "gemma4-12b-abl",
+   "name": "Gemma 4 12B Abliterated (제한 해제)",
+   "gb": 7.6,
+   "ollama": "huihui_ai/gemma-4-abliterated:12b",
+   "nsfw": "ok",
+   "desc": "Gemma 4 12B 의 제한 해제판 — 한국어가 자연스럽고 사진도 봐요. VRAM 8~12GB. 커뮤니티 모델(Gemma 라이선스)."
+  },
+  {
+   "id": "gemma4-26b-abl",
+   "name": "Gemma 4 26B Abliterated (제한 해제 · MoE)",
+   "gb": 18,
+   "ollama": "huihui_ai/gemma-4-abliterated:26b",
+   "nsfw": "ok",
+   "desc": "Gemma 4 26B MoE 의 제한 해제판 — 크기에 비해 빨라요. VRAM 16GB 이상(24GB 권장). 커뮤니티 모델."
+  },
+  {
    "id": "qwen35-9b",
    "name": "Qwen3.5 9B (작업 실행 추천)",
    "gb": 6.6,
    "desc": "대화의 '실행 모드'에서 요청을 작업으로 바꾸는 데 알맞은 모델(도구 호출 지원). 사진도 볼 수 있어요. VRAM 8GB 이상 권장. 공식 모델이라 일부 요청은 거절할 수 있어요.",
-   "ollama": "qwen3.5:9b"
+   "ollama": "qwen3.5:9b",
+   "nsfw": "limited"
   },
   {
    "id": "qwen35-4b",
    "name": "Qwen3.5 4B (가벼운 작업 실행용)",
    "gb": 3.4,
    "desc": "실행 모드용 가벼운 모델. 이미지 작업과 그래픽 메모리를 나눠 쓰기 쉬워요. 9B보다 요청을 잘못 알아들을 수 있어요.",
-   "ollama": "qwen3.5:4b"
+   "ollama": "qwen3.5:4b",
+   "nsfw": "limited"
+  },
+  {
+   "id": "qwen35-27b",
+   "name": "Qwen3.5 27B (똑똑한 대화·번역)",
+   "gb": 17,
+   "ollama": "qwen3.5:27b",
+   "desc": "Qwen3.5 의 큰 판 — 대화·번역·실행 모드가 9B 보다 훨씬 정확해요. 사진도 볼 수 있어요. VRAM 24GB 권장(16GB 는 일부를 RAM 으로 돌려 느려요). Apache-2.0.",
+   "nsfw": "limited"
+  },
+  {
+   "id": "gemma4-e4b",
+   "name": "Gemma 4 E4B (가벼운 대화·사진 보기)",
+   "gb": 9.6,
+   "ollama": "gemma4:e4b",
+   "desc": "Google 의 2026년 경량 모델. 한국어 대화·사진 설명이 자연스럽고 가벼워요. VRAM 8GB 이상. Gemma 라이선스.",
+   "nsfw": "limited"
+  },
+  {
+   "id": "gemma4-26b",
+   "name": "Gemma 4 26B MoE (빠른 큰 대화 모델)",
+   "gb": 18,
+   "ollama": "gemma4:26b",
+   "desc": "전체 26B 중 한 번에 4B 만 쓰는 구조라 크기에 비해 빨라요. 긴 글·번역·실행 모드에 좋아요. VRAM 16GB 이상(24GB 권장). Gemma 라이선스.",
+   "nsfw": "limited"
   },
   {
    "id": "qwen3-8b",
    "name": "Qwen3 8B Abliterated",
    "gb": 5.2,
    "desc": "가볍고 빠른 대화 모델. VRAM 6GB 이상. 답변 전에 생각 과정을 출력할 수 있어요(메시지 끝에 /no_think 를 붙이면 생략).",
-   "ollama": "huihui_ai/qwen3-abliterated:8b"
+   "ollama": "huihui_ai/qwen3-abliterated:8b",
+   "nsfw": "ok"
   },
   {
    "id": "qwen3-14b",
    "name": "Qwen3 14B Abliterated",
    "gb": 9.3,
    "desc": "한국어 품질과 속도의 균형. VRAM 10GB 이상 권장. Apache-2.0 기반 모델이에요.",
-   "ollama": "huihui_ai/qwen3-abliterated:14b"
+   "ollama": "huihui_ai/qwen3-abliterated:14b",
+   "nsfw": "ok"
   },
   {
    "id": "qwen3-32b",
    "name": "Qwen3 32B Abliterated",
    "gb": 20,
    "desc": "가장 풍부한 문장력. VRAM 24GB 권장.",
-   "ollama": "huihui_ai/qwen3-abliterated:32b"
+   "ollama": "huihui_ai/qwen3-abliterated:32b",
+   "nsfw": "ok"
   },
   {
    "id": "exaone35-8b",
    "name": "EXAONE 3.5 7.8B (한국어 특화)",
    "gb": 4.8,
    "desc": "LG가 만든 한국어에 강한 모델. 검열 해제 모델은 아니라서 성인 롤플레이에는 거절이 잦을 수 있어요. 일반 대화·번역·프롬프트 작성용. 연구·비상업 라이선스예요. VRAM 6GB 이상.",
-   "ollama": "exaone3.5:7.8b"
+   "ollama": "exaone3.5:7.8b",
+   "nsfw": "limited"
   },
   {
    "id": "mistral-small-24b",
    "name": "Mistral Small 24B Abliterated",
    "gb": 14.3,
    "desc": "한국어를 공식 지원하는 다국어 모델의 검열 해제판. 롤플레이·소설에 쓸 만한 표현력. VRAM 16GB 이상 권장. 주소가 바뀌었다면 '직접 추가'를 쓰세요.",
-   "ollama": "huihui_ai/mistral-small-abliterated:24b"
+   "ollama": "huihui_ai/mistral-small-abliterated:24b",
+   "nsfw": "ok"
   },
   {
    "id": "qwen25vl-7b",
    "name": "Qwen2.5-VL 7B (이미지를 보는 모델)",
    "gb": 6.0,
    "desc": "사진을 보고 설명하거나 이미지 생성용 프롬프트를 뽑아 줘요('프롬프트' 탭의 이미지→프롬프트). 대화에도 쓸 수 있어요. VRAM 8GB 이상 권장.",
-   "ollama": "qwen2.5vl:7b"
+   "ollama": "qwen2.5vl:7b",
+   "nsfw": "limited"
   }
  ],
  "image": [
@@ -77,7 +141,30 @@
      "dir": "vae",
      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
+  },
+  {
+   "id": "qwen-image-turbo",
+   "name": "Qwen-Image 2.1 Turbo (빠른 생성·편집, int8)",
+   "gb": 17.3,
+   "desc": "Qwen-Image 2.1 의 빠른 판(8단계). 이미지 편집·생성에서 모델 칸에 'turbo' 파일을 고르면 공식 Turbo 설정(정해진 8단계 곡선, CFG 1)으로 그려요. Lightning LoRA 없이도 빨라요. 텍스트 인코더·VAE 는 보통판과 같이 써요. 비상업(Qwen Research License).",
+   "license": "비상업(Qwen Research License)",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors"
+    }
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "qwen-te-small",
@@ -131,6 +218,114 @@
    ]
   },
   {
+   "id": "moss-image-edit",
+   "name": "MOSS-Image 편집 (말로 편집, int8)",
+   "gb": 13.3,
+   "desc": "이미지 편집 > 방법 '말로 편집 (MOSS-Image)'. Qwen-Image 와 다른 시각으로 옷·소품·배경을 문장으로 바꿔요(공식 편집 LoRA 포함, 30단계). 2026년 10월 공개, 시험 중. VRAM 12GB 이상 권장. Apache-2.0.",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/diffusion_models/moss_image_sft_int8_convrot.safetensors"
+    },
+    {
+     "dir": "loras",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/loras/moss_image_edit_lora_rank_64_bf16.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae_small.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "z-image-turbo",
+   "name": "Z-Image-Turbo (빠른 실사·글자, int8)",
+   "gb": 12.1,
+   "desc": "이미지 생성 > 모델 종류 'Z-Image-Turbo'. 6B 모델로 8단계에 고품질 실사·인물·글자(한자·영어)를 그려요. 요즘 ComfyUI 에서 가장 많이 쓰는 생성 모델 중 하나예요. Alibaba Tongyi, Apache-2.0. int8 이라 VRAM 8GB 에서도 돌지만 느려요(12GB 이상 권장).",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors"
+    }
+   ],
+   "nsfw": "ok"
+  },
+  {
+   "id": "flux3-klein",
+   "name": "FLUX 3 Klein (빠른 증류판, int8)",
+   "gb": 11,
+   "desc": "이미지 생성 > 모델 종류 'FLUX 3 Klein', 이미지 편집 > '말로 편집 (FLUX 3 Klein)'. 2026년 10월 Black Forest Labs 의 5.6B 모델로, 16단계로 사실적인 사진과 긴 문장 이해에 강하고 사진 편집도 돼요. int8 이라 VRAM 8GB 에서도 돌아요(공식). FLUX Kommunity 라이선스: 개인·연 매출 500만 달러 미만은 상업 이용 무료.",
+   "license": "FLUX Kommunity License",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/diffusion_models/flux3-image-klein-int8-convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors"
+    }
+   ],
+   "nsfw": "limited"
+  },
+  {
+   "id": "flux3-klein-base",
+   "name": "FLUX 3 Klein Base (원본판 · 고품질·느림, int8)",
+   "gb": 11,
+   "desc": "FLUX 3 Klein 의 원본판 — 50단계·CFG 3.5 로 더 세밀하지만 3배쯤 느려요. LoRA 학습 기반으로도 좋아요. int8, VRAM 8GB 부터(12GB 이상 권장). FLUX Kommunity 라이선스.",
+   "license": "FLUX Kommunity License",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/diffusion_models/flux3-image-klein-base-int8-convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors"
+    }
+   ],
+   "nsfw": "limited"
+  },
+  {
+   "id": "stable-audio-3",
+   "name": "Stable Audio 3 Medium (효과음·연주곡, 최대 3분)",
+   "gb": 11,
+   "desc": "음악 만들기 > 만들 것 '효과음'에서 Stable Audio Open 대신 먼저 써요. 효과음·악기 소리·가사 없는 연주곡을 8단계로 빠르게, 최대 180초까지 만들어요. Stability AI(커뮤니티 라이선스: 연 매출 100만 달러 이하 무료). VRAM 8GB 이상(길게 만들수록 메모리가 더 들어요).",
+   "license": "Stability AI Community License",
+   "files": [
+    {
+     "dir": "checkpoints",
+     "url": "https://huggingface.co/Comfy-Org/stable-audio-3/resolve/main/checkpoints/stable_audio_3_medium.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Comfy-Org/stable-audio-3/resolve/main/text_encoders/t5gemma_b_b_ul2.safetensors"
+    }
+   ]
+  },
+  {
    "id": "stable-audio-open",
    "name": "Stable Audio Open 1.0 — 효과음 만들기",
    "gb": 5.3,
@@ -158,7 +353,8 @@
      "dir": "checkpoints",
      "url": "https://huggingface.co/Laxhar/noobai-XL-1.1/resolve/main/NoobAI-XL-v1.1.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "noobai-vpred",
@@ -170,7 +366,8 @@
      "dir": "checkpoints",
      "url": "https://huggingface.co/Laxhar/noobai-XL-Vpred-1.0/resolve/main/NoobAI-XL-Vpred-v1.0.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "realvisxl5",
@@ -181,6 +378,33 @@
     {
      "dir": "checkpoints",
      "url": "https://huggingface.co/SG161222/RealVisXL_V5.0/resolve/main/RealVisXL_V5.0_fp16.safetensors"
+    }
+   ],
+   "nsfw": "ok"
+  },
+  {
+   "id": "depth-anything-3",
+   "name": "Depth Anything 3 (깊이 지도 · 최신)",
+   "gb": 1.3,
+   "desc": "깊이 지도를 만들 때(ControlNet 깊이·배경 흐림·깊이 효과·3D 장면 전체 배치) 먼저 써요. Depth Anything V2 보다 경계가 또렷하고 거리 차이를 잘 잡아요. ComfyUI 기본 노드로 돌아서 따로 확장이 필요 없어요. ByteDance, Apache-2.0.",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "geometry_estimation",
+     "url": "https://huggingface.co/Comfy-Org/Depth-Anything-3/resolve/main/geometry_estimation/depth_anything_3_mono_large.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "birefnet",
+   "name": "BiRefNet (배경 지우기 · 최고 품질)",
+   "gb": 0.42,
+   "desc": "배경 지우기의 '최고' 품질. 사진을 1024px 로 보고 경계를 찾아 머리카락·가장자리가 또렷해요. 그래픽카드(ComfyUI)로 돌아요. 3D 만들기의 배경 지우기에도 써요. MIT 라이선스.",
+   "license": "MIT",
+   "files": [
+    {
+     "dir": "background_removal",
+     "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors"
     }
    ]
   },
@@ -258,6 +482,40 @@
    ]
   },
   {
+   "id": "seedvr2",
+   "name": "SeedVR2 3B (AI 복원 업스케일, int8)",
+   "gb": 4.0,
+   "desc": "업스케일·일괄 처리·영상 다듬기·영상 복원의 업스케일 모델 목록에 'SeedVR2 3B (AI 복원)'로 나와요. 흐림·노이즈·압축 깨짐까지 복원하며 키워요(사진·영상 둘 다, 1단계라 빨라요). ByteDance, Apache-2.0. VRAM 8GB 이상(결과가 클수록 메모리가 많이 들어요).",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_3b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors"
+    }
+   ]
+  },
+  {
+   "id": "seedvr2-7b",
+   "name": "SeedVR2 7B (AI 복원 업스케일 · 고화질, int8)",
+   "gb": 8.8,
+   "desc": "SeedVR2 의 큰 판 — 3B 보다 세밀하게 복원해요. 목록에 'SeedVR2 7B (AI 복원)'로 나와요. VRAM 12GB 이상 권장. Apache-2.0.",
+   "license": "Apache-2.0",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_7b_int8_convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors"
+    }
+   ]
+  },
+  {
    "id": "flux-common",
    "name": "FLUX 공용 파일 (텍스트 인코더 + VAE)",
    "gb": 5.5,
@@ -290,7 +548,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/FLUX.1-Krea-dev_ComfyUI/resolve/main/split_files/diffusion_models/flux1-krea-dev_fp8_scaled.safetensors"
     }
-   ]
+   ],
+   "nsfw": "limited"
   },
   {
    "id": "krea2-common",
@@ -321,7 +580,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors"
     }
-   ]
+   ],
+   "nsfw": "limited"
   },
   {
    "id": "krea2-raw",
@@ -336,7 +596,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_raw_fp8_scaled.safetensors"
     }
-   ]
+   ],
+   "nsfw": "limited"
   },
   {
    "id": "wan-common",
@@ -367,7 +628,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "chroma-hd",
@@ -382,7 +644,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/lodestones/Chroma1-HD/resolve/main/Chroma1-HD.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "adetailer",
@@ -479,7 +742,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "wan22-14b-i2v",
@@ -499,7 +763,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "wan22-lightning",
@@ -526,13 +791,42 @@
    ]
   },
   {
+   "id": "ltx25",
+   "name": "LTX-2.5 22B (영상 + 소리, int8 · VRAM 24GB)",
+   "gb": 52,
+   "desc": "영상 만들기 > 영상 모델 'LTX-2.5'. 2026년 Lightricks 의 최신 영상 모델로, 영상과 어울리는 소리까지 함께 만들어요. 절반 크기로 그린 뒤 2배로 키워 다듬어 선명해요(빠른 증류판, 11단계). 모델(약 22GB)과 텍스트 인코더(약 15GB)가 커서 VRAM 24GB + RAM 64GB 이상이 현실적이에요(16GB 이하는 어려워요 — Wan 2.2 를 쓰세요). LTX-2 커뮤니티 라이선스(연 매출 1천만 달러 이하 무료).",
+   "license": "LTX-2 Community License",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors"
+    },
+    {
+     "dir": "text_encoders",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-audio-vae-bf16.safetensors"
+    },
+    {
+     "dir": "latent_upscale_models",
+     "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    }
+   ]
+  },
+  {
    "id": "ltx-video",
-   "name": "LTX-Video 2B 0.9.8 (빠른 영상)",
+   "name": "LTX-Video 2B 0.9.8 (가벼운 영상)",
    "gb": 6.3,
    "requires": [
     "flux-common"
    ],
-   "desc": "영상 만들기 > 영상 모델 'LTX-Video'. 글이나 사진으로 몇십 초 만에 짧은 영상을 만들어요(8단계). 화질은 Wan 보다 낮지만 훨씬 빨라요. T5 텍스트 인코더는 FLUX 공용 파일을 같이 써요. VRAM 8GB 이상.",
+   "desc": "영상 만들기 > 영상 모델 'LTX-Video 0.9.8'. 예전 판(2025)이지만 가벼워서 VRAM 8GB 에서도 몇십 초 만에 돌아요. 최신 LTX-2.5 는 24GB 가 필요해서, 8~16GB 에서 화질은 Wan 2.2 5B 가 더 좋아요. 글이나 사진으로 몇십 초 만에 짧은 영상을 만들어요(8단계). 화질은 Wan 보다 낮지만 훨씬 빨라요. T5 텍스트 인코더는 FLUX 공용 파일을 같이 써요. VRAM 8GB 이상.",
    "files": [
     {
      "dir": "checkpoints",
@@ -554,7 +848,8 @@
      "dir": "diffusion_models",
      "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_vace_1.3B_fp16.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "wan-s2v",
@@ -574,7 +869,8 @@
      "dir": "audio_encoders",
      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors"
     }
-   ]
+   ],
+   "nsfw": "ok"
   },
   {
    "id": "trellis2",
@@ -599,6 +895,52 @@
      "dir": "vae",
      "url": "https://huggingface.co/Comfy-Org/TRELLIS.2/resolve/main/vae/trellis_2_texture_vae_bf16.safetensors"
     }
+   ],
+   "requires": [
+    "mediapipe-face"
+   ]
+  },
+  {
+   "id": "pixal3d",
+   "name": "Pixal3D (사진 한 장 → 3D, 사진에 충실 · int8)",
+   "gb": 9,
+   "desc": "3D 만들기의 기본 엔진(설치돼 있으면 먼저 써요). TRELLIS.2 를 바탕으로 사진 화소를 3D 에 그대로 맞춰 붙여서 얼굴·무늬 같은 디테일이 사진에 훨씬 가까워요(SIGGRAPH 2026, ComfyUI 공식 예시의 기본). 화각은 MoGe 로 어림해요. VRAM 16GB 이상 권장. Tencent ARC.",
+   "files": [
+    {
+     "dir": "diffusion_models",
+     "url": "https://huggingface.co/Comfy-Org/Pixal3D/resolve/main/diffusion_models/pixal3d_int8_convrot.safetensors"
+    },
+    {
+     "dir": "clip_vision",
+     "url": "https://huggingface.co/Comfy-Org/Pixal3D/resolve/main/clip_vision/dino_v3_L_naf_fp32.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Pixal3D/resolve/main/vae/trellis_2_shape_vae_bf16.safetensors"
+    },
+    {
+     "dir": "vae",
+     "url": "https://huggingface.co/Comfy-Org/Pixal3D/resolve/main/vae/trellis_2_texture_vae_bf16.safetensors"
+    },
+    {
+     "dir": "geometry_estimation",
+     "url": "https://huggingface.co/Comfy-Org/MoGe/resolve/main/geometry_estimation/moge_2_vitl_normal_fp16.safetensors"
+    }
+   ],
+   "requires": [
+    "mediapipe-face"
+   ]
+  },
+  {
+   "id": "mediapipe-face",
+   "name": "얼굴 찾기 (MediaPipe · 3D 사진 붙이기용)",
+   "gb": 0.01,
+   "desc": "3D 만들기에서 사진의 얼굴을 찾아 그 부분만 크게 키워 붙여요(얼굴이 더 선명해져요). 아주 작아요. Google MediaPipe.",
+   "files": [
+    {
+     "dir": "detection",
+     "url": "https://huggingface.co/Comfy-Org/mediapipe/resolve/main/detection/mediapipe_face_fp32.safetensors"
+    }
    ]
   },
   {
@@ -606,6 +948,7 @@
    "name": "Pixal3D 멀티뷰 (여러 방향 사진 → 3D, int8)",
    "gb": 6.8,
    "requires": [
+    "mediapipe-face",
     "trellis2"
    ],
    "desc": "3D 만들기에서 앞·왼쪽·뒤·오른쪽 그림을 함께 쓰면 뒷모습까지 더 정확해져요. Tencent ARC·칭화대, MIT 라이선스.",
@@ -654,7 +997,8 @@
      "dir": "checkpoints",
      "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_large_fp8_scaled.safetensors"
     }
-   ]
+   ],
+   "nsfw": "limited"
   },
   {
    "id": "sd35-medium",
@@ -666,7 +1010,8 @@
      "dir": "checkpoints",
      "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors"
     }
-   ]
+   ],
+   "nsfw": "limited"
   },
   {
    "id": "krea2-depth-control",

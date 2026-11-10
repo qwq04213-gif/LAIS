@@ -38,9 +38,9 @@ mp4 = [u for u in j["images"] if u.endswith(".mp4")]; png = [u for u in j["image
 assert len(mp4) == 1 and len(png) == 1 and "/영상 복원/" in urllib.parse.unquote(mp4[0]), j["images"]
 V = j["verify"]; assert V["ok"] and V["src_audio"] and V["out_audio"] and abs(V["out_dur"] - 12) < 0.3, V
 assert "소리 그대로" in j["msg"] and "흔들림 보정" in j["msg"] and "노이즈 줄이기" in j["msg"], j["msg"]
-outf = hub.OUT / "영상 복원" / urllib.parse.unquote(mp4[0]).split("/")[-1]
+outf = hub.out_path(mp4[0][5:])
 meta = json.loads(Path(str(outf) + ".json").read_text(encoding="utf-8")); assert meta["kind"] == "vrestore" and meta["verify"]["ok"]
-cmp = Image.open(hub.OUT / "영상 복원" / urllib.parse.unquote(png[0]).split("/")[-1]); assert cmp.size == (320 * 2 + 8, 240)
+cmp = Image.open(hub.out_path(png[0][5:])); assert cmp.size == (320 * 2 + 8, 240)
 assert not list(hub.VR_WORK.glob("*/pre.mp4")), "work folder removed after success"
 assert any("old.mp4" in x["name"] or x["url"] == mp4[0] for x in get("/api/vmix/list")["videos"])
 ok("ffmpeg pass: deinterlace/denoise/deflicker/brightness/vidstab/sharpen, original audio kept & verified, comparison image, own folder")
@@ -72,6 +72,12 @@ V = j["verify"]; assert V["out_audio"] and not V["ok"] and "길이" in V["msg"],
 assert any("확인 필요" in w for w in j["warn"])
 assert not list((hub.COMFY / "input").glob("hub_*.mp4"))
 ok("AI chunks: upscale model → ImageScale to 2x → RIFE x2 per chunk, resume skips finished chunks, length check catches mismatch")
+for f in ("diffusion_models/seedvr2_3b_int8_convrot.safetensors", "vae/seedvr2_ema_vae_fp16.safetensors"):
+    (hub.MODELS / f).parent.mkdir(parents=True, exist_ok=True); (hub.MODELS / f).write_bytes(b"x")
+j = job2({**P, "interp": False, "upm": "SeedVR2 3B (AI 복원)"}); assert j["state"] == "done", j
+g = SUBMITTED[-1]; assert not nodes(g, "UpscaleModelLoader") and nodes(g, "SeedVR2Conditioning") and nodes(g, "VAEEncodeTiled")[0]["temporal_size"] == 64
+sc = nodes(g, "ImageScale")[0]; assert (sc["width"], sc["height"]) == (640, 480), sc
+ok("AI chunks with SeedVR2: scale to 2x then restore per chunk (video tiles)")
 # 4) 검사
 STATE["missing"].add("RIFE VFI"); hub.caps(force=True)
 j = job2({"kind": "vrestore", "op": "run", "video": url, "interp": True}); assert j["state"] == "error" and "ComfyUI-Frame-Interpolation" in j["error"]

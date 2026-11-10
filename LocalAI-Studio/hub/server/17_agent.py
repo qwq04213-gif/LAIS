@@ -315,17 +315,18 @@ def agent_recent(kind="image", count=4):
     except OSError:
         dirs = []
     for d in dirs:
+        files = (f for f in d.iterdir() if f.is_file()) if d == OUT else out_files(d, want)     # 종류 폴더는 날짜·작업 폴더 안까지
         try:
-            for e in os.scandir(d):
-                if e.is_file() and Path(e.name).suffix.lower() in want:
-                    rows.append((e.stat().st_mtime, d, e.name))
+            for f in files:
+                if f.suffix.lower() in want:
+                    rows.append((f.stat().st_mtime, f))
         except OSError:
             continue
-    rows.sort(reverse=True)
+    rows.sort(key=lambda r: r[0], reverse=True)
     out = []
-    for mt, d, n in rows[:count]:
-        rel = (d.name + "/" if d != OUT else "") + n
-        out.append({"address": "/out/" + urllib.parse.quote(rel), "type": gal_type(n), "folder": d.name if d != OUT else "",
+    for mt, f in rows[:count]:
+        rel = f.relative_to(OUT).parts
+        out.append({"address": "/out/" + "/".join(urllib.parse.quote(x) for x in rel), "type": gal_type(f.name), "folder": rel[0] if len(rel) > 1 else "",
                     "time": time.strftime("%m-%d %H:%M", time.localtime(mt))})
     return out
 

@@ -45,7 +45,7 @@ for w, h in ((1000, 600), (777, 1111), (2048, 256)):
 ok("any width x height works on the server (rounded down to a multiple of 8)")
 # 출력 폴더 열기
 opened = []; hub.open_folder = lambda p, select=None: opened.append((str(p), str(select) if select else None))
-u = j["images"][0]; r = req("/api/open", {"file": u}); assert r["ok"] and opened[-1][0].endswith("생성") and opened[-1][1].endswith(u.rsplit("/", 1)[1]), opened
+u = j["images"][0]; r = req("/api/open", {"file": u}); assert r["ok"] and (opened[-1][0].endswith("생성") or "/생성/" in opened[-1][0].replace("\\", "/")) and opened[-1][1].endswith(u.rsplit("/", 1)[1]), opened
 assert req("/api/open", {"which": "outputs"})["ok"] and opened[-1] == (str(hub.OUT), None)
 req("/api/open", {"file": "/out/../../etc/passwd"}); assert str(opened[-1][0]).startswith(str(hub.OUT)), opened[-1]
 ok("open-folder: result file -> its own outputs sub-folder with the file selected; plain 'outputs' still works; traversal stays inside outputs")

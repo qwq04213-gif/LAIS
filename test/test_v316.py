@@ -58,7 +58,7 @@ hub.audio_sep.separate = functools.partial(hub.audio_sep.separate, popen=fpop)
 j = job2({"kind": "audio", "op": "sep", "src": url, "model": "htdemucs"}); assert j["state"] == "done", j
 assert [t["stem"] for t in j["tracks"]] == ["vocals", "drums", "bass", "other"] and j["tracks"][0]["label"] == "목소리" and len(j["images"]) == 4, j
 assert all("/소리 분리·복원/" in urllib.parse.unquote(u) for u in j["images"]) and j["orig"].startswith("/aorig/")
-meta = json.loads((hub.OUT / "소리 분리·복원" / (urllib.parse.unquote(j["images"][0]).split("/")[-1] + ".json")).read_text(encoding="utf-8"))
+meta = json.loads((Path(str(hub.out_path(j["images"][0][5:])) + ".json")).read_text(encoding="utf-8"))
 assert meta["stem"] == "vocals" and meta["model"] == "htdemucs" and meta["source"] == "song.wav"
 j2 = job2({"kind": "audio", "op": "sep", "src": url, "two": True}); assert [t["label"] for t in j2["tracks"]] == ["목소리", "반주(목소리 뺀 것)"]
 assert not list((hub.ROOT / "cache/audio").glob("*/in.wav")), "work folders cleaned"
@@ -71,7 +71,7 @@ assert job2({"kind": "audio", "op": "mix", "tracks": [{"url": "/out/../../etc/pa
 vd = hub.OUT / "영상"; vd.mkdir(parents=True, exist_ok=True)
 subprocess.run([FF, "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=160x120:r=12:d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(vd / "clip.mp4")], check=True)
 j4 = job2({"kind": "audio", "op": "mux", "video": "/out/" + urllib.parse.quote("영상") + "/clip.mp4", "audio": fixed}); assert j4["state"] == "done", j4
-o = hub.vmix.probe(FF, hub.OUT / "소리 분리·복원" / urllib.parse.unquote(j4["images"][0]).split("/")[-1]); assert o["audio"] and o["video"], o
+o = hub.vmix.probe(FF, hub.out_path(j4["images"][0][5:])); assert o["audio"] and o["video"], o
 ok("remix by volume (vocals off), bad paths rejected, new audio muxed into a video (video not re-encoded)")
 # 5) 영상 소리로 고치기 · 올린 파일 미리듣기
 r = urllib.request.Request(B + "/api/vmix/upload?kind=video&name=" + urllib.parse.quote("내 영상.mp4"), data=(vd / "clip.mp4").read_bytes(), method="POST")

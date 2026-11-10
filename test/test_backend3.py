@@ -147,7 +147,7 @@ ok("Qwen model / text encoder / VAE can be picked by hand")
 # ── 22: 출력 폴더 분리 ──
 j = job({"kind": "gen", "ckpt": "noobai_xl_v11.safetensors", "prompt": "x"}); u = j["images"][0]
 import urllib.parse as _up
-assert _up.unquote(u).startswith("/out/생성/") and (hub.OUT / "생성" / u.rsplit("/", 1)[1]).is_file() and out_img(u).size[0] > 0
+assert _up.unquote(u).startswith("/out/생성/") and (hub.out_path(u[5:])).is_file() and out_img(u).size[0] > 0
 src_u = png_url(Image.new("RGB", (300, 300), (5, 5, 5)))
 ju = job({"kind": "up", "image": src_u, "mode": "fast", "upm": "RealESRGAN_x4plus.pth", "scale": "2"}); assert _up.unquote(ju["images"][0]).startswith("/out/업스케일/"), ju["images"]
 je = job({"kind": "edit", "engine": "qwen", "image": src_u, "prompt": "x"}); assert _up.unquote(je["images"][0]).startswith("/out/편집/"), je["images"]

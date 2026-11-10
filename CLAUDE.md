@@ -1,5 +1,9 @@
 # LAIS — 로컬 AI 스튜디오 개발 안내
 
+> **⚠ 가장 먼저 지킬 규칙 — 모든 것을 한국어로 (사용자가 여러 번 요청함)**
+> 답변·진행 안내·중간 보고·질문은 물론, **화면에 보이는 생각(추론) 과정, 명령 설명(description), 작업 목록 이름, 시험 결과 요약까지 전부 한국어**로 써요.
+> 영어 문장을 쓰지 않아요(코드·파일 이름·모델 이름 같은 고유 명칭만 예외). 길게 작업할 때도 단계마다 한국어로 짧게 알려요.
+
 윈도우 PC 에서 도는 한국어 웹 화면 하나로 ComfyUI(그림·영상·3D)와 Ollama(대화)를 묶어 쓰는 통합 패키지예요.
 사용자는 개발자가 아니고, 결과물은 윈도우용 업데이트 파일(`LocalAI-Studio-update-<버전>.bat`)로 받아 설치해요.
 
@@ -20,6 +24,7 @@
 ## 작업 규칙
 
 - 사용자에게는 **한국어**로, 짧게, 표 위주로 알려요. 전문 용어 대신 화면에 나오는 말을 써요.
+  **진행 중 안내·중간 보고·질문까지 모든 대화를 한국어로** 해요(영어로 쓰지 않기 — 사용자 요청).
 - 사용자가 만들라고 분명히 말했을 때만 빌드·배포해요.
 - 버전: 새 기능은 가운데 숫자(4.0 → 4.1), 고침만 있으면 끝 숫자(4.0 → 4.0.1). 사용자가 다른 번호를 말하면 그 번호로.
 - `VERSION.txt` 는 끝에 줄바꿈이 없어요. `README.txt` 는 **UTF-8 BOM + CRLF** 를 지켜요.
@@ -28,9 +33,8 @@
 - 빌드 전에 `__pycache__` 를 지워요.
 - 사용자의 결과물(outputs)·모델 파일은 **절대 자동으로 지우지 않아요**. 정리 기능은 확인을 받은 뒤에만.
 - `settings.json`(API 키 들어 있음)은 읽어서 보여 주거나 내보내지 않아요.
-- 미성년자 + 성적 내용 차단(`blocked()` / `BLOCK_MSG`)은 어떤 기능에서도 빼지 않아요.
 - 실제 엔진(ComfyUI·Blender·GPU)으로 확인 못 한 부분은 README 의 `미검증` 줄에 꼭 적어요.
-- **깃허브에는 대화 내용·릴리즈 노트를 올리지 않아요.** 커밋 메시지는 짧게(예: `v4.1`, `3D 리깅 화면`), GitHub Releases 는 만들지 않아요.
+- **깃허브에는 코드만 올려요. 대화 내용·제작 메모·릴리즈 노트는 절대 올리지 않고 대화에만 적어요(사용자 요청).** 커밋 메시지는 짧게(예: `v4.1`, `3D 리깅 화면`), GitHub Releases 는 만들지 않아요.
   빌드용 메모(`release-tools/notes_*.txt`)·개인 작업 기록은 `.gitignore` 에 있어요 — 커밋하지 마세요.
 
 ## 테스트
@@ -46,6 +50,8 @@ TMPDIR=/tmp/tt python3 runpar.py $(ls test_*.py ui_test*.py)  # 출시 전 전�
 - 경로는 `test/` 의 한 단계 위(저장소 맨 위)를 기준으로 잡아요. 다른 곳을 쓰려면 `LAS_BASE` 환경 변수.
 - 새 ComfyUI 노드를 쓰면 `test/mocks.py` 의 `REQ`(노드별 필수 칸)에 넣어야 가짜 ComfyUI 가 받아 줘요.
 - Blender 는 테스트에서 `BLENDER_EXE=test/fake_blender.py`(가짜)로 흐름만 확인해요.
+- **3D·이미지 품질 확인은 고해상도·고품질 사람/캐릭터 사진으로 해요(사용자 요청).** 단색·줄무늬 같은 단순한 그림만으로 판단하지 않아요.
+  이 환경엔 GPU·실제 3D 엔진이 없으니, 공개 라이선스(CC0 등) 고해상도 얼굴 사진을 가짜 3D(머리·몸)에 무늬로 입혀 '정답'으로 쓰고 결과를 눈으로도 확인해요.
 
 ## 빌드(출시)
 
@@ -60,21 +66,44 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.0.1**(커밋 `v4.0.1`). 다음 판 **4.1** 을 만드는 중이에요.
+마지막 출시: **4.8**(커밋 `v4.8`). 다음 판 **4.9**.
 
-### 4.1 할 일
+### 다음 할 일
 
-1. **3D 리깅(사람형 캐릭터 뼈대·가중치)** — 일부 됨
-   - 됨: `hub/rig_fit.py`(numpy 만 쓰는 관절 어림, Mixamo 뼈 이름 → Unity·Unreal Humanoid 자동 매핑), `hub/blender_game.py` 의 `rig()`(뼈대 → 자동 가중치 → 빈 정점은 가장 가까운 뼈)·`preview_motion()`(확인용 움직임 GLB)·LOD 에 뼈대 다시 연결,
-     `hub/server/27_m3d.py` 의 `tpose` 작업(Qwen-Image 2.1 로 앞 사진을 T자 자세로, 원본은 `view_front_orig.png`)·`rig` 옵션·`rig_preview.glb` 제공·되돌리기(`/api/m3d/slot` restore)
-   - 남음: 화면(`web/js/70-m3d.js`·`index.html` — Blender 칸에 '뼈대 넣기', 방향 칸에 'T자 자세로 바꾸기'·'원래 자세로', 결과에 움직임 미리보기와 뼈대 정보), `test/fake_blender.py` 가 `rig` 를 흉내 내기,
-     테스트(`test/humanoid.py` 의 가짜 사람 정점으로 `rig_fit` 확인 + 3D 흐름), README
-2. **3D 장면 전체(사진 속 여러 물체)** — 계획: 원본 사진에서 물체를 눌러 고르기(기존 MobileSAM `/api/sam/segment`) → 물체마다 잘라 TRELLIS.2 → 깊이(`get_depth`) 로 위치·크기 어림 → Blender 로 한 장면(GLB·FBX·.blend), Blender 없으면 물체별 GLB + 배치 json. 가려진 물체는 선택적으로 Qwen 편집으로 채우기
-3. **다시 켜도 올려 둔 사진 이어서 쓰기** — 편집 창 등 각 화면에 올린 사진을 서버에 저장해 두고, 프로그램을 다시 켜면 그대로 불러오기(지우기 버튼 포함, 자동 삭제 없음)
-4. **기능별 엔진 점검·사양별 추천** — 기능마다 쓰는 엔진이 지금 기준으로 좋은지 확인하고, 그래픽카드 메모리 8/12/16/24GB 별 추천을 '설치와 모델'에 정리
+0. 사용자가 4.5 로 실제 3D(전신 사진)를 만들어 결과 zip 을 보내 주면, 앞·45°·옆·뒤와 옷·손·머리카락·이음새를 그려서 점검하기(시험 도구: 가짜 3D 대신 실제 GLB 를 `photoproj`·렌더러로)
+1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
+
+4.8: 실제 결과(사진 한 장)에서 다리 하나 소실 — 그 3D 의 ComfyUI 기록: RemeshMesh 가 udf 대체값(solid 미지원 판) + drop_inverted_components=True, 엉덩이~허벅지 높이(키 30~40%)에 큰 구멍 4개 → 다시 짜기에서 지워진 것으로 추정(원본 고밀도 메시로 확인 필요). udf 대체값을 drop_inverted False·drop_enclosed True 로. 팔다리 검사 `photoproj.body_parts/limb_check/limbs_of/shape_cam`(사진 카메라 실루엣으로 부위별 덮는 비율, 0.6 미만 없음) · `m3d_limbs`(단계별 hi→remesh→dec→A, lost_at), 엔진 입력 정사각형은 허브가 직접(`m3d_frame` pad 1.1/1.0, ImageCropToMask 안 씀, engine_input_*.png 저장), 업스케일은 사진 붙이기(tex_front)에만, 멀티뷰 검사 `m3d_vcheck` 교체(색 분포·잘림·뒤 비율·다리 수·좌우 거울 — 앞뒤 반전 비교 삭제, 멀티뷰 모델 없으면 검사 생략), 사진 점검 `m3d_body_check`(다리 틈·어두운 옷/배경), orig_full.png·mask_front.png, 비교 모드에 remesh/dec 그물망(SaveGLB 3d/hub3d_remesh·hub3d_dec)·F(TRELLIS.2), `mesh_report` 조각·구멍 목록·면 방향, `M3dVram`(gpu_live 2초) 최대 VRAM, README '3D 품질 숫자 읽는 법', 사진 한 장 모드 앞 사진 보이기(#m3-front). 시험 `test_m3d47` 7~9
+
+4.7: 3D '만드는 방식'(`m3d_opts` mode: single 기본 / multi — 예전 API 는 sides 가 있으면 multi), 멀티뷰 일관성(`m3d_mv_check` = `m3d_vcheck` 실루엣, 안 맞는 방향 빼기·다 빠지면 한 장), 사진 붙이기 카메라 방향 고정(`photoproj.PIXAL_CAM`, `fit(cam_hint)` — 겹침이 낮을 때만 다시 찾기), 얼굴 휘기 기본 꺼짐(`project(align=False)`), 업스케일 `m3d_upscaler(redraw_ok)` Real-ESRGAN 먼저·얼굴은 SeedVR2 안 씀·SeedVR2 뒤 `m3d_keep_face`, 원본 고밀도 메시 `SaveGLB 3d/hub3d_hi`(VaeDecodeShapeTrellis 출력), 4방향 캡처 `photoproj.capture/sheet`·검사 `mesh_report`(+머리 부분 면 수 `m3d_check_mesh`), 비교 모드 단계 A~E(`M3D_STAGE`, 결과 이름 `-엔진원본` 등 `_tag`)·`engine_match`(실루엣·얼굴 자리 NCC), 장면 전체 칸 접기·맨 아래. 시험 `test/test_m3d47.py`
+
+4.6.1: 얼굴 맞추기 `photoproj._align_face` — 엔진 텍스처를 사진 카메라로 그려 사진과 LK 아핀 정합(흐림 3가지·시작 각도 3가지), 닮은 정도 +0.08 이상 · 3° 또는 3% 이상 어긋날 때만 사진 얼굴 부분을 휨(실제 결과: 고개 돌린 사진인데 엔진은 정면 얼굴 → 코가 볼에 칠해짐). 노멀맵은 엔진 TANGENT 로 읽고(우리 계산과 반대 손잡이였음 — 화면에 검은 얼룩·흰 반점) 머리에도 TANGENT 를 적음. 머리 범위 = 보이는 얼굴 점까지 거리×1.1. 3D 결과창 [크게 보기] = 갤러리 lbOpen. 엔진 원본 3D 를 m3d 작업 폴더 engine_last.glb 로 남김. 시험 `test/test_m3d_align.py`
+
+4.6: 결과를 작업 한 번 = 폴더 하나(`job_dir_name`·`JOB_RX`, `out_path`/`out_files` 가 날짜·작업 폴더 둘 다 읽음, 예전 결과는 그대로), 갤러리 3D 미리보기(`photoproj.preview` → `/thumb/`)·전체화면·[보이는 것 전체 선택]/[이 날짜 전체 선택], 3D 지울 때 zip·zip.json 함께(`gal_sides`), 옷·신발 최소 거칠기(`CLOTH_ROUGH`), 방향 그림 반사색 문구. 머리 고르기(`head_split`): 범위 = 보이는 얼굴 점까지 거리×1.1, 안쪽 면(UDF 이중 껍질) 빼기(면 방향은 `project` 에서 전체 맞춤), 겹치면 사진에 보이는 면 중 카메라에 가까운 것. 실제 결과(20k 면)는 얼굴이 평평해서 옆에서 '사진 붙인 판'처럼 보임 — 면 수 20만 권장. 얼굴 앞 머리카락 가닥 자르기는 시도했다가 뺌(UDF 에선 얼굴 겉면도 얇은 층이라 구멍이 남)
+
+4.5.1: 얼굴 찾기 확인(`m3d_face_ok` 피부색·크기)·몸 위쪽 잘라 다시 찾기(`m3d_face_box`) — 실제 결과에서 전신 사진의 작은 얼굴을 가슴으로 잡아 머리 텍스처가 등에 간 문제
+
+4.5: 3D 얼굴 고해상도(`photoproj.head_split` — 공처럼 펼침, 중심=얼굴 앞면에서 머리 두께 절반 뒤, 반경 0.8×얼굴, 겹침·외딴 조각은 몸으로), 밉맵(`fix_samplers`), 가장자리 손질(`m3d_defringe`), 그늘 줄이기·피부 거칠기·색감 맞추기, 사진 위치(줄 단위 범위)·원근(Pixal3D 화각 `PreviewAny` → `dist_e`), 결과 표시(`m3d_photo_res`). 실제 사진 시험 `test/test_m3d_real.py`
+
+4.4.1: 남은 시간을 작업 전체 진행률로 한 곳에서 어림(`08_jobs.py` `eta_update`·`eta_loop` 1초마다, 같은 종류 작업의 진행 곡선 `eta_history.json` — `eta_key`/`eta_learn`), 화면 표시는 `00-core.js` 의 `fmtEta`·`fmtEl`·`etaTxt` 하나로
+
+4.4 에서 넣은 것: 모델 지우기 용량 고침(`delete_files`·`delete_llm`·저장 공간 `llm_orphans`), 3D 사진 붙이기(`photoproj.py` — 카메라 자동 맞춤, `m3d_photo`)·얼굴 키워 붙이기(`m3d_face`, MediaPipe `mediapipe-face`)·캐릭터 면 20만/70만·1536 이면 다시 짜기 1024
+
+4.3 에서 넣은 것: 3D Pixal3D 사진 한 장 기본(`m3d_engine`, MoGe 화각)·캐릭터 텍스처 4096·16GB 이상 1536·작은 사진 자동 키우기(`m3d_enlarge`)·[업스케일로 키우기]·
+방향 칸마다 [그리기]·방향/T자 그림 outputs\3D 저장·3D 전체화면, 저장 공간(작업 폴더 표시·정리), 성인 표현 표시(`models.json` 의 `nsfw`)·제한 해제 대화 모델(Qwen3.5·Gemma 4 abliterated)
+
+4.2 에서 넣은 것: 3D 장면 전체(`glbscene.py`), 배경 지우기 경계 다듬기·BiRefNet, LTX-2.5·SeedVR2·Z-Image-Turbo·FLUX 3 Klein(생성·편집)·MOSS 편집·
+Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양별 추천(`TIERS`, 2026-11 조사), 예전 엔진 정리(`SUPERSEDED` — 제한 해제판 대화 모델은 넣지 않음)
 
 ### 미검증(실제 PC 에서 확인 필요)
 
-- TRELLIS.2·Pixal3D 실제 그래프(4.0.1 에서 RemeshMesh 의 DynamicCombo 하위 칸 `sign_mode.qef` 등 누락을 고침 — 다른 노드에서도 비슷한 오류가 나면 `wf_fit` 과 그래프를 함께 확인)
-- Blender 실제 실행(가져오기·LOD·FBX/OBJ 내보내기, 리깅)
-- ComfyUI 의 DynamicCombo 하위 칸은 API 형식에서 `부모.자식` 키로 넣어요(예: `"sign_mode.qef": false`)
+- 남은 시간: 실제 ComfyUI 작업(영상·3D·하이레스)에서의 정확도
+- 3D 머리 전용 텍스처: 실제 Pixal3D 결과에서 머리 범위(목·어깨 경계)·노멀맵 방향·피부 판정
+- 3D 사진 붙이기: 실제 Pixal3D·TRELLIS.2 GLB 의 좌표·원근에서 붙는 위치, MediaPipe 얼굴 찾기. 윈도우에서 모델 지운 뒤 실제 용량 감소
+- TRELLIS.2·Pixal3D 실제 결과 — 4.1 에서 ComfyUI 공식 예시(workflow_templates `3d_pixal3d_trellis2_image_to_model`)와 같게 맞춤:
+  구조 CFGOverride(0.667)+RescaleCFG 0.7+shift 5, 모양 CFGOverride(0.769)+RescaleCFG 0.5·20단계, RemeshMesh `solid`. 멀티뷰 방향: 왼쪽 그림 = 얼굴이 그림 왼쪽
+- Blender 실제 실행(가져오기·LOD·FBX/OBJ 내보내기, 리깅·움직임 미리보기)
+- ComfyUI 의 DynamicCombo 하위 칸은 API 형식에서 `부모.자식` 키로 넣어요(예: `"sign_mode.fill": 20`)
+  — 그 판에 없는 선택지를 넣으면 ComfyUI 가 칸을 통째로 빼서 `missing ... sign_mode` 오류가 나요. `wf_fit` 이 노드의 `_alt` → 그 판 기본값으로 바꿔요(4.1.1).
+  4.1 에서 새로 쓴 노드(CFGOverride, RemeshMesh `solid`)는 예전 ComfyUI 에 없을 수 있어요 — 새 노드를 쓸 땐 없을 때의 대안도 만들어요
+- 테스트 환경: `test_update` 는 지난판 설치 폴더·빌드 메모가 있어야 해요. `ui_test2/3/25` 는 예전 경로(`/tmp/claude-0/-home-claude/...`, `/tmp/tt/p1.png`)를 써요. `ui_test5` 는 scikit-image, `test_v313` 은 opencv 필요

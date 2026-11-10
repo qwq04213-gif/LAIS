@@ -8,10 +8,22 @@ const ls={get:(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:JSON
 const debounce=(f,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>f(...a),ms)}};
 const toDataURL=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(blob)});
 const urlToDataURL=async u=>toDataURL(await (await fetch(u)).blob());
+/* 올린 사진 기억: 화면마다 올린 사진을 서버(kept_inputs 폴더)에 두고, 다시 켜면 그 자리에 불러와요(99-keep.js). 빼거나 지워야만 사라져요 */
+let KEPT={};const KEEP_T={};
+function keepPut(slot,url){if(!slot)return;clearTimeout(KEEP_T[slot]);
+  KEEP_T[slot]=setTimeout(async()=>{try{if(!url){delete KEPT[slot];await api('/api/keep',{slot,clear:1});return}
+    const r=await api('/api/keep',{slot,image:/^data:/.test(url)?url:await urlToDataURL(url)});if(r.url)KEPT[slot]=r.url}catch{}},250)}
+async function keepGet(slot){const u=KEPT[slot];if(!u)return null;try{return await urlToDataURL(u)}catch{return null}}
 let GPU=null,LISTS={llm:[],checkpoints:[],loras:[],vaes:[],upscalers:[],controlnets:[],wildcards:[],fluxmodels:[],flux_ready:false,chroma_ready:false,krea2models:[],krea2_ready:false,qwen:false},
     CAPS={samplers:[],schedulers:[],has:{}},PROFILES=[];
 const IV={},COMPARE={};
 const FB_S=['euler','euler_ancestral','dpmpp_2m','dpmpp_2m_sde','dpmpp_3m_sde','uni_pc','heun','lms'];
+/* 남은 시간·걸린 시간: 모든 화면이 같은 모양으로 보여요(값은 서버가 작업 전체 기준으로 한 곳에서 어림해요 — eta_update) */
+function fmtEta(t){if(t==null)return'';if(t<15)return'곧 끝나요';if(t<90)return`약 ${Math.max(20,Math.round(t/10)*10)}초`;
+  const m=Math.round(t/60);return m<60?`약 ${m}분`:`약 ${Math.floor(m/60)}시간${m%60?' '+(m%60)+'분':''}`}
+const fmtEl=s=>s<60?`${s}초`:s<3600?`${Math.floor(s/60)}분 ${s%60}초`:`${Math.floor(s/3600)}시간 ${Math.floor(s%3600/60)}분`;
+const etaTxt=j=>j&&j.eta!=null&&j.state!=='queued'?' · 남은 시간 '+fmtEta(j.eta):'';
+const elTxt=j=>j&&j.elapsed?' · '+fmtEl(j.elapsed)+' 지남':'';
 const FB_C=['normal','karras','simple','sgm_uniform','exponential','beta'];
 /* FLUX 계열 기본값: FLUX/Krea는 가이던스 방식(CFG 1), Chroma는 일반 CFG와 beta 스케줄러 */
 const FX_DEF={sdxl:{rdenoise:0.3,cn_strength:0.7},flux:{rdenoise:0.3,cn_strength:0.7,fx_steps:20,fx_guidance:3.5,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
@@ -19,6 +31,7 @@ const FX_DEF={sdxl:{rdenoise:0.3,cn_strength:0.7},flux:{rdenoise:0.3,cn_strength
               krea2:{rdenoise:0.3,cn_strength:1,fx_steps:8,fx_guidance:0,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
               sd35:{fx_steps:28,fx_cfg:4.5,fx_sampler:'euler',fx_scheduler:'sgm_uniform'},
               qwenimg:{fx_steps:25,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},moss:{fx_steps:50,fx_cfg:3,fx_sampler:'euler',fx_scheduler:'simple'},
+              zimage:{fx_steps:8,fx_cfg:1,fx_sampler:'res_multistep',fx_scheduler:'simple'},flux3k:{fx_steps:16,fx_cfg:1,fx_sampler:'euler',fx_scheduler:'simple'},
               qwen:{rdenoise:0.45}};   // Krea 2 Turbo 기준(8단계, CFG 1)
 const LORA_NOTE='프롬프트에 &lt;lora:이름:0.8&gt; 태그를 쓰면 설치된 LoRA 중 이름이 맞는 파일을 자동으로 찾아 적용해요. 개수 제한은 없어요.';
 
@@ -263,15 +276,15 @@ const MINI_LABEL={chref1:'대표 이미지 선택',chref2:'참고 이미지 선�
 function mini(box,label){
   box.innerHTML=`<button type="button" class="ghost">${esc(label||MINI_LABEL[box.dataset.img]||'이미지 선택')}</button><img alt="" hidden><button type="button" class="x" hidden title="제거">×</button><input type="file" accept="image/*" hidden>`;
   const[b,im,x,inp]=[$('.ghost',box),$('img',box),$('.x',box),$('input',box)];box.value=null;
-  box.set=url=>{box.value=url;im.src=url;im.hidden=x.hidden=false;b.hidden=true};
-  box.clear=()=>{box.value=null;im.hidden=x.hidden=true;b.hidden=false};
+  box.set=(url,quiet)=>{box.value=url;im.src=url;im.hidden=x.hidden=false;b.hidden=true;if(quiet!==true)keepPut(box.dataset.keep,url)};
+  box.clear=quiet=>{box.value=null;im.hidden=x.hidden=true;b.hidden=false;if(quiet!==true)keepPut(box.dataset.keep,null)};
   b.onclick=()=>inp.click();x.onclick=box.clear;
   im.title='누르면 크게 봐요';im.onclick=()=>box.value&&lbOpen([{url:box.value,name:'input.png'}],0);      // 작게 보이는 입력 그림도 눌러서 확대
   inp.onchange=async()=>{const f=inp.files[0];inp.value='';if(f)box.set(await toDataURL(f))};
   box.ondragover=e=>{e.preventDefault();box.classList.add('drop')};box.ondragleave=()=>box.classList.remove('drop');
   box.ondrop=async e=>{e.preventDefault();e.stopPropagation();box.classList.remove('drop');const f=[...e.dataTransfer.files].find(x=>/^image\//.test(x.type));if(f)box.set(await toDataURL(f))};
 }
-$$('.mini[data-img]').forEach(b=>mini(b));
+$$('.mini[data-img]').forEach(b=>{const f=b.closest('form');if(f&&f.id&&!/^ch/.test(b.dataset.img))b.dataset.keep=f.id+'.'+b.dataset.img;mini(b)});
 
 /* ══════════ 화면 전환 ══════════ */
 let QSEEN=new Map(),QINIT=false,QLAST=null,QUSER=null;   // 작업 대기열 상태(60-extras.js 에서 써요)
@@ -335,7 +348,6 @@ function navMark(v){let hit=null;$$('#rail nav button').forEach(b=>{const on=b.d
 /* 사이드바 묶음 접기: 제목을 누르면 접고 펴요. 묶음마다 상태를 기억하고, 지금 화면이 든 묶음은 저절로 펴요 */
 function grpOpen(g,on,save){const h=$('.ngt.tog',g),b=$('.ngb',g);if(!h||!b)return;b.hidden=!on;h.setAttribute('aria-expanded',on?'true':'false');h.classList.toggle('open',!!on);
   if(save)try{localStorage.setItem('nav:g:'+g.dataset.g,on?'1':'0')}catch{}}
-function moreOpen(on,save){const g=$('#rail nav .ng[data-g=more]');if(g)grpOpen(g,on,save)}
 $$('#rail nav .ng[data-g]').forEach(g=>{const h=$('.ngt.tog',g);if(!h)return;let o=h.dataset.def==='1';
   try{const s=localStorage.getItem('nav:g:'+g.dataset.g)??(g.dataset.g==='more'?localStorage.getItem('nav:more'):null);if(s!==null)o=s==='1'}catch{}
   if($('button.on',g))o=true;grpOpen(g,o);
@@ -391,7 +403,7 @@ function fillCaps(){
 }
 async function loadCaps(){try{CAPS=await api('/api/caps');fillCaps()}catch{}}
 /* FLUX 종류에 맞는 모델만 목록에 보여 줘요 (이름에 chroma 가 있으면 Chroma) */
-const OXF=['sd35','qwenimg','moss'],OXN={sd35:'Stable Diffusion 3.5',qwenimg:'Qwen-Image 2.1',moss:'MOSS-Image'};
+const OXF=['sd35','qwenimg','moss','zimage','flux3k'],OXN={sd35:'Stable Diffusion 3.5',qwenimg:'Qwen-Image 2.1',moss:'MOSS-Image',zimage:'Z-Image-Turbo',flux3k:'FLUX 3 Klein'};
 const fxModels=g=>(OXF.includes(g)?(LISTS.oxmodels||{})[g]:g==='chroma'?LISTS.chromamodels:g==='krea2'?LISTS.krea2models:LISTS.fluxmodels)||[];
 const fxLabel=x=>x.startsWith('ckpt::')?x.slice(6)+' (올인원 체크포인트)':x;
 function fillFx(){
@@ -405,7 +417,7 @@ function fillFx(){
 function k2tune(f){if((f.dataset.g||f.dataset.re||f.dataset.fe)==='qwenimg'){const t=/turbo/i.test(f.elements.fx_model.value);setv(f,'fx_steps',t?8:25);setv(f,'fx_cfg',1);return}
   if((f.dataset.g||f.dataset.re||f.dataset.fe)!=='krea2')return;const raw=/raw/i.test(f.elements.fx_model.value);setv(f,'fx_steps',raw?30:8);setv(f,'fx_cfg',raw?4:1)}
 function warn(){
-  const fe=$('#f-edit');$('#w-edit').hidden=fe.dataset.e==='qwen'?(LISTS.qwen||!!(fe.q_unet.value&&fe.q_te.value&&fe.q_vae.value)):fe.dataset.e==='flux'?fxModels(fe.elements.fengine.value).length>0:LISTS.checkpoints.length>0;
+  const fe=$('#f-edit');$('#w-edit').hidden=fe.dataset.e==='qwen'?(LISTS.qwen||!!(fe.q_unet.value&&fe.q_te.value&&fe.q_vae.value)):fe.dataset.e==='flux'?fxModels(fe.elements.fengine.value).length>0:fe.dataset.e==='moss'?((LISTS.oxmodels||{}).moss||[]).length>0:fe.dataset.e==='flux3k'?((LISTS.oxmodels||{}).flux3k||[]).length>0&&!!(LISTS.ox_ready||{}).flux3k:LISTS.checkpoints.length>0;
   const g=$('#f-gen').dataset.g||'sdxl',w=$('#w-gen');
   const parts=OXF.includes(g)?(LISTS.ox_ready||{})[g]:g==='flux'?LISTS.flux_ready:g==='krea2'?LISTS.krea2_ready:LISTS.chroma_ready,ms=g==='sdxl'?[]:fxModels(g),ok=g==='sdxl'?LISTS.checkpoints.length>0:ms.length>0&&(!!parts||ms.some(x=>x.startsWith('ckpt::')));
   w.hidden=ok;
@@ -547,7 +559,7 @@ function lbLoad(){
   $('#lb-dl').href=it.url;$('#lb-dl').download=it.name||'image.png';
   if(LB.media){im.removeAttribute('src');$('#lb-cmp').hidden=true;
     md.innerHTML=ty==='video'?`<video src="${it.url}" controls autoplay loop playsinline></video>`:ty==='audio'?`<div class="lbaud"><b>♪ ${esc(it.name||'')}</b><audio src="${it.url}" controls autoplay></audio></div>`
-      :`<model-viewer src="${it.url}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer>`;
+      :`<div class="gmvbox lbmv"><model-viewer src="${it.url}" camera-controls auto-rotate shadow-intensity="0.6" exposure="1.1"></model-viewer><button type="button" class="ghost sm gmv-full" title="화면 가득 크게 봐요(Esc 로 나가요)">전체화면</button></div>`;
     if(ty==='3d')loadMV();$('#lb-info').textContent=`${it.name||''}  (${LB.i+1}/${LB.list.length})`;return}
   im.onload=()=>{LB.nw=im.naturalWidth;LB.nh=im.naturalHeight;im.style.width=LB.nw+'px';im.style.height=LB.nh+'px';lbFit();if(LB.wantCmp){LB.wantCmp=false;lbCmp()}};
   im.src=it.url;
@@ -662,9 +674,9 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-need
   $$(`.needdl[data-need="${CSS.escape(key)}"] .ndl`).forEach(l=>delete l.dataset.fixed);await needCat();NEED.watch.set(key,{ids:needExpand(r.ids||ids),skip:new Set(old.map(x=>x.id)),html:'받기를 시작했어요…'});needPaint();needPoll(key)});
 /* 화면의 '모델이 아직 없어요' 안내마다 받을 모델을 정해서 버튼을 붙여요 */
 const NEED_W={'w-chat':()=>['qwen35-9b'],'w-up':()=>['esrgan'],'w-i2p':()=>['qwen25vl-7b'],
-  'w-edit':()=>{const e=$('#f-edit')?.dataset.e;return e==='qwen'?['qwen-image']:e==='flux'?['krea-dev']:['noobai','sdxl-vae-fix']},
+  'w-edit':()=>{const e=$('#f-edit')?.dataset.e;return e==='qwen'?['qwen-image']:e==='moss'?['moss-image-edit']:e==='flux3k'?['flux3-klein']:e==='flux'?['krea-dev']:['noobai','sdxl-vae-fix']},
   'w-gen':()=>({sdxl:['noobai','sdxl-vae-fix'],flux:['krea-dev'],chroma:['chroma-hd'],krea2:['krea2-turbo'],sd35:['sd35-medium'],qwenimg:['qwen-image'],moss:['moss-image']})[$('#f-gen')?.dataset.g||'sdxl']||[],
-  'w-vid':()=>{const v=$('#f-vid')?.elements.wan_ver?.value;return {ltx:['ltx-video'],vace:['wan-vace'],s2v:['wan-s2v']}[v]||['wan22-ti2v-5b']},
+  'w-vid':()=>{const v=$('#f-vid')?.elements.wan_ver?.value;return {ltx25:['ltx25'],ltx:['ltx-video'],vace:['wan-vace'],s2v:['wan-s2v']}[v]||['wan22-ti2v-5b']},
   'w-vid14':()=>[typeof VID_IMG!=='undefined'&&VID_IMG?'wan22-14b-i2v':'wan22-14b-t2v'],
   'w-music':()=>[$('#f-music')?.elements.mengine?.value==='sfx'?'stable-audio-open':'ace-step-15-turbo']};
 function needDecorate(){let any=false;

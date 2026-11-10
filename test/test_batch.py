@@ -27,13 +27,13 @@ assert "error" in post("/api/batch/scan", {"folder": "relative/dir"}) and "error
 # 2) 크기 변경: 깨진 파일은 실패로 기록하고 나머지는 계속
 j = run({"op": "resize", "folder": str(SRC), "long_side": 200})
 assert j["state"] == "done" and j["batch"]["ok"] == 3 and len(j["batch"]["failed"]) == 1 and j["batch"]["failed"][0][0] == "broken.png", j
-outs = sorted(OUTD.glob("*_크기변경.png")); assert len(outs) == 3 and all(max(Image.open(f).size) == 200 for f in outs); assert "3장 완료, 1장 실패" in j["msg"]; ok("resize batch: 3 saved to outputs/일괄, corrupt file reported but doesn't stop the rest")
+outs = sorted(OUTD.rglob("*_크기변경.png")); assert len(outs) == 3 and all(max(Image.open(f).size) == 200 for f in outs); assert "3장 완료, 1장 실패" in j["msg"]; ok("resize batch: 3 saved to outputs/일괄, corrupt file reported but doesn't stop the rest")
 assert {p.name: p.read_bytes() for p in SRC.iterdir()} == H; ok("original files untouched (and nothing written into the source folder)")
-j = run({"op": "resize", "folder": str(SRC), "long_side": 120, "fmt": "jpg"}); assert j["state"] == "done" and len(list(OUTD.glob("p*_크기변경.jpg"))) == 3; ok("JPEG output option")
-j = run({"op": "resize", "folder": str(SRC), "long_side": 200}); assert len(list(OUTD.glob("*_크기변경-2.png"))) == 3 and len(outs) == 3; ok("re-running never overwrites earlier results (-2 suffix)")
+j = run({"op": "resize", "folder": str(SRC), "long_side": 120, "fmt": "jpg"}); assert j["state"] == "done" and len(list(OUTD.rglob("p*_크기변경.jpg"))) == 3; ok("JPEG output option")
+j = run({"op": "resize", "folder": str(SRC), "long_side": 200}); assert len(list(OUTD.rglob("*_크기변경.png"))) == 6 and all(f.exists() for f in outs); ok("re-running never overwrites earlier results (each run gets its own folder)")
 r = post("/api/job", {"kind": "batch", "op": "resize", "folder": str(SRC)}); assert wait(r["id"])["state"] == "error"; ok("resize with nothing chosen → clear error")
 r = post("/api/job", {"kind": "batch", "op": "resize", "folder": str(TMP / "photos" / "x"), "long_side": 10}); assert "error" in r; empty = TMP / "empty"; empty.mkdir(); assert "error" in post("/api/job", {"kind": "batch", "op": "resize", "folder": str(empty), "long_side": 10}); ok("bad / empty folder refused up front")
-crop = run({"op": "resize", "folder": str(SRC), "crop": "1:1", "long_side": 100}); assert all(Image.open(f).size == (100, 100) for f in OUTD.glob("*_크기변경*.png") if f.stat().st_mtime > time.time() - 5 and Image.open(f).width <= 100) ; ok("crop to 1:1 + long side")
+crop = run({"op": "resize", "folder": str(SRC), "crop": "1:1", "long_side": 100}); assert all(Image.open(f).size == (100, 100) for f in OUTD.rglob("*_크기변경*.png") if f.stat().st_mtime > time.time() - 5 and Image.open(f).width <= 100) ; ok("crop to 1:1 + long side")
 # 3) 배경 지우기
 j = run({"op": "rmbg", "folder": str(SRC)}); assert j["state"] == "error" and "설치" in j["error"], j; ok("rmbg without the model installed → tells you to install it")
 st = get("/api/rmbg/status"); assert st["ort"] and not any(m["installed"] for m in st["models"].values())
@@ -45,12 +45,12 @@ im = Image.new("RGB", (640, 480), (70, 120, 60)); d = ImageDraw.Draw(im) if (Ima
 d.ellipse((260, 80, 380, 200), fill=(230, 190, 160)); d.rectangle((240, 200, 400, 420), fill=(200, 30, 40)); im.save(SRC / "subject.png")
 only = TMP / "one"; only.mkdir(); shutil.copy(SRC / "subject.png", only / "subject.png")
 j = run({"op": "rmbg", "folder": str(only), "rmodel": "fast"}); assert j["state"] == "done", j
-o = Image.open(OUTD / "subject_배경없음.png"); assert o.mode == "RGBA" and o.size == (640, 480); a = o.getchannel("A")
+o = Image.open(next(OUTD.rglob("subject_배경없음.png"))); assert o.mode == "RGBA" and o.size == (640, 480); a = o.getchannel("A")
 assert a.getpixel((320, 300)) > 200 and a.getpixel((5, 5)) < 30 and a.getpixel((630, 470)) < 30; ok("rmbg with the REAL u2netp model: subject opaque, background transparent (RGBA PNG)")
-j = run({"op": "rmbg", "folder": str(only), "rmodel": "fast", "bg": "white", "fmt": "jpg"}); o = Image.open(OUTD / "subject_배경없음.jpg"); assert o.mode == "RGB" and sum(o.getpixel((5, 5))) > 720 and sum(o.getpixel((320, 300))) < 600; ok("rmbg with white fill → JPEG")
+j = run({"op": "rmbg", "folder": str(only), "rmodel": "fast", "bg": "white", "fmt": "jpg"}); o = Image.open(next(OUTD.rglob("subject_배경없음.jpg"))); assert o.mode == "RGB" and sum(o.getpixel((5, 5))) > 720 and sum(o.getpixel((320, 300))) < 600; ok("rmbg with white fill → JPEG")
 j = run({"op": "rmbg", "folder": str(only), "rmodel": "precise"}); assert j["state"] == "error" and "설치" in j["error"]; ok("model not installed for the chosen quality → error names install")
 # 4) 업스케일(모커 ComfyUI)
-j = run({"op": "upscale", "folder": str(only), "scale": "2"}); assert j["state"] == "done" and j["batch"]["ok"] == 1 and any(OUTD.glob("subject_업스케일x2*.png")), j; ok("upscale batch goes through ComfyUI per image")
+j = run({"op": "upscale", "folder": str(only), "scale": "2"}); assert j["state"] == "done" and j["batch"]["ok"] == 1 and any(OUTD.rglob("subject_업스케일x2*.png")), j; ok("upscale batch goes through ComfyUI per image")
 big = TMP / "big"; big.mkdir(); Image.new("RGB", (3000, 3000)).save(big / "huge.png"); shutil.copy(SRC / "p0.jpg", big / "p0.jpg")
 j = run({"op": "upscale", "folder": str(big), "scale": "4"}); assert j["state"] == "done" and j["batch"]["ok"] == 1 and "8192" in j["batch"]["failed"][0][1], j; ok("too-large image skipped with a reason, others continue")
 # 5) 올려 둔 파일(stage)
@@ -62,7 +62,7 @@ j = run({"op": "resize", "stage": sid, "long_side": 50}); assert j["state"] == "
 many = TMP / "many"; many.mkdir()
 for i in range(60): Image.new("RGB", (1500, 1500), (i, 5, 5)).save(many / f"m{i:02d}.png")
 r = post("/api/job", {"kind": "batch", "op": "resize", "folder": str(many), "long_side": 900}); time.sleep(0.4); post("/api/job/cancel", {"id": r["id"]}); j = wait(r["id"])
-n = len(list(OUTD.glob("m*_크기변경.png"))); assert j["state"] == "cancelled" and 0 < n < 60 and str(n) in j["msg"], (j, n); ok(f"cancel mid-batch keeps the {n} finished files")
+n = len(list(OUTD.rglob("m*_크기변경.png"))); assert j["state"] == "cancelled" and 0 < n < 60 and str(n) in j["msg"], (j, n); ok(f"cancel mid-batch keeps the {n} finished files")
 # ── 대기열 ──
 gate, order = threading.Event(), []
 orig = hub.do_batch
