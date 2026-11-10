@@ -50,7 +50,7 @@ class VramWatch:
     """작업하는 동안 1초마다 그래픽카드 메모리 사용량을 재서 최댓값을 남겨요(다른 프로그램 몫 포함)."""
 
     def __init__(self, every=1.0):
-        self.every, self.peak, self.now, self.total, self.base = every, 0, 0, 0, None
+        self.every, self.peak, self.apeak, self.now, self.total, self.base = every, 0, 0, 0, 0, None
         self._stop = threading.Event()
         self._t = None
 
@@ -66,14 +66,26 @@ class VramWatch:
                 self.now, self.total = g["used_mb"], g["total_mb"]
                 self.base = g["used_mb"] if self.base is None else self.base
                 self.peak = max(self.peak, g["used_mb"])
+                self.apeak = max(self.apeak, g["used_mb"])
             self._stop.wait(self.every)
 
     def stop(self):
         self._stop.set()
 
     def take_peak(self):
+        """지금까지의 최댓값을 돌려주고, 여기서부터 다시 재요."""
         p, self.peak = self.peak, self.now
         return p
+
+    def attempt_start(self):
+        """시도 하나(단계 한 번 실행)의 최댓값을 따로 재기 시작해요 — 단계 안에서 세부 단계가 바뀌어도 이어서 재요."""
+        g = gpu_info()                                  # 앞 시도의 값이 넘어오지 않게 지금 값을 바로 다시 읽어요
+        if g:
+            self.now = g["used_mb"]
+        self.apeak = self.now
+
+    def attempt_peak(self):
+        return max(self.apeak, self.now)
 
 
 def kill_tree(proc):

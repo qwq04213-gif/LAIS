@@ -386,7 +386,7 @@ def agent_llm(model, msgs):
     if prefs()["chat_gpu"] == "cpu":
         body["options"]["num_gpu"] = 0
     try:
-        return http(OLLAMA + "/api/chat", body, 600).get("message") or {}
+        return llm_http("/api/chat", body, 600).get("message") or {}
     except urllib.error.HTTPError as e:
         try:
             msg = json.loads(e.read()).get("error", "")
@@ -394,7 +394,7 @@ def agent_llm(model, msgs):
             msg = f"HTTP {e.code}"
         if "think" in msg.lower():      # 생각 끄기를 모르는 모델·엔진이면 그 값만 빼고 다시
             body.pop("think")
-            return http(OLLAMA + "/api/chat", body, 600).get("message") or {}
+            return llm_http("/api/chat", body, 600).get("message") or {}
         if "tool" in msg.lower():
             raise RuntimeError("이 대화 모델은 도구 호출을 지원하지 않아요. 실행 모드에는 Qwen3.5 9B 같은 도구 호출 모델이 필요해요(설치와 모델 > 대화).")
         raise RuntimeError(f"대화 엔진 오류: {msg}")

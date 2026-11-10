@@ -50,10 +50,10 @@ def vana_caption(model, img_path):
     body = {"model": model, "stream": False, "think": False, "options": {"temperature": 0.2},
             "messages": [{"role": "user", "content": "이 영상 장면을 한국어 한 문장(40자 안쪽)으로 설명해. 누가·무엇을·어디서만.", "images": [b64]}]}
     try:
-        r = http(OLLAMA + "/api/chat", body, 180)
+        r = llm_http("/api/chat", body, 180)
     except urllib.error.HTTPError:
         body.pop("think")
-        r = http(OLLAMA + "/api/chat", body, 180)
+        r = llm_http("/api/chat", body, 180)
     return re.sub(r"<think>.*?</think>", "", (r.get("message") or {}).get("content") or "", flags=re.S).strip()[:120]
 
 

@@ -58,17 +58,21 @@ def llm_json(model, system, user, temp=0.5):
                 free_comfy()
         except Exception:  # noqa: BLE001
             pass
+    if GPU_HOLD["who"]:
+        raise GpuBusy(gpu_busy_msg())
     STATE["last"] = "chat"
     body = {"model": model, "stream": False, "format": "json", "think": False, "options": {"temperature": temp},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
     try:
-        r = http(OLLAMA + "/api/chat", body, 300)
+        r = llm_http("/api/chat", body, 300)
     except urllib.error.HTTPError as e:
         if e.code == 400:
             body.pop("think")
-            r = http(OLLAMA + "/api/chat", body, 300)
+            r = llm_http("/api/chat", body, 300)
         else:
             raise RuntimeError(f"대화 엔진 오류 (HTTP {e.code})") from None
+    except GpuBusy:
+        raise
     except Exception:  # noqa: BLE001
         raise RuntimeError("대화 엔진(Ollama)에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.") from None
     txt = re.sub(r"<think>.*?</think>", "", (r.get("message") or {}).get("content") or "", flags=re.S).strip()

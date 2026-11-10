@@ -323,7 +323,7 @@ class Ollama(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/version": return self.j({"version": "x"})
         if self.path == "/api/tags": return self.j({"models": [{"name": "testmodel:latest", "size": 5_000_000_000}, {"name": "venice:old", "size": 1}] + [{"name": n, "size": 4_000_000_000} for n in STATE.get("ollama_extra", [])]})
-        if self.path == "/api/ps": return self.j({"models": [{"name": "testmodel:latest"}]})
+        if self.path == "/api/ps": return self.j({"models": [{"name": n} for n in STATE.get("ollama_loaded", ["testmodel:latest"])]})      # ollama_loaded 를 주면 '내리기'(keep_alive 0)를 따라가요
         self.j({})
     def do_DELETE(self):
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
@@ -336,6 +336,7 @@ class Ollama(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
         if self.path == "/api/generate":
             GEN.append(body)
+            if body.get("keep_alive") == 0 and not body.get("prompt") and body.get("model") in STATE.get("ollama_loaded", []): STATE["ollama_loaded"].remove(body["model"])
             return self.j({"response": "<think>hm</think>change the jacket to red leather"} if body.get("prompt") else {})
         if self.path == "/api/show":
             return self.j({"capabilities": ["completion"] + (["vision"] if body.get("model") in STATE.get("vision", ()) else []) + ([] if body.get("model") in STATE.get("notools", ()) else ["tools"])})

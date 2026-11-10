@@ -19,7 +19,7 @@ def check(root, gpu=None, deep=True, log=None):
     add("wsl", w["wsl"] and w["distro"] and w["version2"], w["text"], w["fix"])
     if gpu and gpu.get("total_mb"):
         free = gpu["total_mb"] - gpu.get("used_mb", 0)
-        add("gpu", gpu["total_mb"] >= MIN_VRAM_MB, f"그래픽카드 메모리 {gpu['total_mb'] / 1024:.1f}GB (지금 비어 있는 양 {free / 1024:.1f}GB)",
+        add("gpu", gpu["total_mb"] >= MIN_VRAM_MB, f"그래픽카드 전체 메모리 {gpu['total_mb'] / 1024:.1f}GB · 지금 쓸 수 있는 양 {free / 1024:.1f}GB",
             "10GB 이상을 권장해요. 그보다 작으면 격자를 낮춰도 실패할 수 있어요.")
     else:
         add("gpu", False, "NVIDIA 그래픽카드를 찾지 못했어요.", "NVIDIA 그래픽카드와 최신 드라이버가 필요해요.")
@@ -46,7 +46,7 @@ def check(root, gpu=None, deep=True, log=None):
                     stage = "ok" if worker.get("ready") else "models"
                 except Exception as e:  # noqa: BLE001
                     add("worker_pf", False, f"worker 점검 실패: {e}", "")
-    ready = stage == "ok" and all(c["ok"] for c in C if not c.get("info") and c["id"] not in ("gpu", "w_vram"))
+    ready = stage == "ok" and all(c["ok"] for c in C if not c.get("info") and c["id"] not in ("gpu", "w_vram", "w_vram_free"))
     out = {"ready": ready, "stage": stage, "checks": C, "worker": {k: worker.get(k) for k in ("provider", "title", "verified", "versions", "paths", "gpu")} if worker else None,
            "verified": bool(worker and worker.get("verified")),
            "note": "SiTH 의 공식 시험 환경은 24GB 그래픽카드예요. 10~12GB 에서는 메모리를 아끼는 방식으로 돌리지만, 실제로 끝까지 돌아가는지는 이 PC 에서 한 번 만들어 봐야 알 수 있어요."}

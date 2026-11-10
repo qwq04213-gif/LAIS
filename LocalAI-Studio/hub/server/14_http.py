@@ -641,20 +641,25 @@ class Handler(BaseHTTPRequestHandler):
 
         if blocked(" ".join(users)):
             return err(BLOCK_MSG)
-        claim("chat")
+        cpu_chat = prefs()["chat_gpu"] == "cpu"        # 설정: 대화 모델은 CPU 로만(그래픽 메모리를 이미지 작업에 양보)
         try:
+            if not (cpu_chat and GPU_HOLD["who"]):
+                claim("chat")                          # 인체 3D 가 그래픽카드를 혼자 쓰는 중이면 GpuBusy(CPU 로만 도는 대화는 그대로 돼요)
             p = dict(p)
             ka = prefs()["chat_keep_alive"]
             p["keep_alive"] = -1 if ka == "-1" else (0 if ka == "0" else ka)
-            if prefs()["chat_gpu"] == "cpu":       # 설정: 대화 모델은 CPU 로만(그래픽 메모리를 이미지 작업에 양보)
+            if cpu_chat:
                 p["options"] = {**(p.get("options") or {}), "num_gpu": 0}
             req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(p).encode(),
                                          headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=900) as r:
-                head()
-                for line in r:
-                    self.wfile.write(line)
-                    self.wfile.flush()
+            with llm_use(gpu=not cpu_chat):            # 답을 만드는 동안은 '그래픽카드 사용 중' — 인체 3D 는 이게 끝난 뒤 시작해요
+                with urllib.request.urlopen(req, timeout=900) as r:
+                    head()
+                    for line in r:
+                        self.wfile.write(line)
+                        self.wfile.flush()
+        except GpuBusy as e:
+            err(str(e))
         except (BrokenPipeError, ConnectionResetError):
             pass
         except urllib.error.HTTPError as e:

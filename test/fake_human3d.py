@@ -1,6 +1,7 @@
 """시험용 가짜 인체 3D 엔진: 그래픽카드·모델 없이 worker 의 흐름(단계·진행·메모리 부족 재시도·중단·결과 파일)만 확인해요.
 입력 그림(images/000.png)의 윤곽을 앞뒤로 부풀린 닫힌 메시를 만들어요(앞 = 회색, 뒤 = 푸른색 → 사진 붙이기가 앞면만 바꾸는지 볼 수 있어요).
-동작은 HUMAN3D_FAKE_MODE 파일의 글자로 바꿔요: ok / oom_once / oom_always / drop_arm / slow / two_pieces"""
+동작은 HUMAN3D_FAKE_MODE 파일의 글자로 바꿔요: ok / oom_once / oom_always / oom_above_256 / drop_arm / slow / two_pieces
+모의 GPU: HUMAN3D_FAKE_VRAM 파일에 '사용 중 MB' 를 적으면 가짜 nvidia-smi(test/fake_bin)가 그 값을 알려요 — 실제 그래픽카드 측정이 아니에요."""
 import json
 import os
 import time
@@ -18,6 +19,14 @@ def mode():
         return open(os.environ["HUMAN3D_FAKE_MODE"], encoding="utf-8").read().strip()
     except (KeyError, OSError):
         return "ok"
+
+
+def vram(mb):
+    """모의 GPU 의 '사용 중' 값을 바꿔요(가짜 nvidia-smi 가 읽어요)."""
+    p = os.environ.get("HUMAN3D_FAKE_VRAM")
+    if p:
+        with open(p, "w") as f:
+            f.write(str(int(mb)))
 
 
 def inflate(mask, res):
@@ -103,7 +112,11 @@ class FakeProvider(SithProvider):
 
     def st_recon(self, job, log):
         md, grid = mode(), job.opts.get("grid", 512)
-        if md == "oom_always" or (md == "oom_once" and grid == 512 and job.opts.get("chunk", 50000) > 20000):
+        chunk = job.opts.get("chunk", 50000)
+        vram(3000 + grid * 16 + chunk // 100)                  # 모의 사용량: 격자·점 수가 클수록 많이(512·5만 = 11692MB)
+        time.sleep(0.35)
+        if md == "oom_always" or (md == "oom_once" and grid == 512 and chunk > 20000) or (md == "oom_above_256" and grid > 256):
+            vram(900)
             raise R.StageError("oom", "가짜 메모리 부족", "geometry", "RuntimeError: CUDA out of memory.")
         res = 320 if grid == 512 else 192
         m = np.asarray(Image.open(os.path.join(job.dir, "images", "000.png")).getchannel("A").resize((res, res), Image.BILINEAR)) > 127
@@ -119,4 +132,5 @@ class FakeProvider(SithProvider):
         X.write_ply(os.path.join(job.dir, "meshes", "000_reco.ply"), X.Mesh(V, F, C))
         with open(os.path.join(job.dir, "meshes", "000_reco.obj"), "w") as f:
             f.write("".join("v %f %f %f %f %f %f\n" % (*v, *(c / 255.0)) for v, c in zip(V, C)) + "".join("f %d %d %d\n" % tuple(t + 1) for t in F))
-        return {"vram_mb": 9000, "notes": [f"격자 {grid}"] if grid < 512 else []}
+        vram(900)
+        return {"vram_mb": 9000, "notes": [f"형태 복원 격자 {grid} 로 만들었어요(기본 512 보다 덜 세밀해요)."] if grid < 512 else []}

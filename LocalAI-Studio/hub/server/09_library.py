@@ -350,9 +350,12 @@ def describe_image(p):
     img.thumbnail((1344, 1344))
     b = io.BytesIO()
     img.save(b, "JPEG", quality=90)
-    claim("chat")
     try:
-        r = http(OLLAMA + "/api/chat", {"model": model, "stream": False, "keep_alive": "2m",
+        claim("chat")
+    except GpuBusy as e:
+        return {"error": str(e)}
+    try:
+        r = llm_http("/api/chat", {"model": model, "stream": False, "keep_alive": "2m",
                                        "messages": [{"role": "user", "content": DESCRIBE[style], "images": [base64.b64encode(b.getvalue()).decode()]}]}, 300)
     except urllib.error.HTTPError as e:
         try:
@@ -360,6 +363,8 @@ def describe_image(p):
         except Exception:
             msg = f"HTTP {e.code}"
         return {"error": msg or "설명을 만들지 못했어요."}
+    except GpuBusy as e:
+        return {"error": str(e)}
     except Exception:
         return {"error": "대화 엔진(Ollama)에 연결할 수 없어요."}
     text = re.sub(r"<think>.*?</think>", "", (r.get("message") or {}).get("content", ""), flags=re.S).strip()

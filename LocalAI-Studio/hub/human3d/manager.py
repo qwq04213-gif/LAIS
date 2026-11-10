@@ -89,7 +89,7 @@ def worker_cmd(root, port):
         return shlex.split(custom, posix=not is_windows()) + ["--port", str(port)], str(engine_dir(root)), dict(os.environ, PYTHONPATH=os.pathsep.join([str(engine_dir(root)), str(HUB_DIR)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])))
     eng = wsl_path(engine_dir(root))
     hub = wsl_path(HUB_DIR)
-    sh = f"cd {shlex.quote(eng)} && PYTHONPATH={shlex.quote(eng)}:{shlex.quote(hub)} HUMAN3D_HOME={WSL_HOME} exec {WSL_HOME}/venv/bin/python -m worker.app --port {int(port)} --home {WSL_HOME}"
+    sh = f"[ -f {WSL_HOME}/env.sh ] && . {WSL_HOME}/env.sh; cd {shlex.quote(eng)} && PYTHONPATH={shlex.quote(eng)}:{shlex.quote(hub)} HUMAN3D_HOME={WSL_HOME} exec {WSL_HOME}/venv/bin/python -m worker.app --port {int(port)} --home {WSL_HOME}"
     return _wsl("bash", "-lc", sh), None, None
 
 

@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""시험용 가짜 nvidia-smi(모의 GPU 12GB). 사용 중 메모리는 HUMAN3D_FAKE_VRAM 파일의 숫자(MB). 실제 그래픽카드가 아니에요."""
+import os, sys
+used = 900
+try:
+    used = int(open(os.environ["HUMAN3D_FAKE_VRAM"]).read().strip() or 900)
+except Exception:
+    pass
+V = {"name": "Mock RTX 12GB", "memory.total": 12288, "memory.used": used, "memory.free": 12288 - used, "driver_version": "000.00", "utilization.gpu": 50,
+     "temperature.gpu": 60, "power.draw": 150, "power.limit": 200}
+q = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--query-gpu=")), None)
+print(", ".join(str(V.get(k.strip(), 0)) for k in q.split(",")) if q else "Mock GPU")

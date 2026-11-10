@@ -75,9 +75,12 @@ ERRORS = {
     "not_implemented": "아직 준비되지 않은 엔진이에요.",
 }
 
-# 메모리가 모자랄 때 차례로 시도하는 격자 크기(낮출수록 덜 세밀해요). 다시 시도는 최대 2번.
+# 메모리가 모자랄 때 형태 복원이 한 단계씩 낮추는 순서(기본 512·점 수 5만에서 시작): 점 수 2만 → 격자 384 → 격자 256.
+# 낮출 게 없으면 멈추고 진단을 남겨요(같은 설정을 두 번 돌리지 않아요). 격자를 낮추면 형상이 덜 세밀해져요.
 GRID_STEPS = (512, 384, 256)
-MAX_OOM_RETRY = 2
+OOM_CHUNK = 20000
+OOM_LADDER = (("chunk", OOM_CHUNK), ("grid", 384), ("grid", 256))
+MAX_OOM_RETRY = len(OOM_LADDER)
 
 DEFAULT_OPTS = {
     "provider": "sith",

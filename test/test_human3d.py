@@ -1,4 +1,4 @@
-"""4.9 인체 3D(SiTH) — 가짜 엔진으로 흐름 확인: 약속(본체↔worker), 자세 변환, 사진 준비, 메시 읽기·쓰기·GLB, 메시 검사,
+"""4.9 인체 3D(SiTH) — 가짜 엔진으로 흐름 확인(그래픽카드는 모의 GPU — 실제 측정 아님): 약속(본체↔worker), 자세 변환, 사진 준비, 메시 읽기·쓰기·GLB, 메시 검사,
 사진 화소 붙이기(앞면만), worker 실행·단계·진행·VRAM, 메모리 부족 재시도(최대 2번)·진단, 중단, 결과 폴더, 파일 주소 보안, 기존 3D 유지, 빌드 포함.
 ※ 실제 SiTH·그래픽카드는 쓰지 않아요(그 부분은 미검증)."""
 import os as _os; BASE = _os.environ.get("LAS_BASE") or _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))  # 저장소 맨 위 폴더
@@ -23,7 +23,7 @@ def wait(jid, t=120):
 
 # 1) 약속: 본체와 worker 가 같은 값을 쓰는지
 assert (K.API_VERSION, K.HOST, K.PORT) == (WR.API_VERSION, WR.HOST, WR.PORT) and K.WORKER_STAGES == WR.WORKER_STAGES and K.HOST == "127.0.0.1"
-assert abs(sum(s[2] for s in K.STAGES) - 1) < 1e-9 and K.overall("preprocess", 0) == 0 and K.overall("export", 1) == 1 and K.MAX_OOM_RETRY == 2
+assert abs(sum(s[2] for s in K.STAGES) - 1) < 1e-9 and K.overall("preprocess", 0) == 0 and K.overall("export", 1) == 1 and K.MAX_OOM_RETRY == 3 and K.OOM_LADDER == (("chunk", 20000), ("grid", 384), ("grid", 256))
 o = K.clean_opts({"grid": 999, "back_candidates": 99, "provider": "evil", "chunk": 1}); assert o["grid"] == 512 and o["back_candidates"] == 8 and o["provider"] == "sith" and o["chunk"] == 5000
 ok("contracts shared by hub and worker; options clamped")
 
@@ -95,6 +95,9 @@ MODE = tmp / "mode.txt"; KP = tmp / "kp.json"; KP.write_text(json.dumps(kp133().
 WPORT = 17990 + SLOT * 1000
 os.environ.update(HUMAN3D_WORKER_CMD=f"{sys.executable} -m worker.app --provider fake_human3d:FakeProvider --home {tmp}", HUMAN3D_FAKE_MODE=str(MODE), HUMAN3D_FAKE_KP=str(KP),
                   PYTHONPATH=BASE + "/test" + os.pathsep + os.environ.get("PYTHONPATH", ""))
+VR = tmp / "vram.txt"; VR.write_text("900")
+os.environ.update(HUMAN3D_FAKE_VRAM=str(VR), HUMAN3D_VRAM_EVERY="0.1", PATH=BASE + "/test/fake_bin" + os.pathsep + os.environ["PATH"])      # 모의 GPU(가짜 nvidia-smi 12GB)
+hub._LIVE["t"] = 0; STATE["ollama_loaded"] = ["testmodel:latest"]
 MG.STATE["port"] = WPORT
 S = get("/api/human3d?deep=1"); assert S["preflight"]["ready"] and S["preflight"]["stage"] == "ok" and S["preflight"]["verified"] is False, S["preflight"]
 h = MG.running(WPORT); assert h and h["api"] == 1
@@ -139,15 +142,25 @@ assert j["state"] == "done" and q2["topology"]["components"] == 2 and any(p["id"
 assert X.read_glb_json(Path(j["human3d"]["dir"]) / "result/human.glb")["accessors"][0]["count"] == q2["topology"]["vertices"]      # 작은 조각도 GLB 에 그대로
 ok("missing limb is named with the stage that lost it; separate pieces are reported and kept")
 
-# 8) 메모리 부족: 설정을 낮춰 다시(최대 2번) → 그래도 안 되면 진단 보고서, 중간 결과 보존
+# 8) 메모리 부족: 한 단계씩 낮춰 다시(점 수 2만 → 격자 384 → 격자 256), 같은 설정은 두 번 안 돌림, 시도마다 격자·점 수·VRAM 기록
 MODE.write_text("oom_once"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); H = j["human3d"]
-assert j["state"] == "done" and H["retries"] == 1 and any("2만" in n for n in H["notes"]) and H["grid"] == 512, H
+assert j["state"] == "done" and H["retries"] == 1 and any("2만" in n for n in H["notes"]) and H["grid"] == 512 and H["chunk"] == 20000 and not H["low_detail"], H
+ga = [a for a in H["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"], a["result"]) for a in ga] == [(512, 50000, "oom"), (512, 20000, "ok")], ga
+assert ga[0]["vram_peak_mb"] >= 11000 and ga[0]["failed_stage"] == "geometry" and 9000 < ga[1]["vram_peak_mb"] < ga[0]["vram_peak_mb"], ga      # 모의 GPU 값(실제 측정 아님)
+MODE.write_text("oom_above_256"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); H = j["human3d"]; d = Path(H["dir"])
+assert j["state"] == "done" and H["retries"] == 3 and H["grid"] == 256 and H["low_detail"] and "512 → 256" in H["low_detail_text"] and "덜 세밀" in j["msg"] and "격자 256" in j["msg"], j
+ga = [a for a in H["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"], a["result"]) for a in ga] == [(512, 50000, "oom"), (512, 20000, "oom"), (384, 20000, "oom"), (256, 20000, "ok")], ga
+assert len({(a["grid"], a["chunk"]) for a in ga}) == 4 and all(a["vram_peak_mb"] > 5000 for a in ga)
+meta = json.loads((d / "job.json").read_text(encoding="utf-8")); assert meta["final_grid"] == 256 and meta["requested_grid"] == 512 and meta["low_detail"] and len(meta["attempts"]) >= 4 and meta["retries"] == 3
+assert (d / "result/human.glb").is_file() and get("/api/human3d/job/" + H["id"])["meta"]["low_detail_text"]
 MODE.write_text("oom_always"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); H = j["human3d"]; d = Path(H["dir"])
-assert j["state"] == "error" and "형태 복원" in j["error"] and "메모리" in j["error"] and "diagnosis.json" in j["error"] and H["retries"] == 2, j
-dg = json.loads((d / "diagnosis.json").read_text(encoding="utf-8")); assert dg["failed_stage"] == "geometry" and dg["code"] == "oom" and len(dg["tried"]) == 2 and dg["opts"]["grid"] == 384 and dg["suggestions"] and "out of memory" in dg["last_output"]
+assert j["state"] == "error" and "형태 복원" in j["error"] and "메모리" in j["error"] and "diagnosis.json" in j["error"] and H["retries"] == 3, j
+dg = json.loads((d / "diagnosis.json").read_text(encoding="utf-8")); assert dg["failed_stage"] == "geometry" and dg["code"] == "oom" and len(dg["tried"]) == 4 and dg["opts"]["grid"] == 256 and dg["opts"]["chunk"] == 20000 and "out of memory" in dg["last_output"]
+ga = [a for a in dg["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"]) for a in ga] == [(512, 50000), (512, 20000), (384, 20000), (256, 20000)] and all(a["result"] == "oom" and a["vram_peak_mb"] for a in ga), ga
+assert dg["tried"][-1]["next"] is None and any("256" in x and "어려워요" in x for x in dg["suggestions"]) and dg["vram"]["total_mb"] == 12288
 assert (d / "back_images/000_000.png").is_file() and (d / "smplx/000_smplx.obj").is_file() and not (d / "result/human.glb").exists() and json.loads((d / "job.json").read_text(encoding="utf-8"))["state"] == "error"
 assert get("/api/human3d/job/" + H["id"])["diagnosis"]["code"] == "oom"
-ok("OOM: one retry with smaller chunks succeeds; persistent OOM stops after 2 retries with diagnosis.json and all intermediate files kept")
+ok("OOM ladder really reaches 256 (512/50k → 512/20k → 384 → 256), no setting repeated, per-attempt grid/chunk/VRAM logged (mock GPU); lower grid flagged as less detailed; stops with diagnosis after 256")
 
 # 9) 중단
 MODE.write_text("slow"); r = post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 4}})
@@ -159,11 +172,62 @@ assert json.loads((Path(j["human3d"]["dir"]) / "job.json").read_text(encoding="u
 MODE.write_text("ok"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); assert j["state"] == "done"
 ok("cancel stops the worker job, keeps intermediate files, and the next job runs")
 
+# 9-2) 그래픽카드 혼자 쓰기: 인체 3D 가 도는 동안 대화(Ollama)가 모델을 올리지 못하고, 끝나면(완료·중단·실패) 반드시 풀림
+def chat():
+    raw = urllib.request.urlopen(urllib.request.Request(B + "/api/chat", json.dumps({"model": "testmodel:latest", "messages": [{"role": "user", "content": "안녕"}]}).encode(), {"Content-Type": "application/json"})).read().decode()
+    rows = [json.loads(l) for l in raw.splitlines() if l.strip()]
+    return "".join((r.get("message") or {}).get("content", "") for r in rows) + "".join("error:" + r["error"] for r in rows if r.get("error"))
+assert hub.GPU_HOLD["who"] is None and "안녕" in chat() and len(STATE["chatreq"]) == 1                       # 평소 대화는 그대로
+STATE["ollama_loaded"] = ["testmodel:latest"]; n_gen = len(GEN); MODE.write_text("slow"); r = post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 4}})
+for _ in range(150):
+    time.sleep(0.1)
+    if (get("/api/job/" + r["id"]).get("human3d") or {}).get("stage") == "back": break
+assert hub.GPU_HOLD["who"] == "human3d" and hub.GPU_HOLD["owner"] == r["id"] and get("/api/human3d")["gpu_hold"]["who"] == "human3d" and get("/api/job/" + r["id"])["human3d"]["gpu_hold"] is True
+assert STATE["ollama_loaded"] == [] and any(g.get("keep_alive") == 0 and g.get("model") == "testmodel:latest" for g in GEN[n_gen:]), GEN[n_gen:]      # 시작할 때 Ollama 모델을 실제로 내림
+c = chat(); assert "인체 3D" in c and "혼자" in c and "error" in c and len(STATE["chatreq"]) == 1, c                 # 대화 요청은 한국어 안내만 받고 Ollama 에 가지 않음
+n_g2 = len(GEN); assert hub.translate("빨간 재킷", "tags") == "빨간 재킷" and len(GEN) == n_g2                       # 번역도 모델을 올리지 않음(원문 그대로)
+try: hub.llm_http("/api/chat", {"model": "m", "messages": []}); raise AssertionError("llm_http 가 막히지 않았어요")
+except hub.GpuBusy as e: assert "인체 3D" in str(e)
+try: hub.claim("chat"); raise AssertionError("claim 이 막히지 않았어요")
+except hub.GpuBusy: pass
+STATE["vision"] = ["testmodel:latest"]; de = post("/api/describe", {"image": url(P0.convert("RGB")), "model": "testmodel:latest"}); assert "인체 3D" in de.get("error", ""), de
+assert hub.llm_http("/api/chat", {"model": "m", "stream": False, "messages": [], "options": {"num_gpu": 0}})["message"]      # CPU 로만 도는 대화는 그래픽카드를 안 쓰니 허용
+assert STATE["ollama_loaded"] == []
+post("/api/job/cancel", {"id": r["id"]}); j = wait(r["id"]); assert j["state"] == "cancelled" and hub.GPU_HOLD["who"] is None and hub.STATE["last"] is None and j["human3d"]["gpu_hold"] is False
+assert "안녕" in chat() and len(STATE["chatreq"]) == 2                                                               # 풀린 뒤 대화가 다시 됨
+MODE.write_text("oom_always"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); assert j["state"] == "error" and hub.GPU_HOLD["who"] is None     # 실패해도 풀림
+MODE.write_text("ok"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); assert j["state"] == "done" and hub.GPU_HOLD["who"] is None            # 완료 뒤 풀림
+real_submit = hub.H3Client.submit
+def boom(self, *a): raise RuntimeError("뜻밖의 오류")
+hub.H3Client.submit = boom; j = wait(post("/api/job", {"kind": "human3d", "image": url(P0)})["id"]); hub.H3Client.submit = real_submit
+assert j["state"] == "error" and "뜻밖의 오류" in j["error"] and hub.GPU_HOLD["who"] is None and hub.LLM_USERS["n"] == 0     # 뜻밖의 예외에도 점유가 남지 않음(finally)
+# 답을 만들고 있는 대화가 있으면 그게 끝난 뒤에 시작
+import threading; rel = {}
+def talk():
+    with hub.llm_use(): time.sleep(2.0); rel["t"] = time.time()
+threading.Thread(target=talk).start(); time.sleep(0.2); assert hub.LLM_USERS["n"] == 1
+r = post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}}); seen = False
+for _ in range(60):
+    time.sleep(0.1); jj = get("/api/job/" + r["id"]); seen = seen or "대화가 끝나기를 기다리는 중" in (jj.get("msg") or "")
+    if "t" in rel: break
+    assert not (jj.get("human3d") or {}).get("stages"), "대화가 끝나기 전에 worker 가 시작됐어요"
+j = wait(r["id"]); hl = (Path(j["human3d"]["dir"]) / "hub.log").read_text(encoding="utf-8")
+assert seen and j["state"] == "done" and "그래픽카드 혼자 쓰기 시작" in hl and (Path(j["human3d"]["dir"]) / "job.log").stat().st_mtime >= rel["t"] - 0.01 and hub.GPU_HOLD["who"] is None
+# 대화가 끝나지 않으면 기다리다 멈추고 점유를 풀어요 · 이미 점유 중이면 두 번째 점유는 거절
+hub.LLM_USERS["n"] = 1
+try: hub.gpu_exclusive_begin("human3d", "인체 3D", wait=0.6); raise AssertionError("기다리지 않았어요")
+except RuntimeError as e: assert "끝나지 않아" in str(e) and hub.GPU_HOLD["who"] is None
+hub.LLM_USERS["n"] = 0; hub.gpu_exclusive_begin("human3d", "인체 3D", owner="a")
+try: hub.gpu_exclusive_begin("human3d", "인체 3D", owner="b"); raise AssertionError
+except hub.GpuBusy: pass
+hub.gpu_exclusive_end("human3d", "b"); assert hub.GPU_HOLD["who"] == "human3d"; hub.gpu_exclusive_end("human3d", "a"); assert hub.GPU_HOLD["who"] is None
+ok("GPU exclusivity: Ollama unloaded at start, chat/translate/describe refused in Korean while running (CPU-only chat allowed), waits for a running chat, released on done / cancel / error / unexpected exception")
+
 # 10) 실제 SiTH 어댑터: 메모리 부족 때 낮추는 순서, 저메모리 격자 순서, 없는 환경에서의 점검
 from worker.providers.sith import SithProvider
 sp = SithProvider({"home": str(tmp / "nohome"), "python": sys.executable})
 class JB: opts = {"grid": 512, "chunk": 50000, "back_candidates": 4}
-a = [sp.on_oom(JB, "geometry") for _ in range(4)]; assert "2만" in a[0] and "384" in a[1] and "256" in a[2] and a[3] is None and JB.opts["grid"] == 256
+a = [sp.on_oom(JB, "geometry") for _ in range(4)]; assert "2만" in a[0] and "384" in a[1] and "256" in a[2] and a[3] is None and JB.opts["grid"] == 256 and JB.opts["chunk"] == 20000 and len(a) - 1 == K.MAX_OOM_RETRY
 b = [sp.on_oom(JB, "back") for _ in range(3)]; assert JB.opts["offload"] and JB.opts["back_candidates"] == 1 and b[2] is None and sp.on_oom(JB, "smplx_fit") is None
 pf = sp.preflight(); ids = {c["id"]: c for c in pf["checks"]}; assert not pf["ready"] and not ids["smplx"]["ok"] and "smpl-x.is.tue.mpg.de" in ids["smplx"]["fix"] and not ids["code"]["ok"] and sp.verified is False
 import itertools
@@ -173,6 +237,61 @@ assert MG.wsl_path(r"D:\AI\LAIS\outputs\3D-human\x") == "/mnt/d/AI/LAIS/outputs/
 src = (Path(BASE) / "LocalAI-Studio/engine/human3d/worker/providers/sith_stages.py").read_text(encoding="utf-8")
 assert "_repair_mesh(" not in src.replace("(_repair_mesh)", "") and "inference_mode" in src and "grid_chunks" in src and "enable_model_cpu_offload" in src and "num_images_per_prompt=1" in src
 ok("SiTH adapter: OOM step-down order (chunk → 384 → 256, back: offload → 1 candidate), CPU-side grid chunks in SiTH order, SMPL-X guidance without bypass")
+
+# 10-2) 설치 스크립트: CUDA 컴파일러가 먼저, 없으면 nvdiffrast 를 시작하지 않음 · 그리기 검사 실패면 '완료'가 아님 (가짜 명령으로 순서만 확인 — 실제 설치 아님)
+import subprocess, stat
+SH = Path(BASE) / "LocalAI-Studio/engine/human3d/scripts/install_wsl.sh"
+def run_install(nvcc, nvcheck, apt="none", build="ok"):
+    h = Path(tempfile.mkdtemp()); stub = h / "stub"; stub.mkdir(); log = h / "calls.log"; cuda = h / "cudahome"
+    def mk(name, body):
+        f = stub / name; f.write_text("#!/usr/bin/env bash\n" + body); f.chmod(f.stat().st_mode | stat.S_IEXEC)
+    mk("pip", f'echo "pip $*" >> {log}\ncase "$*" in *nvdiffrast*) [ "{build}" = ok ] || exit 1; touch {h}/built ;; *nvidia-cuda-nvcc*) exit 1 ;; esac\nexit 0\n')
+    mk("python", f'echo "python $*" >> {log}\ncase "$*" in *worker.nvcheck*) if [ "{nvcheck}" = ok ] && [ -f {h}/built ]; then echo \'@@NVCHECK {{"ok": true, "text": "ok"}}\'; exit 0; else '
+                 f'echo \'@@NVCHECK {{"ok": false, "kind": "runtime", "text": "그리기를 실패했어요(CUDA 실행 문제).", "fix": "드라이버를 올려 주세요."}}\'; exit 2; fi ;; *json.loads*) exec python3 "$@" ;; esac\nexit 0\n')
+    for n in ("wget", "dpkg", "sudo"): mk(n, f'echo "{n} $*" >> {log}\nexit {0 if apt == "ok" else 1}\n')
+    mk("apt-get", f'echo "apt-get $*" >> {log}\n' + (f'case "$*" in *cuda-compiler*) mkdir -p {cuda}/bin {cuda}/include; printf \'#!/bin/sh\\necho "Cuda compilation tools, release 12.1, V12.1.105"\\n\' > {cuda}/bin/nvcc; chmod +x {cuda}/bin/nvcc; touch {cuda}/include/cuda_runtime.h ;; esac\nexit 0\n' if apt == "ok" else "exit 1\n"))
+    if nvcc in ("ok", "old"):
+        (cuda / "bin").mkdir(parents=True); (cuda / "include").mkdir(); (cuda / "include/cuda_runtime.h").write_text("")
+        f = cuda / "bin/nvcc"; f.write_text('#!/bin/sh\necho "Cuda compilation tools, release %s, V0"\n' % ("12.1" if nvcc == "ok" else "11.8")); f.chmod(0o755)
+    env = dict(os.environ, HUMAN3D_HOME=str(h / "home"), HUMAN3D_INSTALL_STEPS="cuda nvdiffrast", HUMAN3D_TEST_BIN=str(stub), CUDA_HOME=str(cuda), HOME=str(h))
+    r = subprocess.run(["bash", str(SH)], capture_output=True, text=True, env=env, timeout=60)
+    return r.returncode, r.stdout + r.stderr, (log.read_text() if log.exists() else ""), h
+rc, out, calls, h = run_install("ok", "ok")
+assert rc == 0 and "@@DONE" in out and "@@FAIL" not in out and "release 12.1" in out, out
+nv = [l for l in calls.splitlines() if "nvdiffrast" in l and l.startswith("pip")]; assert len(nv) == 1 and "--no-build-isolation" in nv[0] and "git+https://github.com/NVlabs/nvdiffrast" in nv[0], calls
+assert calls.index("setuptools, wheel, ninja") < calls.index("pip install -q --force-reinstall") < calls.rindex("worker.nvcheck") and out.index("CUDA 12.1 컴파일러 준비") < out.index("nvdiffrast 설치")
+envsh = (h / "home/env.sh").read_text(); assert "CUDA_HOME=" in envsh and "/bin:$PATH" in envsh and "LD_LIBRARY_PATH" in envsh
+for nvcc in ("none", "old"):                                   # 컴파일러가 없거나 12.1 이 아니고, 받지도 못하면 → 멈춤, nvdiffrast 는 시작도 안 함
+    rc, out, calls, _ = run_install(nvcc, "ok")
+    assert rc == 1 and "@@DONE" not in out and "@@FAIL" in out and "nvcc" in out and "cuda-toolkit-12-1" in out and "nvdiffrast 설치" not in out and "NVlabs/nvdiffrast" not in calls, (nvcc, out, calls)
+rc, out, calls, _ = run_install("none", "ok", apt="ok")         # 없으면 NVIDIA 저장소에서 받아서 진행
+assert rc == 0 and "@@DONE" in out and "cuda-compiler-12-1" in calls and calls.index("cuda-compiler-12-1") < calls.index("NVlabs/nvdiffrast"), (out, calls)
+rc, out, calls, _ = run_install("ok", "fail")                   # 설치는 됐지만 실제 그리기 검사 실패 → 완료로 표시하지 않음
+assert rc == 1 and "@@DONE" not in out and "실제로 그리는 검사에 실패" in out and "CUDA 실행 문제" in out and "드라이버" in out, out
+rc, out, calls, _ = run_install("ok", "fail", build="fail")     # 컴파일 실패 → 한 번 더 시도 뒤 멈춤
+assert rc == 1 and "@@DONE" not in out and "컴파일하지 못했어요" in out and calls.count("NVlabs/nvdiffrast") == 2, (out, calls)
+txt = SH.read_text(encoding="utf-8"); assert txt.index("want torch") < txt.index("if want cuda") < txt.index("if want nvdiffrast") and "STEPS=" in txt and "gpu base sith venv torch cuda parts nvdiffrast pose" in txt
+ok("installer (stubbed commands): torch → CUDA 12.1 nvcc → nvdiffrast with --no-build-isolation → real raster check; no compiler ⇒ nvdiffrast never starts; failed check ⇒ not marked done")
+
+# 10-3) 사전 검사: nvdiffrast 를 실제로 돌려 보고 '설치 문제 / CUDA 실행 문제'를 구분, 전체 메모리와 쓸 수 있는 메모리를 따로 표시
+from worker import nvcheck as NV
+assert NV.check()["ok"] is False and NV.check()["kind"] in ("no_torch", "not_installed")          # 이 시험 환경에는 torch·nvdiffrast 가 없어요
+assert NV.classify("import_pkg", ImportError("x"))[0] == "not_installed" and NV.classify("import_torch_ext", ImportError("No module named '_nvdiffrast_c'"))[0] == "build"
+assert NV.classify("context", RuntimeError("CUDA error: unknown error"))[0] == "runtime" and NV.classify("raster", RuntimeError("Could not find nvcc"))[0] == "build"
+src = Path(NV.__file__).read_text(encoding="utf-8"); assert "import nvdiffrast.torch as dr" in src and "RasterizeCudaContext(device=\"cuda\")" in src and "dr.rasterize(" in src
+def pf_with(nv, free=11000):
+    sp2 = SithProvider({"home": str(tmp / "nohome"), "python": sys.executable})
+    sp2._probe = (time.time(), {"python": "3.10", "torch": "2.1.0", "cuda": True, "gpu": "Mock", "vram_mb": 12288, "free_mb": free, "fp16": True, "bf16": True, "cuda_version": "12.1",
+                               "kaolin": "0.15", "diffusers": "0.24", "smplx": "ok", "rtmlib": "ok", "nv": nv})
+    return sp2.preflight()
+ok_nv = {"ok": True, "kind": "ok", "text": "nvdiffrast 0.4.0 — 그래픽카드에서 삼각형 그리기 확인(1310화소)", "pixels": 1310}
+c = {x["id"]: x for x in pf_with(ok_nv)["checks"]}; assert c["nvdiffrast"]["ok"] and "삼각형" in c["nvdiffrast"]["text"] and "mod_nvdiffrast" not in c
+assert "전체 메모리 12.0GB" in c["vram"]["text"] and "실제로 쓸 수 있는 메모리 10.7GB" in c["vram_free"]["text"] and "1.3GB 사용 중" in c["vram_free"]["text"] and c["vram_free"]["ok"] and "보장하지 않아요" in c["vram_note"]["text"]
+c = {x["id"]: x for x in pf_with({"ok": False, "kind": "build", "text": "CUDA 확장을 불러오지 못했어요.", "fix": NV.FIX_INSTALL}, free=5000)["checks"]}
+assert not c["nvdiffrast"]["ok"] and c["nvdiffrast"]["text"].startswith("[설치 문제]") and "설치 시작" in c["nvdiffrast"]["fix"] and not c["vram_free"]["ok"] and "닫으면" in c["vram_free"]["fix"]
+r2 = pf_with({"ok": False, "kind": "runtime", "text": "그리기를 실패했어요.", "fix": NV.FIX_RUNTIME}); c = {x["id"]: x for x in r2["checks"]}
+assert c["nvdiffrast"]["text"].startswith("[CUDA 실행 문제]") and "wsl --shutdown" in c["nvdiffrast"]["fix"] and r2["ready"] is False and r2["nvdiffrast"]["kind"] == "runtime"
+ok("preflight: nvdiffrast is actually exercised (context + tiny raster), install vs CUDA-runtime problems told apart, total vs usable VRAM shown separately")
 
 # 11) 빌드: worker 코드는 업데이트에 들어가고, engine 의 다른 것(모델·가상환경)은 안 들어감
 sys.path.insert(0, BASE + "/release-tools"); import build_update as BU

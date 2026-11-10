@@ -1,5 +1,5 @@
 """worker 의 작업 관리: 한 번에 하나만(그래픽카드를 나눠 쓰지 않아요), 단계별 실행·기록, 중단,
-메모리 부족 때 설정을 낮춰 최대 2번까지만 다시 시도, 끝나면 job.json(사용한 모델·시간·VRAM)·실패하면 diagnosis.json 을 남겨요.
+메모리 부족 때 엔진이 정한 순서대로 설정을 한 단계씩 낮춰 다시 시도(형태 복원: 점 수 2만 → 격자 384 → 격자 256, 더 낮출 게 없으면 멈춤), 끝나면 job.json(사용한 모델·시간·VRAM)·실패하면 diagnosis.json 을 남겨요.
 중간 결과는 실패해도 지우지 않아요."""
 import os
 import threading
@@ -9,7 +9,7 @@ import uuid
 
 from . import runtime as R
 
-MAX_OOM_RETRY = 2
+MAX_OOM_RETRY = 5          # 안전 상한(무한 반복 방지). 실제 횟수는 엔진의 낮추기 단계 수로 정해져요(SiTH 형태 복원 3단계, 뒷면 2단계)
 
 
 class Job:
@@ -18,9 +18,9 @@ class Job:
         self.dir, self.opts, self.provider = job_dir, dict(opts or {}), provider
         self.state, self.stage, self.frac, self.msg = "queued", None, 0.0, "대기 중"
         self.cancel, self.proc = False, None
-        self.stages, self.notes, self.error, self.retries, self.tried = [], [], None, 0, []
+        self.stages, self.notes, self.error, self.retries, self.tried, self.attempts = [], [], None, 0, [], []
         self.t0 = time.time()
-        self.watch = R.VramWatch()
+        self.watch = R.VramWatch(float(os.environ.get("HUMAN3D_VRAM_EVERY") or 1.0))
         self.gpu0 = R.gpu_info()
         self._lock = threading.Lock()
         self._log = open(os.path.join(job_dir, "job.log"), "a", encoding="utf-8")
@@ -66,7 +66,7 @@ class Job:
         peaks = [s.get("vram_peak_mb") or 0 for s in st] + [self.watch.peak]
         return {"id": self.id, "state": self.state, "stage": self.stage, "stage_progress": round(self.frac, 4), "msg": self.msg,
                 "elapsed": round(time.time() - self.t0, 1), "stages": st, "notes": self.notes, "error": self.error, "retries": self.retries,
-                "opts": self.opts, "vram_now_mb": self.watch.now, "vram_total_mb": self.watch.total, "vram_peak_mb": max(peaks), "log_tail": self.tail[-12:]}
+                "attempts": self.attempts, "opts": self.opts, "vram_now_mb": self.watch.now, "vram_total_mb": self.watch.total, "vram_peak_mb": max(peaks), "log_tail": self.tail[-12:]}
 
     def run(self):
         self.state, self.msg = "running", "시작"
@@ -78,21 +78,29 @@ class Job:
                     if self.cancel:
                         raise R.Cancelled()
                     self.enter(stage)
+                    att = {"n": len(self.attempts) + 1, "stage": stage, "grid": self.opts.get("grid"), "chunk": self.opts.get("chunk"),
+                           "back_candidates": self.opts.get("back_candidates"), "offload": bool(self.opts.get("offload"))}
+                    self.watch.attempt_start()
                     try:
                         self.stage_done(fn(self, self.log) or {})
+                        if stage in ("back", "geometry"):          # 메모리를 많이 쓰는 단계는 성공한 시도도 남겨요(어떤 설정으로 됐는지)
+                            self.attempts.append({**att, "result": "ok", "vram_peak_mb": self.watch.attempt_peak()})
                         break
                     except R.StageError as e:
+                        att.update(result=e.code, failed_stage=self.stage, vram_peak_mb=self.watch.attempt_peak())
+                        self.attempts.append(att)
                         if e.code != "oom" or self.retries >= MAX_OOM_RETRY:
                             raise
-                        before = dict(self.opts)
+                        before = {k: v for k, v in self.opts.items() if not k.startswith("_")}
                         how = self.provider.on_oom(self, self.stage)
-                        self.tried.append({"stage": self.stage, "opts": before, "vram_peak_mb": self.watch.peak, "next": how})
-                        if not how:
+                        after = {k: v for k, v in self.opts.items() if not k.startswith("_")}
+                        self.tried.append({"stage": self.stage, "opts": before, "vram_peak_mb": att["vram_peak_mb"], "next": how})
+                        if not how or after == before:        # 더 낮출 게 없거나 설정이 그대로면(같은 설정을 또 돌리지 않아요) 여기서 멈춰요
                             raise
                         self.retries += 1
                         self._close_stage("oom")
                         self.notes.append(how)
-                        self.log(f"메모리 부족 → 다시 시도 {self.retries}/{MAX_OOM_RETRY}: {how}")
+                        self.log(f"메모리 부족(최대 {att['vram_peak_mb']}MB) → 다시 시도 {self.retries}번째: {how}")
             self._close_stage("done")
             self.state, self.msg, self.frac = "done", "끝났어요", 1.0
         except R.Cancelled:
@@ -119,7 +127,7 @@ class Job:
         R.write_json(os.path.join(self.dir, "job.json"), {
             "id": self.id, "state": self.state, "provider": self.provider.name, "provider_verified": self.provider.verified,
             "versions": self.provider.versions(), "opts": self.opts, "stages": v["stages"], "notes": self.notes, "error": self.error,
-            "retries": self.retries, "vram_peak_mb": v["vram_peak_mb"], "vram_total_mb": self.watch.total, "gpu": self.gpu0,
+            "retries": self.retries, "attempts": self.attempts, "vram_peak_mb": v["vram_peak_mb"], "vram_total_mb": self.watch.total, "gpu": self.gpu0,
             "started": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.t0)), "seconds": round(time.time() - self.t0, 1)})
 
     def _diagnose(self, detail):
@@ -127,12 +135,13 @@ class Job:
         sug = []
         if self.error["code"] == "oom":
             sug = ["다른 프로그램(게임·브라우저·ComfyUI 작업)을 닫고 다시 해 보세요.",
-                   f"형태 복원 격자를 더 낮춰 보세요(지금 {self.opts.get('grid')}).", "뒷면 후보 수를 1로 줄여 보세요."]
+                   "뒷면 후보 수를 1로 줄여 보세요."] + ([f"형태 복원 격자를 더 낮춰 보세요(지금 {self.opts.get('grid')})."] if (self.opts.get("grid") or 0) > 256 else
+                                               ["형태 복원은 가장 낮은 격자(256)·점 수 2만에서도 메모리가 모자랐어요. 이 그래픽카드로는 지금 방식으로 어려워요 — 진단 파일을 보내 주세요."])
         R.write_json(os.path.join(self.dir, "diagnosis.json"), {
             "failed_stage": self.error["stage"], "code": self.error["code"], "message": self.error["msg"],
             "vram": {"peak_mb": self.watch.peak, "total_mb": self.watch.total, "used_before_mb": (self.gpu0 or {}).get("used_mb"),
                      "free_before_mb": (self.gpu0 or {}).get("free_mb"), "free_now_mb": (g or {}).get("free_mb")},
-            "tried": self.tried, "opts": self.opts, "suggestions": sug, "last_output": (detail or "")[-4000:]})
+            "tried": self.tried, "attempts": self.attempts, "opts": self.opts, "suggestions": sug, "last_output": (detail or "")[-4000:]})
 
 
 class Store:

@@ -31,7 +31,7 @@ def h3_status(deep=False):
     if deep or _H3_PF["v"] is None or now - _H3_PF["t"] > 20:
         _H3_PF.update(t=now, v=h3_preflight.check(ROOT, h3_gpu(), deep=deep, log=log))
     return {"preflight": _H3_PF["v"], "install": h3_manager.install_view(), "jobs": h3_list(), "gpu": h3_gpu(),
-            "stages": [{"id": s[0], "ko": s[1]} for s in H3K.STAGES], "defaults": H3K.DEFAULT_OPTS, "out": str(H3_DIR)}
+            "stages": [{"id": s[0], "ko": s[1]} for s in H3K.STAGES], "gpu_hold": gpu_hold_view(), "defaults": H3K.DEFAULT_OPTS, "out": str(H3_DIR)}
 
 
 def h3_install():
@@ -170,6 +170,7 @@ def do_human3d(p, J):
         check_cancel(J)
 
     t0 = time.time()
+    held = False
     try:
         step("preprocess", 0.05)
         raw = base64.b64decode(str(p["image"]).split(",", 1)[-1])
@@ -187,9 +188,16 @@ def do_human3d(p, J):
         pf = h3_preflight.check(ROOT, h3_gpu(), deep=True, log=log)
         _H3_PF.update(t=time.time(), v=pf)
         if not pf["ready"]:
-            miss = [c for c in pf["checks"] if not c["ok"] and not c.get("info") and c["id"] not in ("gpu", "w_vram")]
+            miss = [c for c in pf["checks"] if not c["ok"] and not c.get("info") and c["id"] not in ("gpu", "w_vram", "w_vram_free")]
             raise RuntimeError("인체 3D 를 돌릴 준비가 안 됐어요 — " + " / ".join(c["text"] + (f" ({c['fix']})" if c.get("fix") else "") for c in miss[:3]))
-        free_comfy()                                   # ComfyUI 가 잡고 있던 모델을 내려 그래픽카드를 비워요(이 작업이 대기열을 잡고 있는 동안 다른 그림 작업은 돌지 않아요)
+        # 그래픽카드 혼자 쓰기: 이미지·영상 작업은 이 작업이 대기열을 잡고 있어서 못 돌고, 대화(Ollama)는 여기서 막아요.
+        # 답을 만들고 있는 대화가 있으면 끝날 때까지 기다린 뒤, Ollama·ComfyUI 가 올려 둔 모델을 내려요. 끝나면(완료·중단·실패) finally 에서 꼭 풀어요.
+        step("preprocess", 0.8, "그래픽카드 비우는 중")
+        gpu_exclusive_begin("human3d", "인체 3D", owner=J["id"], should_stop=lambda: J.get("cancel"),
+                            on_wait=lambda n: J.update(msg="진행 중인 대화가 끝나기를 기다리는 중"))
+        held = True
+        info["gpu_hold"] = True
+        note(f"그래픽카드 혼자 쓰기 시작 (Ollama 에 남은 모델: {ollama_loaded() or '없음'})")
         cl = H3Client(h3_manager.STATE["port"])
         try:
             wj = cl.submit(h3_manager.job_path(d), opts)
@@ -216,7 +224,7 @@ def do_human3d(p, J):
                 info["stage"], info["stage_ko"] = st["stage"], H3K.STAGE_KO[st["stage"]]
                 J["progress"] = H3K.overall(st["stage"], st.get("stage_progress") or 0)
                 J["msg"] = H3K.STAGE_KO[st["stage"]] + (f" — {st['msg']}" if st.get("msg") and st["msg"] not in ("시작", "대기 중") else "")
-            info.update(stages=st.get("stages") or [], notes=st.get("notes") or [], grid=(st.get("opts") or {}).get("grid"), retries=st.get("retries", 0),
+            info.update(stages=st.get("stages") or [], notes=st.get("notes") or [], grid=(st.get("opts") or {}).get("grid"), chunk=(st.get("opts") or {}).get("chunk"), retries=st.get("retries", 0), attempts=st.get("attempts") or [],
                         vram={"now_mb": st.get("vram_now_mb"), "peak_mb": st.get("vram_peak_mb"), "total_mb": st.get("vram_total_mb")})
             if st["state"] in ("done", "error", "cancelled"):
                 break
@@ -228,14 +236,19 @@ def do_human3d(p, J):
             info["error"] = e
             raise RuntimeError(f"{H3K.STAGE_KO.get(e.get('stage'), e.get('stage') or '')} 단계에서 멈췄어요 — {H3K.ERRORS.get(e.get('code'), '')} {e.get('msg') or ''} (자세한 진단: {d / H3K.FILES['diagnosis']})".replace("  ", " "))
         rep = h3_finish(d, J, st.get("opts") or opts, step)
+        final_grid = (st.get("opts") or opts).get("grid") or opts["grid"]
+        info["low_detail"] = final_grid < opts["grid"]         # 메모리가 모자라 격자를 낮춰 만들었는지
+        if info["low_detail"]:
+            info["low_detail_text"] = f"그래픽카드 메모리가 모자라 형태 복원 격자를 {opts['grid']} → {final_grid} 로 낮춰 만들었어요. 형상(주름·손가락·얼굴 굴곡)이 덜 세밀해요."
         info["qa"] = {"pass": rep["pass"], "warnings": rep["warnings"], "problems": rep["problems"], "silhouette": rep.get("silhouette"), "topology": {k: rep["topology"].get(k) for k in
                       ("vertices", "faces", "components", "big_holes", "boundary_edges", "inverted", "degenerate_faces")}}
         info["views"] = {k: f"/human3d/file/{jid}/result/{v}" for k, v in rep["views"].items()}
         info["glb"] = f"/human3d/file/{jid}/{H3K.FILES['glb']}"
         info["verified"] = bool(pf.get("verified"))
-        h3_meta_update(d, state="done", hub_seconds=round(time.time() - t0, 1), qa_pass=rep["pass"], glb=H3K.FILES["glb"])
+        h3_meta_update(d, state="done", hub_seconds=round(time.time() - t0, 1), qa_pass=rep["pass"], glb=H3K.FILES["glb"], requested_grid=opts["grid"], final_grid=final_grid,
+                       low_detail=info["low_detail"], low_detail_text=info.get("low_detail_text"))
         J["images"].append(info["glb"])
-        J["msg"] = "인체 3D 를 만들었어요." if rep["pass"] else "만들었지만 검사에서 문제가 보여요 — 아래 검사 결과를 확인해 주세요."
+        J["msg"] = ("인체 3D 를 만들었어요." if rep["pass"] else "만들었지만 검사에서 문제가 보여요 — 아래 검사 결과를 확인해 주세요.") + (f" (격자 {final_grid} — 형상이 덜 세밀해요)" if info["low_detail"] else "")
         step("export", 1.0, J["msg"])
         note("끝: " + J["msg"])
     except Cancelled:
@@ -246,5 +259,8 @@ def do_human3d(p, J):
         note("실패: " + str(e))
         raise
     finally:
+        if held:
+            gpu_exclusive_end("human3d", J["id"])
+            info["gpu_hold"] = False
         hublog.close()
     return []

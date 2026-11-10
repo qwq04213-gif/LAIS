@@ -25,6 +25,8 @@ function h3Live(h,j){const E=$('#h3-live');if(!h){E.hidden=true;return}E.hidden=
   E.innerHTML=`<ul class="h3-steps">${order.map((s,i)=>`<li class="${s.id===h.stage&&j&&j.state!=='done'?'on':(done.has(s.id)||i<ci||(j&&j.state==='done'))?'done':''}">${i+1}. ${esc(s.ko)}<small>${sec(s.id)}</small></li>`).join('')}</ul>${v}`
     +((h.notes||[]).length?`<ul class="m3-checks">${h.notes.map(n=>`<li class="lv-warn">${esc(n)}</li>`).join('')}</ul>`:'')
     +((h.checks||[]).filter(c=>c.level!=='ok').length?`<ul class="m3-checks">${h.checks.filter(c=>c.level!=='ok').map(c=>`<li class="lv-${c.level}">${esc(c.text)}</li>`).join('')}</ul>`:'')}
+function h3Att(m){const A=(m&&m.attempts||[]).filter(a=>a.stage==='geometry'||a.result!=='ok');if(!m||!m.retries||!A.length)return '';
+  return `<table class="m3-stat"><tr><th>시도</th><th>단계</th><th>격자</th><th>점 수</th><th>최대 VRAM</th><th>결과</th></tr>${A.map(a=>`<tr><td>${a.n}</td><td>${esc((H3.S.stages.find(s=>s.id===(a.failed_stage||a.stage))||{}).ko||a.stage)}</td><td>${a.grid||'-'}</td><td>${a.chunk?a.chunk.toLocaleString():'-'}</td><td>${a.vram_peak_mb?(a.vram_peak_mb/1024).toFixed(1)+'GB':'-'}</td><td class="${a.result==='ok'?'':'bad'}">${a.result==='ok'?'성공':a.result==='oom'?'메모리 부족':'실패'}</td></tr>`).join('')}</table>`}
 const H3_VIEW={front:'앞',q45:'45도',side:'옆',back:'뒤',observed:'사진에서 가져온 곳(밝음) · AI 추정(푸름)'};
 function h3Result(R){const q=R.qa,T=q&&q.topology,P=(q&&q.problems)||[];
   const views=Object.entries(R.views||{}).filter(([,u])=>u).map(([k,u])=>`<figure><img src="${u}" alt="${H3_VIEW[k]||k}" data-h3zoom="${u}"><figcaption>${H3_VIEW[k]||k}</figcaption></figure>`).join('');
@@ -38,7 +40,7 @@ function h3Result(R){const q=R.qa,T=q&&q.topology,P=(q&&q.problems)||[];
     <span class="mute">VRAM 최대 ${R.diagnosis.vram.peak_mb||'?'}MB / 전체 ${R.diagnosis.vram.total_mb||'?'}MB · 시작 전 비어 있던 양 ${R.diagnosis.vram.free_before_mb||'?'}MB</span>${(R.diagnosis.suggestions||[]).map(x=>`<br>→ ${esc(x)}`).join('')}</li></ul>`:'';
   $('#h3-out').innerHTML=`<div class="va-tool">${R.glb?`<div class="m3-viewer"><model-viewer id="h3-mv" src="${R.glb}" camera-controls auto-rotate shadow-intensity="0.7" exposure="1.05" environment-image="neutral"></model-viewer></div>
     <div class="vbtns m3-bar"><a class="ghost" href="${R.glb}" download="human-${R.id}.glb">GLB 저장</a><button type="button" class="ghost" data-h3open="${R.id}">결과 폴더 열기</button>${R.log?`<a class="ghost" href="${R.log}" target="_blank">작업 기록</a>`:''}</div>`:''}
-    ${diag}<div class="h3-views">${views}</div>${R.back?`<p class="mute">뒷모습은 사진에 없어서 AI 가 추정해 그렸어요(실제와 다를 수 있어요). <a href="${R.back}" target="_blank">뒷면 그림 보기</a></p>`:''}
+    ${diag}${R.meta&&R.meta.low_detail?`<ul class="m3-checks"><li class="lv-warn"><b>형상 세밀함이 낮아졌어요.</b> ${esc(R.meta.low_detail_text||'')}</li></ul>`:''}${h3Att(R.meta)}<div class="h3-views">${views}</div>${R.back?`<p class="mute">뒷모습은 사진에 없어서 AI 가 추정해 그렸어요(실제와 다를 수 있어요). <a href="${R.back}" target="_blank">뒷면 그림 보기</a></p>`:''}
     <h4>메시 검사</h4>${prob}${stat}${parts}<p class="mute h3-path">저장 위치: ${esc(R.dir)}</p>
     <p class="mute">면 줄이기·다시 짜기는 하지 않았어요(엔진 원본 그대로). 엔진 원본은 meshes 폴더에 따로 있어요.</p></div>`;
   if(R.glb)loadMV()}

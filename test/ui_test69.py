@@ -37,6 +37,7 @@ def url(im): b = io.BytesIO(); im.save(b, "PNG"); return "data:image/png;base64,
 
 tmp = Path(tempfile.mkdtemp()); person().save(tmp / "person.png"); (tmp / "kp.json").write_text(json.dumps(kp133().tolist())); (tmp / "mode.txt").write_text("ok")
 errs = []
+STATE["ollama_loaded"] = []
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1500, "height": 1000})
     pg.on("pageerror", lambda e: errs.append(str(e)))

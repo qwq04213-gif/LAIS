@@ -35,11 +35,16 @@ try:
         except Exception: o["bf16"] = False
 except Exception as e:
     o["torch_error"] = repr(e)
-for m in ("kaolin", "nvdiffrast", "diffusers", "transformers", "smplx", "trimesh", "cv2", "rtmlib", "onnxruntime", "accelerate"):
+for m in ("kaolin", "diffusers", "transformers", "smplx", "trimesh", "cv2", "rtmlib", "onnxruntime", "accelerate"):
     try:
         mod = __import__(m); o[m] = getattr(mod, "__version__", "ok")
     except Exception as e:
         o[m] = None; o[m + "_error"] = repr(e)[:200]
+try:
+    from worker import nvcheck          # nvdiffrast: 불러오기만이 아니라 CUDA 확장·컨텍스트·작은 래스터화까지 실제로 돌려 봐요
+    o["nv"] = nvcheck.check()
+except Exception as e:
+    o["nv"] = {"ok": False, "kind": "not_installed", "text": "nvdiffrast 검사를 돌리지 못했어요.", "fix": "", "detail": repr(e)[:300]}
 print("@@PROBE " + json.dumps(o))
 """
 
@@ -96,8 +101,12 @@ class SithProvider(Provider):
         add("torch", p.get("torch"), f"PyTorch {p.get('torch')}" if p.get("torch") else "PyTorch 를 불러오지 못해요", str(p.get("torch_error") or "설치를 다시 실행해 주세요."))
         add("cuda", p.get("cuda"), f"그래픽카드 사용 가능 — {p.get('gpu')} · {p.get('vram_mb')}MB · CUDA {p.get('cuda_version')}" if p.get("cuda") else "worker 가 그래픽카드(CUDA)를 쓰지 못해요",
             "윈도우의 NVIDIA 드라이버를 최신으로 올리고, WSL 을 다시 시작해 주세요(wsl --shutdown).")
-        for m, ko in (("kaolin", "kaolin"), ("nvdiffrast", "nvdiffrast"), ("diffusers", "diffusers"), ("smplx", "smplx"), ("rtmlib", "자세 검출기(rtmlib)")):
+        for m, ko in (("kaolin", "kaolin"), ("diffusers", "diffusers"), ("smplx", "smplx"), ("rtmlib", "자세 검출기(rtmlib)")):
             add("mod_" + m, p.get(m), f"{ko} {p.get(m) or '없음'}", str(p.get(m + "_error") or "설치를 다시 실행해 주세요."))
+        nv = p.get("nv") or {"ok": False, "kind": "not_installed", "text": "nvdiffrast 를 확인하지 못했어요.", "fix": "설치를 다시 실행해 주세요."}
+        nv_kind = {"not_installed": "설치 문제", "build": "설치 문제", "no_torch": "설치 문제", "no_cuda": "CUDA 실행 문제", "runtime": "CUDA 실행 문제", "wrong": "CUDA 실행 문제"}.get(nv.get("kind"), "")
+        add("nvdiffrast", nv.get("ok"), nv.get("text") if nv.get("ok") else f"[{nv_kind}] {nv.get('text')}", nv.get("fix") or "설치를 다시 실행해 주세요.")
+        C[-1].update(kind=nv.get("kind"), detail="" if nv.get("ok") else (nv.get("detail") or "")[-300:])
         add("recon", f["recon"], "형태 복원 모델(recon_model.pth)" + (" 있음" if f["recon"] else " 없음"), "설치(모델 받기)를 다시 실행해 주세요.")
         add("smplerx", f["smplerx"], "몸 어림 모델(save_smplerx.pth)" + (" 있음" if f["smplerx"] else " 없음"), "설치(모델 받기)를 다시 실행해 주세요.")
         add("diffusion", f["diffusion"], "뒷면 그리기 모델(SiTH_diffusion)" + (" 있음" if f["diffusion"] else " 없음"), "설치(모델 받기)를 다시 실행해 주세요.")
@@ -105,11 +114,14 @@ class SithProvider(Provider):
             f"https://smpl-x.is.tue.mpg.de 에 가입·약관 동의 후 'SMPL-X v1.1 (NPZ+PKL)' 을 받아, 압축을 풀어 나온 models/smplx 안의 파일을 {smplx_dir} 에 넣어 주세요.")
         vram = p.get("vram_mb") or 0
         if p.get("cuda"):
-            add("vram", vram >= 9500, f"그래픽카드 메모리 {vram}MB" + ("" if vram >= 9500 else " — 10GB 보다 작아요"), "10GB 이상을 권장해요. 격자를 낮춰도 실패할 수 있어요.")
+            free = p.get("free_mb") or 0
+            add("vram", vram >= 9500, f"그래픽카드 전체 메모리 {vram / 1024:.1f}GB" + ("" if vram >= 9500 else " — 10GB 보다 작아요"), "10GB 이상을 권장해요. 격자를 낮춰도 실패할 수 있어요.")
+            add("vram_free", free >= 8000, f"지금 실제로 쓸 수 있는 메모리 {free / 1024:.1f}GB (다른 프로그램이 {max(0, vram - free) / 1024:.1f}GB 사용 중)",
+                "쓸 수 있는 메모리가 8GB 보다 적어요. 게임·브라우저·다른 AI 프로그램을 닫으면 늘어나요(인체 3D 를 시작하면 LAIS 의 대화·이미지 모델은 자동으로 내려요).")
             C.append({"id": "vram_note", "ok": True, "info": True,
-                      "text": f"지금 비어 있는 메모리 {p.get('free_mb')}MB · FP16 {'가능' if p.get('fp16') else '불가'} · BF16 {'가능' if p.get('bf16') else '불가'}. SiTH 의 공식 시험 환경은 24GB 이고, 10~12GB 에서는 아직 확인하지 못했어요."})
-        ready = all(c["ok"] for c in C if c["id"] != "vram")
-        return {"ready": ready, "checks": C, "versions": self.versions(), "paths": {"sith": self.sith, "smplx": smplx_dir, "diffusion": self.diff},
+                      "text": f"FP16 {'가능' if p.get('fp16') else '불가'} · BF16 {'가능' if p.get('bf16') else '불가'}. SiTH 의 공식 시험 환경은 24GB 이고, 10~12GB 에서 끝까지 돌아가는지는 아직 확인하지 못했어요(보장하지 않아요)."})
+        ready = all(c["ok"] for c in C if c["id"] not in ("vram", "vram_free"))
+        return {"ready": ready, "checks": C, "versions": self.versions(), "vram": {"total_mb": vram or None, "free_mb": p.get("free_mb")}, "nvdiffrast": {k: nv.get(k) for k in ("ok", "kind", "pixels", "version")}, "paths": {"sith": self.sith, "smplx": smplx_dir, "diffusion": self.diff},
                 "smplx_files": {"need": list(SMPLX_NEED), "all": list(SMPLX_ALL)}}
 
     def versions(self):
@@ -158,18 +170,23 @@ class SithProvider(Provider):
     def stages(self):
         return [("keypoints", self.st_keypoints), ("smplx_init", self.st_smplx), ("back", self.st_back), ("geometry", self.st_recon)]
 
+    # 메모리가 모자랄 때 낮추는 순서(한 번에 한 단계, 같은 설정을 두 번 돌리지 않아요)
+    #   형태 복원: 점 수 5만 → 2만(세밀함 그대로) → 격자 384 → 격자 256 → 끝
+    #   뒷면 그리기: 모델을 하나씩만 올리기 → 후보 1장 → 끝
+    OOM_CHUNK = 20000
+
     def on_oom(self, job, stage):
         """메모리가 모자랐을 때 다음에 낮출 설정. 낮출 게 없으면 None(= 더 시도하지 않음)."""
         o = job.opts
         if stage in ("geometry", "texture"):
-            if o.get("chunk", 50000) > 20000 and not o.get("_chunk_cut"):
-                o["chunk"], o["_chunk_cut"] = 20000, True
+            if o.get("chunk", 50000) > self.OOM_CHUNK:
+                o["chunk"] = self.OOM_CHUNK
                 return "형태 복원에서 한 번에 보내는 점 수를 2만으로 줄였어요(세밀함은 그대로)."
             g = o.get("grid", 512)
             lower = [x for x in GRID_STEPS if x < g]
             if lower:
                 o["grid"] = lower[0]
-                return f"형태 복원 격자를 {g} → {lower[0]} 로 낮췄어요(덜 세밀해요)."
+                return f"형태 복원 격자를 {g} → {lower[0]} 로 낮췄어요(형상이 덜 세밀해져요)."
             return None
         if stage == "back":
             if not o.get("offload"):

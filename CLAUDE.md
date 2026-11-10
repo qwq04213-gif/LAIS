@@ -44,7 +44,7 @@
 ```bash
 pip install pillow numpy playwright onnxruntime   # 처음 한 번(크로미움: python -m playwright install chromium)
 cd test
-TMPDIR=/tmp/tt python3 runpar.py test_m3d ui_test64          # 고친 곳 관련 테스트만 먼저
+TMPDIR=/tmp/tt python3 runpar.py test_m3d ui_test64          # 고친 곳 관련 테스트만 먼저 (인체 3D: test_human3d ui_test69)
 TMPDIR=/tmp/tt python3 runpar.py $(ls test_*.py ui_test*.py)  # 출시 전 전체 회귀(140개 남짓, 수십 분)
 ```
 
@@ -81,7 +81,12 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 - worker: 윈도우는 `wsl -d Ubuntu-22.04 -u root`(`manager.py`, 환경은 `/root/lais-human3d`), 코드는 LAIS 폴더의 것을 `/mnt/c/…` 로 그대로 읽음. 시험은 `HUMAN3D_WORKER_CMD`·`test/fake_human3d.py`(가짜 엔진, `HUMAN3D_FAKE_MODE`)
 - SiTH(커밋 6401549, MIT): 좌표 = [-1,1] 정육면체·직교 카메라(화소 x=(X+1)/2·S, y=(1−Y)/2·S, +z 가 앞). 뒷면 그림은 '뒤에서 본 모습'(복원 때 좌우 뒤집음). `fit.py` 는 `SMPLX_MALE.npz` 를 읽음.
   저메모리 판 `worker/providers/sith_stages.py`: 격자 좌표를 CPU 에서 chunk 로(`runtime.grid_chunks`), 뒷면 후보 1장씩·FP16·`enable_model_cpu_offload`, `_repair_mesh`(가장 큰 조각만 남김) 안 씀.
-  메모리 부족 때 `SithProvider.on_oom`: 점 수 2만 → 격자 384 → 256(뒷면: offload → 후보 1장), 다시 시도 최대 2번(`jobs.MAX_OOM_RETRY`)
+  메모리 부족 때 `SithProvider.on_oom`: 점 수 2만 → 격자 384 → 256(뒷면: offload → 후보 1장) — 낮출 게 없거나 설정이 그대로면 멈춤(`contracts.OOM_LADDER` 3단계, `jobs.MAX_OOM_RETRY`=5 는 안전 상한).
+  시도마다 격자·점 수·VRAM 최댓값을 `attempts`(job.json·diagnosis.json)에 남기고, 낮은 격자로 되면 `low_detail`(화면 '형상 세밀함이 낮아졌어요')
+- GPU 혼자 쓰기(`02_engine.py`): `gpu_exclusive_begin/end`·`GPU_HOLD`·`LLM_USERS`·`llm_use`·`llm_http`·`GpuBusy`. 인체 3D 가 시작할 때 걸고(답 만드는 중인 대화가 끝나기를 기다림 → Ollama·ComfyUI 내림) `do_human3d` 의 finally 에서 풂.
+  걸려 있는 동안 `claim("chat")`·`llm_http` 가 `GpuBusy`(한국어 안내). **Ollama 에 답을 시키는 새 코드는 꼭 `llm_http`(스트림은 `llm_use`)로** — `http(OLLAMA + "/api/chat")` 를 직접 쓰면 막히지 않아요. `num_gpu: 0`(CPU 대화)은 통과
+- 설치(`install_wsl.sh`): 순서 torch → CUDA 12.1 nvcc(`find_cuda` → NVIDIA apt 저장소 `cuda-compiler-12-1`… → pip 대체) → `env.sh`(worker 가 읽음) → nvdiffrast 0.4 `--no-build-isolation`(설치 때 컴파일) → `worker/nvcheck.py`(컨텍스트 + 삼각형 래스터화) 통과해야 `@@DONE`.
+  단계는 `HUMAN3D_INSTALL_STEPS` 로 골라 돌릴 수 있고(시험), 사전 검사도 `nvcheck` 로 설치 문제/CUDA 실행 문제를 구분
 - 자세: 기존 LAIS 에는 관절 좌표를 파일로 내는 기능이 없어(DWPose 는 ControlNet 그림용 노드 이름뿐) worker 안에서 rtmlib(DWPose/RTMPose 133점) → `preprocess.wholebody_to_openpose`
 - 빌드: `build_update.py` 가 `engine/human3d` 만 예외로 넣음(`KEEP_ENGINE`). `.gitignore` 도 `engine/*` 중 `human3d` 만 허용
 - 시험: `test/test_human3d.py`·`ui_test69.py`(가짜 엔진). **실제 SiTH·GPU·WSL 로는 한 번도 못 돌림** — 지시서 14번의 3단계(실제 사진 추론)부터는 사용자 PC 결과가 있어야 진행
@@ -118,7 +123,8 @@ Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양�
 
 ### 미검증(실제 PC 에서 확인 필요)
 
-- **인체 3D 전체**: `install_wsl.sh`·`install_models.sh`(WSL2 Ubuntu 22.04, PyTorch 2.1+cu121, kaolin 0.15, nvdiffrast 의 nvcc 필요 여부), `wsl.exe` 로 worker 띄우기·`/mnt/c` 경로,
+- **인체 3D 전체**: `install_wsl.sh`·`install_models.sh`(WSL2 Ubuntu 22.04, PyTorch 2.1+cu121, kaolin 0.15, CUDA 12.1 컴파일러 꾸러미 이름(`cuda-compiler-12-1`·`cuda-cudart-dev-12-1`·`cuda-driver-dev-12-1`)으로 nvdiffrast 0.4 가 실제로 컴파일되는지 — 가짜 명령으로 순서만 확인),
+  GPU 혼자 쓰기에서 Ollama 가 실제로 VRAM 을 비우는 데 걸리는 시간(`/api/ps` 의 `size_vram`), 시도별 VRAM 기록(시험은 모의 GPU `test/fake_bin/nvidia-smi`), `wsl.exe` 로 worker 띄우기·`/mnt/c` 경로,
   rtmlib 자세 검출, 공식 `fit.py`, `sith_stages.py` 의 back(FP16·offload — 사용자 정의 파이프라인이라 자료형 오류 가능 → FP32 로 한 번 재시도)·recon(kaolin `voxelgrids_to_trianglemeshes` 좌표·CPU marching cubes 대체 경로의 면 방향),
   10~12GB 에서의 실제 VRAM, 사진 붙이기의 좌표 약속(직교·y 뒤집기), 뒷면 후보 자동 고르기 기준(색 분포·배경 깨끗함 — 단순함), 100만 꼭짓점 넘는 메시에서 본체(numpy) 처리 시간·GLB 크기
 

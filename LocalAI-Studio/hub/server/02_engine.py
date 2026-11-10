@@ -145,8 +145,110 @@ def free_comfy():
         pass
 
 
+class GpuBusy(RuntimeError):
+    """그래픽카드를 혼자 써야 하는 작업(인체 3D)이 돌고 있어서 지금은 대화 모델을 올릴 수 없어요."""
+
+
+# 그래픽카드 '혼자 쓰기': 인체 3D 처럼 VRAM 을 거의 다 쓰는 작업이 도는 동안 대화 모델(Ollama)이 새로 올라오지 못하게 막아요.
+#   · 이미지·영상 작업끼리는 작업 대기열이 한 줄로 세워서 이미 겹치지 않아요. 대화만 대기열 밖에서 돌기 때문에 따로 막아요.
+#   · LLM_USERS: 지금 그래픽카드로 답을 만들고 있는 대화 요청 수. 혼자 쓰기는 이게 0 이 될 때까지 기다렸다가 시작해요.
+GPU_HOLD = {"who": None, "label": "", "since": 0.0, "owner": None}
+LLM_USERS = {"n": 0}
+_GPU_CV = threading.Condition()
+GPU_HOLD_MSG = "지금 {label} 작업이 그래픽카드를 혼자 쓰고 있어서 대화 모델을 올릴 수 없어요. 작업이 끝난 뒤 다시 보내 주세요. (설정에서 대화를 'CPU 로만'으로 바꾸면 함께 쓸 수 있어요)"
+
+
+def gpu_hold_view():
+    h = GPU_HOLD
+    return {"who": h["who"], "label": h["label"], "seconds": round(time.time() - h["since"]) if h["who"] else 0, "llm_users": LLM_USERS["n"]}
+
+
+def gpu_busy_msg():
+    return GPU_HOLD_MSG.format(label=GPU_HOLD["label"] or "다른") if GPU_HOLD["who"] else None
+
+
+def ollama_loaded():
+    """지금 Ollama 가 그래픽카드에 올려 둔 모델 이름들(모르면 빈 목록)."""
+    try:
+        return [m.get("name") for m in http(OLLAMA + "/api/ps", timeout=3).get("models", []) if m.get("size_vram", 1)]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def gpu_exclusive_begin(who, label, owner=None, wait=180, should_stop=None, on_wait=None):
+    """그래픽카드 혼자 쓰기 시작. 먼저 '혼자 쓰기' 표시를 걸어 새 대화가 못 들어오게 하고, 이미 답을 만들고 있는 대화가 끝나기를 기다린 뒤,
+    Ollama·ComfyUI 가 올려 둔 모델을 내려요. 기다리다 wait 초가 지나거나 should_stop() 이 참이면 표시를 풀고 예외를 내요."""
+    with _GPU_CV:
+        if GPU_HOLD["who"]:
+            raise GpuBusy(f"이미 {GPU_HOLD['label']} 작업이 그래픽카드를 혼자 쓰고 있어요.")
+        GPU_HOLD.update(who=who, label=label, since=time.time(), owner=owner)
+    try:
+        t0 = time.time()
+        with _GPU_CV:
+            while LLM_USERS["n"] > 0:
+                if should_stop and should_stop():
+                    raise Cancelled("사용자가 중단했어요.")
+                if time.time() - t0 > wait:
+                    raise RuntimeError(f"대화가 {int(wait / 60)}분 넘게 끝나지 않아 {label} 을(를) 시작하지 못했어요. 대화를 멈추고 다시 해 주세요.")
+                if on_wait:
+                    on_wait(LLM_USERS["n"])
+                _GPU_CV.wait(0.5)
+        free_ollama()
+        free_comfy()
+        for _ in range(20):                           # Ollama 가 실제로 내릴 때까지 잠깐 기다려요(최대 10초)
+            if not ollama_loaded():
+                break
+            time.sleep(0.5)
+        STATE["last"] = who
+    except BaseException:
+        gpu_exclusive_end(who, owner)
+        raise
+
+
+def gpu_exclusive_end(who, owner=None):
+    """혼자 쓰기 끝(완료·중단·실패 어느 경우든 꼭 불러요). 건 쪽(owner)이 다르면 건드리지 않아요."""
+    with _GPU_CV:
+        if GPU_HOLD["who"] == who and (owner is None or GPU_HOLD["owner"] == owner):
+            GPU_HOLD.update(who=None, label="", since=0.0, owner=None)
+            if STATE.get("last") == who:
+                STATE["last"] = None
+            _GPU_CV.notify_all()
+
+
+class llm_use:
+    """대화 모델이 그래픽카드로 답을 만드는 동안을 감싸요: 혼자 쓰기 중이면 GpuBusy, 아니면 사용 중 수를 올렸다 내려요.
+    gpu=False(대화를 CPU 로만 돌리는 설정)면 막지도 세지도 않아요."""
+
+    def __init__(self, gpu=True):
+        self.gpu = gpu
+
+    def __enter__(self):
+        if self.gpu:
+            with _GPU_CV:
+                if GPU_HOLD["who"]:
+                    raise GpuBusy(gpu_busy_msg())
+                LLM_USERS["n"] += 1
+        return self
+
+    def __exit__(self, *a):
+        if self.gpu:
+            with _GPU_CV:
+                LLM_USERS["n"] = max(0, LLM_USERS["n"] - 1)
+                _GPU_CV.notify_all()
+        return False
+
+
+def llm_http(path, body, timeout=300):
+    """Ollama 에 답을 시키는 요청은 모두 이 함수로 — 혼자 쓰기 중이면 모델을 올리지 않고 GpuBusy 를 내요."""
+    cpu = isinstance(body.get("options"), dict) and body["options"].get("num_gpu") == 0
+    with llm_use(gpu=not cpu):
+        return http(OLLAMA + path, body, timeout)
+
+
 def claim(who):
     """대화 ↔ 이미지 기능을 오갈 때 상대 엔진이 잡고 있는 VRAM 을 비웁니다."""
+    if GPU_HOLD["who"] and who == "chat":
+        raise GpuBusy(gpu_busy_msg())
     if STATE["last"] != who:
         (free_ollama if who == "image" else free_comfy)()
         STATE["last"] = who
@@ -175,6 +277,8 @@ def translate(text, style):
     names = llms()
     if not names:
         return text
+    if GPU_HOLD["who"]:                               # 그래픽카드 혼자 쓰기 중에는 번역을 건너뛰어요(원문 그대로)
+        return text
     if llm_needs_room(names[0]):
         free_comfy()  # 번역용 LLM 이 쓸 VRAM 확보 (이미지 모델은 작업 때 다시 올라옵니다)
     what = {"sentence": "an image editing instruction. Write one clear imperative sentence.",
@@ -182,7 +286,7 @@ def translate(text, style):
             }.get(style, "an image generation prompt. Output comma-separated Danbooru-style tags.")
     sysmsg = f"Translate the user's Korean text into English as {what} Keep every detail. Output only the result."
     try:
-        r = http(OLLAMA + "/api/generate", {"model": names[0], "system": sysmsg, "prompt": text, "stream": False,
+        r = llm_http("/api/generate", {"model": names[0], "system": sysmsg, "prompt": text, "stream": False,
                                             "keep_alive": 0, "options": {"temperature": 0.2}}, 180)
         out = re.sub(r"<think>.*?</think>", "", r.get("response", ""), flags=re.S).strip().strip('"')
     except Exception:
