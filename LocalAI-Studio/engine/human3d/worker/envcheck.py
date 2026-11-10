@@ -15,6 +15,12 @@ MODULES = (("numpy", "numpy", "numpy"), ("scipy", "scipy.ndimage", "scipy"), ("t
            ("trimesh", "trimesh", "trimesh"), ("cv2", "cv2", "opencv"), ("skimage", "skimage.measure", "scikit-image"), ("h5py", "h5py", "h5py"),
            ("tinyobjloader", "tinyobjloader", "tinyobjloader"), ("yaml", "yaml", "pyyaml"), ("onnxruntime", "onnxruntime", "onnxruntime"),
            ("rtmlib", "rtmlib", "자세 검출기(rtmlib)"), ("accelerate", "accelerate", "accelerate"))
+# ECON 전용 환경(econ-venv)에서 확인할 부품. lib.common.* 는 ECON 폴더 안에서 컴파일한 부품(libmesh·libvoxelize)이라 ECON 폴더를 기준으로 불러와요.
+ECON_MODULES = (("numpy", "numpy", "numpy"), ("torch", "torch", "PyTorch"), ("torchvision", "torchvision", "torchvision"), ("pytorch3d", "pytorch3d.renderer", "PyTorch3D"),
+                ("cupy", "cupy", "cupy"), ("pytorch_lightning", "pytorch_lightning", "pytorch_lightning"), ("kornia", "kornia", "kornia"), ("open3d", "open3d", "open3d"),
+                ("mediapipe", "mediapipe", "mediapipe"), ("rembg", "rembg", "rembg(배경 지우기)"), ("trimesh", "trimesh", "trimesh"), ("skimage", "skimage.measure", "scikit-image"),
+                ("sklearn", "sklearn", "scikit-learn"), ("cv2", "cv2", "opencv"), ("yacs", "yacs.config", "yacs"), ("huggingface_hub", "huggingface_hub", "huggingface_hub"),
+                ("libmesh", "lib.common.libmesh.inside_mesh", "ECON libmesh(컴파일)"), ("libvoxelize", "lib.common.libvoxelize.voxelize", "ECON libvoxelize(컴파일)"))
 ABI_RX = re.compile(r"numpy\.(dtype|ndarray|ufunc|flatiter|broadcast) size changed|compiled using NumPy 1\.x cannot be run in NumPy 2|numpy\.core\.multiarray failed to import|_ARRAY_API not found", re.I)
 FIX = "인체 3D 화면에서 [설치 시작]을 다시 눌러 주세요(부품 판을 다시 맞춰요)."
 
@@ -70,8 +76,46 @@ def check(mods=MODULES):
     return out
 
 
+def gpu_tests(which):
+    """그래픽카드에서 실제로 돌아가는지(불러오기만으로는 모름). [(이름, ok, 글)]"""
+    out = []
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return [("cuda", False, "PyTorch 가 그래픽카드(CUDA)를 쓰지 못해요.")]
+    except Exception as e:  # noqa: BLE001
+        return [("cuda", False, f"PyTorch 를 불러오지 못해요: {e}")]
+    if which == "econ":
+        try:
+            from pytorch3d.renderer.mesh import rasterize_meshes
+            from pytorch3d.structures import Meshes
+            v = torch.tensor([[[-0.8, -0.8, 0.5], [0.8, -0.8, 0.5], [0.0, 0.8, 0.5]]], device="cuda")
+            f = torch.tensor([[[0, 1, 2]]], device="cuda")
+            p2f = rasterize_meshes(Meshes(verts=v, faces=f), image_size=64, blur_radius=0.0, faces_per_pixel=1)[0]
+            n = int((p2f >= 0).sum().item())
+            out.append(("pytorch3d_cuda", 900 <= n <= 1700, f"PyTorch3D 그래픽카드 그리기 {n}화소(기대 약 1310)"))
+        except Exception as e:  # noqa: BLE001
+            out.append(("pytorch3d_cuda", False, f"PyTorch3D 가 그래픽카드에서 그리지 못해요: {e.__class__.__name__}: {str(e)[:200]}"))
+        try:
+            import cupy
+            out.append(("cupy_cuda", int(cupy.arange(10).sum()) == 45, "cupy 그래픽카드 계산"))
+        except Exception as e:  # noqa: BLE001
+            out.append(("cupy_cuda", False, f"cupy 가 그래픽카드에서 돌지 못해요: {e.__class__.__name__}: {str(e)[:200]}"))
+    return out
+
+
 def main():
-    r = check()
+    which = "econ" if "--set" in sys.argv and sys.argv[sys.argv.index("--set") + 1] == "econ" else "sith"
+    r = check(ECON_MODULES if which == "econ" else MODULES)
+    if which == "econ" and r["ok"]:
+        g = gpu_tests("econ")
+        r["gpu"] = [{"id": a, "ok": b, "text": c} for a, b, c in g]
+        if not all(b for _, b, _ in g):
+            r["ok"] = False
+            r["text"] = "부품은 불러왔지만 그래픽카드에서 실제로 돌지 못해요: " + " / ".join(c for _, b, c in g if not b)
+            r["fix"] = "인체 3D 화면에서 ECON [설치 시작]을 다시 눌러 주세요(PyTorch3D 를 다시 컴파일해요). 그래도 같으면 윈도우의 NVIDIA 드라이버를 최신으로 올려 주세요."
+        for _, b, c in g:
+            print(("[ 됨 ] " if b else "[안 됨] ") + c, flush=True)
     for k in r["failed"]:
         m = r["modules"][k]
         print(f"[안 됨] {m['name']}: {m['error']}" + (f"  ← {m['culprit']}" if m.get("culprit") else ""), flush=True)

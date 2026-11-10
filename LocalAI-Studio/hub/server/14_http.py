@@ -279,7 +279,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "없어요"}, 404)
             return self.send_file(fp, "model/gltf-binary" if fp.suffix == ".glb" else "image/png")
         if u == "/api/human3d":
-            return self.send_json(h3_status("deep=1" in self.path))
+            q3 = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            return self.send_json(h3_status("deep=1" in self.path, (q3.get("engine") or ["sith"])[0]))
         if u.startswith("/api/human3d/job/"):
             try:
                 return self.send_json(h3_view(u[17:]))
@@ -401,7 +402,9 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 return self.send_json({"error": str(e)}, 404)
         if u == "/api/human3d/install":
-            return self.send_json(h3_install())
+            return self.send_json(h3_install(p))
+        if u == "/api/human3d/open_drop":
+            return self.send_json(h3_open_drop())
         if u == "/api/human3d/stop":
             h3_manager.stop()
             return self.send_json({"ok": True})

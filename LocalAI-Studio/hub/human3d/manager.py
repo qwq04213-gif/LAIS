@@ -39,6 +39,11 @@ def wsl_path(p):
 HUB_DIR = Path(__file__).resolve().parents[1]                 # LocalAI-Studio/hub
 
 
+def drop_dir(root):
+    """SMPL-X 몸 모델 파일을 넣는 곳(LAIS 폴더 안 — 윈도우 탐색기로 바로 열 수 있어요). worker 가 여기서 엔진 자리로 복사해요."""
+    return Path(root) / "models" / "human3d" / "smplx"
+
+
 def engine_dir(root=None):
     """worker 코드가 있는 곳(LocalAI-Studio/engine/human3d) — 설치 폴더가 아니라 이 코드가 놓인 곳 기준이에요."""
     return HUB_DIR.parent / "engine" / "human3d"
@@ -86,10 +91,10 @@ def worker_cmd(root, port):
     """worker 를 띄울 명령과 작업 폴더·환경."""
     custom = os.environ.get("HUMAN3D_WORKER_CMD")
     if custom:
-        return shlex.split(custom, posix=not is_windows()) + ["--port", str(port)], str(engine_dir(root)), dict(os.environ, PYTHONPATH=os.pathsep.join([str(engine_dir(root)), str(HUB_DIR)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])))
+        return shlex.split(custom, posix=not is_windows()) + ["--port", str(port)], str(engine_dir(root)), dict(os.environ, HUMAN3D_DROP=str(drop_dir(root)), PYTHONPATH=os.pathsep.join([str(engine_dir(root)), str(HUB_DIR)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])))
     eng = wsl_path(engine_dir(root))
     hub = wsl_path(HUB_DIR)
-    sh = f"[ -f {WSL_HOME}/env.sh ] && . {WSL_HOME}/env.sh; cd {shlex.quote(eng)} && PYTHONPATH={shlex.quote(eng)}:{shlex.quote(hub)} HUMAN3D_HOME={WSL_HOME} exec {WSL_HOME}/venv/bin/python -m worker.app --port {int(port)} --home {WSL_HOME}"
+    sh = f"[ -f {WSL_HOME}/env.sh ] && . {WSL_HOME}/env.sh; cd {shlex.quote(eng)} && PYTHONPATH={shlex.quote(eng)}:{shlex.quote(hub)} HUMAN3D_HOME={WSL_HOME} HUMAN3D_DROP={shlex.quote(wsl_path(drop_dir(root)))} exec {WSL_HOME}/venv/bin/python -m worker.app --port {int(port)} --home {WSL_HOME}"
     return _wsl("bash", "-lc", sh), None, None
 
 
@@ -124,8 +129,9 @@ def start(root, port=None, wait=40, log=None):
     port = port or STATE["port"]
     with _LOCK:
         h = running(port)
-        if h and h.get("code") and h["code"] != code_hash() and not h.get("busy") and not os.environ.get("HUMAN3D_KEEP_WORKER"):
-            # LAIS 를 업데이트했는데 예전 코드로 뜬 worker 가 남아 있어요(WSL 안의 프로그램은 LAIS 를 꺼도 살아 있어요) → 내리고 새로 띄워요
+        if h and h.get("code") != code_hash() and not h.get("busy") and not os.environ.get("HUMAN3D_KEEP_WORKER"):
+            # LAIS 를 업데이트했는데 예전 코드로 뜬 worker 가 남아 있어요(WSL 안의 프로그램은 LAIS 를 꺼도 살아 있어요) → 내리고 새로 띄워요.
+            # 코드 지문(code)이 아예 없는 worker(4.9.1 이전)도 예전 것이에요 — 실제로 4.9.1 worker 가 4.9.2 에서 남아 성별 없이 몸을 맞췄어요.
             if log:
                 log("[인체 3D] worker 코드가 바뀌어서 다시 띄워요")
             Client(port).shutdown()
@@ -173,18 +179,45 @@ def stop(port=None):
     STATE["proc"] = None
 
 
-def installed(root):
-    """worker 환경(파이썬·SiTH 코드)이 설치돼 있는지 — 빠른 확인."""
+def installed(root, engine="sith"):
+    """엔진 환경이 설치돼 있는지 — 빠른 확인. ECON 은 SiTH 기본 환경 위에 따로 깔아요."""
     if os.environ.get("HUMAN3D_WORKER_CMD"):
-        return True
+        return engine != "econ" or os.environ.get("HUMAN3D_FAKE_ECON_INSTALLED", "1") == "1"
     if not is_windows():
         return False
-    code, _ = _run(_wsl("test", "-x", f"{WSL_HOME}/venv/bin/python", "-a", "-f", f"{WSL_HOME}/SiTH/fit.py"), timeout=40)
+    if engine == "econ":
+        args = ("test", "-x", f"{WSL_HOME}/econ-venv/bin/python", "-a", "-f", f"{WSL_HOME}/ECON/apps/infer.py")
+    else:
+        args = ("test", "-x", f"{WSL_HOME}/venv/bin/python", "-a", "-f", f"{WSL_HOME}/SiTH/fit.py")
+    code, _ = _run(_wsl(*args), timeout=40)
     return code == 0
 
 
-def install(root, log=None):
-    """환경 설치 → 모델 받기를 뒤에서 차례로 돌려요. 진행은 install_view() 로 봐요."""
+def _steps(root, engine):
+    """(이름, 화면 말, 명령, 표준 입력으로 보낼 것 없음) — 엔진별 설치 순서."""
+    scripts = engine_dir(root) / "scripts"
+    custom = os.environ.get("HUMAN3D_INSTALL_CMD")
+    if engine == "econ":
+        names = (("install_econ.sh", "ECON 환경 설치"), ("econ_fetch.py", "ECON 모델 받기"))
+    else:
+        names = (("install_wsl.sh", "환경 설치"), ("install_models.sh", "모델 받기"))
+    out = []
+    for name, label in names:
+        if custom:
+            cmd = shlex.split(custom) + [str(scripts / name)]
+        elif name.endswith(".py"):
+            sh = (f"cd {WSL_HOME}/ECON && PYTHONPATH={shlex.quote(wsl_path(engine_dir(root)))} HF_HOME={WSL_HOME}/hf {WSL_HOME}/econ-venv/bin/python {shlex.quote(wsl_path(scripts / name))} "
+                  f"--econ {WSL_HOME}/ECON --sapiens {WSL_HOME}/models/sapiens-normal --smplx-copy {WSL_HOME}/SiTH/data/body_models/smplx")
+            cmd = _wsl("bash", "-lc", sh)
+        else:
+            cmd = _wsl("env", f"HUMAN3D_HOME={WSL_HOME}", "bash", wsl_path(scripts / name))
+        out.append((name, label, cmd))
+    return out
+
+
+def install(root, log=None, engine="sith", creds=None):
+    """환경 설치 → 모델 받기를 뒤에서 차례로 돌려요. 진행은 install_view() 로 봐요.
+    creds(ECON 의 ICON 계정)는 모델 받기 프로그램의 표준 입력으로만 보내요 — 기록·파일·명령줄에 남기지 않아요."""
     I = STATE["install"]
     with _LOCK:
         if I["state"] == "running":
@@ -192,16 +225,31 @@ def install(root, log=None):
         w = wsl_status()
         if not (w["wsl"] and w["distro"] and w["version2"]):
             return {"error": w["text"] + " " + w["fix"]}
-        I.update(state="running", msg="설치 준비 중", step=0, total=0, log=[], need_smplx=None, t0=time.time())
-    scripts = engine_dir(root) / "scripts"
+        if engine == "econ":
+            if not installed(root, "sith"):
+                return {"error": "ECON 은 SiTH 기본 설치(CUDA 컴파일러) 위에 깔아요. 엔진을 SiTH 로 두고 [설치 시작]부터 끝내 주세요."}
+            if not (creds and creds.get("user") and creds.get("pass")):
+                return {"error": "ECON 모델을 받으려면 ICON 사이트(https://icon.is.tue.mpg.de) 아이디·비밀번호가 필요해요."}
+        I.update(state="running", msg="설치 준비 중", step=0, total=0, log=[], need_smplx=None, t0=time.time(), engine=engine)
+    steps = _steps(root, engine)
+    secret = json.dumps({"user": creds.get("user"), "pass": creds.get("pass")}) + "\n" if creds else None
+    creds = None
 
     def work():
+        nonlocal secret
         try:
-            for name, label in (("install_wsl.sh", "환경 설치"), ("install_models.sh", "모델 받기")):
-                custom = os.environ.get("HUMAN3D_INSTALL_CMD")
-                cmd = shlex.split(custom) + [str(scripts / name)] if custom else _wsl("env", f"HUMAN3D_HOME={WSL_HOME}", "bash", wsl_path(scripts / name))
+            for name, label, cmd in steps:
                 kw = {"creationflags": 0x08000000} if is_windows() else {}
-                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace", **kw)
+                feed = name.endswith(".py")
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE if feed else subprocess.DEVNULL,
+                                     text=True, encoding="utf-8", errors="replace", **kw)
+                if feed:
+                    try:
+                        p.stdin.write(secret or "{}\n")
+                        p.stdin.close()
+                    except OSError:
+                        pass
+                    secret = None                                # 한 번 보낸 뒤 바로 잊어요
                 fail = None
                 for line in p.stdout:
                     line = line.strip()
@@ -224,8 +272,9 @@ def install(root, log=None):
         except Exception as e:  # noqa: BLE001
             I.update(state="error", msg=f"설치 중 오류: {e}")
         finally:
+            secret = None
             if log:
-                log("[인체 3D 설치]", I["state"], I["msg"])
+                log("[인체 3D 설치]", I.get("engine"), I["state"], I["msg"])
 
     threading.Thread(target=work, daemon=True).start()
     return {"ok": True}
@@ -233,7 +282,7 @@ def install(root, log=None):
 
 def install_view():
     I = STATE["install"]
-    return {"state": I["state"], "msg": I["msg"], "step": I["step"], "total": I["total"], "need_smplx": I["need_smplx"], "log": I["log"][-15:],
+    return {"engine": I.get("engine", "sith"), "state": I["state"], "msg": I["msg"], "step": I["step"], "total": I["total"], "need_smplx": I["need_smplx"], "log": I["log"][-15:],
             "pct": round(100 * I["step"] / I["total"]) if I["total"] else 0}
 
 

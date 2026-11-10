@@ -56,6 +56,7 @@ print("@@PROBE " + json.dumps(o))
 
 
 class SithProvider(Provider):
+    modes = ("normal", "low")          # SiTH 가 실제로 지원하는 화질 단계(고품질은 따로 없어요 — 기본이 공식 최고 설정이에요)
     name = "sith"
     title = "SiTH (ETH Zürich)"
     verified = False
@@ -92,6 +93,7 @@ class SithProvider(Provider):
 
     def files(self):
         s = self.sith
+        R.sync_smplx(os.path.join(s, "data", "body_models", "smplx"))          # LAIS 폴더 안에 넣어 둔 파일이 있으면 가져와요
         gd = {g: os.path.isfile(os.path.join(s, "data", "body_models", "smplx", f"SMPLX_{g.upper()}.npz")) for g in R.GENDERS}
         return {"code": os.path.isfile(os.path.join(s, "fit.py")) and os.path.isfile(os.path.join(s, "recon", "config.yaml")),
                 "recon": os.path.isfile(os.path.join(s, "checkpoints", "recon_model.pth")),
@@ -166,6 +168,10 @@ class SithProvider(Provider):
     def _mine(self, job, log, cmd, *args, timeout=3600, on_line=None):
         return R.run_stage([self.py, "-m", "worker.providers.sith_stages", cmd, "--job", job.dir, *[str(a) for a in args]], self.sith, self.env(), job, job.stage, log, on_line=on_line, timeout=timeout)
 
+    def st_keypoints_mode(self, job, log):
+        self.apply_mode(job)
+        return self.st_keypoints(job, log)
+
     def st_keypoints(self, job, log):
         self._need(job, "code")
         return self._mine(job, log, "keypoints", timeout=900)
@@ -206,26 +212,49 @@ class SithProvider(Provider):
         return self._mine(job, log, "recon", "--grid", o.get("grid", 512), "--chunk", o.get("chunk", 50000), "--subdivide", int(bool(o.get("subdivide", True))))
 
     def stages(self):
-        return [("keypoints", self.st_keypoints), ("smplx_init", self.st_smplx), ("back", self.st_back), ("geometry", self.st_recon)]
+        return [("keypoints", self.st_keypoints_mode), ("smplx_init", self.st_smplx), ("back", self.st_back), ("geometry", self.st_recon)]
 
-    # 메모리가 모자랄 때 낮추는 순서(한 번에 한 단계, 같은 설정을 두 번 돌리지 않아요)
-    #   형태 복원: 점 수 5만 → 2만(세밀함 그대로) → 격자 384 → 격자 256 → 끝
-    #   뒷면 그리기: 모델을 하나씩만 올리기 → 후보 1장 → 끝
+    # 메모리가 모자랄 때(화질 단계에 따라)
+    #   일반 고품질(기본): 한 번에 보내는 점 수만 5만 → 2만(세밀함 그대로). 그래도 모자라면 멈추고 '저메모리'를 권해요 — 조용히 품질을 낮추지 않아요.
+    #   저메모리: 처음부터 모델을 하나씩만 올리고(offload)·뒷면 후보 1장·점 수 2만으로 시작하고, 모자라면 격자 384 → 256 으로 낮춰요(알림).
     OOM_CHUNK = 20000
+
+    def apply_mode(self, job):
+        """작업을 시작할 때 화질 단계에 맞춰 설정을 정해요."""
+        o = job.opts
+        if (o.get("quality") or "normal") == "low" and not o.get("_mode_applied"):
+            o.update(offload=True, back_candidates=1, chunk=min(int(o.get("chunk", 50000)), self.OOM_CHUNK), _mode_applied=True)
 
     def on_oom(self, job, stage):
         """메모리가 모자랐을 때 다음에 낮출 설정. 낮출 게 없으면 None(= 더 시도하지 않음)."""
         o = job.opts
+        low = (o.get("quality") or "normal") == "low"
         if stage in ("geometry", "texture"):
             if o.get("chunk", 50000) > self.OOM_CHUNK:
                 o["chunk"] = self.OOM_CHUNK
                 return "형태 복원에서 한 번에 보내는 점 수를 2만으로 줄였어요(세밀함은 그대로)."
+            if not low:
+                return None
             g = o.get("grid", 512)
             lower = [x for x in GRID_STEPS if x < g]
             if lower:
                 o["grid"] = lower[0]
-                return f"형태 복원 격자를 {g} → {lower[0]} 로 낮췄어요(형상이 덜 세밀해져요)."
+                return f"저메모리: 형태 복원 격자를 {g} → {lower[0]} 로 낮췄어요(형상이 덜 세밀해져요)."
             return None
+        if stage == "back":
+            if not o.get("offload"):
+                o["offload"] = True
+                return "뒷면 그리기에서 모델을 하나씩만 그래픽카드에 올리게 했어요(느려지지만 메모리를 덜 써요, 결과는 같아요)."
+            if low and o.get("back_candidates", 4) > 1:
+                o["back_candidates"] = 1
+                return "저메모리: 뒷면 후보를 1장으로 줄였어요."
+        return None
+
+    def oom_advice(self, job):
+        if (job.opts.get("quality") or "normal") != "low":
+            return ["'일반 고품질'에서 그래픽카드 메모리가 모자랐어요. 화질을 '저메모리'로 바꿔 다시 해 보세요(격자를 384·256 으로 낮춰 가며 해요).",
+                    "다른 프로그램(게임·브라우저·ComfyUI)을 닫고 다시 해 보세요."]
+        return ["가장 낮은 설정(격자 256·점 수 2만·뒷면 후보 1장)에서도 메모리가 모자랐어요. 이 그래픽카드로는 지금 방식으로 어려워요 — 진단 파일을 보내 주세요."]
         if stage == "back":
             if not o.get("offload"):
                 o["offload"] = True

@@ -52,11 +52,17 @@ with sync_playwright() as p:
                       PYTHONPATH=BASE + "/test" + os.pathsep + os.environ.get("PYTHONPATH", ""))
     MG.STATE["port"] = 17991 + SLOT * 1000
     pg.click("#h3-recheck"); pg.wait_for_function("document.querySelector('#h3-pf').innerText.includes('돌릴 준비가 됐어요')", timeout=60000); assert pg.is_enabled("#h3-go")
-    pg.click("#v-human3d details.m3-fold summary"); pg.select_option("#h3-back", "1"); assert pg.input_value("#h3-gender") == "auto" and pg.locator("#h3-gender option").count() == 4; pg.select_option("#h3-gender", "female"); pg.click("#h3-go")
+    pg.click("#v-human3d details.m3-fold summary"); assert pg.input_value("#h3-engine") == "sith" and pg.input_value("#h3-quality") == "normal" and pg.evaluate("document.querySelector('#h3-quality option[value=high]').hidden") and "공식 설정" in pg.inner_text("#h3-qnote")
+    pg.select_option("#h3-engine", "econ"); pg.wait_for_function("document.querySelector('#h3-pf').innerText.includes('돌릴 준비')||document.querySelector('#h3-pf').innerText.includes('덜 됐')", timeout=60000)
+    assert pg.evaluate("!document.querySelector('#h3-quality option[value=high]').hidden && [...document.querySelectorAll('#v-human3d .h3-sith-only')].every(x=>x.hidden)") and "Sapiens 2B" in pg.inner_text("#h3-qnote") and "중립" in pg.inner_text("#h3-gnote")
+    pg.select_option("#h3-quality", "low"); assert "Sapiens 1B" in pg.inner_text("#h3-qnote"); pg.select_option("#h3-quality", "high")
+    pg.select_option("#h3-engine", "sith"); pg.wait_for_function("document.querySelector('#h3-pf').innerText.includes('돌릴 준비가 됐어요')", timeout=60000)
+    assert pg.input_value("#h3-quality") == "normal" and pg.is_visible("#h3-drop")
+    pg.select_option("#h3-back", "1"); assert pg.input_value("#h3-gender") == "auto" and pg.locator("#h3-gender option").count() == 4; pg.select_option("#h3-gender", "female"); pg.click("#h3-go")
     pg.wait_for_function("/전체 \\d+%/.test(document.querySelector('#h3-st').innerText)", timeout=30000); assert pg.is_visible("#h3-stop") and pg.is_visible("#h3-pg")
     pg.wait_for_selector("#h3-out model-viewer", timeout=120000)
     assert pg.locator("#h3-out .h3-views img").count() == 5 and "검사에서 문제를 찾지 못했어요" in pg.inner_text("#h3-out") or pg.locator("#h3-out .m3-checks li").count() >= 1
-    t = pg.inner_text("#h3-out"); assert "몸 모델 성별" in t and "여성" in t and "SMPLX_FEMALE.npz" in t and "꼭짓점" in t and "앞 윤곽 겹침" in t and "3D-human" in t and "AI 가 추정" in t and "면 줄이기·다시 짜기는 하지 않았어요" in t
+    t = pg.inner_text("#h3-out"); assert "SiTH" in t and "일반 고품질" in t and "몸 모델 성별" in t and "여성" in t and "SMPLX_FEMALE.npz" in t and "꼭짓점" in t and "앞 윤곽 겹침" in t and "3D-human" in t and "AI 가 추정" in t and "면 줄이기·다시 짜기는 하지 않았어요" in t
     assert pg.locator("#h3-live .h3-steps li").count() == 10 and pg.locator("#h3-live .h3-steps li.done").count() == 10 and pg.is_hidden("#h3-stop")
     assert pg.get_attribute("#h3-out a[download]", "href").endswith("/result/human.glb")
     pg.screenshot(path=str(tmp / "h3.png"))

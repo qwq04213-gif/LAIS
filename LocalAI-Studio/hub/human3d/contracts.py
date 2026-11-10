@@ -75,8 +75,8 @@ ERRORS = {
     "not_implemented": "아직 준비되지 않은 엔진이에요.",
 }
 
-# 메모리가 모자랄 때 형태 복원이 한 단계씩 낮추는 순서(기본 512·점 수 5만에서 시작): 점 수 2만 → 격자 384 → 격자 256.
-# 낮출 게 없으면 멈추고 진단을 남겨요(같은 설정을 두 번 돌리지 않아요). 격자를 낮추면 형상이 덜 세밀해져요.
+# 메모리가 모자랄 때 SiTH 형태 복원이 낮추는 순서: 점 수 2만(세밀함 그대로) → [저메모리 화질에서만] 격자 384 → 격자 256.
+# '일반 고품질'에서는 격자를 낮추지 않고 멈춰서 저메모리를 권해요(조용히 품질을 낮추지 않아요). 같은 설정을 두 번 돌리지 않아요.
 GRID_STEPS = (512, 384, 256)
 OOM_CHUNK = 20000
 OOM_LADDER = (("chunk", OOM_CHUNK), ("grid", 384), ("grid", 256))
@@ -88,8 +88,16 @@ GENDERS = ("male", "female", "neutral")
 GENDER_CHOICES = ("auto",) + GENDERS
 GENDER_KO = {"auto": "자동", "male": "남성", "female": "여성", "neutral": "중립"}
 
+# 엔진과 화질 단계. 엔진마다 실제로 지원하는 화질만 화면에 보여요(ENGINE_MODES). 기본은 '일반 고품질'.
+ENGINES = ("sith", "econ")
+ENGINE_KO = {"sith": "SiTH (ETH Zürich)", "econ": "ECON (MPI · 시험 중)"}
+QUALITY = ("normal", "high", "low")
+QUALITY_KO = {"normal": "일반 고품질", "high": "고품질", "low": "저메모리"}
+ENGINE_MODES = {"sith": ("normal", "low"), "econ": ("normal", "high", "low")}
+
 DEFAULT_OPTS = {
     "provider": "sith",
+    "quality": "normal",
     "gender": "auto",
     "grid": 512,                # 형태 복원 격자(SiTH 기본 512)
     "chunk": 50000,             # 한 번에 그래픽카드로 보내는 점 수
@@ -111,6 +119,8 @@ def clean_opts(o):
         r["provider"] = o["provider"]
     if o.get("gender") in GENDER_CHOICES:
         r["gender"] = o["gender"]
+    if o.get("quality") in ENGINE_MODES[r["provider"]]:
+        r["quality"] = o["quality"]
     try:
         g = int(o.get("grid", r["grid"]))
         r["grid"] = g if g in GRID_STEPS else r["grid"]

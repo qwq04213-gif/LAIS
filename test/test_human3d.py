@@ -23,8 +23,9 @@ def wait(jid, t=120):
 
 # 1) 약속: 본체와 worker 가 같은 값을 쓰는지
 assert (K.API_VERSION, K.HOST, K.PORT) == (WR.API_VERSION, WR.HOST, WR.PORT) and K.WORKER_STAGES == WR.WORKER_STAGES and K.HOST == "127.0.0.1"
-assert abs(sum(s[2] for s in K.STAGES) - 1) < 1e-9 and K.overall("preprocess", 0) == 0 and K.overall("export", 1) == 1 and K.MAX_OOM_RETRY == 3 and K.OOM_LADDER == (("chunk", 20000), ("grid", 384), ("grid", 256))
+assert abs(sum(s[2] for s in K.STAGES) - 1) < 1e-9 and K.overall("preprocess", 0) == 0 and K.overall("export", 1) == 1 and K.MAX_OOM_RETRY == 3 and K.OOM_LADDER == (("chunk", 20000), ("grid", 384), ("grid", 256)) and K.DEFAULT_OPTS["quality"] == "normal" and K.ENGINE_MODES == {"sith": ("normal", "low"), "econ": ("normal", "high", "low")}
 assert K.GENDERS == WR.GENDERS == ("male", "female", "neutral") and K.DEFAULT_OPTS["gender"] == "auto" and K.clean_opts({"gender": "female"})["gender"] == "female" and K.clean_opts({"gender": "남자"})["gender"] == "auto"
+assert K.clean_opts({"provider": "econ", "quality": "high"})["quality"] == "high" and K.clean_opts({"provider": "sith", "quality": "high"})["quality"] == "normal" and K.clean_opts({"provider": "econ"})["provider"] == "econ"
 o = K.clean_opts({"grid": 999, "back_candidates": 99, "provider": "evil", "chunk": 1}); assert o["grid"] == 512 and o["back_candidates"] == 8 and o["provider"] == "sith" and o["chunk"] == 5000
 ok("contracts shared by hub and worker; options clamped")
 
@@ -185,25 +186,29 @@ st_src = (Path(BASE) / "LocalAI-Studio/engine/human3d/worker/providers/sith_stag
 assert 'kw["gender"] = g' in st_src and '"fit.py", "-i"' not in pv_src and '"fit", "--gender", g' in pv_src      # 공식 fit.py 를 직접 돌리던(남성 고정) 경로는 없어짐
 ok("gender: chosen SMPL-X model is really applied (female/male/neutral), auto = neutral never male, missing gender file stops instead of substituting, no result without an 'applied' record")
 
-# 8) 메모리 부족: 한 단계씩 낮춰 다시(점 수 2만 → 격자 384 → 격자 256), 같은 설정은 두 번 안 돌림, 시도마다 격자·점 수·VRAM 기록
+# 8) 메모리 부족 — 일반 고품질(기본): 세밀함을 안 바꾸는 '점 수 2만'만 해 보고, 그래도 모자라면 멈추고 '저메모리'를 권함(조용히 품질을 낮추지 않음)
+#    저메모리: 처음부터 점 수 2만·뒷면 1장·모델 하나씩, 모자라면 격자 384 → 256(결과에 '세밀함 낮아짐' 표시). 시도마다 격자·점 수·VRAM 기록(모의 GPU)
 MODE.write_text("oom_once"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); H = j["human3d"]
-assert j["state"] == "done" and H["retries"] == 1 and any("2만" in n for n in H["notes"]) and H["grid"] == 512 and H["chunk"] == 20000 and not H["low_detail"], H
+assert j["state"] == "done" and H["quality"] == "normal" and H["retries"] == 1 and any("2만" in n for n in H["notes"]) and H["grid"] == 512 and H["chunk"] == 20000 and not H["low_detail"], H
 ga = [a for a in H["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"], a["result"]) for a in ga] == [(512, 50000, "oom"), (512, 20000, "ok")], ga
 assert ga[0]["vram_peak_mb"] >= 11000 and ga[0]["failed_stage"] == "geometry" and 9000 < ga[1]["vram_peak_mb"] < ga[0]["vram_peak_mb"], ga      # 모의 GPU 값(실제 측정 아님)
-MODE.write_text("oom_above_256"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); H = j["human3d"]; d = Path(H["dir"])
-assert j["state"] == "done" and H["retries"] == 3 and H["grid"] == 256 and H["low_detail"] and "512 → 256" in H["low_detail_text"] and "덜 세밀" in j["msg"] and "격자 256" in j["msg"], j
-ga = [a for a in H["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"], a["result"]) for a in ga] == [(512, 50000, "oom"), (512, 20000, "oom"), (384, 20000, "oom"), (256, 20000, "ok")], ga
-assert len({(a["grid"], a["chunk"]) for a in ga}) == 4 and all(a["vram_peak_mb"] > 5000 for a in ga)
-meta = json.loads((d / "job.json").read_text(encoding="utf-8")); assert meta["final_grid"] == 256 and meta["requested_grid"] == 512 and meta["low_detail"] and len(meta["attempts"]) >= 4 and meta["retries"] == 3
+MODE.write_text("oom_above_256"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 4}})["id"]); H = j["human3d"]; d = Path(H["dir"])
+assert j["state"] == "error" and "저메모리" in json.dumps(json.loads((d / "diagnosis.json").read_text(encoding="utf-8"))["suggestions"], ensure_ascii=False) and H["retries"] == 1, j      # 일반 고품질은 격자를 낮추지 않음
+dg = json.loads((d / "diagnosis.json").read_text(encoding="utf-8")); assert [(a["grid"], a["chunk"]) for a in dg["attempts"] if a["stage"] == "geometry"] == [(512, 50000), (512, 20000)] and dg["opts"]["grid"] == 512, dg["attempts"]
+j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 4, "quality": "low"}})["id"]); H = j["human3d"]; d = Path(H["dir"])
+assert j["state"] == "done" and H["quality"] == "low" and H["retries"] == 2 and H["grid"] == 256 and H["low_detail"] and "512 → 256" in H["low_detail_text"] and "덜 세밀" in j["msg"] and "격자 256" in j["msg"], j
+ga = [a for a in H["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"], a["result"]) for a in ga] == [(512, 20000, "oom"), (384, 20000, "oom"), (256, 20000, "ok")], ga
+assert all(a["vram_peak_mb"] > 5000 for a in ga) and all(a["offload"] and a["back_candidates"] == 1 for a in ga)
+meta = json.loads((d / "job.json").read_text(encoding="utf-8")); assert meta["final_grid"] == 256 and meta["requested_grid"] == 512 and meta["low_detail"] and meta["quality"] == "low" and meta["retries"] == 2
 assert (d / "result/human.glb").is_file() and get("/api/human3d/job/" + H["id"])["meta"]["low_detail_text"]
-MODE.write_text("oom_always"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); H = j["human3d"]; d = Path(H["dir"])
-assert j["state"] == "error" and "형태 복원" in j["error"] and "메모리" in j["error"] and "diagnosis.json" in j["error"] and H["retries"] == 3, j
-dg = json.loads((d / "diagnosis.json").read_text(encoding="utf-8")); assert dg["failed_stage"] == "geometry" and dg["code"] == "oom" and len(dg["tried"]) == 4 and dg["opts"]["grid"] == 256 and dg["opts"]["chunk"] == 20000 and "out of memory" in dg["last_output"]
-ga = [a for a in dg["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"]) for a in ga] == [(512, 50000), (512, 20000), (384, 20000), (256, 20000)] and all(a["result"] == "oom" and a["vram_peak_mb"] for a in ga), ga
+MODE.write_text("oom_always"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"quality": "low"}})["id"]); H = j["human3d"]; d = Path(H["dir"])
+assert j["state"] == "error" and "형태 복원" in j["error"] and "메모리" in j["error"] and "diagnosis.json" in j["error"] and H["retries"] == 2, j
+dg = json.loads((d / "diagnosis.json").read_text(encoding="utf-8")); assert dg["failed_stage"] == "geometry" and dg["code"] == "oom" and len(dg["tried"]) == 3 and dg["opts"]["grid"] == 256 and dg["opts"]["chunk"] == 20000 and "out of memory" in dg["last_output"]
+ga = [a for a in dg["attempts"] if a["stage"] == "geometry"]; assert [(a["grid"], a["chunk"]) for a in ga] == [(512, 20000), (384, 20000), (256, 20000)] and all(a["result"] == "oom" and a["vram_peak_mb"] for a in ga), ga
 assert dg["tried"][-1]["next"] is None and any("256" in x and "어려워요" in x for x in dg["suggestions"]) and dg["vram"]["total_mb"] == 12288
 assert (d / "back_images/000_000.png").is_file() and (d / "smplx/000_smplx.obj").is_file() and not (d / "result/human.glb").exists() and json.loads((d / "job.json").read_text(encoding="utf-8"))["state"] == "error"
 assert get("/api/human3d/job/" + H["id"])["diagnosis"]["code"] == "oom"
-ok("OOM ladder really reaches 256 (512/50k → 512/20k → 384 → 256), no setting repeated, per-attempt grid/chunk/VRAM logged (mock GPU); lower grid flagged as less detailed; stops with diagnosis after 256")
+ok("OOM: normal quality only tries the no-loss step then stops recommending low-memory; low-memory steps 512→384→256 (flagged); per-attempt grid/chunk/VRAM logged (mock GPU); diagnosis after the last step")
 
 # 9) 중단
 MODE.write_text("slow"); r = post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 4}})
@@ -270,8 +275,12 @@ ok("GPU exclusivity: Ollama unloaded at start, chat/translate/describe refused i
 from worker.providers.sith import SithProvider
 sp = SithProvider({"home": str(tmp / "nohome"), "python": sys.executable})
 class JB: opts = {"grid": 512, "chunk": 50000, "back_candidates": 4}
-a = [sp.on_oom(JB, "geometry") for _ in range(4)]; assert "2만" in a[0] and "384" in a[1] and "256" in a[2] and a[3] is None and JB.opts["grid"] == 256 and JB.opts["chunk"] == 20000 and len(a) - 1 == K.MAX_OOM_RETRY
-b = [sp.on_oom(JB, "back") for _ in range(3)]; assert JB.opts["offload"] and JB.opts["back_candidates"] == 1 and b[2] is None and sp.on_oom(JB, "smplx_fit") is None
+a = [sp.on_oom(JB, "geometry") for _ in range(2)]; assert "2만" in a[0] and a[1] is None and JB.opts["grid"] == 512      # 일반 고품질: 격자는 그대로
+b = [sp.on_oom(JB, "back") for _ in range(2)]; assert JB.opts["offload"] and b[1] is None and JB.opts["back_candidates"] == 4      # 결과가 같은 offload 만
+class JL: opts = {"grid": 512, "chunk": 50000, "back_candidates": 4, "quality": "low"}
+sp.apply_mode(JL); assert JL.opts["offload"] and JL.opts["back_candidates"] == 1 and JL.opts["chunk"] == 20000
+a = [sp.on_oom(JL, "geometry") for _ in range(3)]; assert "384" in a[0] and "256" in a[1] and a[2] is None and JL.opts["grid"] == 256 and sp.on_oom(JL, "smplx_fit") is None
+assert any("저메모리" in x for x in sp.oom_advice(JB)) and any("어려워요" in x for x in sp.oom_advice(JL))
 pf = sp.preflight(); ids = {c["id"]: c for c in pf["checks"]}; assert not pf["ready"] and not ids["smplx"]["ok"] and "smpl-x.is.tue.mpg.de" in ids["smplx"]["fix"] and "남성·여성·중립 모두" in ids["smplx"]["fix"] and pf["genders"] == {"male": False, "female": False, "neutral": False} and not ids["code"]["ok"] and sp.verified is False
 import itertools
 lin = np.linspace(-1, 1, 5); assert np.allclose(np.concatenate([p for _, p in WR.grid_chunks(5, 7)]), np.array(list(itertools.product(lin, lin, lin)), np.float32))
@@ -279,7 +288,7 @@ assert WR.is_oom("torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allo
 assert MG.wsl_path(r"D:\AI\LAIS\outputs\3D-human\x") == "/mnt/d/AI/LAIS/outputs/3D-human/x"
 src = (Path(BASE) / "LocalAI-Studio/engine/human3d/worker/providers/sith_stages.py").read_text(encoding="utf-8")
 assert "_repair_mesh(" not in src.replace("(_repair_mesh)", "") and "inference_mode" in src and "grid_chunks" in src and "enable_model_cpu_offload" in src and "num_images_per_prompt=1" in src
-ok("SiTH adapter: OOM step-down order (chunk → 384 → 256, back: offload → 1 candidate), CPU-side grid chunks in SiTH order, SMPL-X guidance without bypass")
+ok("SiTH adapter: OOM step-down by quality (normal: chunk only; low: offload·1 candidate·chunk at start, then 384 → 256), CPU-side grid chunks in SiTH order, SMPL-X guidance without bypass")
 
 # 10-2) 설치 스크립트: CUDA 컴파일러가 먼저, 없으면 nvdiffrast 를 시작하지 않음 · 그리기 검사 실패면 '완료'가 아님 (가짜 명령으로 순서만 확인 — 실제 설치 아님)
 import subprocess, stat
@@ -375,6 +384,14 @@ ok("build: worker code ships in the update; models / venv / other engine folders
 h1 = MG.running(WPORT); assert h1["code"] == MG.code_hash() == WR.code_hash(BASE + "/LocalAI-Studio/engine/human3d/worker") and MG.start(hub.ROOT, WPORT)["pid"] == h1["pid"]      # 같으면 그대로
 real_hash = MG.code_hash; MG.code_hash = lambda: "changed"; h2 = MG.start(hub.ROOT, WPORT); MG.code_hash = real_hash
 assert h2 and h2["pid"] != h1["pid"] and h2["code"] == real_hash(), (h1, h2)
+real_running = MG.running; MG.running = lambda port=None: (lambda h: {k: v for k, v in h.items() if k != "code"} if h else h)(real_running(port))      # 지문이 없는 예전(4.9.1) worker 흉내
+pid_before = real_running(WPORT)["pid"]; MG._calls = 0
+orig_start_running = MG.running
+def once_old(port=None):
+    MG._calls += 1
+    return orig_start_running(port) if MG._calls == 1 else real_running(port)
+MG.running = once_old; h3 = MG.start(hub.ROOT, WPORT); MG.running = real_running
+assert h3 and h3["pid"] != pid_before and h3["code"] == real_hash(), (pid_before, h3)
 ok("stale worker (old code still running after an update) is detected by a code fingerprint and restarted")
 MG.stop(WPORT)
 print("ALL OK")

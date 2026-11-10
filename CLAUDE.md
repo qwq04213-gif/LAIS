@@ -44,7 +44,7 @@
 ```bash
 pip install pillow numpy playwright onnxruntime   # 처음 한 번(크로미움: python -m playwright install chromium)
 cd test
-TMPDIR=/tmp/tt python3 runpar.py test_m3d ui_test64          # 고친 곳 관련 테스트만 먼저 (인체 3D: test_human3d ui_test69)
+TMPDIR=/tmp/tt python3 runpar.py test_m3d ui_test64          # 고친 곳 관련 테스트만 먼저 (인체 3D: test_human3d test_human3d_econ ui_test69)
 TMPDIR=/tmp/tt python3 runpar.py $(ls test_*.py ui_test*.py)  # 출시 전 전체 회귀(140개 남짓, 수십 분)
 ```
 
@@ -87,8 +87,17 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
   걸려 있는 동안 `claim("chat")`·`llm_http` 가 `GpuBusy`(한국어 안내). **Ollama 에 답을 시키는 새 코드는 꼭 `llm_http`(스트림은 `llm_use`)로** — `http(OLLAMA + "/api/chat")` 를 직접 쓰면 막히지 않아요. `num_gpu: 0`(CPU 대화)은 통과
 - 설치(`install_wsl.sh`): 순서 torch → CUDA 12.1 nvcc(`find_cuda` → NVIDIA apt 저장소 `cuda-compiler-12-1`… → pip 대체) → `env.sh`(worker 가 읽음) → nvdiffrast 0.4 `--no-build-isolation`(설치 때 컴파일) → `worker/nvcheck.py`(컨텍스트 + 삼각형 래스터화) 통과해야 `@@DONE`.
   단계는 `HUMAN3D_INSTALL_STEPS` 로 골라 돌릴 수 있고(시험), 사전 검사도 `nvcheck` 로 설치 문제/CUDA 실행 문제를 구분
-- **두 번째 지시서(SiTH 성별 수정 + ECON 연동, 11단계)**: 단계마다 실패하면 다음으로 넘어가지 않기. 지금 **2단계까지 코드 완료, 3단계(실제 남·여 사진 각 3장 추론)는 사용자 PC 결과 대기** — ECON(5단계~)·엔진 선택 UI·품질 모드(일반 고품질 기본/고품질/저메모리)는 아직 시작하지 않음.
-  여성 지원은 '실제 여성 사진으로 회전 가능한 메시 확인' 전까지 완료라고 하지 않기. 품질 모드를 넣을 때 '조용히 품질을 낮추지 않는다'와 지금의 자동 재시도(격자 낮추기 + 알림)를 어떻게 맞출지 사용자에게 확인
+- **두 번째 지시서(SiTH 성별 수정 + ECON 연동, 11단계)**: 단계마다 실패하면 다음으로 넘어가지 않기. 2단계 완료, **3단계(실제 남·여 사진 각 3장 SiTH 추론)는 사용자 PC 결과 대기**. 사용자가 '마저 진행'해서 PC 시험이 필요 없는 5·6단계(ECON 엔진·성별)와 8단계 일부(엔진·화질·성별 고르기 화면)를 코드로 먼저 함 — 실제 확인은 3·7단계.
+  여성 지원은 '실제 여성 사진으로 회전 가능한 메시 확인' 전까지 완료라고 하지 않기. 10단계(UV 아틀라스·뒷면 텍스처)는 실제 메시가 나온 뒤
+- **ECON(5~6단계 코드, 미검증)**: `worker/providers/econ.py`(어댑터, 기본으로 안 씀)·`econ_stages.py`(econ-venv 에서 공식 `apps/infer.py` 를 `runpy.run_module` — 공식 파일은 안 고침).
+  라이선스 MPI 비상업 연구용(배포 금지·성인물 금지) → LAIS 에 코드 안 넣고 설치 때 `<home>/ECON`(커밋 d8f4e8b)으로 받음. 환경은 `<home>/econ-venv`(py3.10·torch 2.1 cu121·PyTorch3D v0.7.5 소스 컴파일·cupy-cuda12x, `scripts/pins_econ.txt`) —
+  공식 판(py3.8·torch1.13·CUDA11.6)은 RTX 40(sm_89) 정식 미지원이라 바꿈. `install_econ.sh`(SiTH 의 env.sh·nvcc 필요) → `econ_fetch.py`(ICON 계정은 표준 입력 JSON 한 줄로만, 기록·명령줄·파일에 안 남김. SMPL-X v1.1 은 SiTH 에도 복사. Sapiens 는 `allow_patterns` 로 4개 파일만).
+  **성별 조사 결과**: `mesh_util.get_smpl_model` 의 남성 고정은 실제 추론에서 안 쓰임. 추론은 PIXIE `SMPLX_NEUTRAL_2020.npz`(중립 고정). 바꿔 끼우기: `pixie_cfg.model.smplx_model_path` ← 고른 성별(여·남 = SMPL-X v1.1, 중립·자동 = 2020), `check_body` 로 키·10475·shapedirs≥350 검사.
+  `poisson` 은 keep_largest+면 5만 없이 원본을 결과로(ECON 원래는 `_econ_default` 비교용), `query_color(paint_normal=False)`(뒤·옆 회색 — ECON 은 뒷면 색 없음), `apps.sapiens` 의 공간 전체 `snapshot_download` 막음.
+  결과 좌표는 `to_square`(M_crop·M_square 역변환)로 LAIS 정사각형 입력 좌표로 → 본체의 사진 붙이기·검사가 그대로 돎. 화질: normal=Sapiens 2B(공식 기본)·high=2B+IF-Net·low=1B(→0.3B 한 번)
+- 화질 단계(`contracts.ENGINE_MODES`, 기본 normal): SiTH normal 은 OOM 때 점 수 2만(세밀함 유지)만 하고 멈춰서 저메모리 권함(**조용히 품질 안 낮춤** — 이전 지시서의 자동 256 은 low 에서만), SiTH low = offload·뒷면 1장·점 수 2만으로 시작 + 384→256. `oom_advice` 가 진단 파일 권장
+- SMPL-X 넣는 곳: `<LAIS>\models\human3d\smplx`(`manager.drop_dir`, 화면 [SMPL-X 넣는 폴더 열기]) → worker 가 `HUMAN3D_DROP` 에서 엔진 자리로 복사(`runtime.sync_smplx`). WSL `/root` 는 탐색기로 못 열 수 있어서
+- 실제 PC 두 번째 결과: 4.9.2 에서 '성별 기록 없음' 오류 — 4.9.1 worker(코드 지문 없음)가 살아 있어 공식 fit.py(남성)로 돌았음. `manager.start` 가 지문이 없어도 다시 띄우게 고침
 - 성별: 공식 `fit.py:181` 이 `SMPLX(..., gender='male')` 고정(주석 "We used SMPL-X male model for fitting and mesh reconstruction", 학습 자료 맞추기 `tools/align_thuman.py` 도 male → **SiTH 네트워크는 모든 사람을 남성 몸 모델로 학습**).
   `sith_stages.cmd_fit` 이 `fit.SMPLX` 를 감싸 고른 성별로 만들고(공식 파일은 안 고침) `smplx/gender.json`(applied) 을 남김 — 본체는 이 기록이 없으면 결과를 내지 않음. `opts.gender` auto/male/female/neutral, **auto = neutral**(성별 추정기 없음, 남성으로 정하지 않음).
   고른 성별의 `SMPLX_<G>.npz` 가 없으면 다른 성별로 바꾸지 않고 멈춤(본체 사전 확인 + worker). 여성·중립 모델로 맞춘 결과 품질은 **미검증**(학습 분포와 달라질 수 있음)

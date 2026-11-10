@@ -134,9 +134,7 @@ class Job:
         g = R.gpu_info()
         sug = []
         if self.error["code"] == "oom":
-            sug = ["다른 프로그램(게임·브라우저·ComfyUI 작업)을 닫고 다시 해 보세요.",
-                   "뒷면 후보 수를 1로 줄여 보세요."] + ([f"형태 복원 격자를 더 낮춰 보세요(지금 {self.opts.get('grid')})."] if (self.opts.get("grid") or 0) > 256 else
-                                               ["형태 복원은 가장 낮은 격자(256)·점 수 2만에서도 메모리가 모자랐어요. 이 그래픽카드로는 지금 방식으로 어려워요 — 진단 파일을 보내 주세요."])
+            sug = (self.provider.oom_advice(self) if hasattr(self.provider, "oom_advice") else []) or ["다른 프로그램(게임·브라우저·ComfyUI 작업)을 닫고 다시 해 보세요."]
         R.write_json(os.path.join(self.dir, "diagnosis.json"), {
             "failed_stage": self.error["stage"], "code": self.error["code"], "message": self.error["msg"],
             "vram": {"peak_mb": self.watch.peak, "total_mb": self.watch.total, "used_before_mb": (self.gpu0 or {}).get("used_mb"),

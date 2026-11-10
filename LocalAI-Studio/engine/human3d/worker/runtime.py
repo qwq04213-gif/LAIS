@@ -252,6 +252,27 @@ def code_hash(*dirs):
     return h.hexdigest()[:16]
 
 
+def sync_smplx(dst, names=("SMPLX_NEUTRAL.npz", "SMPLX_FEMALE.npz", "SMPLX_MALE.npz")):
+    """사용자가 LAIS 폴더 안(models\\human3d\\smplx — HUMAN3D_DROP)에 넣은 SMPL-X 파일을 엔진 자리로 복사해요.
+    없거나 크기가 다를 때만 복사하고, 원래 파일은 그대로 둬요. 돌려주는 값: 복사한 파일 이름들."""
+    import shutil
+    src = os.environ.get("HUMAN3D_DROP")
+    done = []
+    if not src or not os.path.isdir(src):
+        return done
+    for n in names:
+        s, d = os.path.join(src, n), os.path.join(dst, n)
+        try:
+            if os.path.isfile(s) and (not os.path.isfile(d) or os.path.getsize(d) != os.path.getsize(s)):
+                os.makedirs(dst, exist_ok=True)
+                shutil.copyfile(s, d + ".part")
+                os.replace(d + ".part", d)
+                done.append(n)
+        except OSError:
+            pass
+    return done
+
+
 def write_json(path, obj):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:

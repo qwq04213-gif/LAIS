@@ -849,16 +849,20 @@
       <div class="vmrow"><button type="button" class="ghost vpick" id="h3-up">사진 고르기</button><input type="file" id="h3-file" accept="image/*" hidden><span class="mute" id="h3-fname"></span></div>
     </div>
     <figure class="m3-front" id="h3-prev" hidden><img alt="고른 사진"></figure>
+    <div class="row"><label class="f" title="SiTH: 뒷모습을 AI 가 그려서 형태·색을 함께 복원해요. ECON: 앞·뒤 표면 방향으로 옷 모양을 살려요(뒷면 색은 아직 없어요). 둘은 따로 설치돼요.">엔진<select id="h3-engine"><option value="sith" selected>SiTH (ETH Zürich)</option><option value="econ">ECON (MPI · 시험 중)</option></select></label>
+      <label class="f" title="일반 고품질이 기본이에요. 메모리가 모자라 실패하면 까닭과 권장 설정(저메모리)을 알려 줘요 — 조용히 품질을 낮추지 않아요.">화질<select id="h3-quality"><option value="normal" selected>일반 고품질</option><option value="high">고품질</option><option value="low">저메모리</option></select></label></div>
+    <p class="mute h3-unv" id="h3-qnote"></p>
     <label class="f" title="몸의 기본 모양(SMPL-X)을 어느 모델로 맞출지 골라요. 고른 성별의 모델 파일이 없으면 다른 성별로 바꿔 쓰지 않고 멈춰요.">몸 모델 성별<select id="h3-gender"><option value="auto" data-t="자동 — 지금은 중립 모델을 써요(성별 추정 기능은 아직 없어요)" selected>자동 — 지금은 중립 모델을 써요(성별 추정 기능은 아직 없어요)</option><option value="female" data-t="여성">여성</option><option value="male" data-t="남성">남성</option><option value="neutral" data-t="중립">중립</option></select></label>
     <p class="mute h3-unv" id="h3-gnote">SiTH 를 만든 곳은 모든 사람에게 남성 몸 모델을 썼어요. 여성·중립 모델로 맞춘 결과가 더 나은지는 실제 사진으로 아직 확인하지 못했어요.</p>
     <fieldset class="vset"><legend>준비 상태</legend>
       <div id="h3-pf"><p class="mute">확인하는 중…</p></div>
-      <div class="vbtns"><button type="button" class="ghost" id="h3-install" hidden>설치 시작 (약 15GB · 20~40분)</button><button type="button" class="ghost" id="h3-recheck">다시 확인</button></div>
+      <div id="h3-econ-login" hidden><p class="mute">ECON 모델은 ICON 사이트(<a href="https://icon.is.tue.mpg.de" target="_blank" rel="noopener">icon.is.tue.mpg.de</a>) 계정으로 받아요. 가입한 뒤 SMPL · SMPL-X · SMPLify · PIXIE 에 각각 'Register now' 를 눌러 두세요. 아이디·비밀번호는 받는 데에만 쓰고 저장하지 않아요.</p><div class="row"><label class="f">ICON 아이디(이메일)<input id="h3-icon-user" autocomplete="off"></label><label class="f">비밀번호<input id="h3-icon-pass" type="password" autocomplete="off"></label></div></div>
+      <div class="vbtns"><button type="button" class="ghost" id="h3-install" hidden>설치 시작 (약 15GB · 20~40분)</button><button type="button" class="ghost" id="h3-recheck">다시 확인</button><button type="button" class="ghost" id="h3-drop" title="SMPL-X 몸 모델 파일(SMPLX_FEMALE.npz 등)을 넣는 LAIS 폴더를 열어요">SMPL-X 넣는 폴더 열기</button></div>
       <p class="st" id="h3-ist" hidden></p><progress id="h3-ipg" max="100" hidden></progress>
     </fieldset>
     <details class="vset m3-fold"><summary>자세한 설정 <span class="mute">보통은 그대로 두세요</span></summary>
-      <label class="f" title="512 가 기본이에요. 메모리가 모자라면 자동으로 한 단계씩 낮춰 다시 해요(낮추면 덜 세밀해요).">형태 복원 격자<select id="h3-grid"><option value="512" selected>512 (기본 · 가장 세밀)</option><option value="384">384</option><option value="256">256 (메모리 적게)</option></select></label>
-      <label class="f" title="뒷모습을 여러 장 그려서 자동으로 한 장을 골라요. 많을수록 오래 걸려요.">뒷면 후보 수<select id="h3-back"><option value="1">1장 (빠르게)</option><option value="2">2장</option><option value="4" selected>4장 (기본)</option><option value="8">8장</option></select></label>
+      <label class="f h3-sith-only" title="512 가 기본이에요. 메모리가 모자라면 자동으로 한 단계씩 낮춰 다시 해요(낮추면 덜 세밀해요).">형태 복원 격자<select id="h3-grid"><option value="512" selected>512 (기본 · 가장 세밀)</option><option value="384">384</option><option value="256">256 (메모리 적게)</option></select></label>
+      <label class="f h3-sith-only" title="뒷모습을 여러 장 그려서 자동으로 한 장을 골라요. 많을수록 오래 걸려요.">뒷면 후보 수<select id="h3-back"><option value="1">1장 (빠르게)</option><option value="2">2장</option><option value="4" selected>4장 (기본)</option><option value="8">8장</option></select></label>
       <label class="chk" title="앞에서 실제로 보이는 표면에 원본 사진의 화소를 그대로 덮어써요. 옆·뒤·가려진 곳은 엔진이 만든 색 그대로예요."><input type="checkbox" id="h3-photo" checked> 원본 사진 화소 붙이기</label>
     </details>
     <fieldset class="vset"><legend>지난 작업</legend><div id="h3-jobs" class="h3-jobs"><p class="mute">아직 없어요.</p></div></fieldset>

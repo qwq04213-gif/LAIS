@@ -10,7 +10,7 @@ MIN_VRAM_MB = 9500
 MIN_DISK_GB = 25           # PyTorch·kaolin·모델 합쳐 약 15GB + 여유
 
 
-def check(root, gpu=None, deep=True, log=None):
+def check(root, gpu=None, deep=True, log=None, engine="sith"):
     """gpu: 본체가 잰 그래픽카드 상태({used_mb, total_mb}) 또는 None. deep=True 면 worker 를 띄워 안쪽까지 봐요.
     돌려주는 값: {"ready", "stage"(wsl/install/models/ok), "checks": [{id, ok, text, fix, info?}], "worker": …}"""
     C = []
@@ -31,7 +31,11 @@ def check(root, gpu=None, deep=True, log=None):
     stage, worker = "wsl", None
     if C[0]["ok"]:
         inst = M.installed(root)
-        add("install", inst, "인체 3D 환경(파이썬·SiTH 코드)" + (" 설치됨" if inst else " 아직 설치 안 됨"), "[설치 시작] 을 눌러 주세요(약 15GB · 20~40분).")
+        add("install", inst, "인체 3D 기본 환경(파이썬·SiTH 코드)" + (" 설치됨" if inst else " 아직 설치 안 됨"), "[설치 시작] 을 눌러 주세요(약 15GB · 20~40분).")
+        if engine == "econ":
+            ei = M.installed(root, "econ")
+            add("install_econ", ei, "ECON 환경" + (" 설치됨" if ei else " 아직 설치 안 됨"), "ICON 계정을 넣고 [ECON 설치 시작] 을 눌러 주세요(약 25GB · 1시간 남짓, PyTorch3D 컴파일 포함).")
+            inst = inst and ei
         stage = "install"
         if inst and deep:
             h = M.start(root, log=log)
@@ -40,7 +44,7 @@ def check(root, gpu=None, deep=True, log=None):
             else:
                 add("worker", h.get("api") == K.API_VERSION, f"worker 실행 중 (판 {h.get('version')})", "LAIS 와 worker 의 판이 달라요. LAIS 를 다시 시작해 주세요.")
                 try:
-                    worker = M.Client(M.STATE["port"]).preflight()
+                    worker = M.Client(M.STATE["port"]).preflight(engine)
                     for c in worker.get("checks", []):
                         C.append({**c, "id": "w_" + c["id"]})
                     stage = "ok" if worker.get("ready") else "models"
@@ -50,12 +54,16 @@ def check(root, gpu=None, deep=True, log=None):
     out = {"ready": ready, "stage": stage, "checks": C, "worker": {k: worker.get(k) for k in ("provider", "title", "verified", "versions", "paths", "gpu")} if worker else None,
            "verified": bool(worker and worker.get("verified")),
            "note": "SiTH 의 공식 시험 환경은 24GB 그래픽카드예요. 10~12GB 에서는 메모리를 아끼는 방식으로 돌리지만, 실제로 끝까지 돌아가는지는 이 PC 에서 한 번 만들어 봐야 알 수 있어요."}
+    out["engine"] = engine
+    out["modes"] = (worker or {}).get("modes") if worker else None
+    out["drop"] = str(M.drop_dir(root))
     out["genders"] = (worker or {}).get("genders") if worker else None      # {male, female, neutral: 파일이 있는지} — 화면이 없는 성별을 못 고르게 해요
     out["env"] = (worker or {}).get("env") if worker else None
     if any(c["id"] == "w_smplx" and not c["ok"] for c in C):
-        out["smplx"] = {"url": "https://smpl-x.is.tue.mpg.de", "folder": M.smplx_windows_path() if M.is_windows() else (worker or {}).get("paths", {}).get("smplx"),
+        out["smplx"] = {"url": "https://smpl-x.is.tue.mpg.de", "folder": str(M.drop_dir(root)),
                         "files": [f"SMPLX_{g.upper()}.npz" for g, ok_ in ((worker or {}).get("genders") or {"neutral": False, "female": False, "male": False}).items() if not ok_],
                         "partial": any(((worker or {}).get("genders") or {}).values()),
                         "text": "SMPL-X 몸 모델은 만든 곳(막스 플랑크 연구소)에 가입하고 이용 약관에 동의해야 받을 수 있어서 자동으로 받지 않아요. "
-                                "① 사이트에 가입·로그인 → ② Download 에서 'SMPL-X v1.1 (NPZ+PKL)' 받기 → ③ 압축을 풀어 models/smplx 안의 파일을 아래 폴더에 넣기."}
+                                "① 사이트에 가입·로그인 → ② Download 에서 'SMPL-X v1.1 (NPZ+PKL)' 받기 → ③ 압축을 풀어 models\\smplx 안의 SMPLX_FEMALE.npz · SMPLX_MALE.npz · SMPLX_NEUTRAL.npz 를 아래 폴더(LAIS 폴더 안)에 넣기 → ④ [다시 확인]. "
+                                "LAIS 가 알아서 인체 3D 환경으로 옮겨요."}
     return out

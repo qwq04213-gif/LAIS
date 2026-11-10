@@ -17,7 +17,7 @@ H3_DIR = OUT / H3K.OUT_SUB
 H3_ID_RX = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}$")
 H3_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".json": "application/json", ".glb": "model/gltf-binary", ".log": "text/plain; charset=utf-8",
             ".obj": "text/plain", ".ply": "application/octet-stream"}
-_H3_PF = {"t": 0.0, "v": None}
+_H3_PF = {"t": 0.0, "v": None, "engine": "sith"}
 
 
 def h3_gpu():
@@ -25,19 +25,37 @@ def h3_gpu():
     return {"used_mb": g["used_mb"], "total_mb": g["total_mb"]} if g else None
 
 
-def h3_status(deep=False):
-    """화면이 처음 열릴 때: 준비 상태·설치 진행·최근 작업."""
+def h3_status(deep=False, engine="sith"):
+    """화면이 처음 열릴 때: 준비 상태(고른 엔진)·설치 진행·최근 작업."""
+    engine = engine if engine in H3K.ENGINES else "sith"
     now = time.time()
-    if deep or _H3_PF["v"] is None or now - _H3_PF["t"] > 20:
-        _H3_PF.update(t=now, v=h3_preflight.check(ROOT, h3_gpu(), deep=deep, log=log))
+    try:
+        h3_manager.drop_dir(ROOT).mkdir(parents=True, exist_ok=True)      # SMPL-X 넣는 폴더를 미리 만들어 둬요(탐색기로 찾기 쉽게)
+    except OSError:
+        pass
+    if deep or _H3_PF["v"] is None or _H3_PF.get("engine") != engine or now - _H3_PF["t"] > 20:
+        _H3_PF.update(t=now, engine=engine, v=h3_preflight.check(ROOT, h3_gpu(), deep=deep, log=log, engine=engine))
     return {"preflight": _H3_PF["v"], "install": h3_manager.install_view(), "jobs": h3_list(), "gpu": h3_gpu(),
-            "stages": [{"id": s[0], "ko": s[1]} for s in H3K.STAGES], "gpu_hold": gpu_hold_view(), "defaults": H3K.DEFAULT_OPTS, "out": str(H3_DIR)}
+            "stages": [{"id": s[0], "ko": s[1]} for s in H3K.STAGES], "engine": engine,
+            "engines": [{"id": e, "ko": H3K.ENGINE_KO[e], "modes": list(H3K.ENGINE_MODES[e])} for e in H3K.ENGINES], "quality_ko": H3K.QUALITY_KO, "drop": str(h3_manager.drop_dir(ROOT)), "gpu_hold": gpu_hold_view(), "defaults": H3K.DEFAULT_OPTS, "out": str(H3_DIR)}
 
 
-def h3_install():
-    r = h3_manager.install(ROOT, log=log)
+def h3_install(p=None):
+    """설치 시작. ECON 은 ICON 계정(icon_user·icon_pass)을 받아 설치 프로그램의 표준 입력으로만 넘겨요(저장·기록하지 않아요)."""
+    p = p or {}
+    engine = p.get("engine") if p.get("engine") in H3K.ENGINES else "sith"
+    creds = {"user": str(p.get("icon_user") or "")[:200], "pass": str(p.get("icon_pass") or "")[:200]} if engine == "econ" else None
+    r = h3_manager.install(ROOT, log=log, engine=engine, creds=creds)
+    creds = None
     _H3_PF["v"] = None
     return r
+
+
+def h3_open_drop():
+    d = h3_manager.drop_dir(ROOT)
+    d.mkdir(parents=True, exist_ok=True)
+    open_folder(d, None)
+    return {"ok": True, "path": str(d)}
 
 
 def h3_job_dir(jid):
@@ -185,9 +203,10 @@ def do_human3d(p, J):
         h3_meta_update(d, id=jid, state="running", opts=opts, input={"size": list(im.size), "frame": frame, "checks": info["checks"]}, created=time.strftime("%Y-%m-%d %H:%M:%S"))
         note(f"입력 {im.size} → 정사각형 {frame['size']} (사람 키 비율 {frame['ratio']})")
         step("preprocess", 0.6, "인체 3D 프로그램 준비 중")
-        pf = h3_preflight.check(ROOT, h3_gpu(), deep=True, log=log)
-        _H3_PF.update(t=time.time(), v=pf)
+        pf = h3_preflight.check(ROOT, h3_gpu(), deep=True, log=log, engine=opts["provider"])
+        _H3_PF.update(t=time.time(), v=pf, engine=opts["provider"])
         info["gender"] = opts["gender"]
+        info["engine"], info["quality"] = opts["provider"], opts["quality"]
         gd = pf.get("genders")
         want = "neutral" if opts["gender"] == "auto" else opts["gender"]
         if pf["ready"] and gd is not None and not gd.get(want):      # 고른 성별의 몸 모델이 없으면 다른 성별로 바꾸지 않고 여기서 멈춰요
@@ -250,7 +269,7 @@ def do_human3d(p, J):
             raise RuntimeError("몸 맞추기 단계가 어떤 성별의 몸 모델을 썼는지 기록하지 않았어요. 성별이 적용됐는지 확인할 수 없어 결과를 내지 않았어요(작업 폴더는 그대로 있어요).")
         rep = h3_finish(d, J, st.get("opts") or opts, step)
         final_grid = (st.get("opts") or opts).get("grid") or opts["grid"]
-        info["low_detail"] = final_grid < opts["grid"]         # 메모리가 모자라 격자를 낮춰 만들었는지
+        info["low_detail"] = opts["provider"] == "sith" and final_grid < opts["grid"]         # 메모리가 모자라 격자를 낮춰 만들었는지
         if info["low_detail"]:
             info["low_detail_text"] = f"그래픽카드 메모리가 모자라 형태 복원 격자를 {opts['grid']} → {final_grid} 로 낮춰 만들었어요. 형상(주름·손가락·얼굴 굴곡)이 덜 세밀해요."
         info["qa"] = {"pass": rep["pass"], "warnings": rep["warnings"], "problems": rep["problems"], "silhouette": rep.get("silhouette"), "topology": {k: rep["topology"].get(k) for k in
@@ -258,7 +277,7 @@ def do_human3d(p, J):
         info["views"] = {k: f"/human3d/file/{jid}/result/{v}" for k, v in rep["views"].items()}
         info["glb"] = f"/human3d/file/{jid}/{H3K.FILES['glb']}"
         info["verified"] = bool(pf.get("verified"))
-        h3_meta_update(d, state="done", hub_seconds=round(time.time() - t0, 1), qa_pass=rep["pass"], glb=H3K.FILES["glb"], requested_grid=opts["grid"], final_grid=final_grid, gender=opts["gender"], gender_used=info["gender_used"],
+        h3_meta_update(d, state="done", hub_seconds=round(time.time() - t0, 1), qa_pass=rep["pass"], glb=H3K.FILES["glb"], requested_grid=opts["grid"], final_grid=final_grid, gender=opts["gender"], gender_used=info["gender_used"], engine=opts["provider"], quality=opts["quality"],
                        low_detail=info["low_detail"], low_detail_text=info.get("low_detail_text"))
         J["images"].append(info["glb"])
         J["msg"] = ("인체 3D 를 만들었어요." if rep["pass"] else "만들었지만 검사에서 문제가 보여요 — 아래 검사 결과를 확인해 주세요.") + (f" (격자 {final_grid} — 형상이 덜 세밀해요)" if info["low_detail"] else "")
