@@ -42,7 +42,8 @@ def studio_running():
 
 def safe_rel(rel):
     p = Path(rel)
-    if p.is_absolute() or ".." in p.parts or not p.parts or p.parts[0].lower() in PROTECTED or ":" in rel:
+    code = len(p.parts) >= 4 and p.parts[:2] == ("engine", "human3d") and p.parts[2] in ("worker", "scripts") and p.suffix in (".py", ".sh")      # 인체 3D worker 코드만 engine 안에 둬요(모델·가상환경은 아님)
+    if p.is_absolute() or ".." in p.parts or not p.parts or (p.parts[0].lower() in PROTECTED and not code) or ":" in rel:
         raise ValueError(f"안전하지 않은 경로라서 중단했어요: {rel}")
     return "/".join(p.parts)
 
