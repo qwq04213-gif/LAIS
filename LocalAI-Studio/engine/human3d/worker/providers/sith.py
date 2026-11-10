@@ -16,7 +16,8 @@ from .base import Provider
 GRID_STEPS = (512, 384, 256)
 SITH_REPO = "https://github.com/SiTH-Diffusion/SiTH"
 SITH_COMMIT = "6401549"          # 설치 스크립트가 받는 판(코드를 읽고 맞춘 판)
-SMPLX_NEED = ("SMPLX_MALE.npz",)                                   # fit.py 가 실제로 읽는 파일
+SMPLX_NEED = ("SMPLX_NEUTRAL.npz", "SMPLX_FEMALE.npz", "SMPLX_MALE.npz")      # 고른 성별의 파일을 읽어요(공식 fit.py 는 남성 고정 — sith_stages.cmd_fit 이 고른 성별로 바꿔요)
+GENDER_KO = {"male": "남성", "female": "여성", "neutral": "중립"}
 SMPLX_ALL = ("SMPLX_NEUTRAL.npz", "SMPLX_MALE.npz", "SMPLX_FEMALE.npz", "SMPLX_NEUTRAL.pkl", "SMPLX_MALE.pkl", "SMPLX_FEMALE.pkl")
 _PROBE = r"""
 import json, sys
@@ -35,11 +36,16 @@ try:
         except Exception: o["bf16"] = False
 except Exception as e:
     o["torch_error"] = repr(e)
-for m in ("kaolin", "diffusers", "transformers", "smplx", "trimesh", "cv2", "rtmlib", "onnxruntime", "accelerate"):
-    try:
-        mod = __import__(m); o[m] = getattr(mod, "__version__", "ok")
-    except Exception as e:
-        o[m] = None; o[m + "_error"] = repr(e)[:200]
+try:
+    from worker import envcheck          # 부품을 전부 실제로 불러와 봐요(오류 글·어느 꾸러미에서 났는지까지)
+    ec = envcheck.check()
+    o["env"] = {k: v for k, v in ec.items() if k != "modules"}
+    for k, m in ec["modules"].items():
+        o[k] = m.get("version") if m["ok"] else None
+        if not m["ok"]:
+            o[k + "_error"] = m["error"]; o[k + "_culprit"] = m.get("culprit"); o[k + "_abi"] = m.get("abi"); o[k + "_trace"] = m.get("trace", "")[-700:]
+except Exception as e:
+    o["env"] = {"ok": False, "text": "부품 검사를 돌리지 못했어요: " + repr(e)[:200], "failed": [], "abi": False}
 try:
     from worker import nvcheck          # nvdiffrast: 불러오기만이 아니라 CUDA 확장·컨텍스트·작은 래스터화까지 실제로 돌려 봐요
     o["nv"] = nvcheck.check()
@@ -86,11 +92,12 @@ class SithProvider(Provider):
 
     def files(self):
         s = self.sith
+        gd = {g: os.path.isfile(os.path.join(s, "data", "body_models", "smplx", f"SMPLX_{g.upper()}.npz")) for g in R.GENDERS}
         return {"code": os.path.isfile(os.path.join(s, "fit.py")) and os.path.isfile(os.path.join(s, "recon", "config.yaml")),
                 "recon": os.path.isfile(os.path.join(s, "checkpoints", "recon_model.pth")),
                 "smplerx": os.path.isfile(os.path.join(s, "checkpoints", "save_smplerx.pth")),
                 "diffusion": os.path.isfile(os.path.join(self.diff, "unet", "config.json")),
-                "smplx": all(os.path.isfile(os.path.join(s, "data", "body_models", "smplx", n)) for n in SMPLX_NEED)}
+                "genders": gd, "smplx": any(gd.values())}
 
     def preflight(self):
         f, p = self.files(), self.probe()
@@ -102,7 +109,18 @@ class SithProvider(Provider):
         add("cuda", p.get("cuda"), f"그래픽카드 사용 가능 — {p.get('gpu')} · {p.get('vram_mb')}MB · CUDA {p.get('cuda_version')}" if p.get("cuda") else "worker 가 그래픽카드(CUDA)를 쓰지 못해요",
             "윈도우의 NVIDIA 드라이버를 최신으로 올리고, WSL 을 다시 시작해 주세요(wsl --shutdown).")
         for m, ko in (("kaolin", "kaolin"), ("diffusers", "diffusers"), ("smplx", "smplx"), ("rtmlib", "자세 검출기(rtmlib)")):
-            add("mod_" + m, p.get(m), f"{ko} {p.get(m) or '없음'}", str(p.get(m + "_error") or "설치를 다시 실행해 주세요."))
+            if p.get(m):
+                add("mod_" + m, True, f"{ko} {p.get(m)}")
+            else:                                     # 깔려 있어도 불러오지 못하면 '안 됨' — 까닭(판 안 맞음인지)과 어느 꾸러미에서 났는지를 같이 보여요
+                abi, cul = p.get(m + "_abi"), p.get(m + "_culprit")
+                add("mod_" + m, False, f"{ko} 을(를) 불러오지 못해요" + (" — 부품끼리 판이 안 맞아요(numpy)" if abi else "") + (f" · 문제가 난 곳: {cul}" if cul else ""),
+                    "[설치 시작]을 다시 눌러 주세요(부품 판을 고정한 조합으로 다시 맞춰요). 그래도 같으면 아래 오류 글을 캡처해서 보내 주세요.")
+                C[-1].update(detail=str(p.get(m + "_error") or "")[:300], trace=str(p.get(m + "_trace") or "")[-700:], abi=bool(abi), culprit=cul)
+        env = p.get("env") or {}
+        others = [k for k in (env.get("failed") or []) if k not in ("kaolin", "diffusers", "smplx", "rtmlib", "torch")]
+        if others:
+            add("mod_others", False, "불러오지 못하는 부품이 더 있어요: " + ", ".join(others), "[설치 시작]을 다시 눌러 주세요.")
+            C[-1].update(detail="; ".join(f"{k}: {p.get(k + '_error')}" for k in others)[:400])
         nv = p.get("nv") or {"ok": False, "kind": "not_installed", "text": "nvdiffrast 를 확인하지 못했어요.", "fix": "설치를 다시 실행해 주세요."}
         nv_kind = {"not_installed": "설치 문제", "build": "설치 문제", "no_torch": "설치 문제", "no_cuda": "CUDA 실행 문제", "runtime": "CUDA 실행 문제", "wrong": "CUDA 실행 문제"}.get(nv.get("kind"), "")
         add("nvdiffrast", nv.get("ok"), nv.get("text") if nv.get("ok") else f"[{nv_kind}] {nv.get('text')}", nv.get("fix") or "설치를 다시 실행해 주세요.")
@@ -110,8 +128,12 @@ class SithProvider(Provider):
         add("recon", f["recon"], "형태 복원 모델(recon_model.pth)" + (" 있음" if f["recon"] else " 없음"), "설치(모델 받기)를 다시 실행해 주세요.")
         add("smplerx", f["smplerx"], "몸 어림 모델(save_smplerx.pth)" + (" 있음" if f["smplerx"] else " 없음"), "설치(모델 받기)를 다시 실행해 주세요.")
         add("diffusion", f["diffusion"], "뒷면 그리기 모델(SiTH_diffusion)" + (" 있음" if f["diffusion"] else " 없음"), "설치(모델 받기)를 다시 실행해 주세요.")
-        add("smplx", f["smplx"], "SMPL-X 몸 모델" + (" 있음" if f["smplx"] else " 없음 — 직접 가입해서 받아야 하는 파일이에요"),
-            f"https://smpl-x.is.tue.mpg.de 에 가입·약관 동의 후 'SMPL-X v1.1 (NPZ+PKL)' 을 받아, 압축을 풀어 나온 models/smplx 안의 파일을 {smplx_dir} 에 넣어 주세요.")
+        gd = f["genders"]
+        have = [GENDER_KO[g] for g in R.GENDERS if gd[g]]
+        miss = [f"SMPLX_{g.upper()}.npz" for g in R.GENDERS if not gd[g]]
+        add("smplx", all(gd.values()), "SMPL-X 몸 모델: " + ("·".join(have) + " 있음" if have else "없음 — 직접 가입해서 받아야 하는 파일이에요") + (f" (없는 파일: {', '.join(miss)})" if have and miss else ""),
+            f"https://smpl-x.is.tue.mpg.de 에 가입·약관 동의 후 'SMPL-X v1.1 (NPZ+PKL)' 을 받아, 압축을 풀어 나온 models/smplx 안의 파일(남성·여성·중립 모두)을 {smplx_dir} 에 넣어 주세요. "
+            "없는 성별은 고를 수 없어요(다른 성별 모델로 바꿔 쓰지 않아요).")
         vram = p.get("vram_mb") or 0
         if p.get("cuda"):
             free = p.get("free_mb") or 0
@@ -120,9 +142,9 @@ class SithProvider(Provider):
                 "쓸 수 있는 메모리가 8GB 보다 적어요. 게임·브라우저·다른 AI 프로그램을 닫으면 늘어나요(인체 3D 를 시작하면 LAIS 의 대화·이미지 모델은 자동으로 내려요).")
             C.append({"id": "vram_note", "ok": True, "info": True,
                       "text": f"FP16 {'가능' if p.get('fp16') else '불가'} · BF16 {'가능' if p.get('bf16') else '불가'}. SiTH 의 공식 시험 환경은 24GB 이고, 10~12GB 에서 끝까지 돌아가는지는 아직 확인하지 못했어요(보장하지 않아요)."})
-        ready = all(c["ok"] for c in C if c["id"] not in ("vram", "vram_free"))
+        ready = all(c["ok"] for c in C if c["id"] not in ("vram", "vram_free", "smplx")) and f["smplx"]      # 몸 모델은 하나라도 있으면 그 성별로는 돌릴 수 있어요
         return {"ready": ready, "checks": C, "versions": self.versions(), "vram": {"total_mb": vram or None, "free_mb": p.get("free_mb")}, "nvdiffrast": {k: nv.get(k) for k in ("ok", "kind", "pixels", "version")}, "paths": {"sith": self.sith, "smplx": smplx_dir, "diffusion": self.diff},
-                "smplx_files": {"need": list(SMPLX_NEED), "all": list(SMPLX_ALL)}}
+                "smplx_files": {"need": list(SMPLX_NEED), "all": list(SMPLX_ALL)}, "genders": gd, "env": {k: env.get(k) for k in ("ok", "text", "abi", "culprits", "numpy", "failed")}}
 
     def versions(self):
         p = self._probe[1] or {}
@@ -139,22 +161,38 @@ class SithProvider(Provider):
         f = self.files()
         for k in keys:
             if not f[k]:
-                raise R.StageError("no_smplx" if k == "smplx" else "no_model", {"code": "SiTH 코드가 없어요.", "recon": "형태 복원 모델이 없어요.", "smplerx": "몸 어림 모델이 없어요.",
-                                                                              "diffusion": "뒷면 그리기 모델이 없어요.", "smplx": "SMPL-X 몸 모델 파일이 없어요."}[k], job.stage)
+                raise R.StageError("no_model", {"code": "SiTH 코드가 없어요.", "recon": "형태 복원 모델이 없어요.", "smplerx": "몸 어림 모델이 없어요.", "diffusion": "뒷면 그리기 모델이 없어요."}[k], job.stage)
 
-    def _mine(self, job, log, cmd, *args, timeout=3600):
-        return R.run_stage([self.py, "-m", "worker.providers.sith_stages", cmd, "--job", job.dir, *[str(a) for a in args]], self.sith, self.env(), job, job.stage, log, timeout=timeout)
+    def _mine(self, job, log, cmd, *args, timeout=3600, on_line=None):
+        return R.run_stage([self.py, "-m", "worker.providers.sith_stages", cmd, "--job", job.dir, *[str(a) for a in args]], self.sith, self.env(), job, job.stage, log, on_line=on_line, timeout=timeout)
 
     def st_keypoints(self, job, log):
         self._need(job, "code")
         return self._mine(job, log, "keypoints", timeout=900)
 
+    def gender_of(self, job):
+        """이 작업에 쓸 SMPL-X 성별. '자동'은 아직 성별 추정기가 없어서 중립 모델을 써요(남성으로 정하지 않아요)."""
+        g = job.opts.get("gender") or "auto"
+        if g == "auto":
+            return "neutral", "성별 '자동': 사진에서 성별을 추정하는 기능은 아직 없어서 중립 몸 모델을 썼어요. 여성·남성을 직접 고르면 그 모델로 맞춰요."
+        return g, None
+
     def st_smplx(self, job, log):
-        """공식 fit.py 그대로: SMPLer-X 로 어림 → 관절점·실루엣에 맞춰 최적화(방향·체형·크기·위치). 결과: smplx/000_smplx.obj, smplx/debug/000.json"""
-        self._need(job, "code", "smplerx", "smplx")
+        """SMPLer-X 로 어림 → 관절점·실루엣에 맞춰 최적화(방향·체형·크기·위치). 공식 fit.py 를 그대로 쓰되 몸 모델의 성별만 고른 것으로(공식은 남성 고정).
+        결과: smplx/000_smplx.obj, smplx/debug/000.json, smplx/gender.json. 고른 성별의 파일이 없으면 다른 성별로 바꾸지 않고 멈춰요."""
+        self._need(job, "code", "smplerx")
+        g, why = self.gender_of(job)
+        if g not in R.GENDERS:
+            raise R.StageError("stage_failed", f"모르는 성별 값이에요: {g}", job.stage)
+        if not self.files()["genders"][g]:
+            raise R.StageError("no_smplx", f"SMPL-X {GENDER_KO[g]} 몸 모델 파일(SMPLX_{g.upper()}.npz)이 없어요. 다른 성별 모델로 바꿔 쓰지 않아요 — 파일을 넣거나 다른 성별을 골라 주세요.", job.stage)
+        job.opts["gender_used"] = g
         on = lambda line: job.enter("smplx_fit") if "Body Fitting" in line else None
-        return R.run_stage([self.py, "fit.py", "-i", os.path.join(job.dir, "images"), "-o", os.path.join(job.dir, "smplx"), "--size", "1024", "--opt_orient", "--opt_betas", "--debug"],
-                           self.sith, self.env(), job, job.stage, log, on_line=on, timeout=1800)
+        res = self._mine(job, log, "fit", "--gender", g, timeout=1800, on_line=on)
+        res.setdefault("notes", [])
+        if why:
+            res["notes"].append(why)
+        return res
 
     def st_back(self, job, log):
         self._need(job, "code", "diffusion")

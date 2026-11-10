@@ -187,8 +187,14 @@ def do_human3d(p, J):
         step("preprocess", 0.6, "인체 3D 프로그램 준비 중")
         pf = h3_preflight.check(ROOT, h3_gpu(), deep=True, log=log)
         _H3_PF.update(t=time.time(), v=pf)
+        info["gender"] = opts["gender"]
+        gd = pf.get("genders")
+        want = "neutral" if opts["gender"] == "auto" else opts["gender"]
+        if pf["ready"] and gd is not None and not gd.get(want):      # 고른 성별의 몸 모델이 없으면 다른 성별로 바꾸지 않고 여기서 멈춰요
+            raise RuntimeError(f"SMPL-X {H3K.GENDER_KO[want]} 몸 모델 파일(SMPLX_{want.upper()}.npz)이 없어요" + (" ('자동'은 중립 모델을 써요)" if opts["gender"] == "auto" else "") +
+                               ". 다른 성별 모델로 바꿔 쓰지 않아요 — 파일을 넣거나 다른 성별을 골라 주세요.")
         if not pf["ready"]:
-            miss = [c for c in pf["checks"] if not c["ok"] and not c.get("info") and c["id"] not in ("gpu", "w_vram", "w_vram_free")]
+            miss = [c for c in pf["checks"] if not c["ok"] and not c.get("info") and c["id"] not in ("gpu", "w_vram", "w_vram_free", "w_smplx")]
             raise RuntimeError("인체 3D 를 돌릴 준비가 안 됐어요 — " + " / ".join(c["text"] + (f" ({c['fix']})" if c.get("fix") else "") for c in miss[:3]))
         # 그래픽카드 혼자 쓰기: 이미지·영상 작업은 이 작업이 대기열을 잡고 있어서 못 돌고, 대화(Ollama)는 여기서 막아요.
         # 답을 만들고 있는 대화가 있으면 끝날 때까지 기다린 뒤, Ollama·ComfyUI 가 올려 둔 모델을 내려요. 끝나면(완료·중단·실패) finally 에서 꼭 풀어요.
@@ -235,6 +241,13 @@ def do_human3d(p, J):
             e = st.get("error") or {}
             info["error"] = e
             raise RuntimeError(f"{H3K.STAGE_KO.get(e.get('stage'), e.get('stage') or '')} 단계에서 멈췄어요 — {H3K.ERRORS.get(e.get('code'), '')} {e.get('msg') or ''} (자세한 진단: {d / H3K.FILES['diagnosis']})".replace("  ", " "))
+        gj = d / "smplx" / "gender.json"
+        try:
+            info["gender_used"] = json.loads(gj.read_text(encoding="utf-8")) if gj.is_file() else None
+        except ValueError:
+            info["gender_used"] = None
+        if not (info["gender_used"] or {}).get("applied"):     # 몸 맞추기가 성별을 적용했다는 기록이 없으면 '적용됨'으로 치지 않아요
+            raise RuntimeError("몸 맞추기 단계가 어떤 성별의 몸 모델을 썼는지 기록하지 않았어요. 성별이 적용됐는지 확인할 수 없어 결과를 내지 않았어요(작업 폴더는 그대로 있어요).")
         rep = h3_finish(d, J, st.get("opts") or opts, step)
         final_grid = (st.get("opts") or opts).get("grid") or opts["grid"]
         info["low_detail"] = final_grid < opts["grid"]         # 메모리가 모자라 격자를 낮춰 만들었는지
@@ -245,7 +258,7 @@ def do_human3d(p, J):
         info["views"] = {k: f"/human3d/file/{jid}/result/{v}" for k, v in rep["views"].items()}
         info["glb"] = f"/human3d/file/{jid}/{H3K.FILES['glb']}"
         info["verified"] = bool(pf.get("verified"))
-        h3_meta_update(d, state="done", hub_seconds=round(time.time() - t0, 1), qa_pass=rep["pass"], glb=H3K.FILES["glb"], requested_grid=opts["grid"], final_grid=final_grid,
+        h3_meta_update(d, state="done", hub_seconds=round(time.time() - t0, 1), qa_pass=rep["pass"], glb=H3K.FILES["glb"], requested_grid=opts["grid"], final_grid=final_grid, gender=opts["gender"], gender_used=info["gender_used"],
                        low_detail=info["low_detail"], low_detail_text=info.get("low_detail_text"))
         J["images"].append(info["glb"])
         J["msg"] = ("인체 3D 를 만들었어요." if rep["pass"] else "만들었지만 검사에서 문제가 보여요 — 아래 검사 결과를 확인해 주세요.") + (f" (격자 {final_grid} — 형상이 덜 세밀해요)" if info["low_detail"] else "")

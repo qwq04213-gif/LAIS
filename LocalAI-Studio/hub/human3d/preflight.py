@@ -46,13 +46,16 @@ def check(root, gpu=None, deep=True, log=None):
                     stage = "ok" if worker.get("ready") else "models"
                 except Exception as e:  # noqa: BLE001
                     add("worker_pf", False, f"worker 점검 실패: {e}", "")
-    ready = stage == "ok" and all(c["ok"] for c in C if not c.get("info") and c["id"] not in ("gpu", "w_vram", "w_vram_free"))
+    ready = stage == "ok" and all(c["ok"] for c in C if not c.get("info") and c["id"] not in ("gpu", "w_vram", "w_vram_free", "w_smplx")) and bool(worker and worker.get("ready"))
     out = {"ready": ready, "stage": stage, "checks": C, "worker": {k: worker.get(k) for k in ("provider", "title", "verified", "versions", "paths", "gpu")} if worker else None,
            "verified": bool(worker and worker.get("verified")),
            "note": "SiTH 의 공식 시험 환경은 24GB 그래픽카드예요. 10~12GB 에서는 메모리를 아끼는 방식으로 돌리지만, 실제로 끝까지 돌아가는지는 이 PC 에서 한 번 만들어 봐야 알 수 있어요."}
+    out["genders"] = (worker or {}).get("genders") if worker else None      # {male, female, neutral: 파일이 있는지} — 화면이 없는 성별을 못 고르게 해요
+    out["env"] = (worker or {}).get("env") if worker else None
     if any(c["id"] == "w_smplx" and not c["ok"] for c in C):
         out["smplx"] = {"url": "https://smpl-x.is.tue.mpg.de", "folder": M.smplx_windows_path() if M.is_windows() else (worker or {}).get("paths", {}).get("smplx"),
-                        "files": (worker or {}).get("smplx_files", {}).get("need", ["SMPLX_MALE.npz"]),
+                        "files": [f"SMPLX_{g.upper()}.npz" for g, ok_ in ((worker or {}).get("genders") or {"neutral": False, "female": False, "male": False}).items() if not ok_],
+                        "partial": any(((worker or {}).get("genders") or {}).values()),
                         "text": "SMPL-X 몸 모델은 만든 곳(막스 플랑크 연구소)에 가입하고 이용 약관에 동의해야 받을 수 있어서 자동으로 받지 않아요. "
                                 "① 사이트에 가입·로그인 → ② Download 에서 'SMPL-X v1.1 (NPZ+PKL)' 받기 → ③ 압축을 풀어 models/smplx 안의 파일을 아래 폴더에 넣기."}
     return out

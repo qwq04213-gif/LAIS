@@ -2,6 +2,7 @@
 실행 위치는 SiTH 폴더(공식 코드가 상대 경로로 data/·checkpoints/ 를 읽어요).
 
   keypoints  자세·관절점(RTMPose/DWPose 133점) → OpenPose JSON(images/000_keypoints.json)
+  fit        SMPLer-X + SMPL-X 맞추기: 공식 fit.py 를 그대로 돌리되, 몸 모델의 성별만 고른 것으로 바꿔요(공식 코드는 남성 고정)
   back       뒷면 그리기: 후보를 한 장씩 그려(묶음 1) 자동으로 한 장 고름 → back_images/000_000.png
   recon      형태·색 복원: 512³ 격자 좌표를 그래픽카드에 통째로 올리지 않고 CPU 에서 조금씩 만들어 보냄 → meshes/000_reco.ply·obj
 
@@ -63,6 +64,53 @@ def cmd_keypoints(a):
     if len(kps) > 1:
         R.emit("NOTE", f"사진에 사람이 {len(kps)}명 보여서 가장 크게 나온 사람을 골랐어요.")
     R.progress(1.0, "관절점 저장")
+
+
+# ───────────────────────────── 몸 맞추기(SMPL-X) ─────────────────────────────
+def smplx_file(gender):
+    return os.path.join("data", "body_models", "smplx", f"SMPLX_{gender.upper()}.npz")
+
+
+def cmd_fit(a):
+    """공식 fit.py 의 main() 을 그대로 써요. 다른 점은 하나: fit.py 181번째 줄이 SMPLX(..., gender='male') 로 고정돼 있어서,
+    fit 모듈의 SMPLX 를 감싸 '고른 성별'로만 만들어지게 해요(공식 파일은 고치지 않아요 — 되돌리기 쉽고 판이 바뀌어도 알아챌 수 있게).
+    고른 성별의 모델 파일이 없으면 다른 성별로 바꿔 쓰지 않고 멈춰요."""
+    g = a.gender
+    if g not in R.GENDERS:
+        R.fail("stage_failed", f"모르는 성별 값이에요: {g}")
+    if not os.path.isfile(smplx_file(g)):
+        R.fail("no_smplx", f"SMPL-X {({'male': '남성', 'female': '여성', 'neutral': '중립'})[g]} 몸 모델 파일({os.path.basename(smplx_file(g))})이 없어요. 다른 성별 모델로 바꿔 쓰지 않아요 — 파일을 넣거나 다른 성별을 골라 주세요.")
+    import fit as F                                   # SiTH/fit.py
+    seen = {"asked": None, "used": None, "calls": 0, "n_vert": None}
+    real = F.SMPLX
+
+    def make(*args, **kw):
+        seen["asked"] = kw.get("gender")
+        kw["gender"] = g
+        m = real(*args, **kw)
+        seen["calls"] += 1
+        seen["used"] = getattr(m, "gender", None)
+        try:
+            seen["n_vert"] = int(m.v_template.shape[0])
+        except Exception:  # noqa: BLE001
+            pass
+        return m
+
+    F.SMPLX = make
+    ns = argparse.Namespace(input_path=os.path.join(a.job, "images"), output_path=os.path.join(a.job, "smplx"), size=1024, debug=True,
+                            opt_orient=True, opt_pose=False, opt_betas=True)
+    R.progress(0.02, "몸 어림 모델 불러오는 중")
+    F.main(ns)
+    R.report_vram()
+    if seen["calls"] < 1:
+        R.fail("stage_failed", "몸 맞추기가 SMPL-X 모델을 만들지 않았어요(SiTH 코드 판이 달라졌을 수 있어요). 성별을 적용하지 못해 멈췄어요.")
+    if seen["used"] != g:
+        R.fail("stage_failed", f"고른 성별({g})이 몸 모델에 적용되지 않았어요(실제 {seen['used']}). 멈췄어요.")
+    if seen["n_vert"] not in (None, 10475):
+        R.fail("stage_failed", f"SMPL-X 몸 모델의 꼭짓점 수가 예상(10475)과 달라요: {seen['n_vert']}")
+    R.write_json(os.path.join(a.job, "smplx", "gender.json"), {"gender": g, "model_file": os.path.basename(smplx_file(g)), "applied": True, "vertices": seen["n_vert"],
+                                                              "upstream_default": seen["asked"],
+                                                              "note": "SiTH 공식 코드는 모든 사람에게 남성 몸 모델을 써요(학습 자료도 그렇게 맞춰졌어요). 다른 성별 모델로 맞춘 결과의 품질은 실제 사진으로 확인해야 해요."})
 
 
 # ───────────────────────────── 뒷면 그리기 ─────────────────────────────
@@ -305,6 +353,9 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     k = sub.add_parser("keypoints")
     k.add_argument("--job", required=True)
+    f = sub.add_parser("fit")
+    f.add_argument("--job", required=True)
+    f.add_argument("--gender", required=True)
     b = sub.add_parser("back")
     b.add_argument("--job", required=True)
     b.add_argument("--model", required=True)
@@ -316,7 +367,7 @@ def main():
         r.add_argument("--" + n, type=int, default=d)
     a = ap.parse_args()
     try:
-        {"keypoints": cmd_keypoints, "back": cmd_back, "recon": cmd_recon}[a.cmd](a)
+        {"keypoints": cmd_keypoints, "fit": cmd_fit, "back": cmd_back, "recon": cmd_recon}[a.cmd](a)
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001

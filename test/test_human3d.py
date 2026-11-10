@@ -24,6 +24,7 @@ def wait(jid, t=120):
 # 1) 약속: 본체와 worker 가 같은 값을 쓰는지
 assert (K.API_VERSION, K.HOST, K.PORT) == (WR.API_VERSION, WR.HOST, WR.PORT) and K.WORKER_STAGES == WR.WORKER_STAGES and K.HOST == "127.0.0.1"
 assert abs(sum(s[2] for s in K.STAGES) - 1) < 1e-9 and K.overall("preprocess", 0) == 0 and K.overall("export", 1) == 1 and K.MAX_OOM_RETRY == 3 and K.OOM_LADDER == (("chunk", 20000), ("grid", 384), ("grid", 256))
+assert K.GENDERS == WR.GENDERS == ("male", "female", "neutral") and K.DEFAULT_OPTS["gender"] == "auto" and K.clean_opts({"gender": "female"})["gender"] == "female" and K.clean_opts({"gender": "남자"})["gender"] == "auto"
 o = K.clean_opts({"grid": 999, "back_candidates": 99, "provider": "evil", "chunk": 1}); assert o["grid"] == 512 and o["back_candidates"] == 8 and o["provider"] == "sith" and o["chunk"] == 5000
 ok("contracts shared by hub and worker; options clamped")
 
@@ -118,6 +119,7 @@ assert [s["id"] for s in meta["stages"]] == ["keypoints", "smplx_init", "smplx_f
 assert [s["id"] for s in H["stages"]] == [s["id"] for s in meta["stages"]] and H["stages"][3]["vram_proc_mb"] == 5000 and set(H["views"]) >= {"front", "q45", "side", "back", "observed"}
 qa = json.loads((d / "result/mesh_qa.json").read_text(encoding="utf-8")); assert qa["pass"] and qa["silhouette"]["iou"] > 0.93 and qa["topology"]["components"] == 1 and not qa["topology"]["inverted"], qa["problems"]
 assert all(e["known"] and e["cover"] > 0.8 for e in qa["parts"].values()) and len(qa["parts"]) == 12 and qa["face"]["ok"] and qa["neck"]["ok"] and qa["neck"]["connected"] and qa["legs_gap"]["filled"] < 0.2, qa["parts"]
+assert H["gender"] == "auto" and H["gender_used"]["gender"] == "neutral" and H["gender_used"]["applied"] and meta["opts"]["gender"] == "auto" and any("중립" in n and "자동" in n for n in H["notes"]), (H.get("gender_used"), H["notes"])
 assert qa["glb"]["remesh"] is False and qa["glb"]["decimate"] is False and qa["glb"]["vertices"] == qa["topology"]["vertices"]
 # 사진 화소 붙이기: 앞면은 사진 색(옷 빨강·노란 줄), 뒷면은 엔진 색 그대로
 eng = X.read_ply(d / "meshes/000_reco.ply"); assert set(map(tuple, eng.C.tolist())) == {(110, 110, 110), (60, 80, 160)}
@@ -141,6 +143,47 @@ MODE.write_text("two_pieces"); j = wait(post("/api/job", {"kind": "human3d", "im
 assert j["state"] == "done" and q2["topology"]["components"] == 2 and any(p["id"] == "pieces" for p in q2["problems"])
 assert X.read_glb_json(Path(j["human3d"]["dir"]) / "result/human.glb")["accessors"][0]["count"] == q2["topology"]["vertices"]      # 작은 조각도 GLB 에 그대로
 ok("missing limb is named with the stage that lost it; separate pieces are reported and kept")
+
+# 7-2) 성별: 고른 성별의 몸 모델로만 맞춤 — 남성 고정 없음, 없는 성별은 다른 성별로 바꾸지 않고 멈춤 (가짜 엔진 — 실제 여성 사진 추론은 미검증)
+MODE.write_text("ok")
+for g, fn in (("female", "SMPLX_FEMALE.npz"), ("male", "SMPLX_MALE.npz"), ("neutral", "SMPLX_NEUTRAL.npz")):
+    j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1, "gender": g}})["id"]); H = j["human3d"]; d = Path(H["dir"])
+    gu = json.loads((d / "smplx/gender.json").read_text(encoding="utf-8")); mt = json.loads((d / "job.json").read_text(encoding="utf-8"))
+    assert j["state"] == "done" and H["gender"] == g and gu == H["gender_used"] and gu["gender"] == g and gu["model_file"] == fn and gu["applied"] and mt["gender"] == g and mt["gender_used"]["gender"] == g, (g, gu)
+    assert mt["opts"]["gender_used"] == g and not any("자동" in n for n in H["notes"]) and get("/api/human3d/job/" + H["id"])["meta"]["gender_used"]["model_file"] == fn
+MODE.write_text("no_female"); hub._H3_PF["v"] = None; S2 = get("/api/human3d?deep=1"); assert S2["preflight"]["genders"] == {"male": True, "female": False, "neutral": True} and S2["preflight"]["ready"], S2["preflight"]
+assert "SMPLX_FEMALE.npz" in S2["preflight"]["smplx"]["files"] and S2["preflight"]["smplx"]["partial"]
+j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"gender": "female"}})["id"]); d = Path(j["human3d"]["dir"])
+assert j["state"] == "error" and "여성" in j["error"] and "SMPLX_FEMALE.npz" in j["error"] and "바꿔 쓰지 않아요" in j["error"] and not (d / "smplx").exists() and not (d / "result/human.glb").exists() and hub.GPU_HOLD["who"] is None, j
+j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"gender": "male", "back_candidates": 1}})["id"]); assert j["state"] == "done" and j["human3d"]["gender_used"]["gender"] == "male"      # 있는 성별은 그대로 됨
+MODE.write_text("no_gender_record"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"gender": "female", "back_candidates": 1}})["id"])
+assert j["state"] == "error" and "성별이 적용됐는지 확인할 수 없어" in j["error"] and not (Path(j["human3d"]["dir"]) / "result/human.glb").exists(), j      # 적용 기록이 없으면 결과를 내지 않음
+MODE.write_text("ok"); hub._H3_PF["v"] = None
+# 실제 SiTH 단계 스크립트(cmd_fit): 공식 fit.py 의 남성 고정을 고른 성별로 바꾸는지 — 가짜 fit 모듈로 확인(torch·SMPL-X 없이)
+import subprocess
+fk = tmp / "fakesith"; (fk / "data/body_models/smplx").mkdir(parents=True); (fk / "data/body_models/smplx/SMPLX_FEMALE.npz").write_bytes(b"x"); (fk / "data/body_models/smplx/SMPLX_MALE.npz").write_bytes(b"x")
+(fk / "fit.py").write_text("""import os, json
+SMPL_PATH = 'data/body_models'
+class _M:
+    def __init__(self, gender): self.gender = gender; self.v_template = type('V', (), {'shape': (10475, 3)})()
+def SMPLX(model_path=None, gender=None, **kw): return _M(gender)
+def main(args):
+    m = SMPLX(model_path=os.path.join(SMPL_PATH, 'smplx'), gender='male', use_pca=False)      # 공식 코드처럼 남성 고정
+    os.makedirs(args.output_path, exist_ok=True)
+    json.dump({'made_with': m.gender, 'debug': args.debug, 'opt_betas': args.opt_betas, 'opt_orient': args.opt_orient, 'size': args.size}, open(os.path.join(args.output_path, 'made.json'), 'w'))
+""")
+def run_fit(g, extra=""):
+    jd = Path(tempfile.mkdtemp()); (jd / "images").mkdir()
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([BASE + "/LocalAI-Studio/engine/human3d", BASE + "/LocalAI-Studio/hub", str(fk)]))
+    r = subprocess.run([sys.executable, "-m", "worker.providers.sith_stages", "fit", "--job", str(jd), "--gender", g], cwd=fk, env=env, capture_output=True, text=True, timeout=60)
+    return r.returncode, r.stdout + r.stderr, jd
+rc, out, jd = run_fit("female"); made = json.loads((jd / "smplx/made.json").read_text()); gj = json.loads((jd / "smplx/gender.json").read_text(encoding="utf-8"))
+assert rc == 0 and made == {"made_with": "female", "debug": True, "opt_betas": True, "opt_orient": True, "size": 1024} and gj["gender"] == "female" and gj["upstream_default"] == "male" and gj["applied"] and gj["vertices"] == 10475, (out, made, gj)
+rc, out, jd = run_fit("neutral"); assert rc != 0 and "@@ERROR no_smplx" in out and "SMPLX_NEUTRAL.npz" in out and "바꿔 쓰지 않아요" in out and not (jd / "smplx").exists(), out      # 없는 성별 → 남성으로 대신하지 않고 멈춤
+rc, out, jd = run_fit("woman"); assert rc != 0 and "모르는 성별" in out
+st_src = (Path(BASE) / "LocalAI-Studio/engine/human3d/worker/providers/sith_stages.py").read_text(encoding="utf-8"); pv_src = (Path(BASE) / "LocalAI-Studio/engine/human3d/worker/providers/sith.py").read_text(encoding="utf-8")
+assert 'kw["gender"] = g' in st_src and '"fit.py", "-i"' not in pv_src and '"fit", "--gender", g' in pv_src      # 공식 fit.py 를 직접 돌리던(남성 고정) 경로는 없어짐
+ok("gender: chosen SMPL-X model is really applied (female/male/neutral), auto = neutral never male, missing gender file stops instead of substituting, no result without an 'applied' record")
 
 # 8) 메모리 부족: 한 단계씩 낮춰 다시(점 수 2만 → 격자 384 → 격자 256), 같은 설정은 두 번 안 돌림, 시도마다 격자·점 수·VRAM 기록
 MODE.write_text("oom_once"); j = wait(post("/api/job", {"kind": "human3d", "image": url(P0), "opts": {"back_candidates": 1}})["id"]); H = j["human3d"]
@@ -229,7 +272,7 @@ sp = SithProvider({"home": str(tmp / "nohome"), "python": sys.executable})
 class JB: opts = {"grid": 512, "chunk": 50000, "back_candidates": 4}
 a = [sp.on_oom(JB, "geometry") for _ in range(4)]; assert "2만" in a[0] and "384" in a[1] and "256" in a[2] and a[3] is None and JB.opts["grid"] == 256 and JB.opts["chunk"] == 20000 and len(a) - 1 == K.MAX_OOM_RETRY
 b = [sp.on_oom(JB, "back") for _ in range(3)]; assert JB.opts["offload"] and JB.opts["back_candidates"] == 1 and b[2] is None and sp.on_oom(JB, "smplx_fit") is None
-pf = sp.preflight(); ids = {c["id"]: c for c in pf["checks"]}; assert not pf["ready"] and not ids["smplx"]["ok"] and "smpl-x.is.tue.mpg.de" in ids["smplx"]["fix"] and not ids["code"]["ok"] and sp.verified is False
+pf = sp.preflight(); ids = {c["id"]: c for c in pf["checks"]}; assert not pf["ready"] and not ids["smplx"]["ok"] and "smpl-x.is.tue.mpg.de" in ids["smplx"]["fix"] and "남성·여성·중립 모두" in ids["smplx"]["fix"] and pf["genders"] == {"male": False, "female": False, "neutral": False} and not ids["code"]["ok"] and sp.verified is False
 import itertools
 lin = np.linspace(-1, 1, 5); assert np.allclose(np.concatenate([p for _, p in WR.grid_chunks(5, 7)]), np.array(list(itertools.product(lin, lin, lin)), np.float32))
 assert WR.is_oom("torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate") and not WR.is_oom("ValueError: bad shape")
@@ -241,19 +284,22 @@ ok("SiTH adapter: OOM step-down order (chunk → 384 → 256, back: offload → 
 # 10-2) 설치 스크립트: CUDA 컴파일러가 먼저, 없으면 nvdiffrast 를 시작하지 않음 · 그리기 검사 실패면 '완료'가 아님 (가짜 명령으로 순서만 확인 — 실제 설치 아님)
 import subprocess, stat
 SH = Path(BASE) / "LocalAI-Studio/engine/human3d/scripts/install_wsl.sh"
-def run_install(nvcc, nvcheck, apt="none", build="ok"):
+def run_install(nvcc, nvcheck, apt="none", build="ok", steps="cuda nvdiffrast", envcheck="ok"):
     h = Path(tempfile.mkdtemp()); stub = h / "stub"; stub.mkdir(); log = h / "calls.log"; cuda = h / "cudahome"
     def mk(name, body):
         f = stub / name; f.write_text("#!/usr/bin/env bash\n" + body); f.chmod(f.stat().st_mode | stat.S_IEXEC)
-    mk("pip", f'echo "pip $*" >> {log}\ncase "$*" in *nvdiffrast*) [ "{build}" = ok ] || exit 1; touch {h}/built ;; *nvidia-cuda-nvcc*) exit 1 ;; esac\nexit 0\n')
+    mk("pip", f'echo "pip $*" >> {log}\ncase "$*" in show*) exit 1 ;; *nvdiffrast*) [ "{build}" = ok ] || exit 1; touch {h}/built ;; *nvidia-cuda-nvcc*) exit 1 ;; *--force-reinstall*pins.txt*) touch {h}/repaired ;; esac\nexit 0\n')
     mk("python", f'echo "python $*" >> {log}\ncase "$*" in *worker.nvcheck*) if [ "{nvcheck}" = ok ] && [ -f {h}/built ]; then echo \'@@NVCHECK {{"ok": true, "text": "ok"}}\'; exit 0; else '
-                 f'echo \'@@NVCHECK {{"ok": false, "kind": "runtime", "text": "그리기를 실패했어요(CUDA 실행 문제).", "fix": "드라이버를 올려 주세요."}}\'; exit 2; fi ;; *json.loads*) exec python3 "$@" ;; esac\nexit 0\n')
+                 f'echo \'@@NVCHECK {{"ok": false, "kind": "runtime", "text": "그리기를 실패했어요(CUDA 실행 문제).", "fix": "드라이버를 올려 주세요."}}\'; exit 2; fi ;; '
+                 f'*worker.envcheck*) if [ "{envcheck}" = ok ] || {{ [ "{envcheck}" = repair ] && [ -f {h}/repaired ]; }}; then echo \'@@ENVCHECK {{"ok": true, "text": "부품 16개를 모두 불러왔어요(numpy 1.24.1)."}}\'; exit 0; else '
+                 f'echo "[안 됨] kaolin: ValueError: numpy.dtype size changed  ← scipy"; echo \'@@ENVCHECK {{"ok": false, "abi": true, "text": "부품끼리 판이 안 맞아요: kaolin 을(를) 불러오지 못해요. 문제가 난 곳: scipy."}}\'; exit 2; fi ;; '
+                 f'*json.loads*) exec python3 "$@" ;; esac\nexit 0\n')
     for n in ("wget", "dpkg", "sudo"): mk(n, f'echo "{n} $*" >> {log}\nexit {0 if apt == "ok" else 1}\n')
     mk("apt-get", f'echo "apt-get $*" >> {log}\n' + (f'case "$*" in *cuda-compiler*) mkdir -p {cuda}/bin {cuda}/include; printf \'#!/bin/sh\\necho "Cuda compilation tools, release 12.1, V12.1.105"\\n\' > {cuda}/bin/nvcc; chmod +x {cuda}/bin/nvcc; touch {cuda}/include/cuda_runtime.h ;; esac\nexit 0\n' if apt == "ok" else "exit 1\n"))
     if nvcc in ("ok", "old"):
         (cuda / "bin").mkdir(parents=True); (cuda / "include").mkdir(); (cuda / "include/cuda_runtime.h").write_text("")
         f = cuda / "bin/nvcc"; f.write_text('#!/bin/sh\necho "Cuda compilation tools, release %s, V0"\n' % ("12.1" if nvcc == "ok" else "11.8")); f.chmod(0o755)
-    env = dict(os.environ, HUMAN3D_HOME=str(h / "home"), HUMAN3D_INSTALL_STEPS="cuda nvdiffrast", HUMAN3D_TEST_BIN=str(stub), CUDA_HOME=str(cuda), HOME=str(h))
+    env = dict(os.environ, HUMAN3D_HOME=str(h / "home"), HUMAN3D_INSTALL_STEPS=steps, HUMAN3D_TEST_BIN=str(stub), CUDA_HOME=str(cuda), HOME=str(h))
     r = subprocess.run(["bash", str(SH)], capture_output=True, text=True, env=env, timeout=60)
     return r.returncode, r.stdout + r.stderr, (log.read_text() if log.exists() else ""), h
 rc, out, calls, h = run_install("ok", "ok")
@@ -273,6 +319,24 @@ assert rc == 1 and "@@DONE" not in out and "컴파일하지 못했어요" in out
 txt = SH.read_text(encoding="utf-8"); assert txt.index("want torch") < txt.index("if want cuda") < txt.index("if want nvdiffrast") and "STEPS=" in txt and "gpu base sith venv torch cuda parts nvdiffrast pose" in txt
 ok("installer (stubbed commands): torch → CUDA 12.1 nvcc → nvdiffrast with --no-build-isolation → real raster check; no compiler ⇒ nvdiffrast never starts; failed check ⇒ not marked done")
 
+# 10-2b) 부품 판 고정 + 마지막 '실제로 불러와 보는' 검사 (실제 PC 에서 kaolin 이 numpy 판 문제로 안 불러와졌던 것)
+pins = (SH.parent / "pins.txt").read_text(encoding="utf-8"); assert "numpy==1.24.1" in pins and "scipy==" in pins and "opencv-python==" in pins and "onnxruntime==" in pins
+assert "onnxruntime-gpu" not in txt.replace("# 자세 검출은", "") or "pip install -q onnxruntime-gpu" not in txt
+assert "PIP_CONSTRAINT" in txt and txt.index("PIP_CONSTRAINT") < txt.index("want torch") and "want check" in txt and txt.rindex("@@DONE") > txt.index("want check")
+rc, out, calls, h = run_install("ok", "ok", steps="check"); assert rc == 0 and "@@DONE" in out and "모두 불러왔어요" in out and (h / "home/pins.txt").read_text(encoding="utf-8") == pins, out
+rc, out, calls, h = run_install("ok", "ok", steps="check", envcheck="repair")      # 처음엔 안 불러와짐 → 고정한 판으로 다시 깔고 → 통과
+assert rc == 0 and "@@DONE" in out and "고정한 판으로 다시 깔고" in out and "--force-reinstall --no-deps -r" in calls and calls.count("worker.envcheck") >= 2, (out, calls)
+rc, out, calls, h = run_install("ok", "ok", steps="check", envcheck="fail")        # 다시 깔아도 안 되면 → 완료로 표시하지 않음
+assert rc == 1 and "@@DONE" not in out and "부품을 불러오는 검사에 실패" in out and "판이 안 맞아요" in out and "캡처" in out, out
+rc, out, calls, h = run_install("ok", "ok", steps="parts"); assert rc == 0 and calls.index("-r " + str(h / "home/pins.txt")) < calls.index("kaolin==0.15.0") < calls.index("diffusers==0.24.0"), calls
+from worker import envcheck as EC
+tb = 'Traceback\n  File "/root/lais-human3d/venv/lib/python3.10/site-packages/kaolin/__init__.py", line 1, in <module>\n  File "/root/lais-human3d/venv/lib/python3.10/site-packages/scipy/ndimage/_ni.py", line 3\nValueError: x'
+assert EC.culprit_of(tb) == "scipy" and EC.ABI_RX.search("numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject") and not EC.ABI_RX.search("No module named 'x'")
+r = EC.check((("json", "json", "json"), ("nope", "no_such_module_xyz", "없는 부품"))); assert r["ok"] is False and r["failed"] == ["nope"] and r["modules"]["json"]["ok"] and "없는 부품" in r["text"] and r["fix"] and r["modules"]["nope"]["trace"]
+sys.path.insert(0, BASE + "/release-tools"); import apply_update as AU, build_update as BU2
+assert AU.safe_rel("engine/human3d/scripts/pins.txt") and "engine/human3d/scripts/pins.txt" in BU2.collect(Path(BASE) / "LocalAI-Studio")
+ok("pinned package set shipped and enforced (PIP_CONSTRAINT), final import check with one repair attempt; a still-broken environment is not marked done and names the culprit")
+
 # 10-3) 사전 검사: nvdiffrast 를 실제로 돌려 보고 '설치 문제 / CUDA 실행 문제'를 구분, 전체 메모리와 쓸 수 있는 메모리를 따로 표시
 from worker import nvcheck as NV
 assert NV.check()["ok"] is False and NV.check()["kind"] in ("no_torch", "not_installed")          # 이 시험 환경에는 torch·nvdiffrast 가 없어요
@@ -291,6 +355,12 @@ c = {x["id"]: x for x in pf_with({"ok": False, "kind": "build", "text": "CUDA �
 assert not c["nvdiffrast"]["ok"] and c["nvdiffrast"]["text"].startswith("[설치 문제]") and "설치 시작" in c["nvdiffrast"]["fix"] and not c["vram_free"]["ok"] and "닫으면" in c["vram_free"]["fix"]
 r2 = pf_with({"ok": False, "kind": "runtime", "text": "그리기를 실패했어요.", "fix": NV.FIX_RUNTIME}); c = {x["id"]: x for x in r2["checks"]}
 assert c["nvdiffrast"]["text"].startswith("[CUDA 실행 문제]") and "wsl --shutdown" in c["nvdiffrast"]["fix"] and r2["ready"] is False and r2["nvdiffrast"]["kind"] == "runtime"
+sp3 = SithProvider({"home": str(tmp / "nohome"), "python": sys.executable})
+sp3._probe = (time.time(), {"python": "3.10", "torch": "2.1.0", "cuda": True, "gpu": "Mock", "vram_mb": 12288, "free_mb": 9700, "kaolin": None, "kaolin_error": "ValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject",
+                             "kaolin_abi": True, "kaolin_culprit": "scipy", "kaolin_trace": "File .../scipy/ndimage/x.py", "diffusers": "0.24", "smplx": "ok", "rtmlib": "ok", "nv": ok_nv, "env": {"ok": False, "failed": ["kaolin", "h5py"], "abi": True}, "h5py_error": "boom"})
+c = {x["id"]: x for x in sp3.preflight()["checks"]}
+assert not c["mod_kaolin"]["ok"] and "판이 안 맞아요" in c["mod_kaolin"]["text"] and "scipy" in c["mod_kaolin"]["text"] and "설치 시작" in c["mod_kaolin"]["fix"] and "Expected 96" in c["mod_kaolin"]["detail"] and c["mod_kaolin"]["trace"]
+assert not c["mod_others"]["ok"] and "h5py" in c["mod_others"]["text"] and "SMPL-X 몸 모델: 없음" in c["smplx"]["text"]
 ok("preflight: nvdiffrast is actually exercised (context + tiny raster), install vs CUDA-runtime problems told apart, total vs usable VRAM shown separately")
 
 # 11) 빌드: worker 코드는 업데이트에 들어가고, engine 의 다른 것(모델·가상환경)은 안 들어감
@@ -301,5 +371,10 @@ assert sorted(BU.collect(tree)) == ["engine/human3d/worker/app.py", "hub/a.py"]
 real = BU.collect(Path(BASE) / "LocalAI-Studio"); assert "engine/human3d/worker/providers/sith.py" in real and "engine/human3d/scripts/install_wsl.sh" in real and "hub/human3d/mesh_qa.py" in real and "hub/server/27_m3d.py" in real
 assert b"\r" not in real["engine/human3d/scripts/install_wsl.sh"] and b"\r" not in real["engine/human3d/scripts/install_models.sh"]
 ok("build: worker code ships in the update; models / venv / other engine folders never do")
+# 12) LAIS 를 업데이트했는데 예전 코드의 worker 가 떠 있으면 → 알아채고 다시 띄움(실제 PC 에서 4.9 worker 가 4.9.1 뒤에도 남아 있었어요)
+h1 = MG.running(WPORT); assert h1["code"] == MG.code_hash() == WR.code_hash(BASE + "/LocalAI-Studio/engine/human3d/worker") and MG.start(hub.ROOT, WPORT)["pid"] == h1["pid"]      # 같으면 그대로
+real_hash = MG.code_hash; MG.code_hash = lambda: "changed"; h2 = MG.start(hub.ROOT, WPORT); MG.code_hash = real_hash
+assert h2 and h2["pid"] != h1["pid"] and h2["code"] == real_hash(), (h1, h2)
+ok("stale worker (old code still running after an update) is detected by a code fingerprint and restarted")
 MG.stop(WPORT)
 print("ALL OK")

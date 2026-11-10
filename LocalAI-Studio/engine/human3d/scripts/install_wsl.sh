@@ -14,7 +14,7 @@ ENGINE_DIR="$(dirname "$HERE")"                      # engine/human3d (worker �
 SITH_COMMIT="6401549"
 CUDA_VER="12.1"
 CUDA_PKG="12-1"
-STEPS="${HUMAN3D_INSTALL_STEPS:-gpu base sith venv torch cuda parts nvdiffrast pose}"      # 시험에서는 일부 단계만 돌려요
+STEPS="${HUMAN3D_INSTALL_STEPS:-gpu base sith venv torch cuda parts nvdiffrast pose check}"      # 시험에서는 일부 단계만 돌려요
 TOTAL=$(echo $STEPS | wc -w)
 N=0
 step() { N=$((N + 1)); echo "@@STEP $N/$TOTAL $1"; }
@@ -24,6 +24,10 @@ export DEBIAN_FRONTEND=noninteractive PIP_DISABLE_PIP_VERSION_CHECK=1
 SUDO="sudo -n"; [ "$(id -u)" = "0" ] && SUDO=""
 mkdir -p "$HOME_DIR" || die "설치 폴더를 만들지 못했어요: $HOME_DIR"
 cd "$HOME_DIR"
+# 부품 판 고정: 이 뒤의 모든 pip 설치가 pins.txt 의 판을 넘지 못하게 해요(numpy 2 용 부품이 섞이면 kaolin 등을 못 불러와요).
+# 설치 폴더 경로에 빈칸이 있을 수 있어서(PIP_CONSTRAINT 는 빈칸으로 나눠 읽어요) 빈칸 없는 곳에 복사해 써요.
+PINS="$HOME_DIR/pins.txt"
+if [ -f "$HERE/pins.txt" ]; then cp "$HERE/pins.txt" "$PINS" && export PIP_CONSTRAINT="$PINS"; fi
 
 if want gpu; then
   step "그래픽카드 확인"
@@ -126,8 +130,10 @@ fi
 
 if want parts; then
   step "SiTH 부품 설치 (kaolin · diffusers 등) — 몇 분 걸려요"
-  python -c "import kaolin" 2>/dev/null || pip install -q kaolin==0.15.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html || die "kaolin 설치 실패"
-  pip install -q numpy==1.24.1 huggingface-hub==0.22.2 diffusers==0.24.0 accelerate transformers==4.39.3 h5py trimesh matplotlib opencv-python smplx timm einops ninja pyyaml tqdm scikit-image pillow || die "SiTH 부품 설치 실패"
+  # 먼저 숫자 계산 부품을 고정한 판으로 맞춰요(이미 다른 판이 깔려 있으면 이 판으로 바꿔요 — 예전 설치가 남긴 섞인 판을 바로잡아요)
+  [ -f "$PINS" ] && { pip install -q -r "$PINS" || die "부품(numpy·scipy 등)을 고정한 판으로 설치하지 못했어요(인터넷 연결 확인)."; }
+  pip show kaolin >/dev/null 2>&1 || pip install -q kaolin==0.15.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html || die "kaolin 설치 실패"
+  pip install -q numpy==1.24.1 huggingface-hub==0.22.2 diffusers==0.24.0 accelerate transformers==4.39.3 h5py trimesh matplotlib opencv-python smplx timm einops ninja pyyaml tqdm scikit-image pillow scipy || die "SiTH 부품 설치 실패"
   python -c "import tinyobjloader" 2>/dev/null || pip install -q "git+https://github.com/tinyobjloader/tinyobjloader.git@v2.0.0rc8#subdirectory=python" || die "tinyobjloader 설치 실패"
 fi
 
@@ -163,8 +169,28 @@ fi
 
 if want pose; then
   step "자세 검출기 설치 (rtmlib)"
-  python -c "import rtmlib" 2>/dev/null || pip install -q rtmlib onnxruntime || die "자세 검출기 설치 실패"
-  pip install -q onnxruntime-gpu 2>/dev/null || true      # 되면 그래픽카드로, 안 되면 CPU 로 돌아요
+  pip show rtmlib >/dev/null 2>&1 || pip install -q rtmlib onnxruntime || die "자세 검출기 설치 실패"
+  # 자세 검출은 CPU 로 돌려요(몇 초). 그래픽카드용 onnxruntime 은 numpy·CUDA 판을 흔들 수 있어서 넣지 않아요.
+fi
+
+env_check() {        # 부품을 전부 실제로 불러와 봐요(깔려 있다는 것만으로는 통과시키지 않아요)
+  PYTHONPATH="$ENGINE_DIR${PYTHONPATH:+:$PYTHONPATH}" python -m worker.envcheck
+}
+if want check; then
+  step "부품 맞춤 검사 (전부 실제로 불러와 봐요)"
+  EC_OUT="$(env_check 2>&1)"; EC_RC=$?
+  if [ $EC_RC -ne 0 ] && [ -f "$PINS" ]; then
+    echo "$EC_OUT" | grep '^\[안 됨\]' | head -8
+    echo "알림: 불러오지 못하는 부품이 있어서, 고정한 판으로 다시 깔고 한 번 더 확인해요."
+    pip install -q --force-reinstall --no-deps -r "$PINS" || true
+    EC_OUT="$(env_check 2>&1)"; EC_RC=$?
+  fi
+  if [ $EC_RC -ne 0 ]; then
+    echo "$EC_OUT" | tail -40
+    EC_TEXT="$(echo "$EC_OUT" | grep '^@@ENVCHECK ' | tail -1 | python -c 'import sys,json; d=json.loads(sys.stdin.read()[11:] or "{}"); print(d.get("text") or "")' 2>/dev/null)"
+    die "설치는 했지만 부품을 불러오는 검사에 실패해서 설치를 끝내지 않았어요. ${EC_TEXT:-위의 [안 됨] 줄을 확인해 주세요.} 위에 나온 오류 글을 캡처해서 보내 주세요."
+  fi
+  echo "$EC_OUT" | grep '^@@ENVCHECK ' | tail -1 | python -c 'import sys,json; d=json.loads(sys.stdin.read()[11:] or "{}"); print(d.get("text") or "")' 2>/dev/null
 fi
 
 echo "@@DONE 환경 설치가 끝났어요. 이어서 모델을 받아요."

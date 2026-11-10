@@ -3,7 +3,9 @@ const H3={img:null,job:null,S:null,itimer:null};
 function h3St(t,pc,bad){const s=$('#h3-st'),g=$('#h3-pg');s.hidden=!t;s.textContent=t||'';s.className='st'+(bad?' bad':'');g.hidden=pc==null;if(pc!=null)g.value=Math.round(pc*100);$('#h3-stop').hidden=!H3.job}
 function h3Go(){$('#h3-go').disabled=!(H3.img&&!H3.job&&H3.S&&H3.S.preflight&&H3.S.preflight.ready)}
 function h3Pf(S){const p=S.preflight,E=$('#h3-pf');if(!p){E.innerHTML='<p class="mute">확인하지 못했어요.</p>';return}
-  const rows=p.checks.map(c=>`<li class="${c.info?'':c.ok?'lv-ok':'lv-bad'}">${esc(c.text)}${c.fix?`<br><span class="mute">→ ${esc(c.fix)}</span>`:''}</li>`).join('');
+  const rows=p.checks.map(c=>`<li class="${c.info?'':c.ok?'lv-ok':'lv-bad'}">${esc(c.text)}${c.fix?`<br><span class="mute">→ ${esc(c.fix)}</span>`:''}${!c.ok&&(c.detail||c.trace)?`<details class="h3-det"><summary>오류 글 보기</summary><pre>${esc(c.detail||'')}${c.trace?'\n\n'+esc(c.trace):''}</pre></details>`:''}</li>`).join('');
+  const G=p.genders;$$('#h3-gender option').forEach(o=>{const g=o.value==='auto'?'neutral':o.value,no=!!G&&!G[g];o.disabled=no;o.textContent=o.dataset.t+(no?' (모델 파일 없음)':'')});
+  if(G&&$('#h3-gender').selectedOptions[0]&&$('#h3-gender').selectedOptions[0].disabled){const ok=[...$('#h3-gender').options].find(o=>!o.disabled);if(ok)$('#h3-gender').value=ok.value}
   const sx=p.smplx?`<li class="lv-warn"><b>SMPL-X 몸 모델을 직접 넣어 주세요</b><br>${esc(p.smplx.text)}<br><a href="${esc(p.smplx.url)}" target="_blank" rel="noopener">${esc(p.smplx.url)}</a><br>넣을 폴더: <code class="h3-path">${esc(p.smplx.folder||'')}</code><br>필요한 파일: ${esc((p.smplx.files||[]).join(', '))}</li>`:'';
   E.innerHTML=`<p class="${p.ready?'m3-photo ok':'m3-photo no'}">${p.ready?'돌릴 준비가 됐어요.':'아직 준비가 덜 됐어요.'}</p><ul class="m3-checks">${rows}${sx}</ul><p class="mute">${esc(p.note||'')}</p>`;
   $('#h3-install').hidden=!(p.stage==='install'||p.stage==='models')||S.install.state==='running';
@@ -34,6 +36,7 @@ function h3Result(R){const q=R.qa,T=q&&q.topology,P=(q&&q.problems)||[];
   const stat=T?`<table class="m3-stat"><tr><th>꼭짓점</th><td>${(T.vertices||0).toLocaleString()}</td><th>면</th><td>${(T.faces||0).toLocaleString()}</td></tr>
     <tr><th>떨어진 조각</th><td>${T.components}</td><th>큰 구멍</th><td class="${T.big_holes?'bad':''}">${T.big_holes}</td></tr>
     <tr><th>앞 윤곽 겹침</th><td class="${q.silhouette&&q.silhouette.iou<0.85?'bad':''}">${q.silhouette?Math.round(q.silhouette.iou*100)+'%':'-'}</td><th>사진 화소 비율</th><td>${q.projection&&q.projection.observed_ratio!=null?Math.round(q.projection.observed_ratio*100)+'%':'-'}</td></tr>
+    <tr><th>몸 모델 성별</th><td>${R.meta&&R.meta.gender_used?esc(({male:'남성',female:'여성',neutral:'중립'})[R.meta.gender_used.gender]||R.meta.gender_used.gender)+(R.meta.gender==='auto'?' (자동)':''):'-'}</td><th>몸 모델 파일</th><td>${R.meta&&R.meta.gender_used?esc(R.meta.gender_used.model_file||'-'):'-'}</td></tr>
     <tr><th>최대 VRAM</th><td>${R.meta&&R.meta.vram_peak_mb?(R.meta.vram_peak_mb/1024).toFixed(1)+'GB':'-'}</td><th>격자</th><td>${R.meta&&R.meta.opts?R.meta.opts.grid:'-'}</td></tr></table>`:'';
   const parts=q&&q.parts?`<p class="mute">부위별(사진 속 그 부위를 3D 가 덮는 비율): ${Object.values(q.parts).map(e=>`${esc(e.ko)} ${e.known&&e.cover!=null?Math.round(e.cover*100)+'%':'판단 못 함'}`).join(' · ')}</p>`:'';
   const diag=R.diagnosis?`<ul class="m3-checks"><li class="lv-bad"><b>${esc((H3.S.stages.find(s=>s.id===R.diagnosis.failed_stage)||{}).ko||R.diagnosis.failed_stage||'')}</b> 단계에서 실패: ${esc(R.diagnosis.message||'')}<br>
@@ -50,7 +53,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-h3jo
   const o=e.target.closest('[data-h3open]');if(o){const r=await api('/api/human3d/open',{id:o.dataset.h3open});if(r.error)toast(r.error)}});
 $('#h3-stop').onclick=async()=>{if(H3.job)await api('/api/job/cancel',{id:H3.job})};
 $('#h3-go').onclick=async()=>{if(H3.job||!H3.img)return;
-  const r=await api('/api/job',{kind:'human3d',image:H3.img,opts:{grid:+$('#h3-grid').value,back_candidates:+$('#h3-back').value,project_photo:$('#h3-photo').checked}});
+  const r=await api('/api/job',{kind:'human3d',image:H3.img,opts:{gender:$('#h3-gender').value,grid:+$('#h3-grid').value,back_candidates:+$('#h3-back').value,project_photo:$('#h3-photo').checked}});
   if(r.error){h3St(r.error,null,true);return}H3.job=r.id;h3Go();if(typeof qPoll==='function')qPoll();h3St('시작하는 중… 0%',0);$('#h3-out').innerHTML='';let last=null;
   try{for(;;){await sleep(1000);const j=await api('/api/job/'+r.id);last=j.human3d||last;h3Live(last,j);const pc=typeof j.progress==='number'?j.progress:0;
     if(j.state==='done'){h3St(j.msg||'끝났어요.',null);break}

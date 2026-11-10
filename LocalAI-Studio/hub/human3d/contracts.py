@@ -82,8 +82,15 @@ OOM_CHUNK = 20000
 OOM_LADDER = (("chunk", OOM_CHUNK), ("grid", 384), ("grid", 256))
 MAX_OOM_RETRY = len(OOM_LADDER)
 
+# 몸 모델(SMPL-X) 성별. auto = 자동(지금은 성별 추정기가 없어 중립 모델을 써요 — 남성으로 정하지 않아요).
+# 고른 성별의 모델 파일이 없으면 다른 성별로 바꿔 쓰지 않고 멈춰요.
+GENDERS = ("male", "female", "neutral")
+GENDER_CHOICES = ("auto",) + GENDERS
+GENDER_KO = {"auto": "자동", "male": "남성", "female": "여성", "neutral": "중립"}
+
 DEFAULT_OPTS = {
     "provider": "sith",
+    "gender": "auto",
     "grid": 512,                # 형태 복원 격자(SiTH 기본 512)
     "chunk": 50000,             # 한 번에 그래픽카드로 보내는 점 수
     "back_candidates": 4,       # 뒷면 후보 수(하나씩 그려서 자동으로 골라요)
@@ -102,6 +109,8 @@ def clean_opts(o):
     r = dict(DEFAULT_OPTS)
     if o.get("provider") in ("sith", "econ"):
         r["provider"] = o["provider"]
+    if o.get("gender") in GENDER_CHOICES:
+        r["gender"] = o["gender"]
     try:
         g = int(o.get("grid", r["grid"]))
         r["grid"] = g if g in GRID_STEPS else r["grid"]

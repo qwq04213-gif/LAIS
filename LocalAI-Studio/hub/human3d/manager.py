@@ -102,11 +102,38 @@ def running(port=None):
     return Client(port or STATE["port"]).health()
 
 
+def code_hash():
+    """지금 LAIS 폴더에 있는 worker 코드의 지문(worker 의 runtime.code_hash 와 같은 계산)."""
+    import hashlib
+    d = engine_dir() / "worker"
+    h = hashlib.sha1()
+    files = []
+    for root, sub, names in sorted(os.walk(d)):
+        sub[:] = sorted(x for x in sub if x != "__pycache__")
+        for n in sorted(names):
+            if n.endswith(".py"):
+                files.append(Path(root) / n)
+    for p in files:
+        h.update(str(p.relative_to(d)).replace(os.sep, "/").encode())
+        h.update(p.read_bytes().replace(b"\r\n", b"\n"))
+    return h.hexdigest()[:16]
+
+
 def start(root, port=None, wait=40, log=None):
     """worker 가 안 떠 있으면 띄우고, 응답할 때까지 기다려요. 돌려주는 값: health(dict) 또는 None."""
     port = port or STATE["port"]
     with _LOCK:
         h = running(port)
+        if h and h.get("code") and h["code"] != code_hash() and not h.get("busy") and not os.environ.get("HUMAN3D_KEEP_WORKER"):
+            # LAIS 를 업데이트했는데 예전 코드로 뜬 worker 가 남아 있어요(WSL 안의 프로그램은 LAIS 를 꺼도 살아 있어요) → 내리고 새로 띄워요
+            if log:
+                log("[인체 3D] worker 코드가 바뀌어서 다시 띄워요")
+            Client(port).shutdown()
+            for _ in range(30):
+                if not running(port):
+                    break
+                time.sleep(0.2)
+            h = None
         if h:
             return h
         cmd, cwd, env = worker_cmd(root, port)

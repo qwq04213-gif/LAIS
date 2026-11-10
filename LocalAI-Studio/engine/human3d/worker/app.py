@@ -24,6 +24,8 @@ CFG = {}
 PROVIDERS = {}
 STORE = None
 T0 = time.time()
+_HERE = os.path.dirname(os.path.abspath(__file__))
+CODE = R.code_hash(_HERE)        # 떠 있는 동안의 코드 지문(시작할 때 한 번)
 
 
 def provider_of(name):
@@ -77,7 +79,7 @@ class H(BaseHTTPRequestHandler):
         if u == "/health":
             b = STORE.busy()
             return self.send({"ok": True, "api": R.API_VERSION, "version": VERSION, "pid": os.getpid(), "busy": b.id if b else None,
-                              "uptime": round(time.time() - T0), "home": CFG.get("home"), "python": sys.version.split()[0]})
+                              "uptime": round(time.time() - T0), "home": CFG.get("home"), "code": CODE, "python": sys.version.split()[0]})
         if u == "/preflight":
             try:
                 name = (self.path.split("provider=")[1].split("&")[0] if "provider=" in self.path else "sith")

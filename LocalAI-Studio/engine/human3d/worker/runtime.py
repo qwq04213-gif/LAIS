@@ -18,6 +18,7 @@ API_VERSION = 1
 HOST = "127.0.0.1"
 PORT = 17861
 WORKER_STAGES = ("keypoints", "smplx_init", "smplx_fit", "back", "geometry", "texture")
+GENDERS = ("male", "female", "neutral")          # SMPL-X 몸 모델 종류(파일: SMPLX_MALE/FEMALE/NEUTRAL.npz)
 OOM_RX = re.compile(r"CUDA out of memory|OutOfMemoryError|CUDA error: out of memory|cudaErrorMemoryAllocation|std::bad_alloc|Unable to allocate|DefaultCPUAllocator", re.I)
 
 
@@ -233,6 +234,22 @@ def grid_chunks(res, chunk):
     for s in range(0, total, chunk):
         idx = np.arange(s, min(total, s + chunk), dtype=np.int64)
         yield s, np.stack([lin[idx // (res * res)], lin[(idx // res) % res], lin[idx % res]], 1)
+
+
+def code_hash(*dirs):
+    """worker 가 읽는 코드(.py)의 내용 지문. LAIS 를 업데이트했는데 예전 worker 가 그대로 떠 있는지 본체가 이걸로 알아채요."""
+    import hashlib
+    h = hashlib.sha1()
+    for d in dirs:
+        for root, sub, names in sorted(os.walk(d)):
+            sub[:] = sorted(x for x in sub if x != "__pycache__")
+            for n in sorted(names):
+                if n.endswith(".py"):
+                    p = os.path.join(root, n)
+                    h.update(os.path.relpath(p, d).replace(os.sep, "/").encode())
+                    with open(p, "rb") as f:
+                        h.update(f.read().replace(b"\r\n", b"\n"))
+    return h.hexdigest()[:16]
 
 
 def write_json(path, obj):

@@ -1,0 +1,16 @@
+# 인체 3D(SiTH) 환경의 부품 판 고정 — SiTH 가 나온 때(2024년 초, numpy 1.24)의 조합이에요.
+# 최신 판을 그대로 받으면 numpy 2 용으로 만든 부품이 섞여 "numpy.dtype size changed" 오류가 나요(실제 PC 에서 kaolin 을 못 불러옴).
+# install_wsl.sh 가 이 파일을 '설치 목록'이자 '판 제한(PIP_CONSTRAINT)'으로 함께 써요. 판을 바꾸면 test_human3d 의 맞물림 확인도 다시 해요.
+numpy==1.24.1
+scipy==1.11.4
+scikit-image==0.22.0
+h5py==3.10.0
+matplotlib==3.8.4
+contourpy==1.2.1
+opencv-python==4.9.0.80
+opencv-contrib-python==4.9.0.80
+tifffile==2024.2.12
+imageio==2.34.0
+onnxruntime==1.17.3
+pillow==10.3.0
+trimesh==4.3.1

@@ -68,7 +68,12 @@ class FakeProvider(SithProvider):
     verified = False
 
     def preflight(self):
-        return {"ready": True, "checks": [{"id": "code", "ok": True, "text": "가짜 엔진 준비됨", "fix": ""}], "versions": self.versions(), "paths": {"smplx": "/tmp/smplx"}}
+        gd = {"male": True, "female": mode() != "no_female", "neutral": True}
+        return {"ready": True, "checks": [{"id": "code", "ok": True, "text": "가짜 엔진 준비됨", "fix": ""}, {"id": "smplx", "ok": all(gd.values()), "text": "가짜 몸 모델", "fix": "여성 파일을 넣어 주세요"}],
+                "versions": self.versions(), "paths": {"smplx": "/tmp/smplx"}, "genders": gd}
+
+    def files(self):
+        return {"code": True, "recon": True, "smplerx": True, "diffusion": True, "smplx": True, "genders": {"male": True, "female": mode() != "no_female", "neutral": True}}
 
     def versions(self):
         return {"engine": "fake", "commit": "test"}
@@ -84,6 +89,10 @@ class FakeProvider(SithProvider):
         return {}
 
     def st_smplx(self, job, log):
+        g, why = self.gender_of(job)
+        if not self.files()["genders"][g]:
+            raise R.StageError("no_smplx", f"SMPL-X 몸 모델 파일(SMPLX_{g.upper()}.npz)이 없어요. 다른 성별 모델로 바꿔 쓰지 않아요", job.stage)
+        job.opts["gender_used"] = g
         job.set_progress(0.3)
         job.enter("smplx_fit")
         m = np.asarray(Image.open(os.path.join(job.dir, "images", "000.png")).getchannel("A").resize((96, 96))) > 127
@@ -92,7 +101,9 @@ class FakeProvider(SithProvider):
         with open(os.path.join(job.dir, "smplx", "000_smplx.obj"), "w") as f:
             f.write("".join("v %f %f %f\n" % tuple(v) for v in V) + "".join("f %d %d %d\n" % tuple(t + 1) for t in F))
         R.write_json(os.path.join(job.dir, "smplx", "debug", "000.json"), {"betas": [0.0] * 10})
-        return {}
+        if mode() != "no_gender_record":
+            R.write_json(os.path.join(job.dir, "smplx", "gender.json"), {"gender": g, "model_file": f"SMPLX_{g.upper()}.npz", "applied": True, "vertices": 10475, "upstream_default": "male"})
+        return {"notes": [why] if why else []}
 
     def st_back(self, job, log):
         n = job.opts.get("back_candidates", 4)

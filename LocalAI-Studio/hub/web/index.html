@@ -849,6 +849,8 @@
       <div class="vmrow"><button type="button" class="ghost vpick" id="h3-up">사진 고르기</button><input type="file" id="h3-file" accept="image/*" hidden><span class="mute" id="h3-fname"></span></div>
     </div>
     <figure class="m3-front" id="h3-prev" hidden><img alt="고른 사진"></figure>
+    <label class="f" title="몸의 기본 모양(SMPL-X)을 어느 모델로 맞출지 골라요. 고른 성별의 모델 파일이 없으면 다른 성별로 바꿔 쓰지 않고 멈춰요.">몸 모델 성별<select id="h3-gender"><option value="auto" data-t="자동 — 지금은 중립 모델을 써요(성별 추정 기능은 아직 없어요)" selected>자동 — 지금은 중립 모델을 써요(성별 추정 기능은 아직 없어요)</option><option value="female" data-t="여성">여성</option><option value="male" data-t="남성">남성</option><option value="neutral" data-t="중립">중립</option></select></label>
+    <p class="mute h3-unv" id="h3-gnote">SiTH 를 만든 곳은 모든 사람에게 남성 몸 모델을 썼어요. 여성·중립 모델로 맞춘 결과가 더 나은지는 실제 사진으로 아직 확인하지 못했어요.</p>
     <fieldset class="vset"><legend>준비 상태</legend>
       <div id="h3-pf"><p class="mute">확인하는 중…</p></div>
       <div class="vbtns"><button type="button" class="ghost" id="h3-install" hidden>설치 시작 (약 15GB · 20~40분)</button><button type="button" class="ghost" id="h3-recheck">다시 확인</button></div>

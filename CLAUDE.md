@@ -87,6 +87,14 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
   걸려 있는 동안 `claim("chat")`·`llm_http` 가 `GpuBusy`(한국어 안내). **Ollama 에 답을 시키는 새 코드는 꼭 `llm_http`(스트림은 `llm_use`)로** — `http(OLLAMA + "/api/chat")` 를 직접 쓰면 막히지 않아요. `num_gpu: 0`(CPU 대화)은 통과
 - 설치(`install_wsl.sh`): 순서 torch → CUDA 12.1 nvcc(`find_cuda` → NVIDIA apt 저장소 `cuda-compiler-12-1`… → pip 대체) → `env.sh`(worker 가 읽음) → nvdiffrast 0.4 `--no-build-isolation`(설치 때 컴파일) → `worker/nvcheck.py`(컨텍스트 + 삼각형 래스터화) 통과해야 `@@DONE`.
   단계는 `HUMAN3D_INSTALL_STEPS` 로 골라 돌릴 수 있고(시험), 사전 검사도 `nvcheck` 로 설치 문제/CUDA 실행 문제를 구분
+- **두 번째 지시서(SiTH 성별 수정 + ECON 연동, 11단계)**: 단계마다 실패하면 다음으로 넘어가지 않기. 지금 **2단계까지 코드 완료, 3단계(실제 남·여 사진 각 3장 추론)는 사용자 PC 결과 대기** — ECON(5단계~)·엔진 선택 UI·품질 모드(일반 고품질 기본/고품질/저메모리)는 아직 시작하지 않음.
+  여성 지원은 '실제 여성 사진으로 회전 가능한 메시 확인' 전까지 완료라고 하지 않기. 품질 모드를 넣을 때 '조용히 품질을 낮추지 않는다'와 지금의 자동 재시도(격자 낮추기 + 알림)를 어떻게 맞출지 사용자에게 확인
+- 성별: 공식 `fit.py:181` 이 `SMPLX(..., gender='male')` 고정(주석 "We used SMPL-X male model for fitting and mesh reconstruction", 학습 자료 맞추기 `tools/align_thuman.py` 도 male → **SiTH 네트워크는 모든 사람을 남성 몸 모델로 학습**).
+  `sith_stages.cmd_fit` 이 `fit.SMPLX` 를 감싸 고른 성별로 만들고(공식 파일은 안 고침) `smplx/gender.json`(applied) 을 남김 — 본체는 이 기록이 없으면 결과를 내지 않음. `opts.gender` auto/male/female/neutral, **auto = neutral**(성별 추정기 없음, 남성으로 정하지 않음).
+  고른 성별의 `SMPLX_<G>.npz` 가 없으면 다른 성별로 바꾸지 않고 멈춤(본체 사전 확인 + worker). 여성·중립 모델로 맞춘 결과 품질은 **미검증**(학습 분포와 달라질 수 있음)
+- 실제 PC 첫 결과(RTX 4070 Ti 12GB, WSL2): WSL·torch 2.1.0+cu121·CUDA·nvdiffrast 0.4.0 은 됨. **kaolin 이 `numpy.dtype size changed … Expected 96 … got 88`(numpy 2 용 부품이 numpy 1.24 와 섞임)** — 이 환경에서 kaolin 0.15 자체·scipy 1.15.3·opencv 는 numpy 1.24.1 에서 정상이라 범인 부품은 특정 못 함.
+  대책: `scripts/pins.txt`(numpy 1.24.1·scipy 1.11.4·scikit-image 0.22.0·opencv 4.9.0.80·onnxruntime 1.17.3 …)를 `PIP_CONSTRAINT` + 설치 목록으로, 마지막 `check` 단계 `worker/envcheck.py`(전부 실제 import, 실패 시 고정 판으로 한 번 다시 깔기, 그래도 안 되면 `@@FAIL` + culprit), 사전 검사에 오류 글·culprit 표시(화면 '오류 글 보기'). onnxruntime-gpu 는 뺌(자세 검출 CPU)
+- worker 코드 지문: `/health` 의 `code`(`runtime.code_hash`) ≠ `manager.code_hash()` 면 `manager.start` 가 worker 를 내리고 다시 띄움(WSL 안의 worker 는 LAIS 를 꺼도 살아 있어서 업데이트 뒤에도 예전 코드로 돌았음). 적용기 `safe_rel` 은 `engine/human3d/{worker,scripts}` 의 `.py·.sh·.txt` 허용
 - 자세: 기존 LAIS 에는 관절 좌표를 파일로 내는 기능이 없어(DWPose 는 ControlNet 그림용 노드 이름뿐) worker 안에서 rtmlib(DWPose/RTMPose 133점) → `preprocess.wholebody_to_openpose`
 - 빌드: `build_update.py` 가 `engine/human3d` 만 예외로 넣음(`KEEP_ENGINE`). `.gitignore` 도 `engine/*` 중 `human3d` 만 허용
 - 시험: `test/test_human3d.py`·`ui_test69.py`(가짜 엔진). **실제 SiTH·GPU·WSL 로는 한 번도 못 돌림** — 지시서 14번의 3단계(실제 사진 추론)부터는 사용자 PC 결과가 있어야 진행
@@ -126,6 +134,7 @@ Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양�
 - **인체 3D 전체**: `install_wsl.sh`·`install_models.sh`(WSL2 Ubuntu 22.04, PyTorch 2.1+cu121, kaolin 0.15, CUDA 12.1 컴파일러 꾸러미 이름(`cuda-compiler-12-1`·`cuda-cudart-dev-12-1`·`cuda-driver-dev-12-1`)으로 nvdiffrast 0.4 가 실제로 컴파일되는지 — 가짜 명령으로 순서만 확인),
   GPU 혼자 쓰기에서 Ollama 가 실제로 VRAM 을 비우는 데 걸리는 시간(`/api/ps` 의 `size_vram`), 시도별 VRAM 기록(시험은 모의 GPU `test/fake_bin/nvidia-smi`), `wsl.exe` 로 worker 띄우기·`/mnt/c` 경로,
   rtmlib 자세 검출, 공식 `fit.py`, `sith_stages.py` 의 back(FP16·offload — 사용자 정의 파이프라인이라 자료형 오류 가능 → FP32 로 한 번 재시도)·recon(kaolin `voxelgrids_to_trianglemeshes` 좌표·CPU marching cubes 대체 경로의 면 방향),
+  **성별: 여성·중립 SMPL-X 로 맞춘 SiTH 결과(체형·어깨·골반)가 실제로 나은지/깨지는지, `fit` 모듈 감싸기가 실제 smplx 라이브러리에서 도는지**, 판 고정 뒤 kaolin 이 실제 PC 에서 불러와지는지,
   10~12GB 에서의 실제 VRAM, 사진 붙이기의 좌표 약속(직교·y 뒤집기), 뒷면 후보 자동 고르기 기준(색 분포·배경 깨끗함 — 단순함), 100만 꼭짓점 넘는 메시에서 본체(numpy) 처리 시간·GLB 크기
 
 - 남은 시간: 실제 ComfyUI 작업(영상·3D·하이레스)에서의 정확도
