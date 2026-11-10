@@ -140,7 +140,7 @@ def vmix_upload(h):
 def job_thread(J, p):
     try:
         J["state"], J["msg"] = "running", "엔진 준비 중"
-        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")) or p["kind"] == "audio" or (p["kind"] == "m3d" and p.get("op") == "prep") or (p["kind"] == "lora" and not (p.get("op") == "augment" and p.get("mode") == "ai")) \
+        if p["kind"] in ("tts", "vmix") or (p["kind"] == "vedit" and p.get("op") in ("concat", "trim", "cutlist")) or (p["kind"] == "vana" and p.get("op") not in ("vdepth", "cam3d")) or p["kind"] == "audio" or (p["kind"] == "m3d" and p.get("op") == "prep") or p["kind"] == "human3d" or (p["kind"] == "lora" and not (p.get("op") == "augment" and p.get("mode") == "ai")) \
                 or (p["kind"] == "vrestore" and not (p.get("op") == "run" and (vr_opts(p)["upscale"] or vr_opts(p)["interp"]))):
             pass                                          # 음성 만들기·영상 소리/자막 넣기는 ComfyUI 를 쓰지 않아요
         elif (p["kind"] == "feat" and p.get("feature") in ("resize", "color", "rmbg")) or (p["kind"] == "vpost" and p.get("op") == "gif"):
@@ -150,7 +150,7 @@ def job_thread(J, p):
         else:
             wait_comfy()
             claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora, "vrestore": do_vrestore, "audio": do_audio, "m3d": do_m3d}[p["kind"]](p, J)
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora, "vrestore": do_vrestore, "audio": do_audio, "m3d": do_m3d, "human3d": do_human3d}[p["kind"]](p, J)
         sub = OUT_SUB["vid"] if p["kind"] in ("vpost", "vmix", "vedit", "vana") else OUT_SUB.get(p["kind"], "기타")
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
         jdir = job_dir_name(stamp, J.get("out_label") or "")         # 작업 한 번 = 폴더 하나(사용자 요청 — 결과 폴더가 너무 어지러워서)
@@ -221,7 +221,7 @@ def _clean_tmp(J):
 QUEUE, QP = [], {}
 _QCV = threading.Condition()
 _QW = {"t": None, "eta": None}
-KIND_NAME = {"vedit": "영상 편집", "edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "vmix": "영상 소리·자막", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리", "vana": "영상 분석", "lora": "LoRA 만들기", "vrestore": "영상 복원", "audio": "소리 분리·복원", "m3d": "3D 만들기"}
+KIND_NAME = {"vedit": "영상 편집", "edit": "이미지 편집", "gen": "이미지 생성", "up": "업스케일", "wf": "워크플로", "feat": "기능", "vid": "영상 만들기", "vpost": "영상 다듬기", "vmix": "영상 소리·자막", "music": "음악 만들기", "tts": "음성 만들기", "batch": "일괄 처리", "vana": "영상 분석", "lora": "LoRA 만들기", "vrestore": "영상 복원", "audio": "소리 분리·복원", "m3d": "3D 만들기", "human3d": "인체 3D"}
 DONE_STATES = ("done", "error", "cancelled")
 
 

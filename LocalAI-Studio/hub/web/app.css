@@ -781,3 +781,15 @@ details.m3-fold>summary{cursor:pointer;font-weight:600;padding:2px 0}details.m3-
 .m3-files{margin:6px 0;padding-left:18px}.m3-files li{margin:3px 0}
 .m3-front{margin:6px 0}.m3-front img{max-width:100%;max-height:220px;border-radius:8px;cursor:zoom-in;background:repeating-conic-gradient(#2a2a30 0 25%,#222228 0 50%) 0 0/16px 16px}
 .m3-stat td.bad{color:var(--warn,#b26a00);font-weight:600}
+/* 인체 3D */
+.h3-unv{font-size:calc(12.5px*var(--ui,1));margin:-4px 0 10px}
+.h3-steps{list-style:none;margin:8px 0;padding:0;display:grid;gap:3px;font-size:calc(13px*var(--ui,1))}
+.h3-steps li{display:flex;gap:8px;align-items:baseline;padding:3px 8px;border-left:3px solid var(--line)}
+.h3-steps li.on{border-color:var(--acc);font-weight:600}.h3-steps li.done{border-color:var(--okt);color:var(--mute)}.h3-steps li.bad{border-color:var(--bad)}
+.h3-steps li small{margin-left:auto;color:var(--mute);font-weight:400;white-space:nowrap}
+.h3-vram{font-size:calc(13px*var(--ui,1));margin:6px 0}
+.h3-views{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:8px 0}.h3-views figure{margin:0}
+.h3-views img{width:100%;border-radius:6px;background:#1e1e24;cursor:zoom-in}.h3-views figcaption{font-size:calc(12px*var(--ui,1));color:var(--mute);text-align:center}
+.h3-jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px}.h3-jobs button{padding:2px;display:grid;gap:2px;font-size:calc(11px*var(--ui,1))}
+.h3-jobs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;background:#1e1e24}
+.h3-path{font-size:calc(12.5px*var(--ui,1));word-break:break-all}

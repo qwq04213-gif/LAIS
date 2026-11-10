@@ -278,6 +278,19 @@ class Handler(BaseHTTPRequestHandler):
             if not fp:
                 return self.send_json({"error": "없어요"}, 404)
             return self.send_file(fp, "model/gltf-binary" if fp.suffix == ".glb" else "image/png")
+        if u == "/api/human3d":
+            return self.send_json(h3_status("deep=1" in self.path))
+        if u.startswith("/api/human3d/job/"):
+            try:
+                return self.send_json(h3_view(u[17:]))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
+        if u.startswith("/human3d/file/"):
+            parts = u[14:].split("/", 1)
+            fp = h3_file(parts[0], parts[1]) if len(parts) == 2 else None
+            if not fp:
+                return self.send_json({"error": "없어요"}, 404)
+            return self.send_file(fp, H3_TYPES[fp.suffix.lower()])
         if u == "/api/blender":
             return self.send_json(blender3d.status(ROOT))
         if u == "/api/websearch":
@@ -321,7 +334,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss", "report", "verify", "tracks", "orig", "loud", "m3d", "m3d_stats") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss", "report", "verify", "tracks", "orig", "loud", "m3d", "m3d_stats", "human3d") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -381,6 +394,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json((m3d_slot if u.endswith("slot") else m3d_delete)(p))
             except ValueError as e:
                 return self.send_json({"error": str(e)}, 404)
+        if u == "/api/human3d/open":
+            try:
+                open_folder(h3_job_dir(p.get("id")), None)
+                return self.send_json({"ok": True})
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
+        if u == "/api/human3d/install":
+            return self.send_json(h3_install())
+        if u == "/api/human3d/stop":
+            h3_manager.stop()
+            return self.send_json({"ok": True})
         if u == "/api/blender/install":
             return self.send_json(blender3d.install(ROOT))
         if u == "/api/blender/uninstall":
@@ -420,7 +444,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/agent/cancel":
             return self.send_json(agent_cancel(str(p.get("id"))))
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora", "vrestore", "audio", "m3d"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora", "vrestore", "audio", "m3d", "human3d"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if p["kind"] == "batch":
                 try:

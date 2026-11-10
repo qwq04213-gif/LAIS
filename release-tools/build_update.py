@@ -14,6 +14,7 @@ HERE = Path(__file__).resolve().parent
 USER_FILES = {"hub/profiles.json": "json-id", "hub/models.json": "json-id"}   # 직접 고칠 수 있는 파일 -> 합치기 방식
 USER_DIRS = ("wildcards/",)                                                    # 안의 파일은 고쳤으면 .new 로
 SKIP_DIRS = {"__pycache__", ".ruff_cache", "engine", "models", "outputs", "logs", "downloads", "backup", "input", "temp"}
+KEEP_ENGINE = ("engine", "human3d")
 MARK = "::PAYLOAD_BEGIN"
 
 BAT_HEAD = r"""@echo off
@@ -55,7 +56,8 @@ def collect(tree):
     files = {}
     for p in sorted(tree.rglob("*")):
         rel = p.relative_to(tree)
-        if p.is_dir() or any(x in SKIP_DIRS for x in rel.parts) or p.suffix == ".pyc" or p.name.endswith((".new", ".upd-tmp")):
+        keep = rel.parts[:2] == KEEP_ENGINE and not any(x in SKIP_DIRS - {"engine"} for x in rel.parts)      # engine 안에서도 인체 3D worker 코드는 배포해요(모델·가상환경은 WSL 쪽에 있어 여기 없어요)
+        if p.is_dir() or (any(x in SKIP_DIRS for x in rel.parts) and not keep) or p.suffix == ".pyc" or p.name.endswith((".new", ".upd-tmp")):
             continue
         files["/".join(rel.parts)] = p.read_bytes()
     return files

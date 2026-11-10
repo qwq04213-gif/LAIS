@@ -6,3 +6,5 @@ __pycache__/
 /release-tools/queue-doc.md
 /release-tools/ROADMAP.md
 /test/obsolete/
+/LocalAI-Studio/engine/*
+!/LocalAI-Studio/engine/human3d/
