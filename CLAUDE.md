@@ -19,6 +19,8 @@
 | `LocalAI-Studio/README.txt` · `VERSION.txt` | 사용 설명 + 변경 내역(앱 안 '변경 내역' 화면이 이 파일을 읽어요), 현재 버전 |
 | `release-tools/` | `build_update.py`(업데이트 .bat·zip 만들기), `apply_update.py`(= `hub/updater.py`), `history.json` |
 | `test/` | 가짜 ComfyUI·Ollama·파일 서버(`mocks.py`)로 도는 테스트, `runpar.py`(2개씩 동시 실행) |
+| `LocalAI-Studio/hub/human3d/` | 인체 3D 의 본체 쪽 코드(numpy·PIL 만): 약속(`contracts`)·사진 준비·사진 붙이기·메시 검사·GLB·worker 관리·사전 검사 |
+| `LocalAI-Studio/engine/human3d/` | 인체 3D worker(별도 파이썬 — WSL2 에서 돎): `worker/`(서버·작업·SiTH 어댑터), `scripts/`(설치·진단). `engine/` 의 다른 것은 깃·빌드에 넣지 않아요 |
 | `rmbg-test/` | 배경 지우기 테스트용 실제 모델(u2netp.onnx) |
 
 ## 작업 규칙
@@ -68,6 +70,23 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 마지막 출시: **4.8**(커밋 `v4.8`). 다음 판 **4.9**.
 
+### 인체 3D(SiTH) — 브랜치 `feature/human3d-sith` 에서 작업 중(main 에 합치지 않음, 출시 전)
+
+사용자 지시서(4.9 신규 인체 전용 3D 복원 엔진): 기존 3D(`27_m3d.py`·`photoproj.py`·`blender3d.py`)는 새 엔진이 **실제 GPU 로 검증되기 전까지 그대로 두고**, 별도 화면·별도 프로세스로 만든다.
+(그 전에 받은 '3D 임시 제거' 요청은 브랜치 `claude/lucid-fermi-xt75vy` 에만 있고 main 에 합치지 않았어요 — 지시서가 '기존 유지'로 바꿨어요.)
+
+- 흐름: 화면 `71-m3d-human.js` → `/api/job` kind `human3d`(`28_human3d.py` `do_human3d` — 허브 대기열이 곧 GPU 잠금, 시작 전 `free_comfy`) → 사진 준비(`human3d/preprocess`) →
+  worker(127.0.0.1:17861, `engine/human3d/worker/app.py`)가 단계별 별도 프로세스로 SiTH 실행 → 본체가 사진 화소 붙이기(`texture_project.project_front` 직교 투영·깊이 검사)·검사(`mesh_qa.inspect`)·GLB(`export.write_glb`, 꼭짓점 색 + `_OBSERVED`)
+- 결과: `outputs/3D-human/<날짜-시각-xxxx>/`(input·images·smplx·back_images·meshes·result·job.log·job.json·diagnosis.json). 실패해도 안 지움. 파일은 `/human3d/file/<id>/…` 로만 내줌
+- worker: 윈도우는 `wsl -d Ubuntu-22.04 -u root`(`manager.py`, 환경은 `/root/lais-human3d`), 코드는 LAIS 폴더의 것을 `/mnt/c/…` 로 그대로 읽음. 시험은 `HUMAN3D_WORKER_CMD`·`test/fake_human3d.py`(가짜 엔진, `HUMAN3D_FAKE_MODE`)
+- SiTH(커밋 6401549, MIT): 좌표 = [-1,1] 정육면체·직교 카메라(화소 x=(X+1)/2·S, y=(1−Y)/2·S, +z 가 앞). 뒷면 그림은 '뒤에서 본 모습'(복원 때 좌우 뒤집음). `fit.py` 는 `SMPLX_MALE.npz` 를 읽음.
+  저메모리 판 `worker/providers/sith_stages.py`: 격자 좌표를 CPU 에서 chunk 로(`runtime.grid_chunks`), 뒷면 후보 1장씩·FP16·`enable_model_cpu_offload`, `_repair_mesh`(가장 큰 조각만 남김) 안 씀.
+  메모리 부족 때 `SithProvider.on_oom`: 점 수 2만 → 격자 384 → 256(뒷면: offload → 후보 1장), 다시 시도 최대 2번(`jobs.MAX_OOM_RETRY`)
+- 자세: 기존 LAIS 에는 관절 좌표를 파일로 내는 기능이 없어(DWPose 는 ControlNet 그림용 노드 이름뿐) worker 안에서 rtmlib(DWPose/RTMPose 133점) → `preprocess.wholebody_to_openpose`
+- 빌드: `build_update.py` 가 `engine/human3d` 만 예외로 넣음(`KEEP_ENGINE`). `.gitignore` 도 `engine/*` 중 `human3d` 만 허용
+- 시험: `test/test_human3d.py`·`ui_test69.py`(가짜 엔진). **실제 SiTH·GPU·WSL 로는 한 번도 못 돌림** — 지시서 14번의 3단계(실제 사진 추론)부터는 사용자 PC 결과가 있어야 진행
+- 남은 일(지시서 순서): ② WSL 설치 스크립트 실제 실행 확인 → ③ 실제 사진 한 장 전체 추론 → ④ 10~12GB 에서 VRAM 최대값 재고 낮추기 → ⑤⑥ 실제 메시로 검사·사진 붙이기 위치 확인 → ⑨ 회귀. ECON 은 `providers/econ.py` 빈 어댑터(준비 안 됨으로만 알림)
+
 ### 다음 할 일
 
 0. 사용자가 4.5 로 실제 3D(전신 사진)를 만들어 결과 zip 을 보내 주면, 앞·45°·옆·뒤와 옷·손·머리카락·이음새를 그려서 점검하기(시험 도구: 가짜 3D 대신 실제 GLB 를 `photoproj`·렌더러로)
@@ -96,6 +115,10 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 Qwen 2.1 Turbo·Depth Anything 3·Stable Audio 3·Qwen3.5 27B·Gemma 4, 사양별 추천(`TIERS`, 2026-11 조사), 예전 엔진 정리(`SUPERSEDED` — 제한 해제판 대화 모델은 넣지 않음)
 
 ### 미검증(실제 PC 에서 확인 필요)
+
+- **인체 3D 전체**: `install_wsl.sh`·`install_models.sh`(WSL2 Ubuntu 22.04, PyTorch 2.1+cu121, kaolin 0.15, nvdiffrast 의 nvcc 필요 여부), `wsl.exe` 로 worker 띄우기·`/mnt/c` 경로,
+  rtmlib 자세 검출, 공식 `fit.py`, `sith_stages.py` 의 back(FP16·offload — 사용자 정의 파이프라인이라 자료형 오류 가능 → FP32 로 한 번 재시도)·recon(kaolin `voxelgrids_to_trianglemeshes` 좌표·CPU marching cubes 대체 경로의 면 방향),
+  10~12GB 에서의 실제 VRAM, 사진 붙이기의 좌표 약속(직교·y 뒤집기), 뒷면 후보 자동 고르기 기준(색 분포·배경 깨끗함 — 단순함), 100만 꼭짓점 넘는 메시에서 본체(numpy) 처리 시간·GLB 크기
 
 - 남은 시간: 실제 ComfyUI 작업(영상·3D·하이레스)에서의 정확도
 - 3D 머리 전용 텍스처: 실제 Pixal3D 결과에서 머리 범위(목·어깨 경계)·노멀맵 방향·피부 판정

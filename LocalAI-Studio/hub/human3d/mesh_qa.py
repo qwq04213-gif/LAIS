@@ -62,7 +62,7 @@ def topology(V, F):
     used = np.zeros(n, bool)
     used[F.reshape(-1)] = True
     flab = lab[F[:, 0]]
-    ncomp = int(lab[used].max()) + 1 if used.any() else 0
+    ncomp = int(len(np.unique(flab)))                     # 면이 있는 조각만 세요(면에 안 쓰인 꼭짓점은 조각이 아니에요)
     P = V.astype(np.float64)
     cr = np.cross(P[F[:, 1]] - P[F[:, 0]], P[F[:, 2]] - P[F[:, 0]])
     area = np.linalg.norm(cr, axis=1) / 2
