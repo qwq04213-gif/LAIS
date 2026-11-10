@@ -42,14 +42,13 @@
 ```bash
 pip install pillow numpy playwright onnxruntime   # 처음 한 번(크로미움: python -m playwright install chromium)
 cd test
-TMPDIR=/tmp/tt python3 runpar.py test_m3d ui_test64          # 고친 곳 관련 테스트만 먼저
+TMPDIR=/tmp/tt python3 runpar.py test_features ui_test51     # 고친 곳 관련 테스트만 먼저
 TMPDIR=/tmp/tt python3 runpar.py $(ls test_*.py ui_test*.py)  # 출시 전 전체 회귀(140개 남짓, 수십 분)
 ```
 
 - ffmpeg 가 있어야 하는 테스트가 있어요. 테스트마다 고정 포트(`TEST_HUB_PORT`)를 쓰고, `TEST_SLOT` 으로 1000씩 띄워 동시에 돌려요.
 - 경로는 `test/` 의 한 단계 위(저장소 맨 위)를 기준으로 잡아요. 다른 곳을 쓰려면 `LAS_BASE` 환경 변수.
 - 새 ComfyUI 노드를 쓰면 `test/mocks.py` 의 `REQ`(노드별 필수 칸)에 넣어야 가짜 ComfyUI 가 받아 줘요.
-- Blender 는 테스트에서 `BLENDER_EXE=test/fake_blender.py`(가짜)로 흐름만 확인해요.
 - **3D·이미지 품질 확인은 고해상도·고품질 사람/캐릭터 사진으로 해요(사용자 요청).** 단색·줄무늬 같은 단순한 그림만으로 판단하지 않아요.
   이 환경엔 GPU·실제 3D 엔진이 없으니, 공개 라이선스(CC0 등) 고해상도 얼굴 사진을 가짜 3D(머리·몸)에 무늬로 입혀 '정답'으로 쓰고 결과를 눈으로도 확인해요.
 
@@ -68,9 +67,17 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 마지막 출시: **4.8**(커밋 `v4.8`). 다음 판 **4.9**.
 
+**3D 만들기는 지금 빠져 있어요(임시 제거 — 모델·구동 방식을 새로 짜려고, 방향은 사용자가 알려 줌).**
+- 지운 것: '3D 만들기' 화면(`27_m3d.py`·`70-m3d.js`), 기타 기능 '사진 → 3D'(`img3d`·`wf_trellis`·`wf_face_mask`), `photoproj.py`·`glbscene.py`·`blender3d.py`·`blender_game.py`·`rig_fit.py`,
+  추천 모델 `trellis2`·`pixal3d`·`pixal3d-mv`·`mediapipe-face` 와 3D 분류, 대화 도구 `image_to_3d`, 관련 테스트(`test_m3d*`·`ui_test64/65/68`·`fake_blender.py`). 예전 코드는 커밋 `v4.8` 에 있어요.
+- 남긴 것: '깊이 → 3D 메시'·영상 분석 '3D 카메라'(다른 기능), 갤러리의 .glb 돌려 보기(그림 미리보기는 `photoproj` 가 그리던 것이라 지금은 카드로만 보여요),
+  저장 공간의 '예전 3D 만들기 작업' 정리 항목(`M3D_OLD`), `wf_fit`(→ `03_comfy.py`), `test/mocks.py` 의 3D 노드 모의.
+- 업데이트로 사용자 PC 의 옛 파일을 치우려고 `updater.py` 의 `OBSOLETE` 에 넣었어요(안 치우면 허브가 `27_m3d.py`·`70-m3d.js` 를 그대로 읽어요). 받은 3D 모델 파일·만든 결과는 손대지 않아요.
+- 다음 출시 README 변경 내역에 `삭제` 로 적어야 해요. 아래 3D 관련 기록(4.3~4.8)은 예전 구현의 참고용이에요.
+
 ### 다음 할 일
 
-0. 사용자가 4.5 로 실제 3D(전신 사진)를 만들어 결과 zip 을 보내 주면, 앞·45°·옆·뒤와 옷·손·머리카락·이음새를 그려서 점검하기(시험 도구: 가짜 3D 대신 실제 GLB 를 `photoproj`·렌더러로)
+0. (보류 — 3D 다시 만든 뒤) 사용자가 4.5 로 실제 3D(전신 사진)를 만들어 결과 zip 을 보내 주면, 앞·45°·옆·뒤와 옷·손·머리카락·이음새를 그려서 점검하기(시험 도구: 가짜 3D 대신 실제 GLB 를 `photoproj`·렌더러로)
 1. (미룸) 움직임 미리보기에서 옷이 몸과 함께 늘어나는 문제(리깅 가중치)
 
 4.8: 실제 결과(사진 한 장)에서 다리 하나 소실 — 그 3D 의 ComfyUI 기록: RemeshMesh 가 udf 대체값(solid 미지원 판) + drop_inverted_components=True, 엉덩이~허벅지 높이(키 30~40%)에 큰 구멍 4개 → 다시 짜기에서 지워진 것으로 추정(원본 고밀도 메시로 확인 필요). udf 대체값을 drop_inverted False·drop_enclosed True 로. 팔다리 검사 `photoproj.body_parts/limb_check/limbs_of/shape_cam`(사진 카메라 실루엣으로 부위별 덮는 비율, 0.6 미만 없음) · `m3d_limbs`(단계별 hi→remesh→dec→A, lost_at), 엔진 입력 정사각형은 허브가 직접(`m3d_frame` pad 1.1/1.0, ImageCropToMask 안 씀, engine_input_*.png 저장), 업스케일은 사진 붙이기(tex_front)에만, 멀티뷰 검사 `m3d_vcheck` 교체(색 분포·잘림·뒤 비율·다리 수·좌우 거울 — 앞뒤 반전 비교 삭제, 멀티뷰 모델 없으면 검사 생략), 사진 점검 `m3d_body_check`(다리 틈·어두운 옷/배경), orig_full.png·mask_front.png, 비교 모드에 remesh/dec 그물망(SaveGLB 3d/hub3d_remesh·hub3d_dec)·F(TRELLIS.2), `mesh_report` 조각·구멍 목록·면 방향, `M3dVram`(gpu_live 2초) 최대 VRAM, README '3D 품질 숫자 읽는 법', 사진 한 장 모드 앞 사진 보이기(#m3-front). 시험 `test_m3d47` 7~9

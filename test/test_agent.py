@@ -23,7 +23,7 @@ def wait(pid):
 
 # 1) 그냥 대화
 say(content="안녕하세요! 무엇을 만들까요?"); r = plan("안녕"); assert r["reply"].startswith("안녕하세요") and "plan" not in r, r
-assert {t["function"]["name"] for t in STATE["agentreq"][-1]["tools"]} >= {"queue_status", "recent_results", "generate_image", "edit_image", "explore_prompts", "relight_image", "analyze_video", "recompose_image", "ask_user", "make_video", "make_music", "make_speech", "upscale_image", "remove_background", "swap_face", "fix_face_hands", "extend_image", "depth_map", "parallax_video", "image_to_3d", "restore_video", "separate_audio", "clean_audio", "trim_video", "join_videos", "add_sound_subtitles", "train_lora"} and STATE["agentreq"][-1]["think"] is False
+assert {t["function"]["name"] for t in STATE["agentreq"][-1]["tools"]} >= {"queue_status", "recent_results", "generate_image", "edit_image", "explore_prompts", "relight_image", "analyze_video", "recompose_image", "ask_user", "make_video", "make_music", "make_speech", "upscale_image", "remove_background", "swap_face", "fix_face_hands", "extend_image", "depth_map", "parallax_video", "restore_video", "separate_audio", "clean_audio", "trim_video", "join_videos", "add_sound_subtitles", "train_lora"} and STATE["agentreq"][-1]["think"] is False
 ok("no tool → plain reply; tool list sent")
 # 2) 조회 도구는 바로 실행하고 결과를 모델에 돌려줘서 답을 받아요
 say(tc("queue_status", {})); say(content="지금 대기 중인 작업은 없어요.")

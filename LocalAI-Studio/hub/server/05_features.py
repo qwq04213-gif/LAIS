@@ -518,7 +518,7 @@ def feat_ipadapter(p, J):
 
 def do_feat(p, J):
     fn = {"outpaint": feat_outpaint, "regional": feat_regional, "compare": feat_compare, "resize": feat_resize, "color": feat_color,
-          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "img3d": feat_3d, "rmbg": feat_rmbg,
+          "detailer": feat_detailer, "ipadapter": feat_ipadapter, "faceswap": feat_faceswap, "rmbg": feat_rmbg,
           "relight": feat_relight, "depth": feat_depth, "parallax": feat_parallax, "depth3d": feat_depth3d, "recompose": feat_recompose}.get(p.get("feature"))
     if not fn:
         raise ValueError("알 수 없는 기능이에요.")

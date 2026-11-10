@@ -507,12 +507,6 @@ def do_vid_more(p, J):
     return [(data, info, Path(name).suffix.lower() or ".mp4") for name, data in res[:1]]
 
 
-def feat_3d(p, J):
-    """사진 한 장 → 텍스처 입힌 3D 모델(GLB, TRELLIS.2). 자세한 설정·여러 방향·Blender 마무리는 '3D 만들기' 화면에서 해요."""
-    return m3d_quick(p["image"], {"res": {"fast": 512, "high": 1536}.get(p.get("quality"), 1024), "faces": p.get("faces") or 20000,
-                                  "seed": p.get("seed", -1)}, J)
-
-
 VPOST = {"interp": ("RIFE VFI", "ComfyUI-Frame-Interpolation", "프레임 늘리기"), "upscale": ("ImageUpscaleWithModel", "", "업스케일"),
          "webp": ("SaveAnimatedWEBP", "", "WebP 변환"), "gif": ("", "", "GIF 변환")}
 

@@ -19,7 +19,10 @@ from pathlib import Path
 PROTECTED = ("engine", "models", "outputs", "logs", "downloads", "backup", "input", "temp")
 DEFAULT_VERSION = "2026.10.17"                                # VERSION.txt 가 없던 첫 배포 버전(hub.py 의 기본값과 같게)
 KEEP_BACKUPS = 3
-OBSOLETE = ("hub/automask.py",)      # 이전 버전이 설치했지만 더는 쓰지 않는 파일(업데이트하면 치워요)
+OBSOLETE = ("hub/automask.py",
+            # 3D 만들기를 새로 짜려고 잠시 뺐어요(남아 있으면 허브가 예전 화면·서버 코드를 그대로 읽어요)
+            "hub/server/27_m3d.py", "hub/web/js/70-m3d.js", "hub/photoproj.py", "hub/glbscene.py",
+            "hub/blender3d.py", "hub/blender_game.py", "hub/rig_fit.py")      # 이전 버전이 설치했지만 더는 쓰지 않는 파일(업데이트하면 치워요)
 
 
 def sha(b):

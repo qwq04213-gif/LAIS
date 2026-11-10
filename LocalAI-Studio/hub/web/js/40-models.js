@@ -29,7 +29,7 @@ async function loadSetup(){
   loadManage();
   $('#cat-llm').innerHTML=c.llm.map(row).join('');
   const by=k=>c.image.filter(m=>(m.cat||'image')===k).map(row).join('')||'<p class="mute">항목이 없어요.</p>';
-  $('#cat-img').innerHTML=by('image');$('#cat-vid').innerHTML=by('video');$('#cat-aud').innerHTML=by('audio');$('#cat-3d').innerHTML=by('d3');catVoice();
+  $('#cat-img').innerHTML=by('image');$('#cat-vid').innerHTML=by('video');$('#cat-aud').innerHTML=by('audio');catVoice();
   $$('#v-setup .item input').forEach(i=>{if(keep.has(i.value))i.checked=true});
   CATALOG_NOW=c;selSummary();loadTasks();tierPaint();oldPaint(c.superseded||[]);
 }
@@ -46,17 +46,17 @@ document.addEventListener('change',e=>{if(e.target.closest('#v-setup .item'))sel
 const TIERS=[      // 그 메모리에서 돌아가는 가장 최신 모델, 성인 표현이 되는 모델을 먼저(2026년 11월 기준, 공식 자료·사용자 측정 참고)
   {gb:8,rows:{chat:[['qwen35-9b-abl','gemma4-12b-abl'],'Qwen3.5 9B · Gemma 4 12B 제한 해제판'],gen:[['z-image-turbo','noobai','realvisxl5','sdxl-vae-fix'],'Z-Image-Turbo(실사, 느림) · 그림체 NoobAI · 실사 RealVis'],
     edit:[['qwen-image-turbo','qwen-te-small','noobai'],"Qwen 2.1 Turbo + 작은 인코더(RAM 32GB, 느림) · 칠해서 편집(SDXL)"],vid:[['wan22-ti2v-5b','ltx-video'],'Wan 2.2 5B 를 짧고 작게'],
-    aud:[['stable-audio-3'],'효과음·연주곡'],d3:[['trellis2'],"세밀함 '빠르게(512)' · 면 2만"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원) · Real-ESRGAN']}},
+    aud:[['stable-audio-3'],'효과음·연주곡'],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원) · Real-ESRGAN']}},
   {gb:12,rows:{chat:[['gemma4-12b-abl','qwen35-9b-abl'],'Gemma 4 12B · Qwen3.5 9B 제한 해제판'],gen:[['z-image-turbo','noobai','realvisxl5','sdxl-vae-fix'],'Z-Image-Turbo · NoobAI · RealVis'],
     edit:[['qwen-image-turbo','qwen-image','qwen-te-small'],'Qwen-Image 2.1 Turbo(작은 텍스트 인코더)'],vid:[['wan22-ti2v-5b','wan-vace'],'Wan 2.2 5B 기본 길이 · VACE'],
-    aud:[['ace-step-15-turbo','stable-audio-3'],'노래는 ACE-Step 1.5'],d3:[['pixal3d','trellis2'],"Pixal3D · 세밀함 '보통(1024)' — 메모리 부족이면 '빠르게'"],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원)']}},
+    aud:[['ace-step-15-turbo','stable-audio-3'],'노래는 ACE-Step 1.5'],up:[['seedvr2','esrgan'],'SeedVR2 3B(AI 복원)']}},
   {gb:16,rows:{chat:[['gemma4-26b-abl','gemma4-12b-abl'],'Gemma 4 26B 제한 해제판(MoE, 빠름)'],gen:[['chroma-hd','z-image-turbo','noobai','sdxl-vae-fix'],'Chroma(무검열) · Z-Image-Turbo · NoobAI'],
     edit:[['qwen-image','qwen-image-turbo','qwen-lightning'],'Qwen-Image 2.1(+Turbo)'],vid:[['wan22-14b-i2v','wan22-lightning','wan-s2v'],'Wan 2.2 14B + 4단계 가속, 말하는 영상'],
-    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['pixal3d','trellis2','pixal3d-mv'],"Pixal3D(사진에 충실) · 세밀함 1536 · 여러 방향"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}},
+    aud:[['ace-step-15-turbo','stable-audio-3'],''],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}},
   {gb:24,rows:{chat:[['qwen35-27b-abl','gemma4-26b-abl'],'Qwen3.5 27B 제한 해제판 — 가장 똑똑해요'],gen:[['chroma-hd','z-image-turbo','noobai','realvisxl5'],'Chroma · Z-Image-Turbo · NoobAI · RealVis'],
     edit:[['qwen-image','qwen-image-turbo','qwen-lightning'],'여러 장 합치기도 넉넉해요'],vid:[['wan22-14b-i2v','wan22-14b-t2v','wan22-lightning','wan-s2v','ltx25'],'Wan 2.2 14B · LTX-2.5(소리까지, 성인 표현은 확인 안 됨)'],
-    aud:[['ace-step-15-turbo','stable-audio-3'],''],d3:[['pixal3d','trellis2','pixal3d-mv'],"Pixal3D · 세밀함 1536 · 텍스처 4096"],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
-const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',d3:'3D 만들기',up:'업스케일'};
+    aud:[['ace-step-15-turbo','stable-audio-3'],''],up:[['seedvr2-7b','esrgan'],'SeedVR2 7B(AI 복원 · 고화질)']}}];
+const TIER_ROW={chat:'대화',gen:'이미지 생성',edit:'이미지 편집',vid:'영상',aud:'음악·효과음',up:'업스케일'};
 const tierOf=v=>v>=22?24:v>=15?16:v>=11?12:8;
 const nsfwTag=m=>m.nsfw==='ok'?' <span class="nsfw ok" title="성인 표현을 막지 않는 모델이에요(미성년자 관련 내용은 이 프로그램이 항상 막아요)">성인 표현 가능</span>'
   :m.nsfw==='limited'?' <span class="nsfw lim" title="공식 필터·안전 학습 때문에 성인 표현이 막히거나 흐려질 수 있어요">성인 표현 제한</span>':'';
@@ -161,7 +161,7 @@ $('#disk').onclick=async e=>{
   const c=e.target.closest('.cl');if(c){if((c.dataset.ext||c.dataset.w==='cache_in')&&!confirm('이 캐시를 모두 지울까요?\n다른 프로그램이 다시 받아야 할 수 있어서 처음 쓸 때 시간이 걸려요. 되돌릴 수 없어요.'))return;
     const ask={vrestore:'영상 복원 작업 파일을 지울까요?\n결과물은 그대로예요. 끊긴 복원을 이어서 하기만 안 돼요.',audio_work:'소리 분리 작업 파일을 지울까요?\n결과물은 그대로예요.',
       llm_orphans:'어떤 대화 모델도 쓰지 않는 조각 파일을 지울까요?\n설치된 대화 모델은 그대로예요. 받다 멈춘 대화 모델은 처음부터 다시 받아야 해요.',
-      m3d_old:'30일 넘게 손대지 않은 3D 만들기 작업(올린 사진·방향 그림)을 지울까요?\n만든 3D 파일(outputs)은 그대로예요. 되돌릴 수 없어요.'}[c.dataset.w];if(ask&&!confirm(ask))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
+      m3d_old:'30일 넘게 손대지 않은 예전 3D 만들기 작업(올린 사진·방향 그림)을 지울까요?\n만든 3D 파일(outputs)은 그대로예요. 되돌릴 수 없어요.'}[c.dataset.w];if(ask&&!confirm(ask))return;c.disabled=true;const r=await api('/api/clean',{what:c.dataset.w});toast(r.error||`${fmtSize(r.freed||0)} 확보했어요.`);diskScan();return}
   const b=e.target.closest('.del');if(!b)return;
   if(!confirm(`'${b.dataset.name}' 파일을 지울까요?\n되돌릴 수 없어요.`))return;
   const r=await api('/api/delete',{kind:b.dataset.kind,dir:b.dataset.dir,name:b.dataset.name});

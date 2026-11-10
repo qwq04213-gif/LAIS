@@ -35,7 +35,6 @@ STATE["missing"].discard("DepthAnythingV2Preprocessor"); hub._CAPS["t"] = 0
 ok("depth map: gray / color / cut-out, missing extension reported")
 # 3) 없는 모델 → need
 assert hub.need_ids("업스케일 모델이 없습니다. '설치와 모델' 탭에서 Real-ESRGAN 을 설치해 주세요.") == ["esrgan"]
-assert hub.need_ids("없는 파일: TRELLIS.2 모델. '설치와 모델' 탭의 3D 분류에서 'TRELLIS.2' 를 설치해 주세요.") == ["trellis2"]
 assert hub.need_ids("없는 파일: FLUX 모델. '설치와 모델' 탭에서 설치하거나", {"kind": "gen", "gengine": "chroma"}) == ["chroma-hd"]
 assert hub.need_ids("영상 편집에는 ffmpeg 가 필요해요. 설치와 모델 > 내 PC 점검의 [빠진 부품 설치]") == [] and hub.need_ids("그냥 오류") == []
 (M / "upscale_models/RealESRGAN_x4plus.pth").rename(M / "upscale_models/x.bak")

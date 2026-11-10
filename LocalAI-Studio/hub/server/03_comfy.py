@@ -539,3 +539,58 @@ def run_wf(wf, J, raw=False):
                 raise RuntimeError("결과 파일이 없습니다." if raw else "결과 이미지가 없습니다.")
             return imgs
         time.sleep(0.3)
+
+
+def wf_fit(g, notes=None):
+    """엔진(ComfyUI)이 알려 준 노드 설명에 맞춰 그래프를 다듬어요: 모르는 칸은 빼고, 빠진 필수 칸은 기본값으로 채워요.
+    ComfyUI 판마다 칸 이름이 조금씩 달라도 그래프가 깨지지 않게 하려는 안전장치예요.
+    선택 칸(DynamicCombo)에 그 판에 없는 값을 넣으면 ComfyUI 가 칸을 통째로 빼 버려서(→ 'missing ... sign_mode')
+    노드의 '_alt'(대신 쓸 값과 하위 칸) → 그 판의 기본값 순서로 바꿔요. 바꾼 내용은 notes 에 적어요."""
+    info = caps().get("info") or {}
+    for n in g.values():
+        alt = n.pop("_alt", None) or {}
+        spec = (info.get(n["class_type"]) or {}).get("input")
+        if not spec:
+            continue
+        req, opt = spec.get("required") or {}, spec.get("optional") or {}
+        if not (req or opt):                          # 설명이 비어 있으면 손대지 않아요
+            continue
+        for k in list(n["inputs"]):
+            if k not in req and k not in opt and "." not in k:
+                del n["inputs"][k]
+        for k, v in req.items():
+            if k not in n["inputs"] and isinstance(v, (list, tuple)) and len(v) > 1 and isinstance(v[1], dict) and "default" in v[1]:
+                n["inputs"][k] = v[1]["default"]
+        for k, v in {**opt, **req}.items():                 # 고른 값에 따라 칸이 생기는 선택 칸(DynamicCombo): 하위 칸은 '부모.이름' 으로 채워요
+            try:
+                if not (isinstance(v, (list, tuple)) and len(v) > 1 and isinstance(v[1], dict) and isinstance(v[1].get("options"), list)):
+                    continue
+                opts = [o for o in v[1]["options"] if isinstance(o, dict) and "key" in o]
+                if not opts:
+                    continue
+                cur = n["inputs"].get(k, v[1].get("default", opts[0]["key"]))
+                if isinstance(cur, list):                   # 다른 노드에서 이어진 값이면 알 수 없어요
+                    continue
+                keys = [o["key"] for o in opts]
+                if cur not in keys:                         # 이 ComfyUI 판에 없는 선택지
+                    pick = next(((a, kids) for a, kids in alt.get(k, []) if a in keys), None)
+                    new = pick[0] if pick else (v[1].get("default") if v[1].get("default") in keys else keys[0])
+                    for x in [x for x in n["inputs"] if x.startswith(k + ".")]:
+                        del n["inputs"][x]
+                    n["inputs"].update((pick or (None, {}))[1])
+                    if notes is not None:
+                        notes.append(f"{n['class_type']}.{k}: {cur} → {new}")
+                    cur = new
+                n["inputs"][k] = cur
+                sel = next((o for o in opts if o["key"] == cur), None)
+                kids = (sel or {}).get("inputs") or {}
+                names = set(kids.get("optional") or {}) | set(kids.get("required") or {})
+                for x in [x for x in n["inputs"] if x.startswith(k + ".") and x.split(".", 1)[1] not in names]:
+                    del n["inputs"][x]                      # 고른 값에 없는 하위 칸은 빼요
+                kids = (sel or {}).get("inputs") or {}
+                for c, cs in {**(kids.get("optional") or {}), **(kids.get("required") or {})}.items():
+                    if f"{k}.{c}" not in n["inputs"] and isinstance(cs, (list, tuple)) and len(cs) > 1 and isinstance(cs[1], dict) and "default" in cs[1]:
+                        n["inputs"][f"{k}.{c}"] = cs[1]["default"]
+            except Exception:  # noqa: BLE001
+                continue
+    return g

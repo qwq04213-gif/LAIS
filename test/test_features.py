@@ -10,7 +10,7 @@ def outimg(j): return out_img(j["images"][0]).convert("RGB")
 def classes(wf): return [n["class_type"] for n in wf.values()]
 def node(wf, c, i=0): return [n for n in wf.values() if n["class_type"] == c][i]["inputs"]
 
-F = req("/api/features"); ids = [f["id"] for f in F]; assert ids == ["outpaint", "regional", "compare", "resize", "color", "relight", "recompose", "depth", "parallax", "depth3d", "rmbg", "detailer", "ipadapter", "faceswap", "img3d"] and all(not f["missing_nodes"] and not f["missing_lists"] for f in F), F
+F = req("/api/features"); ids = [f["id"] for f in F]; assert ids == ["outpaint", "regional", "compare", "resize", "color", "relight", "recompose", "depth", "parallax", "depth3d", "rmbg", "detailer", "ipadapter", "faceswap"] and all(not f["missing_nodes"] and not f["missing_lists"] for f in F), F
 STATE["missing"].add("ImagePadForOutpaint"); hub.caps(force=True)
 F2 = req("/api/features"); assert F2[0]["missing_nodes"] == ["ImagePadForOutpaint"] and not F2[1]["missing_nodes"], F2
 r = job({"kind": "feat", "feature": "outpaint", "image": "x", "prompt": "a", "right": "64"}, expect_ok=False); assert r["state"] == "error" and "ImagePadForOutpaint" in r["error"], r

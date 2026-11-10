@@ -747,37 +747,4 @@ button:not(.go):not(.ico):not([class*="ico"]),.chip{max-width:100%;overflow:hidd
 .csrc{margin-top:8px;font-size:calc(12.5px*var(--ui,1))}.csrc summary{cursor:pointer;color:var(--mute)}.csrc ol{margin:6px 0 0;padding-left:20px}.csrc li{margin:3px 0}
 .copts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.copts .chip{cursor:pointer}
 #rail .sp-btn{min-height:calc(36px*var(--ui,1)/1.25);height:auto;padding:8px 10px;line-height:1.2}
-/* 3D 만들기 */
-.m3-checks{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px;font-size:calc(13px*var(--ui,1))}
-.m3-checks li{padding:7px 10px;border-left:3px solid var(--line);background:var(--chrome);border-radius:0 6px 6px 0}
-.m3-checks .lv-ok{border-color:var(--okt)}.m3-checks .lv-warn{border-color:var(--warnt)}.m3-checks .lv-bad{border-color:var(--bad);color:var(--bad)}
-.m3-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
-.m3-slot{margin:0;display:grid;gap:4px;min-width:0}
-.m3-slot img,.m3-ph{width:100%;aspect-ratio:1;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/14px 14px;max-height:none}
-.m3-ph{display:grid;place-items:center;color:var(--mute);border-style:dashed;background:none;font-size:calc(13px*var(--ui,1))}
-.m3-slot figcaption{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:calc(12.5px*var(--ui,1));white-space:nowrap}
-.m3-slot figcaption span{display:flex;gap:4px}.m3-slot figcaption .sm{padding:2px 8px}
-.m3-viewer model-viewer{width:100%;height:min(62vh,560px);background:var(--raised);border-radius:8px;display:block}
-.m3-bar{margin:10px 0}.m3-bar a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
-.m3-stat{border-collapse:collapse;width:100%;max-width:640px;font-size:calc(13px*var(--ui,1))}
-.m3-stat th,.m3-stat td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;white-space:nowrap}.m3-stat th{color:var(--mute);font-weight:500}
-.m3-slot{position:relative}.m3-slot.sus img{outline:2px solid var(--warnt);outline-offset:-2px}
-.m3-sus{position:absolute;top:6px;left:6px;background:var(--warnt);color:var(--acc-tx);font-size:calc(11.5px*var(--ui,1));padding:1px 6px;border-radius:4px;cursor:help}
-.m3-sbox{position:relative;cursor:crosshair;margin-bottom:8px;line-height:0}.m3-sbox img{width:100%;border-radius:6px;border:1px solid var(--line);display:block}
-.m3-sbox canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:6px}
-.m3-sobjs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px;margin:6px 0 10px}.m3-sobj{margin:0;position:relative;display:grid;gap:2px}
-.m3-sobj img{width:100%;aspect-ratio:1;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/12px 12px}
-.m3-sobj figcaption{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:calc(12px*var(--ui,1))}.m3-sobj .m3-sus{position:static}.m3-sobj .sm{padding:1px 7px}
 model-viewer:fullscreen{width:100vw!important;height:100vh!important;background:var(--table)!important;border-radius:0!important}
-.m3-photo{font-size:calc(13px*var(--ui,1));margin:6px 0}.m3-photo.ok{color:var(--okt)}.m3-photo.no{color:var(--warnt)}
-.m3-size{font-size:calc(13px*var(--ui,1));margin:-4px 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.m3-size .okc{color:var(--okt)}
-.m3-dir{font-size:calc(12.5px*var(--ui,1))}.m3-rig{margin:8px 0;font-size:calc(13px*var(--ui,1))}
-#m3-bl{margin-bottom:8px;font-size:calc(13px*var(--ui,1))}#m3-bl .bad{color:var(--bad)}
-
-/* 3D: 접는 칸(장면 전체)·검사·4방향 캡처·단계 파일 */
-details.m3-fold>summary{cursor:pointer;font-weight:600;padding:2px 0}details.m3-fold[open]>summary{margin-bottom:8px}
-.m3-mesh.ok{color:var(--ok,#2e7d32)}.m3-mesh.no{color:var(--warn,#b26a00)}
-.m3-sheet{margin:8px 0}.m3-sheet img{width:100%;border-radius:8px;cursor:zoom-in;background:#16161a}
-.m3-files{margin:6px 0;padding-left:18px}.m3-files li{margin:3px 0}
-.m3-front{margin:6px 0}.m3-front img{max-width:100%;max-height:220px;border-radius:8px;cursor:zoom-in;background:repeating-conic-gradient(#2a2a30 0 25%,#222228 0 50%) 0 0/16px 16px}
-.m3-stat td.bad{color:var(--warn,#b26a00);font-weight:600}

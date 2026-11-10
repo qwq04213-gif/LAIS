@@ -26,7 +26,7 @@ assert req("/api/clean", {"what": "x_nothing"}).get("error"); ok("unknown clean 
 import time as _t
 (hub.VR_WORK / "k1" / "chunks").mkdir(parents=True, exist_ok=True); (hub.VR_WORK / "k1" / "pre.mp4").write_bytes(b"V" * 4000); (hub.VR_WORK / "k1" / "chunks" / "c1.mp4").write_bytes(b"V" * 1000)
 hub.DEPTH_DIR.mkdir(parents=True, exist_ok=True); (hub.DEPTH_DIR / "a.png").write_bytes(b"D" * 500)
-old, new = hub.M3D_DIR / "aaaaaaaaaaaa", hub.M3D_DIR / "bbbbbbbbbbbb"
+old, new = hub.M3D_OLD / "aaaaaaaaaaaa", hub.M3D_OLD / "bbbbbbbbbbbb"
 for d in (old, new): d.mkdir(parents=True, exist_ok=True); (d / "meta.json").write_text("{}"); (d / "orig.png").write_bytes(b"P" * 800)
 for f in old.iterdir(): os.utime(f, (_t.time() - 40 * 86400,) * 2)
 (hub.COMFY / "input").mkdir(parents=True, exist_ok=True); (hub.COMFY / "input" / "hub_aaaa.mp4").write_bytes(b"M" * 900); (hub.COMFY / "input" / "mine.mp4").write_bytes(b"U" * 10)

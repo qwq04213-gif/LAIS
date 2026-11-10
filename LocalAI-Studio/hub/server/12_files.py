@@ -568,6 +568,9 @@ def _ext_cache_dirs():
     return out
 
 
+M3D_OLD = ROOT / "m3d_work"      # 예전 3D 만들기가 쓰던 작업 폴더(기능은 뺐지만 PC 에 남아 있을 수 있어서 정리 항목은 둬요)
+
+
 def disk_paths():
     """항목 key → (이름, 폴더, 설명, 정리 방법, 건너뛸 폴더, 프로그램 폴더 안인지). 용량 점검과 [폴더 열기]가 같은 목록을 써요."""
     rows = []
@@ -586,7 +589,7 @@ def disk_paths():
              ("vrestore", "영상 복원 작업 파일 (이어서 하기용)", VR_WORK, "끊긴 복원을 이어서 하려고 남겨 둔 중간 영상이에요. 지워도 결과물은 그대로예요(이어서 하기만 안 돼요).", "vrestore", ()),
              ("audio_work", "소리 분리 작업 파일", AU_WORK, "소리 분리·복원의 중간 파일이에요. 지워도 결과물은 그대로예요.", "audio_work", ()),
              ("depth", "깊이 지도 저장분", DEPTH_DIR, "같은 사진을 다시 쓸 때 빨리 하려고 둔 깊이 지도예요. 지워도 필요할 때 다시 만들어요.", "depth", ()),
-             ("m3d", "3D 만들기 작업 (사진·방향 그림)", M3D_DIR, "만든 3D 파일은 결과물(outputs)에 따로 있어요. 정리는 30일 넘게 손대지 않은 작업만 지워요.", "m3d_old", ()),
+             ("m3d", "예전 3D 만들기 작업 (사진·방향 그림)", M3D_OLD, "만든 3D 파일은 결과물(outputs)에 따로 있어요. 정리는 30일 넘게 손대지 않은 작업만 지워요.", "m3d_old", ()),
              ("kept", "올려 둔 사진 (다시 켜도 불러오기)", KEEP_DIR, "위의 [올려 둔 사진 모두 지우기]로 지워요.", None, ()),
              ("analysis", "영상 분석 기록", VANA_DIR, "영상 분석 화면의 이전 분석 목록에서 지울 수 있어요.", None, ()),
              ("explore", "프롬프트 탐색 기록", EXP_DIR, "프롬프트 탐색 화면에서 지울 수 있어요.", None, ()),
@@ -786,7 +789,7 @@ def clean_item(what):
                 pass
     elif what == "m3d_old":
         old = time.time() - 30 * 86400
-        for s in (list(M3D_DIR.iterdir()) if M3D_DIR.is_dir() else []):
+        for s in (list(M3D_OLD.iterdir()) if M3D_OLD.is_dir() else []):
             mf = s / "meta.json"
             if s.is_dir() and mf.is_file() and max(f.stat().st_mtime for f in s.iterdir()) < old:
                 freed += dir_size(s)

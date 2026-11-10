@@ -36,7 +36,6 @@
       <button data-v="edit" title="이미지 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span>이미지 편집</span></button>
       <button data-v="photo" title="사진 편집기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.6"/></svg><span>사진 편집기</span></button>
       <button data-v="up" title="업스케일"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg><span>업스케일</span></button>
-      <button data-v="m3d" title="3D 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>3D 만들기</span></button>
       <button data-v="info" title="이미지 정보"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span>이미지 정보</span></button>
     </div></div>
     <div class="ng" data-g="more"><span class="ngt tog" id="ng-more" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="0">이미지 기능<i aria-hidden="true"></i></span>
@@ -54,7 +53,6 @@
       <button data-v="feat" data-f="depth" title="깊이 맵 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19L12 4l9 15z"/><path d="M7.5 19L12 11.5 16.5 19"/></svg><span>깊이 맵</span></button>
       <button data-v="feat" data-f="parallax" title="패럴랙스 영상"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="M9 3h10a2 2 0 0 1 2 2v10"/><path d="M8 13l2-2 3 3"/></svg><span>패럴랙스 영상</span></button>
       <button data-v="feat" data-f="depth3d" title="깊이 → 3D 메시"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span>깊이 → 3D 메시</span></button>
-      <button data-v="feat" data-f="img3d" title="사진 → 3D 모델"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>사진 → 3D</span></button>
       <button data-v="feat" data-f="compare" title="설정 비교표"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg><span>설정 비교표</span></button>
     </div></div>
     <div class="ng" data-g="vid"><span class="ngt tog" role="button" tabindex="0" aria-expanded="true" title="눌러서 펼치거나 접어요" data-def="1">영상<i aria-hidden="true"></i></span>
@@ -778,67 +776,6 @@
 </section>
 
 <!-- 기록 갤러리 -->
-<section class="view split" id="v-m3d">
-  <form class="vform" autocomplete="off" novalidate onsubmit="return false">
-    <button type="button" class="go" id="m3-go" disabled>3D 만들기</button>
-    <p class="hint plain">사진 한 장(또는 여러 방향)으로 텍스처까지 입힌 게임용 3D 모델을 만들어요. 물체 하나가 잘 보이는 사진이 가장 좋아요.</p>
-    <div class="f vsrc"><span>사진</span>
-      <div class="vmrow"><select id="m3-sess"><option value="">새로 시작…</option></select><button type="button" class="ghost vpick" id="m3-up">사진 고르기</button><input type="file" id="m3-file" accept="image/*" hidden><button type="button" class="ghost" id="m3-del" title="이 작업(방향 그림 포함)을 지워요. 만든 3D 파일은 그대로 남아요" hidden>지우기</button></div>
-    </div>
-    <div class="row"><label class="f">종류<select id="m3-kind"><option value="character">사람·캐릭터</option><option value="object" selected>물건·소품</option><option value="big">건물·탈것 등 큰 것</option></select></label>
-      <label class="f">이름<input id="m3-name" placeholder="예: 기사_캐릭터"></label></div>
-    <div id="m3-check"></div>
-    <figure class="m3-front" id="m3-front" hidden><img alt="올린 사진(배경 지운 것)" title="크게 보기"><figcaption class="mute">올린 사진(배경 지운 것) · 눌러서 크게 보기 <button type="button" class="ghost sm" id="m3-frontup" title="앞 사진을 다른 사진으로 바꿔요">사진 바꾸기</button></figcaption></figure>
-    <label class="f" title="사진 한 장: 정면을 원본 그대로 살리고, 옆·뒤는 3D 엔진이 학습한 형태로 추정해요(권장). AI 멀티뷰 보조: AI 가 그린 왼쪽·뒤·오른쪽 그림을 함께 넣어요 — 그림이 앞 사진과 자세·비율이 다르면 그 그림은 빼고 만들어요.">만드는 방식<select id="m3-mode"><option value="single" selected>사진 한 장 (기본 · 정면에 가장 충실)</option><option value="multi">AI 멀티뷰 보조 (방향 그림 함께)</option></select></label>
-    <p class="mute" id="m3-modenote">사진에 없는 옆·뒤는 3D 엔진이 추정해요. 실제와 같다고 보장하지는 않아요.</p>
-    <fieldset class="vset" id="m3-viewset" hidden><legend>여러 방향 <span class="mute">선택 · 뒷모습까지 정확하게</span></legend>
-      <div class="m3-slots" id="m3-slots"></div>
-      <div class="vbtns"><button type="button" class="ghost" id="m3-views" title="앞 사진을 보고 왼쪽·뒤·오른쪽 모습을 그려요(Qwen-Image 2.1)">왼쪽·뒤·오른쪽 그리기</button>
-        <label class="chk" title="Lightning LoRA 로 4단계"><input type="checkbox" id="m3-vfast"> 빠르게</label></div>
-      <p class="mute m3-dir">방향 약속: <b>왼쪽</b> 그림은 얼굴(앞)이 그림의 <b>왼쪽</b>을, <b>오른쪽</b> 그림은 그림의 <b>오른쪽</b>을 봐요. <b>뒤</b> 그림에는 얼굴이 안 보여야 해요. 다르면 체크를 풀어 주세요.</p>
-      <p class="mute" id="m3-mvnote"></p>
-      <div class="vbtns" id="m3-tposebox" hidden><button type="button" class="ghost" id="m3-tpose" title="앞 사진의 캐릭터를 양팔을 옆으로 편 T자 자세로 다시 그려요(Qwen-Image 2.1) — 뼈대·가중치가 더 잘 맞아요">T자 자세로 바꾸기</button>
-        <button type="button" class="ghost" id="m3-tundo" title="T자로 바꾸기 전 앞 사진으로 되돌려요" hidden>원래 자세로</button></div>
-    </fieldset>
-    <fieldset class="vset"><legend>모양·텍스처</legend>
-      <label class="f" title="Pixal3D 는 사진 화소를 3D 에 그대로 맞춰 붙여 얼굴·무늬가 사진에 더 가까워요(ComfyUI 공식 예시의 기본)">3D 엔진 (사진 한 장)<select id="m3-engine"><option value="auto" selected>자동 — Pixal3D 가 있으면 Pixal3D</option><option value="pixal">Pixal3D — 사진에 충실(얼굴·무늬)</option><option value="trellis">TRELLIS.2</option></select></label>
-      <p class="mute" id="m3-engnote" hidden></p>
-      <div class="row"><label class="f">세밀함<select id="m3-res"><option value="512">빠르게 (512)</option><option value="1024" selected>보통 (1024)</option><option value="1536">아주 촘촘하게 (1536)</option></select></label>
-        <label class="f">면 수<select id="m3-faces"><option value="5000">5천 (모바일 게임)</option><option value="20000">2만 (게임 · 가벼움)</option><option value="50000" selected>5만 (게임 주인공급)</option><option value="200000">20만 (보기용 · 원본에 가깝게)</option><option value="700000">70만 (최고 · 파일이 커요)</option></select></label>
-        <label class="f">텍스처<select id="m3-tex"><option value="1024">1024px</option><option value="2048" selected>2048px</option><option value="4096">4096px</option></select></label></div>
-      <label class="chk" title="그물망을 고르게 다시 짜서 구멍·뾰족한 면을 줄여요"><input type="checkbox" id="m3-remesh" checked> 그물망 고르게 다시 짜기</label>
-      <label class="chk" title="3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요. 얼굴·무늬가 사진처럼 나와요. 사진과 3D 가 안 맞으면 자동으로 건너뛰어요."><input type="checkbox" id="m3-photo" checked> 사진 그대로 붙이기(얼굴·무늬)</label>
-      <label class="chk" title="사진에서 얼굴을 찾아 얼굴 부분을 키워 붙이고, 머리를 따로 떼어 전용 텍스처를 줘요(게임 회사 방식 — 얼굴 해상도가 여러 배). 얼굴 찾기(MediaPipe) 모델이 필요해요. 만화 그림체에서 얼굴을 엉뚱하게 잡으면 꺼 보세요."><input type="checkbox" id="m3-head" checked> 얼굴 고해상도(머리 전용 텍스처)</label>
-      <label class="chk" title="사진 속 얼굴의 각도가 3D 얼굴과 다를 때 사진 얼굴을 3D 쪽으로 휘어 붙여요. 원본 얼굴의 비율·눈코입 자리가 조금 바뀌어서 기본은 꺼져 있어요."><input type="checkbox" id="m3-align"> 얼굴 각도 맞추기(사진 휘기) <span class="mute">기본 꺼짐</span></label>
-      <label class="chk" title="면을 줄이기 전, 3D 엔진이 만든 원래의 촘촘한 그물망을 따로 저장해요(색 없음 · 파일이 커요). 나중에 다시 다듬을 때 써요."><input type="checkbox" id="m3-keephi" checked> 원본 고밀도 메시도 저장</label>
-      <label class="chk" title="A 엔진 원본 · B 사진 붙이기 · C 얼굴 텍스처 · D Blender 마무리 · E AI 멀티뷰(방향 그림이 있을 때)를 각각 저장하고, 앞·왼쪽·오른쪽·뒤 비교표를 만들어요. E 는 3D 를 한 번 더 만들어서 시간이 더 걸려요."><input type="checkbox" id="m3-compare"> 단계별 결과·비교표 저장 <span class="mute">A~E · 느려요</span></label>
-    </fieldset>
-    <fieldset class="vset"><legend>Blender 마무리 <span class="mute">크기·LOD·FBX/OBJ</span></legend>
-      <div id="m3-bl" class="lo-eng"></div>
-      <label class="chk"><input type="checkbox" id="m3-blender" checked> Blender 로 마무리하기</label>
-      <div class="row"><label class="f" title="0 이면 크기를 바꾸지 않아요">키(m)<input type="number" id="m3-height" value="0" min="0" max="500" step="0.01"></label>
-        <label class="f">앞 방향 돌리기<select id="m3-rot"><option value="0">그대로</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label></div>
-      <label class="chk" title="가까이(원본)·중간(50%)·멀리(20%) 3단계"><input type="checkbox" id="m3-lods" checked> LOD 3단계 만들기</label>
-      <label class="chk" title="사람형 캐릭터에 뼈대(Mixamo 이름 — Unity·Unreal 사람형 자동 매핑)와 가중치를 넣어요. 양팔을 편 T자·A자 자세일 때 가장 잘 맞아요"><input type="checkbox" id="m3-rig"> 뼈대 넣기 <span class="mute">사람형 캐릭터</span></label>
-      <div class="vbtns"><label class="chk"><input type="checkbox" id="m3-fmt-glb" checked> GLB</label><label class="chk"><input type="checkbox" id="m3-fmt-fbx" checked> FBX</label><label class="chk"><input type="checkbox" id="m3-fmt-obj"> OBJ</label></div>
-    </fieldset>
-    <details class="vset m3-fold" id="m3-sceneset" hidden><summary>장면 전체 — 이 물체 넣기 <span class="mute">선택 · 사진 속 여러 물체를 한 장면으로</span></summary>
-      <p class="mute">원본 사진에서 물체를 눌러 고르고 [이 물체 넣기]를 눌러요(Shift+클릭은 빼기). 물체마다 3D 를 만들어 사진 속 자리에 놓아요. 위치·크기는 AI 어림값이에요.</p>
-      <div class="m3-sbox" id="m3-sbox" title="물체를 눌러 고르기 · Shift+클릭은 빼기"><img id="m3-sorig" alt="원본 사진"><canvas id="m3-smask"></canvas></div>
-      <div class="vbtns"><button type="button" class="ghost" id="m3-sadd" disabled>이 물체 넣기</button><button type="button" class="ghost sm" id="m3-sreset" disabled>다시 고르기</button>
-        <button type="button" class="ghost" id="m3-ssam" hidden>선택 도구 설치 (약 45MB)</button></div>
-      <div class="m3-sobjs" id="m3-sobjs"></div>
-      <label class="chk" title="다른 물체에 가려졌거나 사진 가장자리에서 잘린 부분을 AI 편집(Qwen-Image 2.1)으로 그려 넣은 뒤 3D 로 만들어요"><input type="checkbox" id="m3-sfill"> 가려진 부분 채우기 <span class="mute">물체마다 AI 편집 · 느려요</span></label>
-      <button type="button" class="go wide" id="m3-sgo" disabled>장면 만들기</button>
-    </details>
-  </form>
-  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
-  <div class="col">
-    <div class="vstat"><p class="st" id="m3-st" hidden></p><progress id="m3-pg" max="100" hidden></progress><button type="button" class="ghost sm" id="m3-stop" hidden>중단</button></div>
-    <div id="m3-out"><p class="vempty">왼쪽에서 사진을 고르면 상태를 점검하고, [3D 만들기]를 누르면 여기서 돌려 볼 수 있어요.</p></div>
-  </div>
-</section>
-
 <section class="view split" id="v-explore">
   <div class="vleft">
     <button type="button" class="go" id="xp-analyze">요소 나누기</button>
@@ -1229,7 +1166,6 @@
     <tr><td>효과음 만들기 (Stable Audio, 최대 47초)</td><td class="p">미검증</td><td>음악 만들기 → 만들 것 → 효과음</td></tr>
     <tr><td>빠른 영상 (LTX-Video) · 사진 속 인물 유지 영상 (Wan VACE)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델</td></tr>
     <tr><td>사진 + 목소리 → 말하는 영상 (Wan 2.2 S2V, 최대 30초)</td><td class="p">미검증</td><td>영상 만들기 → 영상 모델 → Wan 2.2 S2V</td></tr>
-    <tr><td>사진 → 3D 모델 (Hunyuan3D 2, GLB)</td><td class="p">미검증</td><td>기타 기능 → 사진 → 3D</td></tr>
     <tr><td>영상 → GIF 저장</td><td class="y">지원</td><td>영상 결과 카드 → 더 보기</td></tr>
     <tr><td>PC 소리 녹음 → 목소리 샘플</td><td class="y">지원</td><td>음성 만들기 → 목소리 샘플 → PC 소리 녹음해서 만들기 (Chrome·Edge)</td></tr>
     <tr><td>추천 모델 분류 · 설치된 모델 삭제 · 메모리/GPU 제한</td><td class="y">지원</td><td>설치와 모델 → 추천 모델, 설정 → 생성</td></tr>
@@ -1365,7 +1301,6 @@
     <h4>영상 모델</h4><div id="cat-vid"></div>
     <h4>음악·효과음 모델</h4><div id="cat-aud"></div>
     <h4>음성 모델 <small class="mute">(음성 만들기 전용 공간에 따로 설치돼요)</small></h4><div id="cat-voice"></div>
-    <h4>3D 모델</h4><div id="cat-3d"></div>
 </div></div>
 <div class="cpane" id="fold-manage"><div class="card"><h3>설치된 모델</h3>
     <p class="hint plain">받은 모델과 LoRA를 지울 수 있어요. 지우면 되돌릴 수 없어요(다시 받아야 해요).</p>

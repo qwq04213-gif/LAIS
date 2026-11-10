@@ -15,7 +15,7 @@ with sync_playwright() as p:
     pg.click("nav button[data-v=setup]"); pg.wait_for_selector("table.tiers tbody tr", timeout=8000)
     heads = pg.eval_on_selector_all("table.tiers thead th", "e=>e.map(x=>x.textContent)"); assert [h[:4] for h in heads[1:]] == ["8GB", "12GB", "16GB", "24GB"] or [h.split("GB")[0] + "GB" for h in heads[1:]] == ["8GB", "12GB", "16GB", "24GB"], heads
     assert "내 PC" in heads[2] and pg.locator("table.tiers thead th.mine").count() == 1
-    rows = pg.eval_on_selector_all("table.tiers tbody th", "e=>e.map(x=>x.textContent)"); assert {"대화", "이미지 생성", "이미지 편집", "영상", "3D 만들기"} <= set(rows), rows
+    rows = pg.eval_on_selector_all("table.tiers tbody th", "e=>e.map(x=>x.textContent)"); assert {"대화", "이미지 생성", "이미지 편집", "영상"} <= set(rows), rows
     tiers = pg.evaluate("TIERS"); used = {i for t in tiers for r in t["rows"].values() for i in r[0]}; assert used <= ids, used - ids     # 표의 모델은 모두 목록에 있어요
     assert all(set(t["rows"]) == set(tiers[0]["rows"]) for t in tiers)
     ok("VRAM table: 8/12/16/24GB columns, my PC (12GB) marked, every function row, every model exists in the catalog")

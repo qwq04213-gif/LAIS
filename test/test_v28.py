@@ -45,19 +45,9 @@ assert cls("WanSoundImageToVideo")[0]["length"] <= 77 and cls("LoadAudio")[0]["a
 assert "wan2.1_vace_1.3B_fp16.safetensors" not in hub.wan_models() and "wan2.2_s2v_14B_fp8_scaled.safetensors" not in hub.wan_models()
 ok("Wan VACE (photo required, reference trimmed) and S2V (audio encoder, ≤77 frames, voice muxed into video)")
 # 3D
-def png3d():
-    im = Image.new("RGBA", (400, 400), (0, 0, 0, 0)); im.paste((200, 60, 60, 255), (100, 60, 300, 360))
-    b = io.BytesIO(); im.save(b, "PNG"); return "data:image/png;base64," + base64.b64encode(b.getvalue()).decode()
-j = job({"kind": "feat", "feature": "img3d", "image": png3d()}); assert j["state"] == "error" and "TRELLIS.2" in j["error"] and j.get("need") == ["trellis2"], j
-touch("diffusion_models/trellis_2_int8_convrot.safetensors", "clip_vision/dino_v3_vit_l.safetensors", "vae/trellis_2_shape_vae_bf16.safetensors", "vae/trellis_2_texture_vae_bf16.safetensors")
-j = job({"kind": "feat", "feature": "img3d", "image": png3d(), "quality": "fast"}); assert j["state"] == "done" and j["images"][0].endswith(".glb"), j
-assert cls("DecimateMesh")[0]["target_face_count"] == 20000 and cls("SaveGLB") and not cls("Trellis2UpsampleStage") and cls("UNETLoader")[0]["unet_name"] == "trellis_2_int8_convrot.safetensors"
-raw = urllib.request.urlopen(B + j["images"][0]).read(); assert raw[:4] == b"glTF"
-L = json.load(urllib.request.urlopen(B + "/api/lists")); assert not any("trellis" in x for x in L["checkpoints"] + L.get("diffusion_models", L.get("unets", [])))
-ok("photo → 3D: TRELLIS.2 graph, .glb saved and served")
 # 추천 모델 분류·삭제
 C = json.load(urllib.request.urlopen(B + "/api/catalog")); cat = {m["id"]: m["cat"] for m in C["image"]}
-assert cat["ltx-video"] == cat["wan-s2v"] == cat["wan22-ti2v-5b"] == "video" and cat["stable-audio-open"] == cat["ace-step-15-turbo"] == "audio" and cat["trellis2"] == cat["pixal3d-mv"] == "d3" and cat["qwen-image"] == "image"
+assert cat["ltx-video"] == cat["wan-s2v"] == cat["wan22-ti2v-5b"] == "video" and cat["stable-audio-open"] == cat["ace-step-15-turbo"] == "audio" and cat["qwen-image"] == "image"
 C = json.load(urllib.request.urlopen(B + "/api/catalog")); inst = {m["id"]: m["installed"] for m in C["image"]}; assert inst["qwen-image"] and inst["qwen-lightning"]
 r = post("/api/catalog/remove", {"id": "qwen-image"}); assert r["ok"] and sorted(r["removed"]) == ["qwen3vl_8b_int8_convrot.safetensors", "qwen_image_2.1_int8_convrot.safetensors", "qwen_image_2.1_vae_bf16.safetensors"], r
 assert (M / "loras/qwen_image_2.1_lightning_4step.safetensors").exists()
