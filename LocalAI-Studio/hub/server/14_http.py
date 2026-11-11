@@ -158,6 +158,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(tts_models.status(ROOT))
         if u == "/api/model-tidy":
             return self.send_json(model_tidy())
+        if u == "/api/h3clean":
+            return self.send_json(h3c_scan())
         if u == "/api/disk":
             return self.send_json(disk_report())
         if u == "/api/faceswap/model":
@@ -535,6 +537,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(part_delete(p))
         if u == "/api/disk/open":
             return self.send_json(disk_open(p.get("key")))
+        if u == "/api/h3clean":
+            return self.send_json(h3c_clean(p))
         if u == "/api/clean":
             return self.send_json(clean_item(str(p.get("what", ""))))
         if u == "/api/delete":

@@ -747,6 +747,7 @@ button:not(.go):not(.ico):not([class*="ico"]),.chip{max-width:100%;overflow:hidd
 .csrc{margin-top:8px;font-size:calc(12.5px*var(--ui,1))}.csrc summary{cursor:pointer;color:var(--mute)}.csrc ol{margin:6px 0 0;padding-left:20px}.csrc li{margin:3px 0}
 .copts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.copts .chip{cursor:pointer}
 #rail .sp-btn{min-height:calc(36px*var(--ui,1)/1.25);height:auto;padding:8px 10px;line-height:1.2}
+.h3c-box{margin-top:18px}.h3c-list{list-style:none;padding:0;margin:8px 0;display:grid;gap:6px}.h3c-list li{display:grid;gap:2px;padding:6px 10px;border-left:3px solid var(--line)}.h3c-list li.h3c-danger{border-color:var(--bad)}.h3c-list small.path{font-size:calc(11.5px*var(--ui,1))}
 /* 3D 만들기 */
 .m3-checks{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px;font-size:calc(13px*var(--ui,1))}
 .m3-checks li{padding:7px 10px;border-left:3px solid var(--line);background:var(--chrome);border-radius:0 6px 6px 0}

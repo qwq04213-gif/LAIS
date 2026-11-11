@@ -19,7 +19,39 @@ from pathlib import Path
 PROTECTED = ("engine", "models", "outputs", "logs", "downloads", "backup", "input", "temp")
 DEFAULT_VERSION = "2026.10.17"                                # VERSION.txt 가 없던 첫 배포 버전(hub.py 의 기본값과 같게)
 KEEP_BACKUPS = 3
-OBSOLETE = ("hub/automask.py",)      # 이전 버전이 설치했지만 더는 쓰지 않는 파일(업데이트하면 치워요)
+# 이전 버전이 설치했지만 더는 쓰지 않는 파일(업데이트하면 백업해 두고 치워요)
+# 인체 3D 시험판(4.9 ~ 4.9.3)의 코드 — 기능을 뺐어요. 남겨 두면 허브가 28_human3d.py 를 읽다가 멈추고, 화면에 빈 메뉴가 남아요.
+OBSOLETE = ("hub/automask.py",
+            "engine/human3d/scripts/doctor.py",
+            "engine/human3d/scripts/econ_fetch.py",
+            "engine/human3d/scripts/install_econ.sh",
+            "engine/human3d/scripts/install_models.sh",
+            "engine/human3d/scripts/install_wsl.sh",
+            "engine/human3d/scripts/pins.txt",
+            "engine/human3d/scripts/pins_econ.txt",
+            "engine/human3d/worker/__init__.py",
+            "engine/human3d/worker/app.py",
+            "engine/human3d/worker/envcheck.py",
+            "engine/human3d/worker/jobs.py",
+            "engine/human3d/worker/nvcheck.py",
+            "engine/human3d/worker/providers/__init__.py",
+            "engine/human3d/worker/providers/base.py",
+            "engine/human3d/worker/providers/econ.py",
+            "engine/human3d/worker/providers/econ_stages.py",
+            "engine/human3d/worker/providers/sith.py",
+            "engine/human3d/worker/providers/sith_stages.py",
+            "engine/human3d/worker/runtime.py",
+            "hub/human3d/__init__.py",
+            "hub/human3d/contracts.py",
+            "hub/human3d/export.py",
+            "hub/human3d/manager.py",
+            "hub/human3d/mesh_qa.py",
+            "hub/human3d/preflight.py",
+            "hub/human3d/preprocess.py",
+            "hub/human3d/texture_project.py",
+            "hub/human3d/worker_client.py",
+            "hub/server/28_human3d.py",
+            "hub/web/js/71-m3d-human.js")
 
 
 def sha(b):

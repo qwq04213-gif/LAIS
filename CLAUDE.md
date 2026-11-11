@@ -66,7 +66,14 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.8**(커밋 `v4.8`). 다음 판 **4.9**.
+마지막 출시: **4.8**(커밋 `v4.8`). 다음 판 **4.9.4**(이 브랜치 `feature/human3d-cleanup`).
+
+### 인체 3D(SiTH·ECON) — 사용자가 실패로 판단하고 접음
+
+- 4.9 ~ 4.9.3 시험판은 브랜치 `feature/human3d-sith` 에만 있어요(기록용으로 남겨 둠, main 에 합치지 않음). 거기서 바꾼 공용 코드(대화 GPU 막기 `llm_http` 등·설치 도구)도 함께 빠졌어요.
+- 4.9.4 는 main(4.8)에서 시작: 4.9.x 가 깔아 둔 파일 30개를 `updater.py` 의 `OBSOLETE` 로 백업 후 지우고, `server/29_h3clean.py`·`web/js/45-h3clean.js`(저장 공간 → '인체 3D(시험판) 남은 파일')를 넣음.
+  정리 항목: WSL `/root/lais-human3d`·`/root/.cache/pip`·CUDA 12.1 꾸러미(`apt-get remove` 만, autoremove 안 함)·LAIS `engine/human3d`·`hub/human3d`·`logs/human3d-worker.log`(기본 선택),
+  `models/human3d`·`outputs/3D-human`·우분투 전체(`wsl --unregister`, 두 번 확인) — 기본 선택 안 함. 정해 둔 경로만 지움. 시험 `test/test_h3clean.py`(`H3CLEAN_LOCAL=1` 로 bash 에서)
 
 ### 다음 할 일
 
