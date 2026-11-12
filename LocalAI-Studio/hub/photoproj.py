@@ -367,6 +367,16 @@ def fit(P, F, UV, tex, alpha, rgb, log=None, dist_e=None, cam_hint=None):
 
 
 # ───────────────────────── 붙이기 ─────────────────────────
+def _smooth_n(N, tri, c0, c1, flat):
+    """텍스처 칸마다의 면 방향: 정점 방향을 이어서(매끈하게) — 면마다 따로 쓰면 사진과 엔진 색의 경계가 톱니처럼 깨져요.
+    정점 방향이 없는 3D 는 면 방향 그대로."""
+    if N is None:
+        return flat
+    v = N[tri[:, 0]] * c0[:, None] + N[tri[:, 1]] * c1[:, None] + N[tri[:, 2]] * (1 - c0 - c1)[:, None]
+    ln = np.linalg.norm(v, axis=1, keepdims=True)
+    return np.where(ln > 1e-9, v / np.maximum(ln, 1e-12), flat)
+
+
 def _skin(col):
     """사진 색(0~255) → 피부일 정도 0~1 (YCbCr 피부색 범위, 밝은 피부·만화 피부 포함)"""
     r, g, b = col[:, 0], col[:, 1], col[:, 2]
@@ -526,7 +536,8 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
         if not ok.any():
             continue
         tp, f, X, sx, sy = tp[ok], f[ok], X[ok], sx[ok], sy[ok]
-        cs = np.abs((n[f] * cam.view(X)).sum(1))
+        c0, c1 = c0[ok], c1[ok]
+        cs = np.abs((_smooth_n(M["N"], F[f], c0, c1, n[f]) * cam.view(X)).sum(1))
         w = np.clip((cs - FACING[0]) / (FACING[1] - FACING[0]), 0, 1)
         w = (w * w * (3 - 2 * w))[:, None].astype(np.float32) * _sample(soft, sx, sy)
         col = _sample(photo_rgb, sx, sy)
@@ -575,7 +586,7 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
             "skin": round(float(sk.mean()), 3), "align": align, "cam_fixed": cam_fixed}
     if head is not None:
         try:
-            new, hi = head_split(new, cam, head, head_size, n, visible, soft, photo_rgb, fbox, (W0, H0), x, y, d, log)
+            new, hi = head_split(new, cam, head, head_size, n, visible, soft, photo_rgb, fbox, (W0, H0), x, y, d, log, eng=T)
             info.update(hi)
         except Exception as e:  # noqa: BLE001 — 머리 텍스처는 덤: 실패하면 한 장 텍스처 그대로
             info["head_error"] = str(e)[:120]
@@ -757,6 +768,10 @@ def _align_face(P, F, UV, tex, cam, head, rgb, alpha, face, log=None):
 # 머리 둘레를 원통처럼 펼치되 앞쪽 반(±90°)에 가로 70% 를 줘요 → 얼굴이 텍스처의 절반 가까이를 써요.
 HEAD_BOX = (1.05, 0.95, 0.15)    # 얼굴 크기 기준 머리 상자: 좌우 반폭, 위로(머리카락), 아래로(턱 밑 조금)
 HEAD_R = 0.8                     # 머리 가운데에서 얼굴 크기의 이만큼 안쪽만 머리로(어깨·목둘레 링은 몸 텍스처 그대로)
+FACE_FACING = (0.2, 0.5)         # 머리에서 사진을 쓰는 범위(cos) — 몸(FACING)보다 넓게: 볼 옆·턱선까지 사진으로(머리는 전용 텍스처라 화소가 넉넉해요)
+TONE_GRID = 256                  # 사진 색감 잇기를 계산하는 격자(머리 텍스처를 이 크기로 줄여서)
+TONE_SIGMA = 14.0                # 사진이 닿은 곳에서 이만큼(격자 칸) 떨어진 곳까지 색감을 이어요
+TONE_MAX = 70.0                  # 한 번에 옮기는 색 차이의 한계(0~255)
 HEAD_DEPTH = (0.6, 1.7)          # 얼굴 앞면 깊이 기준 앞쪽·뒤쪽 범위(얼굴 크기 배수)
 
 
@@ -804,7 +819,28 @@ def _png(arr):
     return buf.getvalue()
 
 
-def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, size, px, py, pd, log=None):
+def _tone_carry(tex, done, wmap, tsum, tcnt):
+    """사진이 닿지 않은 머리 부분(볼 옆·옆머리)의 엔진 색에, 가까운 '사진 − 엔진' 색 차이를 부드럽게 이어 줘요.
+    엔진이 칠한 옆얼굴은 사진과 색감이 달라(바래고 어두움) 옆에서 보면 경계에 띠가 생겨요 — 사진에서 멀어질수록 원래 색으로 돌아가요.
+    tex 를 그 자리에서 고치고 → 옮긴 칸의 비율"""
+    G = tcnt.shape[0]
+    if tcnt.sum() < 50:
+        return 0.0
+    den = _gblur(tcnt / max(1.0, float(tcnt.max())), TONE_SIGMA)
+    full = _gblur((tcnt > 0).astype(np.float64), TONE_SIGMA)                 # 사진이 닿은 칸이 둘레에 얼마나 있는지(0~1)
+    conf = np.clip(full / 0.16, 0, 1)
+    TS = tex.shape[0]
+    cf = np.asarray(Image.fromarray(conf.astype(np.float32), "F").resize((TS, TS), Image.BILINEAR))
+    amt = cf * (1 - wmap.astype(np.float32) / 255) * done
+    for ch in range(3):
+        d = _gblur(tsum[..., ch] / max(1.0, float(tcnt.max())), TONE_SIGMA) / np.maximum(den, 1e-6)
+        d = np.clip(d, -TONE_MAX, TONE_MAX).astype(np.float32)
+        tex[..., ch] += np.asarray(Image.fromarray(d, "F").resize((TS, TS), Image.BILINEAR)) * amt
+    np.clip(tex, 0, 255, out=tex)
+    return float((amt > 0.2).mean())
+
+
+def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, size, px, py, pd, log=None, eng=None):
     """사진을 붙인 GLB → 머리를 따로 떼어 자기 텍스처(TS×TS: 색·노멀·그늘/거칠기)를 준 GLB. → (GLB, 정보)"""
     M = load(glb)
     g, b, P, F, UV, N = M["g"], M["b"], M["P"], M["F"], M["UV"], M["N"]
@@ -911,6 +947,9 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     done = np.zeros((TS, TS), bool)
     CH = 20000                                         # 삼각형을 나눠 처리해요(4096 텍스처도 메모리를 적게)
     hit = np.zeros(len(hf), bool)                      # 텍스처 칸을 하나라도 받은 삼각형
+    G = TONE_GRID
+    wmap = np.zeros((TS, TS), np.uint8)                # 칸마다 사진을 쓴 정도(0~255)
+    tsum, tcnt = np.zeros((G * G, 3)), np.zeros(G * G)  # 사진을 쓴 칸의 (사진 색 − 엔진 색)을 격자에 모아요
     for k0 in range(0, len(FF), CH):
         tp, tf, c0, c1 = raster(xy, FF[k0:k0 + CH], TS, TS)
         if not len(tp):
@@ -928,8 +967,8 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         sx, sy, sd = cam.px(X)
         ok = visible(sx, sy, sd) & (sx >= 0) & (sy >= 0) & (sx < W0) & (sy < H0)
         if ok.any():
-            cs = np.abs((n_face[hf][t[ok]] * cam.view(X[ok])).sum(1))
-            w = np.clip((cs - FACING[0]) / (FACING[1] - FACING[0]), 0, 1)
+            cs = np.abs((Nn[ok] * cam.view(X[ok])).sum(1))      # 매끈한 방향으로(면마다 따로면 경계가 톱니처럼 깨져요)
+            w = np.clip((cs - FACE_FACING[0]) / (FACE_FACING[1] - FACE_FACING[0]), 0, 1)
             w = (w * w * (3 - 2 * w))[:, None].astype(np.float32) * _sample(soft, sx[ok], sy[ok])
             pc = _sample(photo_rgb, sx[ok], sy[ok])
             if fbox:
@@ -941,6 +980,15 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
                     ex = np.minimum.reduce([sx[ok][q] - fx0, fx1 - sx[ok][q], sy[ok][q] - fy0, fy1 - sy[ok][q]]) / max(1.0, 0.08 * (fx1 - fx0))
                     fwq = np.clip(ex, 0, 1)[:, None].astype(np.float32)
                     pc[q] = pc[q] * (1 - fwq) + fc * fwq
+            strong = w[:, 0] > 0.6
+            if eng is not None and strong.any():
+                gi = (ty[ok][strong] * G // TS) * G + tx[ok][strong] * G // TS
+                o2 = ouv[ok][strong]                    # 엔진이 칠한 원래 색(사진을 붙이기 전)과의 차이
+                dlt = (pc[strong] - _sample(eng, o2[:, 0] * eng.shape[1], o2[:, 1] * eng.shape[0])).astype(np.float64)
+                tcnt += np.bincount(gi, minlength=G * G)
+                for ch in range(3):
+                    tsum[:, ch] += np.bincount(gi, dlt[:, ch], minlength=G * G)
+            wmap[ty[ok], tx[ok]] = np.round(w[:, 0] * 255)
             col[ok] = col[ok] + (pc - col[ok]) * w
         tex[ty, tx], done[ty, tx] = col, True
         if has_nm:                                     # 노멀맵: 원래 텍스처 방향 → 세상 방향 → 새 텍스처 방향으로 옮겨요
@@ -969,6 +1017,8 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
             nt[my[free], mx[free]] = (127.5, 127.5, 255)
         done[my[free], mx[free]] = True
     del base
+    tone = _tone_carry(tex, done, wmap, tsum.reshape(G, G, 3), tcnt.reshape(G, G))
+    del wmap
     tex, done2 = _spread(tex, done.copy(), 6)          # 빈칸은 이웃 색으로 넉넉히
     done = done2 if done2.sum() > done.sum() else done
     if done.any():                                     # 그래도 남은 빈칸은 머리 평균색으로(검게 비지 않게)
@@ -1069,7 +1119,7 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     g2["meshes"] = meshes
     if log:
         log(f"[머리 텍스처] 삼각형 {len(hf):,}개 · {TS}px · 이음새 {int(seam.sum())}")
-    return glbscene.write(g2, b2), {"head": True, "head_tris": int(len(hf)), "head_tex": TS}
+    return glbscene.write(g2, b2), {"head": True, "head_tris": int(len(hf)), "head_tex": TS, "head_tone": round(tone, 3)}
 
 
 # ───────────────────────── 갤러리 미리보기 그림 ─────────────────────────

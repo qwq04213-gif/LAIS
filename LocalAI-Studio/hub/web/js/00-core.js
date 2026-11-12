@@ -130,6 +130,15 @@ function addLora(box,name,w){
   row.innerHTML=`<label class="f"><span class="lt">LoRA ${i}</span><select name="lora${i}"></select></label><label class="f"><span class="lt">강도</span><input type="number" name="lora${i}_w" value="${w??0.8}" step="0.01" min="-2" max="3"></label><button type="button" class="x" title="이 LoRA 줄 지우기" aria-label="LoRA ${i} 줄 지우기">×</button>`;
   box.append(row);loraOptions($('select',row),name);addTips(row);return row;
 }
+/* LoRA 줄 번호를 위에서부터 1, 2, 3… 으로 다시 매겨요(중간 줄을 지워도 번호·이름이 이어지게). 줄이 없으면 [+ LoRA 추가] 만 남아요. */
+function renumLoras(box){
+  const rows=$$('.lora-row',box);
+  rows.forEach((row,k)=>{const i=k+1,s=$('select',row),w=$('input[type=number]',row),x=$('.x',row);
+    const lt=$('.lt',row),tx=lt.firstChild&&lt.firstChild.nodeType===3?lt.firstChild:lt.insertBefore(document.createTextNode(''),lt.firstChild);
+    tx.textContent='LoRA '+i;      // 글자만 바꿔요(옆의 도움말 ? 표시는 그대로)
+    if(s)s.name='lora'+i;if(w)w.name='lora'+i+'_w';if(x)x.setAttribute('aria-label',`LoRA ${i} 줄 지우기`)});
+  box.dataset.n=rows.length;
+}
 function setLoras(f,o){
   const box=$('.loras',f);if(!box)return;
   const idx=Object.keys(o).map(k=>/^lora(\d+)$/.exec(k)).filter(Boolean).map(m=>+m[1]).sort((a,b)=>a-b);

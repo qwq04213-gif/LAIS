@@ -66,7 +66,7 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 
 ## 지금 상태
 
-마지막 출시: **4.8**(커밋 `v4.8`). 다음 판 **4.9.4**(이 브랜치 `feature/human3d-cleanup`).
+마지막 출시: **4.8**(커밋 `v4.8`). **4.9.4** 를 빌드해 전달함(브랜치 `feature/human3d-cleanup`, main 에는 아직 안 합침).
 
 ### 인체 3D(SiTH·ECON) — 사용자가 실패로 판단하고 접음
 
@@ -74,6 +74,11 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 - 4.9.4 는 main(4.8)에서 시작: 4.9.x 가 깔아 둔 파일 30개를 `updater.py` 의 `OBSOLETE` 로 백업 후 지우고, `server/29_h3clean.py`·`web/js/45-h3clean.js`(저장 공간 → '인체 3D(시험판) 남은 파일')를 넣음.
   정리 항목: WSL `/root/lais-human3d`·`/root/.cache/pip`·CUDA 12.1 꾸러미(`apt-get remove` 만, autoremove 안 함)·LAIS `engine/human3d`·`hub/human3d`·`logs/human3d-worker.log`(기본 선택),
   `models/human3d`·`outputs/3D-human`·우분투 전체(`wsl --unregister`, 두 번 확인) — 기본 선택 안 함. 정해 둔 경로만 지움. 시험 `test/test_h3clean.py`(`H3CLEAN_LOCAL=1` 로 bash 에서)
+
+- 4.9.4 에 함께 넣은 것: LoRA 줄 번호(`00-core.js` `renumLoras` — × 뒤 다시 매김, 다 지우면 추가 버튼만. 시험 `test/ui_test70.py`),
+  3D 얼굴 옆모습(`photoproj.py`: 머리 전용 텍스처에서 사진 쓰는 범위 `FACE_FACING` 0.2~0.5 — 몸은 `FACING` 그대로, 섞는 정도는 매끈한 정점 방향 `_smooth_n`,
+  사진이 안 닿는 옆머리에 '사진 − 엔진' 색 차이 잇기 `_tone_carry`(`TONE_*`, `head_split(eng=색 맞춘 엔진 텍스처)`, 정보 `head_tone`)). 시험 `test/test_m3d_face49.py`(둥근 머리 + 실제 얼굴 사진,
+  비스듬한 띠의 사진과의 차이 22 → 7). 실제 엔진 결과로는 미검증. 바깥 사진 사이트는 이 환경에서 막혀 있어 skimage 의 우주비행사 사진을 써요(scipy·scikit-image 필요)
 
 ### 다음 할 일
 

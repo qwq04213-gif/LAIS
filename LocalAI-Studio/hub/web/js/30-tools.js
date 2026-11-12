@@ -64,7 +64,7 @@ document.addEventListener('click',async e=>{
   const op=e.target.closest('[data-open]');if(op){e.preventDefault();openFolder(op.dataset.open);return}
   const la=e.target.closest('.lora-add');if(la){addLora($('.loras',la.parentElement.parentElement)).querySelector('select').focus();return}
   const lx=e.target.closest('.lora-row .x');if(lx){const box=lx.closest('.loras'),f=lx.closest('form');lx.closest('.lora-row').remove();
-    if(!$('.lora-row',box))addLora(box);if(f)saveForm(f);return}
+    renumLoras(box);if(f)saveForm(f);return}
   const im=e.target.closest('.res figure img');if(im){openFrom(im);return}
   const vg=e.target.closest('.v-go');if(vg){const bar=vg.closest('.varbar');vg.disabled=true;
     try{await run('gen',$('#f-gen'),{init:await urlToDataURL(bar.dataset.u),init_denoise:+$('.v-lv',bar).value,n:+$('.v-n',bar).value,seed:-1})}finally{bar.remove()}return}
