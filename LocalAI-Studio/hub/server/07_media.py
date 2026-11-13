@@ -6,6 +6,9 @@ DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 JOB_RX = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}(?:-[0-9A-Za-z가-힣_.-]{1,40})?$")     # 작업 한 번 = 폴더 하나(예: 20261109-223645-d1ad-모델이름)
 
 
+DIAG_RX = re.compile(r"^diagnostics(?:_\d{1,3})?$")       # 작업 폴더 안의 진단 폴더
+
+
 def job_dir_name(stamp, label=""):
     """작업 한 번의 결과를 모으는 폴더 이름(날짜-시간-구분자[-이름])."""
     lab = re.sub(r"[^0-9A-Za-z가-힣_.-]+", "_", str(label or "")).strip("_.")[:40]
@@ -20,6 +23,8 @@ def out_path(rel):
         return OUT / parts[0] / Path(parts[1]).name
     if len(parts) == 3 and parts[0] in OUT_SUB.values() and (DATE_RX.match(parts[1]) or JOB_RX.match(parts[1])):      # 날짜별로 정리한 폴더 · 작업 폴더
         return OUT / parts[0] / parts[1] / Path(parts[2]).name
+    if len(parts) == 4 and parts[0] in OUT_SUB.values() and JOB_RX.match(parts[1]) and DIAG_RX.match(parts[2]):      # 작업 폴더 안의 진단 폴더(얼굴 정렬 A/B 비교)
+        return OUT / parts[0] / parts[1] / parts[2] / Path(parts[3]).name
     return OUT / Path(parts[-1] if parts else "x").name
 
 

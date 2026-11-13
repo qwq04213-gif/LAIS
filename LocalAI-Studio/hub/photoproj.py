@@ -1221,14 +1221,17 @@ def _scene(glb, tex_max=2048):
     return out
 
 
-def capture(glb, yaw=0.0, size=512, bg=(34, 34, 40), scene=None):
+def capture(glb, yaw=0.0, size=512, bg=(34, 34, 40), scene=None, focus=None):
     """GLB 를 캐릭터 둘레로 yaw 도 돌아간 자리에서 본 그림(정사영, 텍스처 화소 그대로 + 약한 음영) → PIL.
-    yaw: 0 앞, -90 왼쪽(캐릭터의 왼쪽), 90 오른쪽, 180 뒤. 방향마다 같은 배율이라 크기·두께를 비교할 수 있어요."""
+    yaw: 0 앞, -90 왼쪽(캐릭터의 왼쪽), 90 오른쪽, 180 뒤. 방향마다 같은 배율이라 크기·두께를 비교할 수 있어요.
+    focus: (가운데 3D 좌표, 크기) — 주면 그 부분만 크게(얼굴 가까이 보기)."""
     sc = scene or _scene(glb)
     allP = np.concatenate([x[0] for x in sc])
     lo, hi = allP.min(0), allP.max(0)
     ctr = (lo + hi) / 2
     ext = max(hi[1] - lo[1], np.hypot(hi[0] - lo[0], hi[2] - lo[2]), 1e-9)
+    if focus is not None:
+        ctr, ext = np.asarray(focus[0], np.float64), max(float(focus[1]), 1e-9)
     a = math.radians(yaw)
     R = np.array([[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]])
     k = size * 0.92 / ext
@@ -1300,6 +1303,49 @@ def sheet(rows, size=320):
             continue
         for j, (_, _, yaw) in enumerate(VIEWS4):
             im.paste(capture(glb, yaw, size, scene=sc), (lab + j * size, y))
+    return im
+
+
+FACE_YAWS = (("정면", "front", 0.0), ("왼쪽 45°", "left 45", -45.0), ("오른쪽 45°", "right 45", 45.0), ("왼쪽 옆", "left side", -90.0), ("오른쪽 옆", "right side", 90.0))
+
+
+def head_focus(glb):
+    """머리 전용 텍스처를 받은 부분(재질 이름이 _head 로 끝남)의 (가운데, 크기) — 없으면 None. 얼굴 가까이 캡처·화면의 '얼굴 가까이'에 써요."""
+    g, b = glbscene.read(glb)
+    mats = g.get("materials") or []
+    for ni, nd in enumerate(g.get("nodes") or []):
+        if "mesh" not in nd:
+            continue
+        m = _world(g, ni)
+        for pr in g["meshes"][nd["mesh"]].get("primitives") or []:
+            mi = pr.get("material")
+            if mi is None or not str(mats[mi].get("name") or "").endswith("_head"):
+                continue
+            P = _acc(g, b, pr["attributes"]["POSITION"])[:, :3] @ m[:3, :3].T + m[:3, 3]
+            lo, hi = P.min(0), P.max(0)
+            return ((lo + hi) / 2).tolist(), float(max(hi - lo))
+    return None
+
+
+def face_sheet(rows, focus, size=360):
+    """얼굴 가까이 비교표: rows = [(한국어 이름, 영어 이름, GLB)] → 줄마다 정면·좌우 45°·좌우 옆에서 본 얼굴(PIL). 못 그린 칸은 비워요."""
+    from PIL import ImageDraw
+    head, lab = 34, 230
+    im = Image.new("RGB", (lab + size * len(FACE_YAWS), head + size * len(rows)), (22, 22, 26))
+    dr = ImageDraw.Draw(im)
+    fnt, ko = _font(20)
+    for j, (k_, e_, _) in enumerate(FACE_YAWS):
+        dr.text((lab + j * size + 8, 6), k_ if ko else e_, fill=(230, 230, 235), font=fnt)
+    for i, (kname, ename, glb) in enumerate(rows):
+        y = head + i * size
+        dr.text((8, y + 8), kname if ko else ename, fill=(240, 240, 245), font=fnt)
+        try:
+            sc = _scene(glb, 4096)
+        except Exception:  # noqa: BLE001
+            dr.text((8, y + 40), "-", fill=(200, 120, 120), font=fnt)
+            continue
+        for j, (_, _, yaw) in enumerate(FACE_YAWS):
+            im.paste(capture(glb, yaw, size, scene=sc, focus=(focus[0], focus[1] * 1.15)), (lab + j * size, y))
     return im
 
 

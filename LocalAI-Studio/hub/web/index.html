@@ -810,6 +810,7 @@
       <label class="chk" title="3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요. 얼굴·무늬가 사진처럼 나와요. 사진과 3D 가 안 맞으면 자동으로 건너뛰어요."><input type="checkbox" id="m3-photo" checked> 사진 그대로 붙이기(얼굴·무늬)</label>
       <label class="chk" title="사진에서 얼굴을 찾아 얼굴 부분을 키워 붙이고, 머리를 따로 떼어 전용 텍스처를 줘요(게임 회사 방식 — 얼굴 해상도가 여러 배). 얼굴 찾기(MediaPipe) 모델이 필요해요. 만화 그림체에서 얼굴을 엉뚱하게 잡으면 꺼 보세요."><input type="checkbox" id="m3-head" checked> 얼굴 고해상도(머리 전용 텍스처)</label>
       <label class="chk" title="사진 속 얼굴의 각도가 3D 얼굴과 다를 때 사진 얼굴을 3D 쪽으로 휘어 붙여요. 원본 얼굴의 비율·눈코입 자리가 조금 바뀌어서 기본은 꺼져 있어요."><input type="checkbox" id="m3-align"> 얼굴 각도 맞추기(사진 휘기) <span class="mute">기본 꺼짐</span></label>
+      <label class="chk" title="얼굴이 사진과 다르게 일그러질 때 원인을 찾는 진단이에요. 3D 엔진은 한 번만 돌리고, 그 결과 하나에서 A(얼굴 각도 맞추기 끔)와 B(켬)를 따로 만들어 결과 폴더의 diagnostics 폴더에 저장해요. 평소 결과는 그대로예요. 사진 붙이기를 두 번 더 해서 시간이 조금 더 걸려요."><input type="checkbox" id="m3-faceab"> 얼굴 정렬 A/B 비교 <span class="mute">진단 · 기본 꺼짐</span></label>
       <label class="chk" title="면을 줄이기 전, 3D 엔진이 만든 원래의 촘촘한 그물망을 따로 저장해요(색 없음 · 파일이 커요). 나중에 다시 다듬을 때 써요."><input type="checkbox" id="m3-keephi" checked> 원본 고밀도 메시도 저장</label>
       <label class="chk" title="A 엔진 원본 · B 사진 붙이기 · C 얼굴 텍스처 · D Blender 마무리 · E AI 멀티뷰(방향 그림이 있을 때)를 각각 저장하고, 앞·왼쪽·오른쪽·뒤 비교표를 만들어요. E 는 3D 를 한 번 더 만들어서 시간이 더 걸려요."><input type="checkbox" id="m3-compare"> 단계별 결과·비교표 저장 <span class="mute">A~E · 느려요</span></label>
     </fieldset>

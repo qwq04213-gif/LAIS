@@ -159,6 +159,25 @@ def job_thread(J, p):
             dsub = dsub0 + "/" + jdir
             (OUT / dsub).mkdir(parents=True, exist_ok=True)
             if p["kind"] in ("vid", "vpost", "vmix", "vedit", "music", "tts") or isinstance(im, (bytes, bytearray, Path)):      # 영상·음악: 받은 파일을 그대로 저장하고, 설정은 옆에 .json 으로 남겨요
+                rel = info.pop("_file", None)
+                if rel:                                       # 정해 둔 이름으로 작업 폴더 안의 하위 폴더에(예: diagnostics/face_align_off.glb — 얼굴 정렬 A/B 비교)
+                    top, fname = str(rel).split("/", 1)
+                    subs = J.setdefault("_subdirs", {})
+                    if top not in subs:                       # 같은 이름의 폴더가 이미 있으면 덮어쓰지 않고 새 이름(diagnostics_2 …)
+                        cand, n = top, 1
+                        while (OUT / dsub / cand).exists():
+                            n += 1
+                            cand = f"{top}_{n}"
+                        subs[top] = cand
+                    (OUT / dsub / subs[top]).mkdir(parents=True, exist_ok=True)
+                    if isinstance(J.get("m3d_stats"), dict):  # 화면에 저장한 곳을 알려 주려고
+                        J["m3d_stats"].setdefault("diag_dir", f"outputs/{dsub}/{subs[top]}")
+                    fname = Path(fname).name
+                    (OUT / dsub / subs[top] / fname).write_bytes(im)
+                    if not info.pop("_quiet", False):
+                        J["images"].append("/out/" + urllib.parse.quote(dsub0) + "/" + urllib.parse.quote(jdir) + "/" + urllib.parse.quote(subs[top]) + "/" + urllib.parse.quote(fname))
+                        J.setdefault("used", []).append("")
+                    continue
                 tag = re.sub(r"[^0-9A-Za-z가-힣_]", "", str(info.get("_tag") or ""))[:20]      # 단계 이름(예: 엔진원본) — 같은 작업 폴더에서 알아보기 쉽게
                 name = f'{stamp}-{uuid.uuid4().hex[:4]}-{p["kind"] if p["kind"] in ("music", "tts", "audio", "m3d") else "m3d" if graph in (".glb", ".zip") else "vid"}-{i}{"-" + tag if tag else ""}{graph}'
                 if isinstance(im, Path):                      # 큰 결과(복원한 영상 등)는 메모리에 올리지 않고 파일을 옮겨요

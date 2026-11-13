@@ -750,6 +750,7 @@ def m3d_opts(p, m):
             "mode": p.get("mode") if p.get("mode") in ("single", "multi") else ("multi" if p.get("sides") else "single"),
             "align": flag(p, "align", False),        # 사진 얼굴을 3D 얼굴 각도에 맞춰 휘기 — 기본 꺼짐(원본 얼굴 비율·눈코입 자리 보존)
             "compare": flag(p, "compare", False),    # 단계별 결과(A~E)·비교표 저장
+            "face_ab": flag(p, "face_ab", False),    # 얼굴 정렬 A/B 비교(진단) — 같은 엔진 결과에서 정렬 끔·켬 두 가지를 따로 저장. 기본 꺼짐
             "keep_hi": flag(p, "keep_hi", True),     # 원본 고밀도 메시(면 줄이기 전)를 따로 저장
             "capture": flag(p, "capture", True)}     # 앞·왼쪽·오른쪽·뒤 캡처 그림
 
@@ -958,14 +959,25 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None, stages=None):
     if stages is not None:
         stages["A"] = glb
         stages["_dist"], stages["_pixal"], stages["_front"], stages["_fov"] = dist_e, o["_pixal"], tex_front, fov
+    ab_on = stages is not None and o.get("face_ab")
+    engine_glb = glb                                     # 엔진 원본(사진 붙이기 전) — A/B 는 둘 다 여기서 시작해요
+    pre = m3d_face_pre(tex_front, J, o) if ab_on and o.get("photo", True) else None      # 얼굴 찾기·확대는 한 번만(본 제작·A·B 가 같이 써요)
     if o.get("photo", True):
         if stages is not None and o.get("compare") and o.get("head", True):   # 비교용 B: 얼굴 전용 텍스처 없이
             stages["B"] = m3d_photo(glb, tex_front, J, {**o, "head": False}, dist_e)
-        glb = m3d_photo(glb, tex_front, J, o, dist_e)
+        glb = m3d_photo(glb, tex_front, J, o, dist_e, pre=pre)
         if stages is not None and "B" not in stages and o.get("compare"):
             stages["B"] = glb
     if stages is not None:
         stages["C"] = glb
+    if ab_on:                                            # 진단: 본 결과(glb)는 그대로 두고, 엔진 원본에서 A·B 를 따로
+        try:
+            stages["_ab"] = m3d_face_ab(engine_glb, tex_front, J, o, dist_e, pre, "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2", fov)
+        except Cancelled:
+            raise
+        except Exception as e:  # noqa: BLE001 — 진단이 실패해도 3D 는 평소대로
+            quiet_log("[얼굴 정렬 A/B 실패]", repr(e))
+            warn(J, f"얼굴 정렬 A/B 비교를 하지 못했어요({str(e)[:80]}). 3D 는 평소대로 만들었어요.")
     return glb
 
 
@@ -1103,20 +1115,34 @@ def m3d_face_up(photo, b, J):
     return (x0, y0, x1, y1, big)
 
 
-def m3d_photo(glb, photo, J, o=None, dist_e=None):
-    """사진 붙이기: 3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요(얼굴·무늬가 사진처럼). 안 맞으면 원래 색 그대로."""
-    box, face = None, None
-    if o.get("head", True):
-        try:
-            box, face = m3d_face(photo, J)
-        except Exception as e:  # noqa: BLE001
-            quiet_log("[3D 얼굴 키우기 실패]", repr(e))
+def m3d_face_pre(photo, J, o):
+    """얼굴 상자·얼굴 확대본을 준비해요(얼굴 찾기 + 업스케일) → (상자 또는 None, 확대본 또는 None). '얼굴 고해상도'가 꺼져 있으면 (None, None)."""
+    if not o.get("head", True):
+        return None, None
+    try:
+        return m3d_face(photo, J)
+    except Exception as e:  # noqa: BLE001
+        quiet_log("[3D 얼굴 키우기 실패]", repr(e))
+        return None, None
+
+
+def m3d_project(glb, photo, pre, o, dist_e, align=None, log=None):
+    """사진 붙이기 한 번(photoproj.project) — 본 제작과 얼굴 정렬 A/B 비교가 같은 설정으로 부르게 한 곳에 모았어요.
+    pre = (얼굴 상자, 얼굴 확대본). align 을 주면 그 값으로, 안 주면 옵션(o) 대로. → (GLB, 정보)"""
+    box, face = pre
+    return photoproj.project(glb, photo, face, log=log or quiet_log, head=box, head_size=max(2048, int(o.get("tex") or 4096)), dist_e=dist_e,
+                             align=bool(o.get("align")) if align is None else bool(align), cam_hint=photoproj.PIXAL_CAM if o.get("_pixal") else None)
+
+
+def m3d_photo(glb, photo, J, o=None, dist_e=None, pre=None):
+    """사진 붙이기: 3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요(얼굴·무늬가 사진처럼). 안 맞으면 원래 색 그대로.
+    pre: 이미 준비한 (얼굴 상자, 얼굴 확대본) — 주면 얼굴 찾기·업스케일을 다시 하지 않아요."""
+    box, face = pre if pre is not None else m3d_face_pre(photo, J, o)
     if box:
         J["_m3d_face"] = list(box)
     J["msg"] = "사진을 3D 에 붙이는 중 — 얼굴·무늬를 사진 그대로" + (" · 머리 전용 텍스처" if box else "")
     try:
-        new, info = photoproj.project(glb, photo, face, log=quiet_log, head=box, head_size=max(2048, int(o.get("tex") or 4096)), dist_e=dist_e,
-                                      align=bool(o.get("align")), cam_hint=photoproj.PIXAL_CAM if o.get("_pixal") else None)
+        new, info = m3d_project(glb, photo, (box, face), o, dist_e)
     except ValueError as e:              # 붙일 수 없는 모양(텍스처 없음 등) — 원래 색 그대로
         quiet_log("[3D 사진 붙이기 건너뜀]", e)
         J["m3d_photo_res"] = {"done": False, "text": f"이 3D 에는 붙일 수 없었어요({e})"}
@@ -1147,6 +1173,121 @@ def m3d_photo(glb, photo, J, o=None, dist_e=None):
         J["_face_noted"] = 1
         warn(J, "얼굴 찾기 모델이 없어 얼굴 확대는 건너뛰었어요. '설치와 모델'의 3D 분류에서 '얼굴 찾기(MediaPipe)'를 받으면 얼굴이 더 선명해져요.")
     return new
+
+
+M3D_AB_DIR = "diagnostics"       # 결과 폴더 안의 진단 폴더 이름
+M3D_AB = (("off", False, "A: 기존 사진 투영", "A plain projection"), ("on", True, "B: 얼굴 정렬 적용", "B face aligned"))
+
+
+def m3d_face_ab(glb, photo, J, o, dist_e, pre, engine, fov=None):
+    """얼굴 정렬 A/B 비교(진단): 3D 엔진이 만든 같은 원본(glb) 하나에서 A(정렬 끔)·B(정렬 켬)를 각각 따로 만들어요.
+    엔진·다시 짜기·면 줄이기·Blender 는 다시 돌리지 않고, 얼굴 상자·확대본(pre)·카메라·텍스처 설정은 둘이 같아요 — 다른 건 얼굴 정렬 하나뿐.
+    본 제작 결과(J 의 사진 붙이기 기록)는 건드리지 않아요. 한쪽이 실패해도 다른 쪽은 남겨요. → 기록(dict: shared, runs, errors, focus)"""
+    box, face = pre if pre else (None, None)
+    hint = photoproj.PIXAL_CAM if o.get("_pixal") else None
+    out = {"shared": {"engine": engine, "source_mesh": {"sha256": hashlib.sha256(glb).hexdigest(), "bytes": len(glb)},
+                      "photo_size": list(photo.size), "face_box": [round(float(v), 1) for v in box] if box else None,
+                      "face_enlarged": [face[4].width, face[4].height] if face else None,
+                      "head_texture_size": max(2048, int(o.get("tex") or 4096)), "texture_size": o.get("tex"), "camera_hint": hint,
+                      "camera_dist_engine": round(float(dist_e), 4) if dist_e else None, "fov": fov,
+                      "photo": bool(o.get("photo", True)), "head": bool(o.get("head", True))},
+           "runs": {}, "errors": [], "warnings": [], "focus": None}
+    why = None
+    if not o.get("photo", True):
+        why = "'사진 그대로 붙이기'가 꺼져 있어요"
+    elif not o.get("head", True):
+        why = "'얼굴 고해상도(머리 전용 텍스처)'가 꺼져 있어요"
+    elif not box:
+        why = "사진에서 얼굴을 찾지 못했어요" + ("" if m3d_face_model() else "('설치와 모델'의 3D 분류에서 '얼굴 찾기(MediaPipe)'가 필요해요)")
+    if why:
+        out["errors"].append(why)
+        warn(J, f"얼굴 정렬 A/B 비교는 하지 못했어요 — {why}. 3D 는 평소대로 만들었어요.")
+        return out
+    try:                                                   # 붙이기 전: 엔진이 칠한 얼굴과 사진 얼굴이 얼마나 같은 자리에 있나
+        out["shared"]["engine_match"] = photoproj.engine_match(glb, photo, box, dist_e, hint)
+    except Exception as e:  # noqa: BLE001
+        out["warnings"].append(f"엔진 결과와 사진의 일치도를 재지 못했어요({str(e)[:80]})")
+    for key, align, label, _ in M3D_AB:
+        if J.get("cancel"):
+            raise Cancelled("사용자가 중단했어요.")
+        J["msg"] = f"얼굴 정렬 A/B 비교 — {label} 만드는 중(3D 엔진은 다시 돌리지 않아요)"
+        logs = []
+        rec = {"label": label, "engine": engine, "align": align, "errors": [], "warnings": [], "log": logs}
+
+        def log(*a, _l=logs):
+            _l.append(" ".join(str(x) for x in a)[:300])
+            quiet_log(*a)
+        try:
+            new, info = m3d_project(glb, photo, (box, face), o, dist_e, align=align, log=log)
+            if info.get("skip"):
+                rec["iou"] = info.get("iou")
+                rec["errors"].append("사진과 3D 모양이 충분히 겹치지 않아 사진을 붙이지 않았어요" if info["skip"] == "shape" else "사진 쪽에서 보이는 면이 없어 붙이지 않았어요")
+            else:
+                al = info.get("align") or {}
+                ncc = al.get("ncc") or [None, None]
+                rec.update(camera=info.get("cam"), camera_dist=info.get("dist"), camera_dist_engine=out["shared"]["camera_dist_engine"], camera_fixed=info.get("cam_fixed"),
+                           iou=info.get("iou"), ncc=info.get("pat"), face_enlarged=bool(info.get("face")),
+                           head_texture=bool(info.get("head")), head_texture_size=info.get("head_tex"), head_tris=info.get("head_tris"),
+                           face_align={"requested": align, "applied": bool(al.get("ok")), "ncc_before": ncc[0], "ncc_after": ncc[1], "rotation_deg": al.get("rot"),
+                                       "shift": al.get("shift"), "scale": al.get("scale"), "why": al.get("why")})
+                if info.get("head_error"):
+                    rec["warnings"].append("머리 전용 텍스처를 만들지 못했어요: " + str(info["head_error"]))
+                if align and not al.get("ok"):
+                    rec["warnings"].append("얼굴 정렬을 켰지만 휘지 않았어요: " + str(al.get("why") or "조건에 못 미침"))
+                rec["sha256"] = hashlib.sha256(new).hexdigest()
+                rec["_glb"] = new
+        except Cancelled:
+            raise
+        except Exception as e:  # noqa: BLE001 — 한쪽이 실패해도 다른 쪽·본 결과는 그대로
+            quiet_log("[얼굴 정렬 A/B 실패]", key, repr(e))
+            rec["errors"].append(f"{e.__class__.__name__}: {str(e)[:160]}")
+        out["runs"][key] = rec
+    a, b = out["runs"].get("off") or {}, out["runs"].get("on") or {}
+    for r in (a, b):
+        if r.get("_glb") and not out["focus"]:
+            try:
+                out["focus"] = photoproj.head_focus(r["_glb"])
+            except Exception:  # noqa: BLE001
+                pass
+    if a.get("_glb") and b.get("_glb"):
+        out["same_result"] = a["sha256"] == b["sha256"]
+        fa = (b.get("face_align") or {})
+        out["verdict"] = (f"B 는 사진 얼굴을 3D 얼굴 쪽으로 휘어 붙였어요(기울기 {fa.get('rotation_deg')}°, 자리 이동 {round(100 * (fa.get('shift') or 0))}% · 닮은 정도 {fa.get('ncc_before')} → {fa.get('ncc_after')})."
+                          if fa.get("applied") else
+                          "B 에서도 얼굴을 휘지 않았어요 — A 와 B 가 같아요(" + str(fa.get("why") or "정렬 조건에 못 미침") + "). 일그러짐의 원인이 '사진과 3D 얼굴의 각도 차이'는 아닐 수 있어요.")
+    else:
+        out["verdict"] = "A·B 중 만들지 못한 것이 있어요."
+    return out
+
+
+def m3d_ab_items(ab, base_info):
+    """A/B 기록 → 저장할 항목들(결과 폴더의 diagnostics 폴더로). GLB 2개 + JSON 3개 + 얼굴 가까이 비교표."""
+    items, summ = [], {k: v for k, v in ab.items() if k != "runs"}
+    summ["runs"], summ["files"] = {}, {}
+    rows = []
+    for key, _, label, en in M3D_AB:
+        r = ab["runs"].get(key)
+        if not r:
+            continue
+        glb = r.pop("_glb", None)
+        rec = {**r, "file": f"face_align_{key}.glb" if glb else None}
+        if glb:
+            items.append((glb, {**base_info, "face_ab": key, "_file": f"{M3D_AB_DIR}/face_align_{key}.glb"}, ".glb"))
+            summ["files"][key] = rec["file"]
+            rows.append((label, en, glb))
+        items.append((json.dumps(rec, ensure_ascii=False, indent=1).encode("utf-8"), {"_file": f"{M3D_AB_DIR}/face_align_{key}.json", "_quiet": True}, ".json"))
+        summ["runs"][key] = {k: v for k, v in rec.items() if k != "log"}
+    if rows and ab.get("focus"):
+        try:
+            bio = io.BytesIO()
+            photoproj.face_sheet(rows, ab["focus"]).save(bio, "PNG")
+            items.append((bio.getvalue(), {"_file": f"{M3D_AB_DIR}/face_ab_views.png"}, ".png"))
+            summ["files"]["views"] = "face_ab_views.png"
+        except Exception as e:  # noqa: BLE001 — 캡처는 덤
+            quiet_log("[얼굴 A/B 캡처 실패]", repr(e))
+            summ["warnings"] = list(summ.get("warnings") or []) + [f"얼굴 가까이 비교표를 그리지 못했어요({str(e)[:80]})"]
+    items.append((json.dumps(summ, ensure_ascii=False, indent=1).encode("utf-8"), {"_file": f"{M3D_AB_DIR}/face_ab_summary.json", "_quiet": True}, ".json"))
+    return items, summ
 
 
 M3D_STAGE = {"A": ("A 엔진 원본", "A engine", "엔진원본"), "B": ("B 사진 붙이기", "B photo", "사진붙이기"), "C": ("C 얼굴 텍스처", "C head", "얼굴텍스처"),
@@ -1345,7 +1486,7 @@ def m3d_build(p, J):
                 if mvE:
                     imE = {"front": Image.open(d / "view_front.png").convert("RGBA"), **{sd: Image.open(d / f"view_{sd}.png").convert("RGBA") for sd in good}}
                     sE = {}
-                    stages["E"] = m3d_glb(imE, True, fE, {**o, "compare": False, "keep_hi": False}, q["seed"], J, label="비교용 AI 멀티뷰(E) 만드는 중", stages=sE)
+                    stages["E"] = m3d_glb(imE, True, fE, {**o, "compare": False, "keep_hi": False, "face_ab": False}, q["seed"], J, label="비교용 AI 멀티뷰(E) 만드는 중", stages=sE)
                     stages["_E"] = sE
             elif good:
                 warn(J, "비교용 AI 멀티뷰(E)는 'Pixal3D 멀티뷰' 모델이 없어 건너뛰었어요.")
@@ -1359,7 +1500,7 @@ def m3d_build(p, J):
             if all(trellis_files(False).values()):
                 fF, _ = m3d_need(False, J, "trellis")
                 sF = {}
-                stages["F"] = m3d_glb({"front": Image.open(d / "view_front.png").convert("RGBA")}, False, fF, {**o, "compare": False, "keep_hi": False}, q["seed"], J,
+                stages["F"] = m3d_glb({"front": Image.open(d / "view_front.png").convert("RGBA")}, False, fF, {**o, "compare": False, "keep_hi": False, "face_ab": False}, q["seed"], J,
                                       label="비교용 TRELLIS.2(F) 만드는 중", stages=sF)
                 stages["_F"] = sF
             else:
@@ -1424,6 +1565,10 @@ def m3d_build(p, J):
         J.setdefault("m3d_stats", {})["stages"] = st
     if stages.get("hi"):
         items.append((stages["hi"], {**base_info, "hi": True, "_tag": "원본고밀도"}, ".glb"))
+    if stages.get("_ab"):                                # 얼굴 정렬 A/B 비교: 결과 폴더의 diagnostics 안에 따로(본 결과 파일은 그대로)
+        ab_items, summ = m3d_ab_items(stages["_ab"], base_info)
+        items += ab_items
+        J.setdefault("m3d_stats", {})["face_ab"] = summ
     J["msg"] = done_msg
     m["builds"] = m.get("builds", 0) + 1
     m3d_save_meta(sid, m)
