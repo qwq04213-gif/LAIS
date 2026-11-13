@@ -67,6 +67,7 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 ## 지금 상태
 
 마지막 출시: **4.8**(커밋 `v4.8`). **4.9.4** 를 빌드해 전달함(브랜치 `feature/human3d-cleanup`, main 에는 아직 안 합침).
+다음 판 **4.10**(브랜치 `feature/face-ab-diag` — `feature/human3d-cleanup`(= main + 4.9.4)에서 시작. 아직 빌드 안 함).
 
 ### 인체 3D(SiTH·ECON) — 사용자가 실패로 판단하고 접음
 
@@ -79,6 +80,16 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
   3D 얼굴 옆모습(`photoproj.py`: 머리 전용 텍스처에서 사진 쓰는 범위 `FACE_FACING` 0.2~0.5 — 몸은 `FACING` 그대로, 섞는 정도는 매끈한 정점 방향 `_smooth_n`,
   사진이 안 닿는 옆머리에 '사진 − 엔진' 색 차이 잇기 `_tone_carry`(`TONE_*`, `head_split(eng=색 맞춘 엔진 텍스처)`, 정보 `head_tone`)). 시험 `test/test_m3d_face49.py`(둥근 머리 + 실제 얼굴 사진,
   비스듬한 띠의 사진과의 차이 22 → 7). 실제 엔진 결과로는 미검증. 바깥 사진 사이트는 이 환경에서 막혀 있어 skimage 의 우주비행사 사진을 써요(scipy·scikit-image 필요)
+
+### 4.10 얼굴 정렬 A/B 비교(진단)
+
+- 옵션 `face_ab`(`m3d_opts`, 화면 `#m3-faceab`, 기본 꺼짐). `m3d_glb` 에서 엔진 원본(`engine_glb`)을 잡아 두고 `m3d_face_pre`(얼굴 찾기·확대 한 번)를 본 제작·A·B 가 같이 써요.
+  사진 붙이기 호출은 `m3d_project` 한 곳(본 제작 `m3d_photo(pre=)`·A/B `m3d_face_ab`). A/B 는 J 의 사진 붙이기 기록을 건드리지 않고 `stages["_ab"]` → `m3d_ab_items` → `m3d_stats.face_ab`.
+  비교용 E·F(`compare`)는 `face_ab: False` 로 불러서 A/B 를 되풀이하지 않아요.
+- 저장: 항목 정보의 `_file`(`diagnostics/이름`)·`_quiet` 를 `08_jobs.py` `job_thread` 가 결과 폴더 안 하위 폴더에 그 이름대로 저장(이미 있으면 `diagnostics_2`…, `m3d_stats.diag_dir`).
+  주소는 `out_path` 의 4단계(`DIAG_RX`). 갤러리 목록(`out_files`)에는 안 나와요.
+- `photoproj.head_focus`(재질 이름 `_head` 부분의 가운데·크기)·`capture(focus=)`·`face_sheet`(정면·좌우 45°·좌우 옆). 화면 `m3AB`·`m3AbCam`(model-viewer 두 개의 camera-orbit/target 을 함께).
+- 시험 `test/test_m3d_faceab.py`(포트 17958, test_m3d_align 의 머리·사진을 빌려 씀, 화면 부분은 텍스처 2048 — 4096 은 이 환경에서 몇 분). 실제 GPU 결과는 미검증
 
 ### 다음 할 일
 

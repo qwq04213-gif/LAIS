@@ -166,7 +166,7 @@ with sync_playwright() as p:
     pg.select_option("#m3-sess", sid); pg.wait_for_function("window.M3 ? !!M3.S : true"); pg.wait_for_timeout(500)
     assert not pg.is_checked("#m3-faceab") and not pg.is_checked("#m3-align") and "얼굴 정렬 A/B 비교" in pg.inner_text("label:has(#m3-faceab)")
     pg.evaluate("document.querySelector('#m3-faceab').closest('fieldset').scrollIntoView()")
-    pg.uncheck("#m3-blender"); pg.uncheck("#m3-keephi"); pg.select_option("#m3-engine", "trellis"); pg.check("#m3-faceab")
+    pg.uncheck("#m3-blender"); pg.uncheck("#m3-keephi"); pg.select_option("#m3-engine", "trellis"); pg.select_option("#m3-tex", "2048"); pg.check("#m3-faceab")      # 텍스처 2048: 시험 환경(CPU)에서 빨리 끝나게
     pg.click("#m3-go"); pg.wait_for_selector("#m3-out .m3-ab", timeout=180000)
     body = json.loads([s for s in sent if s and '"build"' in s][-1]); assert body["face_ab"] is True and body["align"] is False, body
     assert pg.locator("#m3-out .m3-abmv").count() == 2 and pg.locator("#m3-out #m3-mv").count() == 1
