@@ -67,7 +67,8 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 ## 지금 상태
 
 마지막 출시: **4.8**(커밋 `v4.8`). **4.9.4** 를 빌드해 전달함(브랜치 `feature/human3d-cleanup`, main 에는 아직 안 합침).
-다음 판 **4.10**(브랜치 `feature/face-ab-diag` — `feature/human3d-cleanup`(= main + 4.9.4)에서 시작. 아직 빌드 안 함).
+**4.10** 빌드해 전달함(브랜치 `feature/face-ab-diag`, 커밋 `v4.10`). **4.11**(얼굴 3D 형상 보정 실험, 브랜치 `feature/human3d-face-geometry-fit`, 커밋 `v4.11`)도 전달했지만 실패로 접음.
+다음 판 **4.12**(브랜치 `feature/back-quality` — 4.11 브랜치에서 실험 커밋 3개를 되돌린 것 + 뒷면 작업. 아직 빌드 안 함).
 
 ### 인체 3D(SiTH·ECON) — 사용자가 실패로 판단하고 접음
 
@@ -90,6 +91,26 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
   주소는 `out_path` 의 4단계(`DIAG_RX`). 갤러리 목록(`out_files`)에는 안 나와요.
 - `photoproj.head_focus`(재질 이름 `_head` 부분의 가운데·크기)·`capture(focus=)`·`face_sheet`(정면·좌우 45°·좌우 옆). 화면 `m3AB`·`m3AbCam`(model-viewer 두 개의 camera-orbit/target 을 함께).
 - 시험 `test/test_m3d_faceab.py`(포트 17958, test_m3d_align 의 머리·사진을 빌려 씀, 화면 부분은 텍스처 2048 — 4096 은 이 환경에서 몇 분). 실제 GPU 결과는 미검증
+
+### 4.11 얼굴 3D 형상 보정 — 실패, 4.12 에서 삭제
+
+- 랜드마크(ComfyUI `MediaPipeFaceMeshVisualize`)로 3D 얼굴 정점을 옮기는 실험(`facegeo.py`). 가짜 3D 에서는 됐지만 사용자의 실제 Pixal3D 결과에서는 '면 뒤집힘'으로 거부돼 C 가 한 번도 안 나옴.
+  코드는 브랜치 `feature/human3d-face-geometry-fit` 에 기록으로만 남아 있어요. `updater.py` 의 `OBSOLETE` 에 `hub/facegeo.py`. 다시 살리지 말 것(사용자가 방향을 뒷면 품질로 바꿈).
+- 그때 남긴 것: `M3D_HEAD_MIN`(시험에서 머리 텍스처를 1024 로), A/B 표 넘침 CSS.
+
+### 4.12 뒷면 — `m3dviews.py`(진단) + `photoproj.py` 고침
+
+- 진단 도구로 가짜 3D 에서 찾은, **우리 파이프라인이 뒷면·옆면에 만들던 문제 4가지**를 고침(실제 결과로는 미검증 — 사용자의 '이상한 뒷모습'이 이것 때문인지는 모름):
+  1. `_color_match` 가 텍스처 전체(뒤 포함)를 사진 색감으로 바꿈(뒷면 화소 16% 가 눈에 띄게 달라짐) → `_front_map`(`BACK_KEEP` cos −0.3~0.3: 뒤를 보는 면은 0, 조각 둘레는 `_spread` 로 채움)으로 뒤는 엔진 색 그대로.
+  2. `head_split` 이 머리 정점을 삼각형마다 따로 만듦(정점 1.76배, Blender 의 DECIMATE(LOD)·법선 재계산에서 깨질 구조) → (원래 정점, 새 UV, 접선 부호)가 같으면 한 정점으로 묶음, 몸의 안 쓰는 정점은 뺌(자료가 따로 담긴 GLB 일 때만).
+  3. 머리·몸 경계의 색 이음새: `_tone_carry` 와 `FACE_FACING` 이 머리에만 걸림 → 가장자리 거리(`E3`/`emap`, `TONE_EDGE`)로 경계에서는 몸과 같은 `FACING`·색감 잇기 0.
+  4. 얇은 곳의 뒷면에 앞 사진이 샘(`visible` 의 깊이 여유 1% 안) → 뒤를 보는 면은 `THIN_TOL` 안에서 맨 앞일 때만(`away`).
+- `m3dviews`: `prepare`(모서리 분류: 1 정점 안 이어짐 / 2 구멍 / 3 셋 넘게) · `render`(material·clay·wire·normal·uv, `VIEWS6`) · `sheet`·`back_sheet` · `structure`(구멍·조각남·뒤집힘·법선 반대·겹친 면·앞뒤 텍스처 해상도) ·
+  `compare`(단계 사이 변화) · `mirror_score`(뒷면이 앞면을 뒤집은 것과 비슷한지 — 엔진이 뒤통수에 얼굴을 비쳐 칠하는 경우) · `verdict` · `diagnose`(단계 하나를 못 읽어도 나머지는 진행).
+  옵션 `back_diag`(`#m3-backdiag`, 기본 꺼짐) → `m3d_build` 끝에서 stages A(엔진)·C(사진 뒤)·final(Blender 뒤) → diagnostics/`back_*.png`·`back_report.json`, `m3d_stats.back_diag`, 화면 `m3Back`.
+- 시험 `test/test_m3d_back.py`(포트 17961, face49 의 둥근 머리를 빌려 씀). `test_m3d_face49` 의 옆머리 밝기 기대값은 0.3 → 0.15 로(뒷면 보존이 먼저).
+- 다음: 사용자가 '뒷면 진단'을 켠 결과(diagnostics 폴더)를 보내 주면 — 엔진 원본부터 이상하면(mirror 높음·뒤통수 납작) 엔진 한계라 AI 멀티뷰 보조/뒤 그림 쪽, 사진 붙이기·Blender 단계에서 바뀌면 그 단계를 고침.
+  Blender LOD 에서 머리가 깨지는지는 실제 Blender 결과(`back_views_final.png`, zip 안 LOD1·2)로 확인 필요.
 
 ### 다음 할 일
 

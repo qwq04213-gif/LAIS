@@ -69,7 +69,7 @@ $('#m3-views').onclick=async()=>{if(!M3.S)return toast('먼저 사진을 골라 
   const j=await m3Job({kind:'m3d',op:'views',id:M3.S.id,sides:['left','back','right'],fast:$('#m3-vfast').checked?'on':''},'여러 방향 그림 만드는 중');if(j?.m3d){M3.S=j.m3d;m3Paint()}};
 $('#m3-go').onclick=async()=>{if(!M3.S)return;
   const mode=$('#m3-mode').value,sides=mode==='multi'?$$('#m3-slots [data-use]').filter(x=>x.checked).map(x=>x.dataset.use):[];
-  const p={kind:'m3d',op:'build',id:M3.S.id,sides,mode,align:$('#m3-align').checked,face_ab:$('#m3-faceab').checked,compare:$('#m3-compare').checked,keep_hi:$('#m3-keephi').checked,engine3:$('#m3-engine').value,res:$('#m3-res').value,faces:$('#m3-faces').value,tex:$('#m3-tex').value,remesh:$('#m3-remesh').checked,photo:$('#m3-photo').checked,head:$('#m3-head').checked,
+  const p={kind:'m3d',op:'build',id:M3.S.id,sides,mode,align:$('#m3-align').checked,face_ab:$('#m3-faceab').checked,back_diag:$('#m3-backdiag').checked,compare:$('#m3-compare').checked,keep_hi:$('#m3-keephi').checked,engine3:$('#m3-engine').value,res:$('#m3-res').value,faces:$('#m3-faces').value,tex:$('#m3-tex').value,remesh:$('#m3-remesh').checked,photo:$('#m3-photo').checked,head:$('#m3-head').checked,
     blender:$('#m3-blender').checked,height:$('#m3-height').value,rotate:$('#m3-rot').value,lods:$('#m3-lods').checked,rig:$('#m3-rig').checked,
     fmt_glb:$('#m3-fmt-glb').checked,fmt_fbx:$('#m3-fmt-fbx').checked,fmt_obj:$('#m3-fmt-obj').checked};
   const j=await m3Job(p,'3D 만드는 중');if(!j)return;m3Show(j)};
@@ -115,6 +115,17 @@ function m3AB(j){const s=j.m3d_stats?.face_ab;if(!s)return '';
     ${em?`<p class="mute">붙이기 전 엔진 결과: 실루엣 겹침 ${m3n(em.iou)} · 무늬 일치 ${m3n(em.pattern)} · 엔진이 칠한 얼굴과 사진 얼굴의 자리 일치 ${m3n(em.face)} (낮으면 3D 얼굴의 각도·자리가 사진과 다른 거예요)</p>`:''}
     ${notes.length?`<ul class="m3-checks">${notes.map(t=>`<li class="lv-warn">${esc(t)}</li>`).join('')}</ul>`:''}
     ${dir?`<p class="mute">저장한 곳: <code>${esc(dir.replace(/\//g,'\\'))}</code> — face_align_off.glb(A) · face_align_on.glb(B) · 숫자 기록(.json) · face_ab_summary.json</p>`:''}</section>`}
+/* 뒷면 진단: 어느 단계에서 무엇이 문제인지(판정) + 단계별 뒷모습 비교 그림 */
+const M3_BK={engine:'엔진 원본',photo:'사진 붙이기 뒤',final:'마무리(Blender) 뒤'},M3_BKK={shape:'모양',texture:'텍스처·UV',mesh:'그물망·법선',none:''};
+function m3Back(j){const s=j.m3d_stats?.back_diag;if(!s)return '';
+  const url=n=>j.images.find(u=>M3_DIAG.test(u)&&u.endsWith('/'+n)),png=url('back_compare.png'),dir=j.m3d_stats.diag_dir;
+  const rows=Object.entries(s.stages||{}).map(([k,v])=>{const x=v.structure;
+    return `<tr><td>${M3_BK[k]||k}</td><td>${x.triangles.toLocaleString()}</td><td class="${x.hole_edges?'bad':''}">${x.hole_edges.toLocaleString()}</td><td class="${x.unwelded_ratio>1.5?'bad':''}">${x.unwelded_ratio}</td><td>${x.winding_conflicts.toLocaleString()}</td><td>${x.normal_flip_area==null?'—':Math.round(x.normal_flip_area*100)+'%'}</td><td>${x.duplicate_faces.toLocaleString()}</td><td>${v.mirror?.head??'—'}</td></tr>`}).join('');
+  return `<section class="m3-ab m3-back"><h4>뒷면 진단 <small class="mute">진단 — 3D 는 평소대로 만들었어요</small></h4>
+    <ul class="m3-checks">${(s.verdict||[]).map(v=>`<li class="lv-${v.level==='warn'?'warn':v.level==='ok'?'ok':'info'}">${M3_BKK[v.kind]?'<b>'+M3_BKK[v.kind]+'</b> — ':''}${esc(v.text)}</li>`).join('')}</ul>
+    ${png?`<figure class="m3-sheet"><img src="${png}" alt="단계별 뒷모습" data-m3sheet="${png}" title="크게 보기"><figcaption class="mute">뒤에서 본 모습 — 줄: 단계, 칸: 원본 재질 · 단색 · 그물망 · 법선 · UV 체커. 그물망의 빨강 = 구멍, 주황 = 정점이 안 이어진 곳. 법선의 자홍 = 뒤집힌 면</figcaption></figure>`:''}
+    ${rows?`<table class="m3-stat"><thead><tr><th>단계</th><th>면</th><th title="이웃 면이 없는 모서리(구멍·찢어진 곳)">구멍 모서리</th><th title="정점 수 ÷ 자리 수. 1 이면 다 이어져 있고 3 에 가까우면 삼각형마다 따로예요">정점 이어짐</th><th title="이웃과 감는 방향이 다른 곳(뒤집힌 면)">뒤집힌 면</th><th title="법선이 면 방향과 반대인 넓이">법선 반대</th><th>겹친 면</th><th title="뒤통수 텍스처가 얼굴을 뒤집은 것과 비슷한 정도(0.5 넘으면 의심)">뒤통수에 얼굴 비침</th></tr></thead><tbody>${rows}</tbody></table>`:''}
+    ${dir?`<p class="mute">저장한 곳: <code>${esc(dir.replace(/\//g,'\\'))}</code> — back_compare.png · back_views_engine.png · back_views_photo.png · back_views_final.png(여섯 방향 × 다섯 방식) · back_report.json</p>`:''}</section>`}
 function m3AbCam(){const a=M3.ab;if(!a)return;for(const mv of $$('#m3-out .m3-abmv')){const f=a.near&&a.focus;
     mv.setAttribute('camera-target',f?`${f[0][0]}m ${f[0][1]}m ${f[0][2]}m`:'auto auto auto');
     mv.setAttribute('min-camera-orbit',f?`auto auto ${(f[1]*0.6).toFixed(3)}m`:'auto auto auto');
@@ -129,6 +140,7 @@ function m3Show(j){const glb=j.images.find(u=>/\.glb$/i.test(u)),zip=j.images.fi
     ${st?.photo?`<p class="m3-photo ${st.photo.done?'ok':'no'}">${st.photo.done?'✓':'⚠'} 사진 붙이기: ${esc(st.photo.text)}</p>`:''}
     ${m3Extra(j,glb)}
     ${m3AB(j)}
+    ${m3Back(j)}
     ${st?.scene?`<table class="m3-stat"><thead><tr><th>물체</th><th>키</th><th>거리</th><th>면(삼각형)</th></tr></thead><tbody>${st.scene.map((x,i)=>`<tr><td>물체 ${i+1}</td><td>${x.height.toFixed(2)} m</td><td>${x.dist.toFixed(1)} m</td><td>${x.tris.toLocaleString()}</td></tr>`).join('')}</tbody></table>
       <p class="mute">위치·크기는 AI 가 사진 한 장과 깊이 추정으로 어림한 값이에요. 묶음에는 장면 GLB, 물체별 GLB, 배치 정보(layout.json)${st.blender?', Blender 로 만든 장면 파일(.blend·FBX)':''}이 들어 있어요.</p>`:''}
     ${st?.lods?`<table class="m3-stat"><thead><tr><th>LOD</th><th>면(삼각형)</th><th>정점</th><th>파일</th></tr></thead><tbody>${st.lods.map(l=>`<tr><td>${l.lod} (${Math.round(l.ratio*100)}%)</td><td>${l.tris.toLocaleString()}</td><td>${l.verts.toLocaleString()}</td><td class="mute">${['glb','fbx','obj'].filter(k=>l[k]).join(' · ')}</td></tr>`).join('')}</tbody></table>

@@ -750,6 +750,7 @@ def m3d_opts(p, m):
             "mode": p.get("mode") if p.get("mode") in ("single", "multi") else ("multi" if p.get("sides") else "single"),
             "align": flag(p, "align", False),        # 사진 얼굴을 3D 얼굴 각도에 맞춰 휘기 — 기본 꺼짐(원본 얼굴 비율·눈코입 자리 보존)
             "compare": flag(p, "compare", False),    # 단계별 결과(A~E)·비교표 저장
+            "back_diag": flag(p, "back_diag", False),  # 뒷면 진단 — 엔진 원본·사진 붙이기 뒤·마무리 뒤를 여섯 방향 × 다섯 방식으로 그리고 구조를 검사(기본 꺼짐)
             "face_ab": flag(p, "face_ab", False),    # 얼굴 정렬 A/B 비교(진단) — 같은 엔진 결과에서 정렬 끔·켬 두 가지를 따로 저장. 기본 꺼짐
             "keep_hi": flag(p, "keep_hi", True),     # 원본 고밀도 메시(면 줄이기 전)를 따로 저장
             "capture": flag(p, "capture", True)}     # 앞·왼쪽·오른쪽·뒤 캡처 그림
@@ -1568,6 +1569,22 @@ def m3d_build(p, J):
         J.setdefault("m3d_stats", {})["stages"] = st
     if stages.get("hi"):
         items.append((stages["hi"], {**base_info, "hi": True, "_tag": "원본고밀도"}, ".glb"))
+    if o.get("back_diag") and stages.get("A"):           # 뒷면 진단: 어느 단계에서, 무엇(모양·텍스처·그물망) 때문에 뒷모습이 이상한지
+        J["msg"] = "뒷면 진단 그리는 중 — 여섯 방향 × 다섯 방식(3D 엔진은 다시 돌리지 않아요)"
+        try:
+            photo_glb = stages.get("C") if stages.get("C") is not stages.get("A") else None
+            brep, bfiles = m3dviews.diagnose({"engine": stages["A"], "photo": photo_glb, "final": final if isinstance(final, (bytes, bytearray)) and final is not stages.get("C") and final is not stages["A"] else None},
+                                             rotate=o.get("rotate") or 0)
+            brep["engine"], brep["options"] = engine, {k: o.get(k) for k in ("mode", "res", "faces", "tex", "remesh", "photo", "head", "align", "blender", "rotate")}
+            brep["files"] = sorted(bfiles) + ["back_report.json"]
+            for fn_, dat in bfiles.items():
+                items.append((dat, {"_file": f"{M3D_AB_DIR}/{fn_}", "_quiet": fn_ != "back_compare.png"}, ".png"))
+            items.append((json.dumps(brep, ensure_ascii=False, indent=1).encode("utf-8"), {"_file": f"{M3D_AB_DIR}/back_report.json", "_quiet": True}, ".json"))
+            J.setdefault("m3d_stats", {})["back_diag"] = {"verdict": brep["verdict"], "changes": brep["changes"], "files": brep["files"],
+                                                           "stages": {k: {"structure": {kk: vv for kk, vv in v["structure"].items() if kk != "texel_density"}, "mirror": v["mirror"]} for k, v in brep["stages"].items()}}
+        except Exception as e:  # noqa: BLE001 — 진단이 실패해도 3D 는 그대로
+            quiet_log("[뒷면 진단 실패]", repr(e))
+            warn(J, f"뒷면 진단을 하지 못했어요({str(e)[:80]}). 3D 는 평소대로 만들었어요.")
     if stages.get("_ab"):                                # 얼굴 정렬 A/B 비교: 결과 폴더의 diagnostics 안에 따로(본 결과 파일은 그대로)
         ab_items, summ = m3d_ab_items(stages["_ab"], base_info)
         items += ab_items

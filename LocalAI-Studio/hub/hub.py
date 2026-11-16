@@ -15,6 +15,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 # ComfyUI 포터블의 python_embeded 는 ._pth 설정 때문에 스크립트 폴더를 import 경로에 넣지 않으므로 직접 추가
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flows
+import m3dviews
 import meta
 import bgremove
 import modelinfo

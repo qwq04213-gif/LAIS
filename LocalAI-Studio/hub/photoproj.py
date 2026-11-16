@@ -24,6 +24,8 @@ AO_KEEP = 0.15          # 사진을 붙인 곳의 그늘 굽기는 이만큼만 
 SKIN_ROUGH = 0.5        # 사진을 붙인 피부의 거칠기(업계 시작값 0.4~0.6) — 3D 엔진은 피부를 매우 거칠게 칠해 찰흙처럼 보여요
 CLOTH_ROUGH = 0.75      # 사진을 붙인 피부 아닌 곳(옷·신발)의 최소 거칠기 — 엔진이 0.2~0.6 으로 칠하면 검은 옷이 비닐처럼 번들거리고 신발이 비쳐 보여요(천 0.7~0.95)
 FACING = (0.3, 0.65)    # 면이 사진 쪽을 보는 정도(cos) — 아래쪽은 원래 색, 위쪽은 사진 색, 사이는 섞어요
+BACK_KEEP = (-0.3, 0.3) # 색감 맞추기를 거는 범위(cos): 아래쪽(뒤를 보는 면)은 엔진이 칠한 색을 한 화소도 바꾸지 않고, 위쪽은 사진 색감에 맞추고, 옆에서 부드럽게 넘어가요
+THIN_TOL = 0.15         # 사진 반대쪽을 보는 면은 깊이 여유의 이 비율 안에서 맨 앞일 때만 사진을 받아요(귀·머리카락처럼 얇은 곳의 뒷면에 앞 사진이 새지 않게)
 _CT = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8, 5122: np.int16, 5120: np.int8}
 _NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
 
@@ -377,6 +379,32 @@ def _smooth_n(N, tri, c0, c1, flat):
     return np.where(ln > 1e-9, v / np.maximum(ln, 1e-12), flat)
 
 
+def _front_map(P, F, uvp, n, cam, TW, TH):
+    """텍스처 칸마다 '사진 쪽을 보는 정도'(0 = 뒤를 봄 … 1 = 앞·옆) → (TH, TW, 1). 색감 맞추기를 뒷면에 걸지 않으려고 써요.
+    n: 바깥을 보게 맞춘 면 방향. 정점마다 둘레 면의 평균으로 매끈하게 하고, 조각 둘레(빈칸)는 그 조각 값으로 채워요(이음새에 줄이 안 생기게)."""
+    nv = (n * cam.view(P[F].mean(1))).sum(1)
+    acc, cnt = np.zeros(len(P)), np.zeros(len(P))
+    for k in range(3):
+        np.add.at(acc, F[:, k], nv)
+        np.add.at(cnt, F[:, k], 1)
+    vf = acc / np.maximum(cnt, 1)
+    m = np.ones((TH, TW, 1), np.float32)
+    cov = np.zeros((TH, TW), bool)
+    CH = 80000
+    for k in range(0, len(F), CH):
+        fs = F[k:k + CH]
+        tp, tf, c0, c1 = raster(uvp, fs, TW, TH)
+        if not len(tp):
+            continue
+        v = vf[fs[tf, 0]] * c0 + vf[fs[tf, 1]] * c1 + vf[fs[tf, 2]] * (1 - c0 - c1)
+        t = np.clip((v - BACK_KEEP[0]) / (BACK_KEEP[1] - BACK_KEEP[0]), 0, 1)
+        ty, tx = np.divmod(tp, TW)
+        m[ty, tx, 0] = t * t * (3 - 2 * t)
+        cov[ty, tx] = True
+    m, cov = _spread(m, cov, 6)
+    return m
+
+
 def _skin(col):
     """사진 색(0~255) → 피부일 정도 0~1 (YCbCr 피부색 범위, 밝은 피부·만화 피부 포함)"""
     r, g, b = col[:, 0], col[:, 1], col[:, 2]
@@ -479,10 +507,10 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     zb = zb.reshape(ZH, ZW)
     tol = cam.ext * 0.01                    # 깊이 비교 여유(물체 크기의 1%)
 
-    def visible(xx, yy, dd):
+    def visible(xx, yy, dd, k=1.0):
         ix = np.clip((xx * zs).astype(np.int64), 0, ZW - 1)
         iy = np.clip((yy * zs).astype(np.int64), 0, ZH - 1)
-        return dd <= zb[iy, ix] + tol
+        return dd <= zb[iy, ix] + tol * k
 
     # 사진 쪽을 보는 면만 고르기
     e1, e2 = P[F[:, 1]] - P[F[:, 0]], P[F[:, 2]] - P[F[:, 0]]
@@ -538,8 +566,10 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
         tp, f, X, sx, sy = tp[ok], f[ok], X[ok], sx[ok], sy[ok]
         c0, c1 = c0[ok], c1[ok]
         cs = np.abs((_smooth_n(M["N"], F[f], c0, c1, n[f]) * cam.view(X)).sum(1))
+        away = ((n[f] * cam.view(X)).sum(1) < 0) & ~visible(sx, sy, sd[ok], THIN_TOL)      # 뒤를 보는데 맨 앞 면도 아님 = 얇은 곳의 뒷면
         w = np.clip((cs - FACING[0]) / (FACING[1] - FACING[0]), 0, 1)
         w = (w * w * (3 - 2 * w))[:, None].astype(np.float32) * _sample(soft, sx, sy)
+        w[away] = 0
         col = _sample(photo_rgb, sx, sy)
         if fbox:
             fx0, fy0, fx1, fy1, fa = fbox
@@ -557,7 +587,9 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     if not TPs:
         return glb, {"skip": "none", "iou": round(v, 3)}
     tp, w, col = np.concatenate(TPs), np.concatenate(Ws), np.concatenate(COLs)
-    T = _color_match(T, tp, w, col)
+    Tm = _color_match(T, tp, w, col)
+    if Tm is not T:                          # 뒤를 보는 면은 엔진이 칠한 색 그대로(사진으로 알 수 없는 뒷면은 건드리지 않아요)
+        T = T + (Tm - T) * _front_map(P, F, uvp, n, cam, TW, TH)
     ty, tx = np.divmod(tp, TW)
     delta = np.zeros((TH, TW, 3), np.float32)
     changed = np.zeros((TH, TW), bool)
@@ -772,6 +804,7 @@ FACE_FACING = (0.2, 0.5)         # 머리에서 사진을 쓰는 범위(cos) —
 TONE_GRID = 256                  # 사진 색감 잇기를 계산하는 격자(머리 텍스처를 이 크기로 줄여서)
 TONE_SIGMA = 14.0                # 사진이 닿은 곳에서 이만큼(격자 칸) 떨어진 곳까지 색감을 이어요
 TONE_MAX = 70.0                  # 한 번에 옮기는 색 차이의 한계(0~255)
+TONE_EDGE = 0.35                 # 머리 메시의 가장자리(몸 메시와 만나는 곳)에서 이만큼(얼굴 크기 대비) 안쪽까지 색감 잇기를 0 → 1 로(경계에 색 이음새가 안 생기게)
 HEAD_DEPTH = (0.6, 1.7)          # 얼굴 앞면 깊이 기준 앞쪽·뒤쪽 범위(얼굴 크기 배수)
 
 
@@ -819,7 +852,7 @@ def _png(arr):
     return buf.getvalue()
 
 
-def _tone_carry(tex, done, wmap, tsum, tcnt):
+def _tone_carry(tex, done, wmap, tsum, tcnt, emap=None):
     """사진이 닿지 않은 머리 부분(볼 옆·옆머리)의 엔진 색에, 가까운 '사진 − 엔진' 색 차이를 부드럽게 이어 줘요.
     엔진이 칠한 옆얼굴은 사진과 색감이 달라(바래고 어두움) 옆에서 보면 경계에 띠가 생겨요 — 사진에서 멀어질수록 원래 색으로 돌아가요.
     tex 를 그 자리에서 고치고 → 옮긴 칸의 비율"""
@@ -832,6 +865,8 @@ def _tone_carry(tex, done, wmap, tsum, tcnt):
     TS = tex.shape[0]
     cf = np.asarray(Image.fromarray(conf.astype(np.float32), "F").resize((TS, TS), Image.BILINEAR))
     amt = cf * (1 - wmap.astype(np.float32) / 255) * done
+    if emap is not None:                               # 몸 메시와 만나는 가장자리에서는 0(몸 쪽은 색감 잇기를 안 하니까 — 경계에서 색이 끊기지 않게)
+        amt *= emap.astype(np.float32) / 255
     for ch in range(3):
         d = _gblur(tsum[..., ch] / max(1.0, float(tcnt.max())), TONE_SIGMA) / np.maximum(den, 1e-6)
         d = np.clip(d, -TONE_MAX, TONE_MAX).astype(np.float32)
@@ -949,6 +984,23 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     hit = np.zeros(len(hf), bool)                      # 텍스처 칸을 하나라도 받은 삼각형
     G = TONE_GRID
     wmap = np.zeros((TS, TS), np.uint8)                # 칸마다 사진을 쓴 정도(0~255)
+    emap = np.full((TS, TS), 255, np.uint8)            # 칸마다 머리 가장자리에서 떨어진 정도(0 = 몸 메시와 만나는 곳, 255 = 충분히 안쪽)
+    inb_ = np.zeros(len(P), bool)                      # 머리 면과 몸 면이 함께 쓰는 정점 = 머리 메시의 가장자리
+    rest = np.ones(len(F), bool)
+    rest[hf] = False
+    inb_[F[rest].ravel()] = True
+    hv = np.unique(FH)
+    bv = hv[inb_[hv]]
+    E3 = None
+    if len(bv):
+        bp = P[bv[:: max(1, len(bv) // 1500)]]
+        dmin = np.empty(len(hv))
+        for k0 in range(0, len(hv), 4000):
+            dmin[k0:k0 + 4000] = np.sqrt(((P[hv[k0:k0 + 4000], None] - bp[None]) ** 2).sum(-1).min(1))
+        tt = np.clip(dmin / max(TONE_EDGE * fw, 1e-12), 0, 1)
+        vd = np.zeros(len(P))
+        vd[hv] = tt * tt * (3 - 2 * tt)
+        E3 = vd[FH]                                     # (Mh, 3)
     tsum, tcnt = np.zeros((G * G, 3)), np.zeros(G * G)  # 사진을 쓴 칸의 (사진 색 − 엔진 색)을 격자에 모아요
     for k0 in range(0, len(FF), CH):
         tp, tf, c0, c1 = raster(xy, FF[k0:k0 + CH], TS, TS)
@@ -968,8 +1020,16 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         ok = visible(sx, sy, sd) & (sx >= 0) & (sy >= 0) & (sx < W0) & (sy < H0)
         if ok.any():
             cs = np.abs((Nn[ok] * cam.view(X[ok])).sum(1))      # 매끈한 방향으로(면마다 따로면 경계가 톱니처럼 깨져요)
+            away = ((n_face[hf][t[ok]] * cam.view(X[ok])).sum(1) < 0) & ~visible(sx[ok], sy[ok], sd[ok], THIN_TOL)      # 얇은 곳의 뒷면에는 앞 사진을 붙이지 않아요
             w = np.clip((cs - FACE_FACING[0]) / (FACE_FACING[1] - FACE_FACING[0]), 0, 1)
-            w = (w * w * (3 - 2 * w))[:, None].astype(np.float32) * _sample(soft, sx[ok], sy[ok])
+            w = w * w * (3 - 2 * w)
+            if E3 is not None:                         # 몸 메시와 만나는 가장자리에서는 몸과 같은 범위(FACING)로 — 경계 양쪽의 색이 같아야 이음새가 안 보여요
+                wb = np.clip((cs - FACING[0]) / (FACING[1] - FACING[0]), 0, 1)
+                wb = wb * wb * (3 - 2 * wb)
+                ef = (E3[t[ok]] * c[ok]).sum(1)
+                w = wb + (w - wb) * ef
+            w = w[:, None].astype(np.float32) * _sample(soft, sx[ok], sy[ok])
+            w[away] = 0
             pc = _sample(photo_rgb, sx[ok], sy[ok])
             if fbox:
                 fx0, fy0, fx1, fy1, fa = fbox
@@ -989,6 +1049,8 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
                 for ch in range(3):
                     tsum[:, ch] += np.bincount(gi, dlt[:, ch], minlength=G * G)
             wmap[ty[ok], tx[ok]] = np.round(w[:, 0] * 255)
+        if E3 is not None:
+            emap[ty, tx] = np.round((E3[t] * c).sum(1) * 255)
             col[ok] = col[ok] + (pc - col[ok]) * w
         tex[ty, tx], done[ty, tx] = col, True
         if has_nm:                                     # 노멀맵: 원래 텍스처 방향 → 세상 방향 → 새 텍스처 방향으로 옮겨요
@@ -1017,8 +1079,8 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
             nt[my[free], mx[free]] = (127.5, 127.5, 255)
         done[my[free], mx[free]] = True
     del base
-    tone = _tone_carry(tex, done, wmap, tsum.reshape(G, G, 3), tcnt.reshape(G, G))
-    del wmap
+    tone = _tone_carry(tex, done, wmap, tsum.reshape(G, G, 3), tcnt.reshape(G, G), emap)
+    del wmap, emap
     tex, done2 = _spread(tex, done.copy(), 6)          # 빈칸은 이웃 색으로 넉넉히
     done = done2 if done2.sum() > done.sum() else done
     if done.any():                                     # 그래도 남은 빈칸은 머리 평균색으로(검게 비지 않게)
@@ -1068,14 +1130,55 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
         wsg = np.where((np.cross(Nc, Tt) * Bt).sum(1) < 0, -1.0, 1.0)
         Th = np.concatenate([Tt, wsg[:, None]], 1).astype(np.float32)
     UVh = NUV3.reshape(-1, 2).astype(np.float32)
+    # 머리 정점 잇기: 같은 원래 정점·같은 새 텍스처 좌표인 모서리는 정점 하나로(이음새에서만 나뉘어요).
+    # 삼각형마다 정점을 따로 두면 그물망이 조각나서, 면 줄이기(LOD)·법선 다시 계산·다른 프로그램에서 머리가 깨지거나 각져 보여요.
+    wkey = np.stack([FH.reshape(-1), np.round(UVh[:, 0].astype(np.float64) * 1e6).astype(np.int64), np.round(UVh[:, 1].astype(np.float64) * 1e6).astype(np.int64),
+                     (Th[:, 3] > 0).astype(np.int64) if Th is not None else np.zeros(len(Ph), np.int64)], 1)
+    _, first, winv = np.unique(wkey, axis=0, return_index=True, return_inverse=True)
+    winv = winv.reshape(-1)
+    if Th is not None:                                 # 접선은 모인 모서리들의 평균(법선과 직교하게 다시)
+        tacc = np.zeros((len(first), 3))
+        np.add.at(tacc, winv, Th[:, :3].astype(np.float64))
+        nn_ = Nh[first].astype(np.float64)
+        nn_ /= np.maximum(np.linalg.norm(nn_, axis=1, keepdims=True), 1e-12)
+        tacc -= nn_ * (tacc * nn_).sum(1, keepdims=True)
+        ln_ = np.linalg.norm(tacc, axis=1, keepdims=True)
+        tacc = np.where(ln_ > 1e-9, tacc / np.maximum(ln_, 1e-12), Th[first, :3])
+        Th = np.concatenate([tacc, Th[first, 3:4]], 1).astype(np.float32)
+    Ph, Nh, UVh = Ph[first], Nh[first], UVh[first]
     keep = np.ones(len(F), bool)
     keep[hf] = False
-    body_idx = F[keep].astype(np.uint32).tobytes()
-    head_idx = np.arange(len(Ph), dtype=np.uint32).tobytes()
-    adds = [Ph.tobytes(), UVh.tobytes(), head_idx] + ([Nh.tobytes()] if M["N"] is not None else []) + ([Th.tobytes()] if Th is not None else []) + [_png(a) for _, a in imgs]
     pr = M["prim"]
-    g2, b2, nv = rebuild(g, b, {g["accessors"][pr["indices"]]["bufferView"]: body_idx}, adds)
+    # 몸: 머리로 옮겨 간 면만 쓰던 정점은 빼요(안 쓰는 정점이 남으면 파일이 커지고 다른 프로그램에서 떠다니는 점이 돼요) — 자료가 따로따로 담긴 GLB 일 때만
+    Fb = F[keep]
+    used = np.zeros(len(P), bool)
+    used[Fb.ravel()] = True
+    repl, acc_fix = {}, {}
+    if not used.all():
+        for an, ai in pr["attributes"].items():
+            a_ = g["accessors"][ai]
+            bv_ = g["bufferViews"][a_["bufferView"]]
+            dt_, nc_ = np.dtype(_CT[a_["componentType"]]), _NC[a_["type"]]
+            alone = (not bv_.get("byteStride") or bv_["byteStride"] == dt_.itemsize * nc_) and a_.get("byteOffset", 0) == 0 and not a_.get("sparse") \
+                and a_["count"] == len(P) and bv_["byteLength"] == len(P) * dt_.itemsize * nc_ and sum(1 for x in g["accessors"] if x.get("bufferView") == a_["bufferView"]) == 1
+            if not alone:
+                repl, acc_fix = {}, {}
+                break
+            rows = np.frombuffer(b, dt_, len(P) * nc_, bv_.get("byteOffset", 0)).reshape(len(P), nc_)[used]
+            repl[a_["bufferView"]] = rows.tobytes()
+            acc_fix[ai] = {"count": int(used.sum())}
+            if an == "POSITION":
+                acc_fix[ai].update(min=rows.min(0).astype(float).tolist(), max=rows.max(0).astype(float).tolist())
+        if repl:
+            remap = np.cumsum(used) - 1
+            Fb = remap[Fb]
+    body_idx = Fb.astype(np.uint32).tobytes()
+    head_idx = winv.astype(np.uint32).tobytes()
+    adds = [Ph.tobytes(), UVh.tobytes(), head_idx] + ([Nh.tobytes()] if M["N"] is not None else []) + ([Th.tobytes()] if Th is not None else []) + [_png(a) for _, a in imgs]
+    g2, b2, nv = rebuild(g, b, {**repl, g["accessors"][pr["indices"]]["bufferView"]: body_idx}, adds)
     acc = [dict(x) for x in g2["accessors"]]
+    for ai, fx in acc_fix.items():
+        acc[ai] = {**acc[ai], **fx}
     ia = dict(acc[pr["indices"]])
     ia.update(componentType=5125, count=int(keep.sum()) * 3, byteOffset=0)
     ia.pop("min", None), ia.pop("max", None)
@@ -1083,7 +1186,7 @@ def head_split(glb, cam, fbox_px, TS, n_face, visible, soft, photo_rgb, fbox, si
     base_acc = len(acc)
     acc += [{"bufferView": nv[0], "componentType": 5126, "count": len(Ph), "type": "VEC3", "min": Ph.min(0).tolist(), "max": Ph.max(0).tolist()},
             {"bufferView": nv[1], "componentType": 5126, "count": len(UVh), "type": "VEC2"},
-            {"bufferView": nv[2], "componentType": 5125, "count": len(Ph), "type": "SCALAR"}]
+            {"bufferView": nv[2], "componentType": 5125, "count": len(winv), "type": "SCALAR"}]
     attrs = {"POSITION": base_acc, "TEXCOORD_0": base_acc + 1}
     vi = 3
     if M["N"] is not None:
