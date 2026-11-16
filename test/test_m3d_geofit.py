@@ -60,6 +60,17 @@ def prims(gl):
     return [(photoproj._acc(g, b, pr["attributes"]["POSITION"]), photoproj._acc(g, b, pr["indices"]).astype(int).reshape(-1, 3)) for pr in g["meshes"][0]["primitives"]]
 def posset(gl): return {r.tobytes() for P, F in prims(gl) for r in P.astype(np.float32)}
 
+# 0) 좌표 변환: 사진 화소·깊이 → 3D 자리(원근 없는 카메라 = TRELLIS.2, 원근 카메라 = Pixal3D 둘 다) — 정점을 옮길 때 쓰는 계산이에요
+P0 = photoproj.load(fx["engine"])["P"]
+c0 = next(c for c in photoproj._cams() if c["name"] == photoproj.PIXAL_CAM)
+for cam in (photoproj.Cam(c0, P0, (100.0, 50.0, 900.0, 1000.0)), photoproj.Cam(c0, P0, (100.0, 50.0, 900.0, 1000.0), dist_e=1.1136)):
+    x_, y_, d_ = cam.px(P0)
+    assert np.abs(facegeo._unproject(cam, x_, y_, d_) - P0).max() < 1e-9, cam.dist
+    Q = facegeo._unproject(cam, x_ + 7.0, y_ - 3.0, d_)                      # 화소만 옮기면 깊이는 그대로, 화면에서는 그만큼만 움직여요
+    x2, y2, d2 = cam.px(Q)
+    assert np.abs(x2 - x_ - 7.0).max() < 1e-6 and np.abs(y2 - y_ + 3.0).max() < 1e-6 and np.abs(d2 - d_).max() < 1e-9, cam.dist
+ok("pixel + depth → 3D position is exact for both the orthographic (TRELLIS.2) and the perspective (Pixal3D, camera distance 1.1136) cameras")
+
 # 1) 기본값: 꺼져 있어요 — 평소 결과 그대로, 랜드마크도 찾지 않아요
 assert hub.m3d_opts({}, {"kind": "character"})["face_geometry_fit"] is False and hub.m3d_opts({"face_geometry_fit": "on"}, {})["face_geometry_fit"] is True
 assert hub.m3d_opts({"face_geometry_fit": "on"}, {})["align"] is False and hub.m3d_opts({"align": "on"}, {})["face_geometry_fit"] is False      # 얼굴 정렬과 따로 켜고 꺼요

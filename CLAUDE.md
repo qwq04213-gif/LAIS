@@ -67,7 +67,7 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
 ## 지금 상태
 
 마지막 출시: **4.8**(커밋 `v4.8`). **4.9.4** 를 빌드해 전달함(브랜치 `feature/human3d-cleanup`, main 에는 아직 안 합침).
-다음 판 **4.10**(브랜치 `feature/face-ab-diag` — `feature/human3d-cleanup`(= main + 4.9.4)에서 시작. 아직 빌드 안 함).
+**4.10** 빌드해 전달함(브랜치 `feature/face-ab-diag`, 커밋 `v4.10`). 다음 판 **4.11**(브랜치 `feature/human3d-face-geometry-fit` — `feature/face-ab-diag` 에서 시작. 아직 빌드 안 함).
 
 ### 인체 3D(SiTH·ECON) — 사용자가 실패로 판단하고 접음
 
@@ -90,6 +90,26 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
   주소는 `out_path` 의 4단계(`DIAG_RX`). 갤러리 목록(`out_files`)에는 안 나와요.
 - `photoproj.head_focus`(재질 이름 `_head` 부분의 가운데·크기)·`capture(focus=)`·`face_sheet`(정면·좌우 45°·좌우 옆). 화면 `m3AB`·`m3AbCam`(model-viewer 두 개의 camera-orbit/target 을 함께).
 - 시험 `test/test_m3d_faceab.py`(포트 17958, test_m3d_align 의 머리·사진을 빌려 씀, 화면 부분은 텍스처 2048 — 4096 은 이 환경에서 몇 분). 실제 GPU 결과는 미검증
+
+### 4.11 얼굴 3D 형상 보정(실험) — `facegeo.py`
+
+- 사용자의 실제 A/B 결과(4.10): Pixal3D, 얼굴 105×120px, 겹침 0.834, A·B 의 정점 자리(POSITION)가 같음 = 텍스처만 달라짐 → 이번엔 정점을 실제로 옮김.
+- 옵션 `face_geometry_fit`(`#m3-geofit`, 기본 꺼짐, `align` 과 독립). `m3d_glb` → `m3d_geofit`(27_m3d) → `facegeo.run`.
+- 핵심 생각: 사진을 붙인 정면은 언제나 사진처럼 보이므로 '3D 쪽 랜드마크'는 **엔진이 칠한 원래 얼굴**을 사진 카메라로 그린 그림에서 찾고(= 3D 모양의 눈·코·입 자리),
+  목표는 사진을 붙인 결과를 같은 카메라로 그린 그림의 랜드마크. 엔진 원본(머리 떼기 전, 정점이 이어진 상태)을 옮긴 뒤 `project(reuse=)` 로 같은 카메라·같은 얼굴 휘기를 다시 써서 붙임
+  → 머리 메시·몸 메시가 어긋날 수 없음(`same_triangles` 로 확인).
+- 랜드마크: `flows.wf_face_lines` — ComfyUI `MediaPipeFaceMeshVisualize`(connections=custom, 부위 하나씩, 부위마다 색, point_size 0)를 이어 붙인 그림 2장(홍채는 눈 선과 겹쳐서 따로) + `PreviewAny`(bboxes → score).
+  `facegeo.landmarks` 가 색으로 읽어 이름 붙은 점 44개쯤(눈 가운데·끝, 홍채, 눈썹, 코, 입, 윤곽 16방향). 위아래 끝은 '부위 가운데 가로 + 끝 세로', 윤곽은 방향선 위의 점(안 그러면 튐).
+  랜드마크 모델은 흐린 엔진 얼굴에서 코의 위아래 어긋남을 못 잡음 → `refine`(눈·코·입 상자별 무늬 맞추기, 가운데 무게 NCC, 믿을 만하면 그 부위 점을 '목표 + 옮김'으로 바꿈).
+- 옮기기 `facegeo.fit`: TPS(점별 믿는 정도 `LM_WEIGHT`, 윤곽 0.3) → 영역 = 3D 쪽 얼굴 윤곽 다각형(`GROW` 조금만 — 턱 아래로 넓히면 목이 움직임) 안쪽 `FALL` 감쇠 × 겉면에서의 깊이 감쇠(`DEPTH`)
+  → 같은 자리 정점 묶기(`_weld`) 후 이웃 고르기 → 면 뒤집힘이면 세기 ×0.75 → `_unproject` 로 화소 이동, 깊이는 '큰 모양'(겉면 깊이에 맞춘 3차 다항식 `BASE_DEG`)의 차이만 따라감
+  (정점을 깊이째 끌고 가면 머리의 둥근 모양까지 밀려서 정답에서 멀어졌음 — 흐림으로 구한 큰 모양도 가장자리 기울기가 틀려서 다항식으로 바꿈).
+  POSITION 은 옮긴 줄만 덮어씀(나머지는 비트까지 그대로), 법선은 표면이 돈 만큼 더하고 접선은 다시 직교. `run` 은 재기→옮기기를 나아지는 동안 최대 `MAX_PASS` 번.
+- 채택: 메시 검사(바깥 정점 0·뒤집힘 0·퇴화 0·이음새·면 방향 회전) + `same_triangles` + 랜드마크 차이 ≤ `MIN_GAIN` × 전. 아니면 기존 결과(이유 기록). 얼굴 정렬 꺼짐 + 보정 = 변형 D(본 결과만, 파일 없음).
+- 저장: diagnostics 에 `face_A_baseline.glb`·`face_B_texture_align.glb`·`face_C_geometry_fit.glb`·`face_geometry_fit_summary.json`·`_views.png`(`face_sheet(ref=)`)·`_landmarks.png`. `m3d_stats.face_geo`, 화면 `m3Geo`.
+- 시험: `test/geofix.py`(정답 있는 가짜 3D + 진짜 MediaPipe — mediapipe·scipy·scikit-image·libEGL, 모델·남성 사진은 TMPDIR/lais_geofit 에 받아 둠),
+  `test_m3d_geofit.py`(여성, 포트 17959)·`test_m3d_geofit2.py`(남성·정렬 켬·화면, 17960). 시험에서는 `hub.M3D_HEAD_MIN = 1024`. 가짜 ComfyUI 는 `STATE["lm_fn"]`.
+  결과(가짜 3D): 랜드마크 차이 0.056 → 0.012(여) / 0.052 → 0.016(남), 엔진이 틀렸던 곳의 깊이 차이 45°에서 3.3 → 1.0mm. 실제 엔진·GPU 는 미검증
 
 ### 다음 할 일
 
