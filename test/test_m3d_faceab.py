@@ -62,7 +62,8 @@ def spy(glb, photo, face=None, **kw):
     return real_project(glb, photo, face, **kw)
 hub.photoproj.project = spy
 def engines(n0): return sum(1 for wf in SUBMITTED[n0:] if any(x["class_type"] == "Trellis2ShapeStage" for x in wf.values()))
-BUILD = {"kind": "m3d", "op": "build", "id": sid, "blender": "", "engine3": "trellis", "keep_hi": "", "capture": "", "seed": 7, "tex": 2048}
+BUILD = {"kind": "m3d", "op": "build", "id": sid, "blender": "", "engine3": "trellis", "keep_hi": "", "capture": "", "seed": 7, "tex": 1024}
+hub.M3D_HEAD_MIN = 1024                                   # 머리 텍스처를 작게: 시험 환경(CPU)에서 빨리 끝나게
 def diag_dirs(j): return sorted(p.name for p in path_of(j["images"][0]).parent.iterdir() if p.is_dir())
 
 # 1) 기본값: 꺼져 있어요 — 진단 폴더도, 기록도 없어요
@@ -93,7 +94,7 @@ A, Bg = (dg / "face_align_off.glb").read_bytes(), (dg / "face_align_on.glb").rea
 ja, jb, js = (json.loads((dg / n).read_text(encoding="utf-8")) for n in ("face_align_off.json", "face_align_on.json", "face_ab_summary.json"))
 assert ja["align"] is False and jb["align"] is True and ja["engine"] == jb["engine"] == "TRELLIS.2" and ja["label"].startswith("A:") and jb["label"].startswith("B:")
 for r in (ja, jb):
-    assert r["camera"] and r["camera_dist"] is not None and r["iou"] > 0.9 and r["ncc"] is not None and r["head_texture"] and r["head_texture_size"] == 2048 and r["errors"] == [] and r["file"], r
+    assert r["camera"] and r["camera_dist"] is not None and r["iou"] > 0.9 and r["ncc"] is not None and r["head_texture"] and r["head_texture_size"] == 1024 and r["errors"] == [] and r["file"], r
 fa = jb["face_align"]
 assert ja["face_align"]["applied"] is False and ja["face_align"]["ncc_before"] is None and fa["requested"] and fa["applied"] and fa["ncc_after"] > fa["ncc_before"] + 0.08 and abs(fa["rotation_deg"]) > 3 and fa["shift"] is not None and len(fa["scale"]) == 2, (ja["face_align"], fa)
 assert js["shared"]["source_mesh"]["sha256"] == sha(eng) and js["shared"]["face_box"] == [float(v) for v in FB] and js["shared"]["engine_match"]["face"] < 0.5 and js["same_result"] is False and "휘어" in js["verdict"]
@@ -166,7 +167,7 @@ with sync_playwright() as p:
     pg.select_option("#m3-sess", sid); pg.wait_for_function("window.M3 ? !!M3.S : true"); pg.wait_for_timeout(500)
     assert not pg.is_checked("#m3-faceab") and not pg.is_checked("#m3-align") and "얼굴 정렬 A/B 비교" in pg.inner_text("label:has(#m3-faceab)")
     pg.evaluate("document.querySelector('#m3-faceab').closest('fieldset').scrollIntoView()")
-    pg.uncheck("#m3-blender"); pg.uncheck("#m3-keephi"); pg.select_option("#m3-engine", "trellis"); pg.select_option("#m3-tex", "2048"); pg.check("#m3-faceab")      # 텍스처 2048: 시험 환경(CPU)에서 빨리 끝나게
+    pg.uncheck("#m3-blender"); pg.uncheck("#m3-keephi"); pg.select_option("#m3-engine", "trellis"); pg.select_option("#m3-tex", "1024"); pg.check("#m3-faceab")      # 텍스처 1024: 시험 환경(CPU)에서 빨리 끝나게
     pg.click("#m3-go"); pg.wait_for_selector("#m3-out .m3-ab", timeout=180000)
     body = json.loads([s for s in sent if s and '"build"' in s][-1]); assert body["face_ab"] is True and body["align"] is False, body
     assert pg.locator("#m3-out .m3-abmv").count() == 2 and pg.locator("#m3-out #m3-mv").count() == 1
