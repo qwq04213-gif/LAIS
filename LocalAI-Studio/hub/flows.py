@@ -772,6 +772,28 @@ def wf_face_mask(model, img):
     return w.n
 
 
+def wf_face_lines(model, img, sets, colors, all_feats):
+    """얼굴 랜드마크를 부위마다 다른 색 선으로 그린 그림(검은 바탕, 넣은 그림과 같은 크기) — 얼굴 3D 형상 보정이 읽어요.
+    sets: 부위 묶음들(묶음마다 그림 한 장 — 선이 겹치는 부위는 다른 묶음으로), colors: {부위: (r, g, b)}, all_feats: 노드가 아는 부위 이름 전부.
+    MediaPipeFaceMeshVisualize 를 부위 하나씩 이어 붙여요(connections=custom). 얼굴 상자·신뢰도는 PreviewAny 로 글로 받아요."""
+    w = WF()
+    im = w.add("LoadImage", image=img)
+    fd = w.add("LoadMediaPipeFaceLandmarker", model_name=model)
+    lm = w.add("MediaPipeFaceLandmarker", face_detection_model=[fd, 0], image=[im, 0], detector_variant="both", num_faces=1,
+               min_confidence=0.5, missing_frame_fallback="empty")
+    for grp in sets:
+        prev = None
+        for name in grp:
+            ins = {"face_landmarks": [lm, 0], "connections": "custom", "color": "#%02x%02x%02x" % tuple(colors[name]), "thickness": 2, "point_size": 0}
+            ins.update({"connections." + f: f == name for f in all_feats})
+            if prev:
+                ins["image"] = [prev, 0]
+            prev = w.add("MediaPipeFaceMeshVisualize", **ins)
+        w.add("PreviewImage", images=[prev, 0])
+    w.add("PreviewAny", source=[lm, 1])
+    return w.n
+
+
 def wf_trellis(q):
     """사진 → 게임용 3D(GLB). TRELLIS.2(사진 한 장) 또는 Pixal3D 멀티뷰(앞·왼쪽·뒤·오른쪽).
     ComfyUI 공식 예시(3d_pixal3d_trellis2_image_to_model)와 같은 설정이에요:

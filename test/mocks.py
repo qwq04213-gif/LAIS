@@ -151,7 +151,21 @@ REQ.update({"LTXVDualCFGGuider": ["model", "positive", "negative", "video_cfg", 
             "SamplerCustomAdvanced": ["noise", "guider", "sampler", "sigmas", "latent_image"], "RandomNoise": ["noise_seed"],
             "VAEDecodeTiled": ["samples", "vae", "tile_size", "overlap", "temporal_size", "temporal_overlap"]})
 REQ.update({"LoadMediaPipeFaceLandmarker": ["model_name"], "MediaPipeFaceLandmarker": ["face_detection_model", "image", "detector_variant", "num_faces"],
-            "MediaPipeFaceMask": ["face_landmarks", "regions"], "PreviewAny": ["source"]})
+            "MediaPipeFaceMask": ["face_landmarks", "regions"], "PreviewAny": ["source"],
+            "MediaPipeFaceMeshVisualize": ["face_landmarks", "connections", "color", "thickness", "point_size"]})
+def lm_sets(wf):
+    """랜드마크 선 그림 워크플로 → 그림(PreviewImage)마다 [(부위, (r, g, b))] — MediaPipeFaceMeshVisualize 를 이어 붙인 순서대로"""
+    out = []
+    for nid in sorted(wf, key=lambda x: [int(p) for p in x.split(":")]):
+        n = wf[nid]
+        if n["class_type"] != "PreviewImage": continue
+        cur, lst = n["inputs"]["images"][0], []
+        while cur in wf and wf[cur]["class_type"] == "MediaPipeFaceMeshVisualize":
+            i = wf[cur]["inputs"]; assert i["connections"] == "custom" and i["point_size"] == 0, i
+            on = [k.split(".", 1)[1] for k, v in i.items() if k.startswith("connections.") and v is True]; assert len(on) == 1, on
+            c = i["color"].lstrip("#"); lst.insert(0, (on[0], tuple(int(c[j:j + 2], 16) for j in (0, 2, 4)))); cur = (i.get("image") or [None])[0]
+        if lst: out.append(lst)
+    return out
 REQ.update({"LoadBackgroundRemovalModel": ["bg_removal_name"], "RemoveBackground": ["bg_removal_model", "image"], "MaskToImage": ["mask"]})
 REQ.update({"InvertMask": ["mask"], "ImageCropToMask": ["images", "masks"], "Trellis2Conditioning": ["clip_vision_model", "image"],
             "Pixal3DMultiViewConditioning": ["clip_vision_model", "front"], "Pixal3DConditioning": ["clip_vision_model", "image", "camera_angle_x"], "LoadMoGeModel": ["model_name"], "MoGeInference": ["moge_model", "image"], "MoGeGeometryToFOV": ["moge_geometry"], "EmptyTrellis2LatentStructure": ["batch_size"],
@@ -268,6 +282,10 @@ class Comfy(BaseHTTPRequestHandler):
             if h.get("glb"):                       # SaveGLB 마다 결과 하나(이름에 저장 이름을 붙여요 — 원본 고밀도 메시 hub3d_hi 와 구분)
                 outs = {str(90 - i): {"3d": [{"filename": pid + "-" + pre.split("/")[-1] + ".glb", "subfolder": "3d", "type": "output"}]} for i, pre in enumerate(h["glb"])}
                 return self.j({pid: {"outputs": {**outs, **({"98": {"text": [STATE.get("fov_text", "38.5")]}} if h.get("txt") else {})}, "status": {"status_str": "success", "messages": []}}})
+            if h.get("lm"):                        # 얼굴 랜드마크 선 그림: 묶음마다 그림 한 장 + 얼굴 상자·신뢰도 글
+                outs = {str(80 + i): {"images": [{"filename": f"{pid}-lm{i}.png", "subfolder": "", "type": "temp"}]} for i in range(len(h["lm"]))}
+                outs["98"] = {"text": [STATE.get("lm_text", '[[{"x": 1.0, "y": 1.0, "width": 10.0, "height": 10.0, "label": "face", "score": 0.93}]]')]}
+                return self.j({pid: {"outputs": outs, "status": {"status_str": "success", "messages": []}}})
             if h.get("audio"): return self.j({pid: {"outputs": {"99": {"audio": [{"filename": pid + ".mp3", "subfolder": "audio", "type": "output"}]}}, "status": {"status_str": "success", "messages": []}}})
             if h.get("webp"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".webp", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
             if h.get("video"): return self.j({pid: {"outputs": {"99": {"images": [{"filename": pid + ".mp4", "subfolder": "video", "type": "output"}], "animated": [True]}}, "status": {"status_str": "success", "messages": []}}})
@@ -281,6 +299,13 @@ class Comfy(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "image/webp"); self.end_headers(); self.wfile.write(b"RIFF\x00\x00\x00\x00WEBPVP8X"); return
         if u == "/view" and ".mp4" in self.path:
             self.send_response(200); self.send_header("Content-Type", "video/mp4"); self.end_headers(); self.wfile.write(STATE.get("mp4") or b"\x00\x00\x00\x18ftypmp42" + bytes(range(256)) * 8); return
+        if u == "/view" and "-lm" in self.path:           # 랜드마크 선 그림: STATE['lm_fn'](넣은 그림, 묶음들) → [그림] (없으면 검은 그림 = 얼굴 없음)
+            pid, i = self.path.split("filename=")[1].split(".png")[0].split("-lm"); h = HIST[pid]
+            if "lm_out" not in h:
+                src = Image.open(M.parent / "input" / h["face_img"]).convert("RGB"); STATE.setdefault("lm_calls", []).append(src.size)
+                h["lm_out"] = STATE["lm_fn"](src, h["lm"]) if STATE.get("lm_fn") else [Image.new("RGB", src.size, 0) for _ in h["lm"]]
+            b = io.BytesIO(); h["lm_out"][int(i)].save(b, "PNG")
+            self.send_response(200); self.send_header("Content-Type", "image/png"); self.end_headers(); self.wfile.write(b.getvalue()); return
         if u == "/view":
             pid = self.path.split("filename=")[1].split(".png")[0]
             w, h = HIST[pid]["size"]; im = Image.new("RGB", (w, h), (255, 0, 0))
@@ -301,7 +326,7 @@ class Comfy(BaseHTTPRequestHandler):
             except AssertionError as e:
                 return self.j({"error": {"message": "Prompt outputs failed validation"}, "node_errors": {"1": {"class_type": "X", "errors": [{"message": str(e), "details": ""}]}}}, 400)
             pid = f"p{len(SUBMITTED)}"; SUBMITTED.append(wf)
-            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": [n["inputs"].get("filename_prefix", "3d/hub3d") for n in wf.values() if n["class_type"] == "SaveGLB"], "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "face_img": next((n["inputs"].get("image") for n in wf.values() if n["class_type"] == "LoadImage"), None), "txt": any(n["class_type"] == "PreviewAny" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
+            HIST[pid] = {"polls": 0, "video": any(n["class_type"] == "SaveVideo" for n in wf.values()), "webp": any(n["class_type"] == "SaveAnimatedWEBP" for n in wf.values()), "audio": any(n["class_type"] == "SaveAudioAdvanced" for n in wf.values()), "glb": [n["inputs"].get("filename_prefix", "3d/hub3d") for n in wf.values() if n["class_type"] == "SaveGLB"], "face": any(n["class_type"] == "MediaPipeFaceMask" for n in wf.values()), "lm": lm_sets(wf), "face_img": next((n["inputs"].get("image") for n in wf.values() if n["class_type"] == "LoadImage"), None), "txt": any(n["class_type"] == "PreviewAny" for n in wf.values()), "size": out_size(wf), "slow": STATE["slow_from"] is not None and len(SUBMITTED) - 1 >= STATE["slow_from"]}
             if STATE["ws"] and WS_CLIENTS and not HIST[pid]["slow"]: HIST[pid]["polls"] = -14; threading.Thread(target=ws_progress, args=(pid, 5, 0.35, wf), daemon=True).start()
             return self.j({"prompt_id": pid, "number": 1, "node_errors": {}})
         if self.path == "/free": STATE["freed"] += 1; return self.j({})
