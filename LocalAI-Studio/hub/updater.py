@@ -21,7 +21,9 @@ DEFAULT_VERSION = "2026.10.17"                                # VERSION.txt 가 
 KEEP_BACKUPS = 3
 # 이전 버전이 설치했지만 더는 쓰지 않는 파일(업데이트하면 백업해 두고 치워요)
 # 인체 3D 시험판(4.9 ~ 4.9.3)의 코드 — 기능을 뺐어요. 남겨 두면 허브가 28_human3d.py 를 읽다가 멈추고, 화면에 빈 메뉴가 남아요.
+# 얼굴 3D 형상 보정 실험(4.11)의 모듈 — 실제 결과에서 메시 면 뒤집힘으로 거부돼 뺐어요.
 OBSOLETE = ("hub/automask.py",
+            "hub/facegeo.py",
             "engine/human3d/scripts/doctor.py",
             "engine/human3d/scripts/econ_fetch.py",
             "engine/human3d/scripts/install_econ.sh",

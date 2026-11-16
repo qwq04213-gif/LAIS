@@ -452,25 +452,18 @@ def _adjust_orm(M, wmap, skin):
     return out
 
 
-def project(glb, photo, face=None, log=None, progress=None, head=None, head_size=4096, dist_e=None, align=False, cam_hint=None, reuse=None):
+def project(glb, photo, face=None, log=None, progress=None, head=None, head_size=4096, dist_e=None, align=False, cam_hint=None):
     """photo: 배경 지운 앞 사진(RGBA PIL). face: (x0, y0, x1, y1, 확대한 RGBA PIL) — 사진 좌표의 얼굴 상자와 그 확대본.
     head: (x0, y0, x1, y1) 사진 속 얼굴 상자 — 주면 머리를 따로 떼어 자기 텍스처(head_size)를 줘요(얼굴 해상도 여러 배).
     align: 사진 얼굴을 3D 얼굴 각도에 맞춰 휘기(기본 꺼짐 — 원본 얼굴의 비율·눈코입 자리를 그대로 두는 게 먼저예요).
     cam_hint: 3D 엔진의 카메라 방향(fit 참고).
-    reuse: dict — 같은 사진·같은 3D(또는 얼굴 정점만 옮긴 3D)를 다시 붙일 때 카메라("fit")와 얼굴 휘기 결과("align")를 그대로 다시 써요.
-           처음 부를 때 채워지고, 다음에 넘기면 다시 계산하지 않아요(얼굴 3D 형상 보정: 텍스처 정렬은 그대로 두고 모양만 바꾸려고).
     → (새 GLB 바이트, 정보 dict). 맞지 않으면 (원래 GLB, {"skip": 이유})"""
     M = load(glb)
     P, F, UV, tex = M["P"], M["F"], M["UV"], M["tex"]
     ph = np.asarray(photo.convert("RGBA")).astype(np.float64) / 255
     alpha, rgb = ph[..., 3], ph[..., :3]
-    if reuse is not None and "fit" in reuse:
-        cam, v, pat, cam_fixed = reuse["fit"]
-    else:
-        cam, v, pat = fit(P, F, UV, tex, alpha, rgb, log, dist_e, cam_hint)
-        cam_fixed = fit.fixed
-        if reuse is not None:
-            reuse["fit"] = (cam, v, pat, cam_fixed)
+    cam, v, pat = fit(P, F, UV, tex, alpha, rgb, log, dist_e, cam_hint)
+    cam_fixed = fit.fixed
     if not (v >= MIN_IOU or (v >= MIN_IOU_PAT[0] and pat >= MIN_IOU_PAT[1])):
         return glb, {"skip": "shape", "iou": round(v, 3), "pat": round(pat, 3)}
     if progress:
@@ -513,15 +506,10 @@ def project(glb, photo, face=None, log=None, progress=None, head=None, head_size
     sel = np.nonzero(pick)[0]
     align_on, align = bool(align), None
     if head is not None and align_on:        # (켰을 때만) 3D 얼굴과 사진 얼굴의 각도·자리가 다르면 사진 얼굴을 3D 쪽으로 휘어요
-        if reuse is not None and "align" in reuse:
-            rgb, alpha, face, align = reuse["align"]
-        else:
-            try:
-                rgb, alpha, face, align = _align_face(P, F, UV, tex, cam, head, rgb, alpha, face, log)
-            except Exception as e:  # noqa: BLE001 — 맞추기는 덤: 실패하면 그대로
-                align = {"ok": False, "why": str(e)[:80]}
-            if reuse is not None:
-                reuse["align"] = (rgb, alpha, face, align)
+        try:
+            rgb, alpha, face, align = _align_face(P, F, UV, tex, cam, head, rgb, alpha, face, log)
+        except Exception as e:  # noqa: BLE001 — 맞추기는 덤: 실패하면 그대로
+            align = {"ok": False, "why": str(e)[:80]}
     soft = Image.fromarray((alpha * 255).astype(np.uint8))
     er = max(1, round(max(H0, W0) * 0.004))
     soft = soft.filter(ImageFilter.MinFilter(er * 2 + 1)).filter(ImageFilter.GaussianBlur(er))
@@ -1339,18 +1327,13 @@ def head_focus(glb):
     return None
 
 
-def face_sheet(rows, focus, size=360, ref=None):
-    """얼굴 가까이 비교표: rows = [(한국어 이름, 영어 이름, GLB)] → 줄마다 정면·좌우 45°·좌우 옆에서 본 얼굴(PIL). 못 그린 칸은 비워요.
-    ref: 원본 사진의 얼굴 부분(PIL) — 주면 이름 칸 아래에 작게 붙여요(정면과 견주어 보게)."""
+def face_sheet(rows, focus, size=360):
+    """얼굴 가까이 비교표: rows = [(한국어 이름, 영어 이름, GLB)] → 줄마다 정면·좌우 45°·좌우 옆에서 본 얼굴(PIL). 못 그린 칸은 비워요."""
     from PIL import ImageDraw
     head, lab = 34, 230
     im = Image.new("RGB", (lab + size * len(FACE_YAWS), head + size * len(rows)), (22, 22, 26))
     dr = ImageDraw.Draw(im)
     fnt, ko = _font(20)
-    if ref is not None:
-        rs = min(lab - 16, size - 70)
-        for i in range(len(rows)):
-            im.paste(ref.convert("RGB").resize((rs, rs), Image.LANCZOS), (8, head + i * size + 60))
     for j, (k_, e_, _) in enumerate(FACE_YAWS):
         dr.text((lab + j * size + 8, 6), k_ if ko else e_, fill=(230, 230, 235), font=fnt)
     for i, (kname, ename, glb) in enumerate(rows):

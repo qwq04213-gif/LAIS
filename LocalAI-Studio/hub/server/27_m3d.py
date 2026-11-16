@@ -750,7 +750,6 @@ def m3d_opts(p, m):
             "mode": p.get("mode") if p.get("mode") in ("single", "multi") else ("multi" if p.get("sides") else "single"),
             "align": flag(p, "align", False),        # 사진 얼굴을 3D 얼굴 각도에 맞춰 휘기 — 기본 꺼짐(원본 얼굴 비율·눈코입 자리 보존)
             "compare": flag(p, "compare", False),    # 단계별 결과(A~E)·비교표 저장
-            "face_geometry_fit": flag(p, "face_geometry_fit", False),   # 얼굴 3D 형상 보정(실험) — 얼굴 정점을 사진 특징에 맞게 실제로 옮겨요. 기본 꺼짐
             "face_ab": flag(p, "face_ab", False),    # 얼굴 정렬 A/B 비교(진단) — 같은 엔진 결과에서 정렬 끔·켬 두 가지를 따로 저장. 기본 꺼짐
             "keep_hi": flag(p, "keep_hi", True),     # 원본 고밀도 메시(면 줄이기 전)를 따로 저장
             "capture": flag(p, "capture", True)}     # 앞·왼쪽·오른쪽·뒤 캡처 그림
@@ -961,34 +960,14 @@ def m3d_glb(imgs, mv, f, o, seed, J, label=None, stages=None):
         stages["A"] = glb
         stages["_dist"], stages["_pixal"], stages["_front"], stages["_fov"] = dist_e, o["_pixal"], tex_front, fov
     ab_on = stages is not None and o.get("face_ab")
-    geo_on = stages is not None and o.get("face_geometry_fit")
     engine_glb = glb                                     # 엔진 원본(사진 붙이기 전) — A/B 는 둘 다 여기서 시작해요
-    pre = m3d_face_pre(tex_front, J, o) if (ab_on or geo_on) and o.get("photo", True) else None      # 얼굴 찾기·확대는 한 번만(본 제작·A·B·C 가 같이 써요)
-    geo_reuse = {} if geo_on else None                   # 카메라·얼굴 휘기 결과를 형상 보정이 그대로 다시 쓰게
-    n_photo = len(J.get("m3d_photo") or [])
+    pre = m3d_face_pre(tex_front, J, o) if ab_on and o.get("photo", True) else None      # 얼굴 찾기·확대는 한 번만(본 제작·A·B 가 같이 써요)
     if o.get("photo", True):
         if stages is not None and o.get("compare") and o.get("head", True):   # 비교용 B: 얼굴 전용 텍스처 없이
             stages["B"] = m3d_photo(glb, tex_front, J, {**o, "head": False}, dist_e)
-        glb = m3d_photo(glb, tex_front, J, o, dist_e, pre=pre, reuse=geo_reuse)
+        glb = m3d_photo(glb, tex_front, J, o, dist_e, pre=pre)
         if stages is not None and "B" not in stages and o.get("compare"):
             stages["B"] = glb
-    if geo_on:                                            # 실험: 얼굴 정점을 실제로 옮겨요. 실패·불합격이면 위 결과(glb) 그대로
-        try:
-            got = (J.get("m3d_photo") or [])[n_photo:]
-            fitted, grec = m3d_geofit(engine_glb, tex_front, J, o, dist_e, pre, "Pixal3D 멀티뷰" if mv else "Pixal3D" if f.get("pixal") else "TRELLIS.2", fov,
-                                      (glb, got[-1] if got else None, geo_reuse))
-            stages["_geo"] = grec
-            if fitted:
-                glb = fitted
-                if J.get("m3d_photo_res"):
-                    J["m3d_photo_res"]["geofit"] = True
-                    J["m3d_photo_res"]["text"] += " 얼굴 3D 형상 보정(실험): " + grec["result"]["text"] + "."
-        except Cancelled:
-            raise
-        except Exception as e:  # noqa: BLE001 — 실험 기능이 실패해도 3D 는 평소대로
-            quiet_log("[얼굴 형상 보정 실패]", repr(e))
-            warn(J, f"얼굴 3D 형상 보정을 하지 못해 기존 결과를 썼어요({str(e)[:80]}).")
-        _clean_tmp(J)
     if stages is not None:
         stages["C"] = glb
     if ab_on:                                            # 진단: 본 결과(glb)는 그대로 두고, 엔진 원본에서 A·B 를 따로
@@ -1150,15 +1129,15 @@ def m3d_face_pre(photo, J, o):
 M3D_HEAD_MIN = 2048          # 머리 전용 텍스처의 가장 작은 크기(시험에서만 줄여요)
 
 
-def m3d_project(glb, photo, pre, o, dist_e, align=None, log=None, reuse=None):
+def m3d_project(glb, photo, pre, o, dist_e, align=None, log=None):
     """사진 붙이기 한 번(photoproj.project) — 본 제작과 얼굴 정렬 A/B 비교가 같은 설정으로 부르게 한 곳에 모았어요.
     pre = (얼굴 상자, 얼굴 확대본). align 을 주면 그 값으로, 안 주면 옵션(o) 대로. → (GLB, 정보)"""
     box, face = pre
     return photoproj.project(glb, photo, face, log=log or quiet_log, head=box, head_size=max(M3D_HEAD_MIN, int(o.get("tex") or 4096)), dist_e=dist_e,
-                             align=bool(o.get("align")) if align is None else bool(align), cam_hint=photoproj.PIXAL_CAM if o.get("_pixal") else None, reuse=reuse)
+                             align=bool(o.get("align")) if align is None else bool(align), cam_hint=photoproj.PIXAL_CAM if o.get("_pixal") else None)
 
 
-def m3d_photo(glb, photo, J, o=None, dist_e=None, pre=None, reuse=None):
+def m3d_photo(glb, photo, J, o=None, dist_e=None, pre=None):
     """사진 붙이기: 3D 엔진이 다시 칠한 색 대신 앞 사진의 화소를 그대로 붙여요(얼굴·무늬가 사진처럼). 안 맞으면 원래 색 그대로.
     pre: 이미 준비한 (얼굴 상자, 얼굴 확대본) — 주면 얼굴 찾기·업스케일을 다시 하지 않아요."""
     box, face = pre if pre is not None else m3d_face_pre(photo, J, o)
@@ -1166,7 +1145,7 @@ def m3d_photo(glb, photo, J, o=None, dist_e=None, pre=None, reuse=None):
         J["_m3d_face"] = list(box)
     J["msg"] = "사진을 3D 에 붙이는 중 — 얼굴·무늬를 사진 그대로" + (" · 머리 전용 텍스처" if box else "")
     try:
-        new, info = m3d_project(glb, photo, (box, face), o, dist_e, reuse=reuse)
+        new, info = m3d_project(glb, photo, (box, face), o, dist_e)
     except ValueError as e:              # 붙일 수 없는 모양(텍스처 없음 등) — 원래 색 그대로
         quiet_log("[3D 사진 붙이기 건너뜀]", e)
         J["m3d_photo_res"] = {"done": False, "text": f"이 3D 에는 붙일 수 없었어요({e})"}
@@ -1311,305 +1290,6 @@ def m3d_ab_items(ab, base_info):
             quiet_log("[얼굴 A/B 캡처 실패]", repr(e))
             summ["warnings"] = list(summ.get("warnings") or []) + [f"얼굴 가까이 비교표를 그리지 못했어요({str(e)[:80]})"]
     items.append((json.dumps(summ, ensure_ascii=False, indent=1).encode("utf-8"), {"_file": f"{M3D_AB_DIR}/face_ab_summary.json", "_quiet": True}, ".json"))
-    return items, summ
-
-
-# ───────────────────────── 얼굴 3D 형상 보정(실험) ─────────────────────────
-M3D_GEO = (("A", "face_A_baseline.glb", "A: 기존 사진 투영", "A baseline", False, False),
-           ("B", "face_B_texture_align.glb", "B: 얼굴 정렬", "B texture align", True, False),
-           ("C", "face_C_geometry_fit.glb", "C: 얼굴 정렬 + 3D 형상 보정", "C geometry fit", True, True))
-M3D_LM_MIN_SCORE = 0.5       # 얼굴 찾기 신뢰도가 이보다 낮으면 랜드마크를 믿지 않아요
-
-
-def m3d_lm_ready():
-    """랜드마크를 그릴 수 있는지: 얼굴 찾기 모델 + ComfyUI 의 랜드마크 그리기 노드."""
-    nodes = caps()["nodes"]
-    return bool(m3d_face_model()) and (not nodes or "MediaPipeFaceMeshVisualize" in nodes)
-
-
-def m3d_landmarks(img, J):
-    """얼굴 그림 → 랜드마크(facegeo.landmarks 결과 + score). ComfyUI 의 MediaPipe 노드가 부위별 색 선으로 그린 그림을 읽어요(새 모델 없음, 아주 작은 모델)."""
-    msg, prog = J.get("msg"), J.get("progress")
-    J.pop("wf_text", None)
-    try:
-        res = run_wf(wf_fit(flows.wf_face_lines(m3d_face_model(), put_input(img.convert("RGB"), J), facegeo.LINE_SETS, dict(facegeo.FEATURES), facegeo.ALL_FEATURES)), J, raw=True)
-    finally:
-        J["msg"] = msg
-        if prog is not None:
-            J["progress"] = prog
-    texts = J.pop("wf_text", None) or []
-    ims = [Image.open(io.BytesIO(dat)) for n, dat in res if n.lower().endswith(".png")]
-    if not ims:
-        return {"ok": False, "why": "랜드마크 그림을 받지 못했어요", "pts": {}}
-    L = facegeo.landmarks(ims)
-    sc = [float(x) for t in texts for x in re.findall(r"score['\"]?\s*[:=]\s*([0-9]*\.?[0-9]+)", str(t))]
-    if sc:
-        L["score"] = round(max(sc), 3)
-        if L.get("ok") and max(sc) < M3D_LM_MIN_SCORE:
-            L.update(ok=False, why=f"얼굴 찾기 신뢰도가 낮아요({max(sc):.2f})")
-    return L
-
-
-def m3d_mem():
-    """이 프로그램(허브)이 쓰는 메모리 MB — 잴 수 없으면 None."""
-    try:
-        import psutil
-        return round(psutil.Process().memory_info().rss / 2 ** 20)
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        if os.name == "nt":
-            import ctypes
-            import ctypes.wintypes as wt
-
-            class PMC(ctypes.Structure):
-                _fields_ = [("cb", wt.DWORD), ("PageFaultCount", wt.DWORD)] + [(n, ctypes.c_size_t) for n in (
-                    "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
-            c = PMC()
-            c.cb = ctypes.sizeof(c)
-            k32 = ctypes.windll.kernel32
-            k32.GetCurrentProcess.restype = wt.HANDLE
-            k32.K32GetProcessMemoryInfo.argtypes = [wt.HANDLE, ctypes.POINTER(PMC), wt.DWORD]
-            if k32.K32GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(c), c.cb):
-                return round(c.WorkingSetSize / 2 ** 20)
-            return None
-        with open("/proc/self/statm", encoding="ascii") as f:
-            return round(int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2 ** 20)
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _geo_clean(r):
-    """기록에서 그림·좌표 덩어리는 빼요(요약 JSON 에 넣지 않는 것)."""
-    return {k: v for k, v in (r or {}).items() if not k.endswith(("_img", "_lm"))}
-
-
-def m3d_geofit(engine_glb, photo, J, o, dist_e, pre, engine, fov, base):
-    """얼굴 3D 형상 보정(실험): 3D 엔진은 다시 돌리지 않고, 엔진 원본의 얼굴 정점을 사진 속 얼굴 특징에 맞게 옮겨요(facegeo).
-    같은 원본에서 A(기존 투영) · B(얼굴 정렬) · C(얼굴 정렬 + 형상 보정)를 만들어 비교할 수 있게 남기고,
-    본 제작에는 '사용자가 고른 얼굴 정렬 설정 + 형상 보정'을 써요. 검사에서 걸리거나 나아지지 않으면 기존 결과 그대로(이유를 기록).
-    base = (본 제작의 사진 붙이기 결과 GLB, 그 정보 dict 또는 None, 다시 쓰기 dict). → (보정한 GLB 또는 None, 기록)"""
-    t0, m0 = time.time(), m3d_mem()
-    box, face = pre if pre else (None, None)
-    hint = photoproj.PIXAL_CAM if o.get("_pixal") else None
-    align_user = bool(o.get("align"))
-    rec = {"shared": {"engine": engine, "source_mesh": {"sha256": hashlib.sha256(engine_glb).hexdigest(), "bytes": len(engine_glb)},
-                      "photo_size": list(photo.size), "face_box": [round(float(v), 1) for v in box] if box else None,
-                      "face_enlarged": [face[4].width, face[4].height] if face else None,
-                      "head_texture_size": max(M3D_HEAD_MIN, int(o.get("tex") or 4096)), "texture_size": o.get("tex"), "camera_hint": hint,
-                      "camera_dist_engine": round(float(dist_e), 4) if dist_e else None, "fov": fov, "align_option": align_user},
-           "variants": {}, "fits": {}, "errors": [], "warnings": [], "status": "skipped", "_glb": {}, "_imgs": {}}
-    why = None
-    if not o.get("photo", True):
-        why = "'사진 그대로 붙이기'가 꺼져 있어요"
-    elif not o.get("head", True):
-        why = "'얼굴 고해상도(머리 전용 텍스처)'가 꺼져 있어요"
-    elif not box:
-        why = "사진에서 얼굴을 찾지 못했어요" + ("" if m3d_face_model() else "('설치와 모델'의 3D 분류에서 '얼굴 찾기(MediaPipe)'가 필요해요)")
-    elif base[1] is None:
-        why = "사진을 3D 에 붙이지 못했어요(사진과 3D 모양이 충분히 겹치지 않음)"
-    elif not base[1].get("head"):
-        why = "머리 전용 텍스처를 만들지 못했어요"
-    elif not m3d_lm_ready():
-        why = "이 ComfyUI 에는 얼굴 랜드마크 그리기 노드(MediaPipeFaceMeshVisualize)가 없어요 — ComfyUI 폴더의 update 폴더 안 update_comfyui.bat 으로 업데이트해 주세요"
-
-    def done(used, reason=None):
-        rec["result"] = {"used": used, "geometry_fit_applied": used in ("C", "D") and not reason, "fallback_reason": reason}
-        m1 = m3d_mem()
-        rec["timing"] = {"seconds": round(time.time() - t0, 1)}
-        rec["memory"] = {"before_mb": m0, "after_mb": m1, "note": "허브 프로그램이 쓰는 메모리예요. 형상 보정 계산은 CPU 로 하고, 랜드마크 찾기만 ComfyUI 의 작은 모델을 써요."} if m0 and m1 else \
-            {"note": "메모리는 재지 못했어요. 형상 보정 계산은 CPU 로 하고, 랜드마크 찾기만 ComfyUI 의 작은 모델을 써요."}
-
-    base_key = "B" if align_user else "A"
-    if why:
-        rec["errors"].append(why)
-        done(base_key, why)
-        warn(J, f"얼굴 3D 형상 보정은 하지 못해 기존 결과를 썼어요 — {why}.")
-        return None, rec
-    R = {align_user: base[2], (not align_user): {"fit": base[2]["fit"]}}
-    V = {(align_user, False): (base[0], base[1])}
-
-    def proj(src, align, what):
-        logs = []
-
-        def log(*a):
-            logs.append(" ".join(str(x) for x in a)[:300])
-            quiet_log(*a)
-        new, info = m3d_project(src, photo, (box, face), o, dist_e, align=align, log=log, reuse=R[align])
-        if info.get("skip"):
-            raise RuntimeError("사진과 3D 모양이 충분히 겹치지 않아 붙이지 못했어요" if info["skip"] == "shape" else "사진 쪽에서 보이는 면이 없어요")
-        if info.get("head_error"):
-            raise RuntimeError("머리 전용 텍스처를 만들지 못했어요: " + str(info["head_error"]))
-        return new, info
-
-    def check():
-        if J.get("cancel"):
-            raise Cancelled("사용자가 중단했어요.")
-
-    other = "A" if align_user else "B"
-    try:
-        check()
-        J["msg"] = f"얼굴 3D 형상 보정 — 비교용 {other} 만드는 중(3D 엔진은 다시 돌리지 않아요)"
-        V[(not align_user, False)] = proj(engine_glb, not align_user, other)
-    except Cancelled:
-        raise
-    except Exception as e:  # noqa: BLE001 — 비교용 하나가 실패해도 나머지는 계속
-        quiet_log("[얼굴 형상 보정] 비교용 실패", repr(e))
-        rec["errors"].append(f"{other} 를 만들지 못했어요: {str(e)[:160]}")
-    cam = base[2]["fit"][0]
-    region = facegeo.region_of(box)
-    rec["shared"]["camera"], rec["shared"]["camera_dist"] = cam.name, str(cam.dist)
-    rec["shared"]["face_region"] = [round(float(v), 1) for v in region]
-    J["msg"] = "얼굴 3D 형상 보정 — 얼굴 랜드마크 찾는 중"
-    pimg = facegeo.crop_photo(photo, region, face)
-    Lp = m3d_landmarks(pimg, J)
-    rec["photo_landmarks"] = {"ok": bool(Lp.get("ok")), "why": Lp.get("why"), "score": Lp.get("score"), "points": len(Lp.get("pts") or {}),
-                              "eye_distance_px": round(Lp["iod"] * region[2] / facegeo.DET, 1) if Lp.get("iod") else None, "counts": Lp.get("counts")}
-    rec["_imgs"]["photo"] = (pimg, Lp)
-
-    def one_fit(align, key):
-        """형상 보정 한 벌: 바탕(사진을 붙인 결과)의 랜드마크를 목표로 엔진 원본을 옮기고, 같은 정렬 설정으로 다시 붙여요."""
-        fr = {"align": align, "accepted": False}
-        rec["fits"][key] = fr
-        bglb = V[(align, False)][0]
-        check()
-        timg = facegeo.render(bglb, cam, region)
-        Lt = m3d_landmarks(timg, J)
-        if not Lt.get("ok"):
-            fr["reason"] = "사진을 붙인 결과에서 랜드마크를 찾지 못했어요" + (f"({Lt.get('why')})" if Lt.get("why") else "")
-            return None
-        fr["front_vs_photo_before"] = facegeo.lm_error(Lt, Lp) or "not_evaluable"
-        J["msg"] = f"얼굴 3D 형상 보정 — {key}: 얼굴 정점 옮기는 중"
-        try:
-            fitted, r = facegeo.run(engine_glb, cam, region, timg, Lt, lambda im: (check(), m3d_landmarks(im, J))[1], quiet_log)
-        except facegeo.FitError as e:
-            fr.update(reason=str(e), **_geo_clean(getattr(e, "rec", None)))
-            r0 = getattr(e, "rec", None) or {}
-            if r0.get("engine_img") is not None:
-                rec["_imgs"][key] = (r0["engine_img"], r0.get("engine_lm"), Lt, None, None)
-            return None
-        fr.update(_geo_clean(r))
-        fr["landmark_error_before"] = fr.pop("before")
-        fr.pop("after", None)
-        check()
-        J["msg"] = f"얼굴 3D 형상 보정 — {key}: 옮긴 3D 에 사진 다시 붙이는 중"
-        new, info = proj(fitted, align, key)
-        V[(align, True)] = (new, info)
-        cons = facegeo.same_triangles(new, fitted)
-        cimg = facegeo.render(new, cam, region)
-        Lc = m3d_landmarks(cimg, J)
-        final = facegeo.lm_error(r["fitted_lm"], Lc)
-        mv = facegeo.moved_report(engine_glb, fitted)[0]
-        kept = [p_["mesh"] for p_ in r["passes"] if p_.get("kept")]
-        eye3 = kept[0]["eye_distance_3d"] or 1.0
-        fr.update(mesh_consistency=cons, landmark_error_after=final or "not_evaluable", front_vs_photo_after=facegeo.lm_error(Lc, Lp) or "not_evaluable",
-                  position_changed={"vertices": mv["vertices"], "triangles": mv["triangles"], "same_layout": mv["same_layout"], "changed_vertices": mv["changed"],
-                                    "mean_move": mv["mean"], "max_move": mv["max"], "mean_move_rel": round(mv["mean"] / eye3, 4), "max_move_rel": round(mv["max"] / eye3, 4)},
-                  mesh_check={"valid": all(m_.get("valid") for m_ in kept), "outside_moved": sum(m_["outside_moved"] for m_ in kept),
-                              "flipped_triangles": sum(m_["flipped_triangles"] for m_ in kept), "degenerate_added": sum(max(0, m_["degenerate_after"] - m_["degenerate_before"]) for m_ in kept),
-                              "seam_torn": sum(m_["seam_torn"] for m_ in kept), "normal_turn_max": max(m_["normal_turn_max"] for m_ in kept),
-                              "face_vertices": max(m_["face_vertices"] for m_ in kept)},
-                  mesh_hash={"before": hashlib.sha256(engine_glb).hexdigest(), "after": hashlib.sha256(fitted).hexdigest()})
-        rec["_imgs"][key] = (r["engine_img"], r["engine_lm"], Lt, r["fitted_img"], r["fitted_lm"])
-        if not cons["ok"]:
-            fr["reason"] = "머리 메시와 몸 메시의 표면이 보정한 원본과 맞지 않아요"
-        elif final is None:
-            fr["reason"] = "보정한 결과의 정면에서 랜드마크를 다시 찾지 못해 나아졌는지 확인할 수 없어요"
-        elif final["mean"] > facegeo.MIN_GAIN * fr["landmark_error_before"]["mean"]:
-            fr["reason"] = f"보정 효과가 작아요(랜드마크 차이 {fr['landmark_error_before']['mean']:.3f} → {final['mean']:.3f})"
-        else:
-            fr["accepted"] = True
-            return new
-        return None
-
-    main = None
-    if not Lp.get("ok"):
-        why = "원본 사진에서 얼굴 랜드마크를 찾지 못했어요" + (f"({Lp.get('why')})" if Lp.get("why") else "") + " — 얼굴이 작거나 가려져 있으면 무리하게 보정하지 않아요"
-        rec["errors"].append(why)
-    else:
-        for align, key in ((True, "C"), (False, "D")):
-            if (align, False) not in V or (key == "D" and align_user):
-                continue                                   # D(정렬 없이 형상 보정)는 사용자가 얼굴 정렬을 껐을 때만 — 그때의 본 결과예요
-            try:
-                got = one_fit(align, key)
-            except Cancelled:
-                raise
-            except Exception as e:  # noqa: BLE001 — 보정이 실패해도 기존 결과는 그대로
-                quiet_log("[얼굴 형상 보정 실패]", key, repr(e))
-                rec["fits"].setdefault(key, {"align": align, "accepted": False})["reason"] = f"{e.__class__.__name__}: {str(e)[:160]}"
-                got = None
-            if align == align_user:
-                main = got
-        why = None if main else (rec["fits"].get("C" if align_user else "D") or {}).get("reason") or "형상 보정을 하지 못했어요"
-    rec["status"] = "applied" if main else "fallback"
-    for key, fname, label, _, al, gf in M3D_GEO:
-        v = V.get((al, gf))
-        ent = {"label": label, "align": al, "geometry_fit": gf, "file": fname if v else None}
-        if v:
-            info = v[1]
-            a_ = info.get("align") or {}
-            ncc = a_.get("ncc") or [None, None]
-            ent.update(iou=info.get("iou"), ncc=info.get("pat"), camera=info.get("cam"), camera_dist=info.get("dist"), head_texture=bool(info.get("head")),
-                       head_texture_size=info.get("head_tex"), sha256=hashlib.sha256(v[0]).hexdigest(),
-                       face_align={"requested": al, "applied": bool(a_.get("ok")), "ncc_before": ncc[0], "ncc_after": ncc[1], "rotation_deg": a_.get("rot"),
-                                   "shift": a_.get("shift"), "scale": a_.get("scale"), "why": a_.get("why")})
-            rec["_glb"][key] = v[0]
-        if gf:
-            ent["accepted"] = bool((rec["fits"].get("C") or {}).get("accepted"))
-            ent["reason"] = (rec["fits"].get("C") or {}).get("reason")
-        rec["variants"][key] = ent
-    done(("C" if align_user else "D") if main else base_key, why)
-    if main:
-        fr = rec["fits"]["C" if align_user else "D"]
-        n = fr["position_changed"]["changed_vertices"]
-        rec["result"]["text"] = f"얼굴 정점 {n:,}개를 옮겼어요(랜드마크 차이 {fr['landmark_error_before']['mean']:.3f} → {fr['landmark_error_after']['mean']:.3f} × 눈 사이 거리)"
-    else:
-        warn(J, f"얼굴 3D 형상 보정은 적용하지 않고 기존 결과를 썼어요 — {why}.")
-    return main, rec
-
-
-def m3d_geo_items(rec, base_info):
-    """형상 보정 기록 → 저장할 항목들(결과 폴더의 diagnostics 폴더로): A·B·C GLB, 요약 JSON, 얼굴 가까이 비교표, 랜드마크 그림."""
-    items = []
-    glbs, imgs = rec.pop("_glb", {}), rec.pop("_imgs", {})
-    summ = json.loads(json.dumps(rec, ensure_ascii=False, default=str))
-    summ["files"] = {}
-    rows = []
-    for key, fname, label, en, _, _ in M3D_GEO:
-        if glbs.get(key):
-            items.append((glbs[key], {**base_info, "face_geo": key, "_file": f"{M3D_AB_DIR}/{fname}"}, ".glb"))
-            summ["files"][key] = fname
-            rows.append((label, en, glbs[key]))
-    focus = None
-    for _, _, gl in rows:
-        try:
-            focus = focus or photoproj.head_focus(gl)
-        except Exception:  # noqa: BLE001
-            pass
-    summ["focus"] = focus
-    ph = imgs.get("photo")
-    if rows and focus:
-        try:
-            bio = io.BytesIO()
-            photoproj.face_sheet(rows, focus, ref=ph[0] if ph else None).save(bio, "PNG")
-            items.append((bio.getvalue(), {"_file": f"{M3D_AB_DIR}/face_geometry_fit_views.png"}, ".png"))
-            summ["files"]["views"] = "face_geometry_fit_views.png"
-        except Exception as e:  # noqa: BLE001 — 그림은 덤
-            quiet_log("[얼굴 형상 보정 캡처 실패]", repr(e))
-            summ["warnings"].append(f"얼굴 가까이 비교표를 그리지 못했어요({str(e)[:80]})")
-    try:                                                   # 랜드마크 확인 그림: 사진 / 엔진(빨강)→목표(초록) / 보정 뒤
-        key = next((k for k in ("C", "D") if imgs.get(k)), None)
-        if ph and key:
-            eimg, elm, tlm, fimg, flm = imgs[key]
-            panels = [("원본 사진", "photo", facegeo.overlay(ph[0], [(ph[1], (60, 255, 60))])),
-                      ("보정 전: 3D 얼굴(빨강) → 목표(초록)", "before: 3D face (red) -> target (green)", facegeo.overlay(eimg, [(elm, (255, 70, 70)), (tlm, (60, 255, 60))]))]
-            if fimg is not None:
-                panels.append(("보정 뒤", "after", facegeo.overlay(fimg, [(flm, (255, 70, 70)), (tlm, (60, 255, 60))])))
-            items.append((facegeo.png(facegeo.panel_sheet(panels)), {"_file": f"{M3D_AB_DIR}/face_geometry_fit_landmarks.png", "_quiet": True}, ".png"))
-            summ["files"]["landmarks"] = "face_geometry_fit_landmarks.png"
-    except Exception as e:  # noqa: BLE001
-        quiet_log("[얼굴 형상 보정 랜드마크 그림 실패]", repr(e))
-    items.append((json.dumps(summ, ensure_ascii=False, indent=1).encode("utf-8"), {"_file": f"{M3D_AB_DIR}/face_geometry_fit_summary.json", "_quiet": True}, ".json"))
     return items, summ
 
 
@@ -1809,7 +1489,7 @@ def m3d_build(p, J):
                 if mvE:
                     imE = {"front": Image.open(d / "view_front.png").convert("RGBA"), **{sd: Image.open(d / f"view_{sd}.png").convert("RGBA") for sd in good}}
                     sE = {}
-                    stages["E"] = m3d_glb(imE, True, fE, {**o, "compare": False, "keep_hi": False, "face_ab": False, "face_geometry_fit": False}, q["seed"], J, label="비교용 AI 멀티뷰(E) 만드는 중", stages=sE)
+                    stages["E"] = m3d_glb(imE, True, fE, {**o, "compare": False, "keep_hi": False, "face_ab": False}, q["seed"], J, label="비교용 AI 멀티뷰(E) 만드는 중", stages=sE)
                     stages["_E"] = sE
             elif good:
                 warn(J, "비교용 AI 멀티뷰(E)는 'Pixal3D 멀티뷰' 모델이 없어 건너뛰었어요.")
@@ -1823,7 +1503,7 @@ def m3d_build(p, J):
             if all(trellis_files(False).values()):
                 fF, _ = m3d_need(False, J, "trellis")
                 sF = {}
-                stages["F"] = m3d_glb({"front": Image.open(d / "view_front.png").convert("RGBA")}, False, fF, {**o, "compare": False, "keep_hi": False, "face_ab": False, "face_geometry_fit": False}, q["seed"], J,
+                stages["F"] = m3d_glb({"front": Image.open(d / "view_front.png").convert("RGBA")}, False, fF, {**o, "compare": False, "keep_hi": False, "face_ab": False}, q["seed"], J,
                                       label="비교용 TRELLIS.2(F) 만드는 중", stages=sF)
                 stages["_F"] = sF
             else:
@@ -1888,12 +1568,6 @@ def m3d_build(p, J):
         J.setdefault("m3d_stats", {})["stages"] = st
     if stages.get("hi"):
         items.append((stages["hi"], {**base_info, "hi": True, "_tag": "원본고밀도"}, ".glb"))
-    if stages.get("_geo"):                               # 얼굴 3D 형상 보정(실험): A·B·C 와 요약을 결과 폴더의 diagnostics 안에
-        if vr:
-            stages["_geo"]["gpu"] = {"vram_peak_mb": vr.get("peak_mb"), "vram_total_mb": vr.get("total_mb"), "note": "3D 만들기 전체에서 가장 많이 쓴 때예요(형상 보정만의 값이 아니에요)"}
-        geo_items, gsumm = m3d_geo_items(stages["_geo"], base_info)
-        items += geo_items
-        J.setdefault("m3d_stats", {})["face_geo"] = gsumm
     if stages.get("_ab"):                                # 얼굴 정렬 A/B 비교: 결과 폴더의 diagnostics 안에 따로(본 결과 파일은 그대로)
         ab_items, summ = m3d_ab_items(stages["_ab"], base_info)
         items += ab_items
