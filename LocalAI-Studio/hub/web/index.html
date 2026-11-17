@@ -34,6 +34,7 @@
       <button data-v="gen" title="이미지 생성"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg><span>이미지 생성</span></button>
       <button data-v="explore" title="프롬프트 탐색"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/><path d="M10.5 7.5v6M7.5 10.5h6"/></svg><span>프롬프트 탐색</span></button>
       <button data-v="edit" title="이미지 편집"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span>이미지 편집</span></button>
+      <button data-v="fusion" title="AI 사진 합성·편집 — 사진 두 장과 지시문으로 한 장 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="11" height="11" rx="2"/><rect x="10" y="9" width="11" height="11" rx="2"/><path d="M6.5 12.5l2-2 2.5 2.5"/></svg><span>AI 사진 합성·편집</span></button>
       <button data-v="photo" title="사진 편집기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.6"/></svg><span>사진 편집기</span></button>
       <button data-v="up" title="업스케일"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg><span>업스케일</span></button>
       <button data-v="m3d" title="3D 만들기"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>3D 만들기</span></button>
@@ -426,6 +427,37 @@
   <div class="col">
     <div class="jobbar" hidden><span class="spin" aria-hidden="true"></span><span class="st" role="status"></span><progress class="pg" max="100" value="0" hidden></progress><button type="button" class="ghost stop">중단</button></div>
     <div class="res"></div>
+  </div>
+</section>
+
+<!-- AI 사진 합성·편집 -->
+<section class="view split" id="v-fusion">
+  <form class="vform" autocomplete="off" novalidate onsubmit="return false">
+    <button type="button" class="go" id="fu-go" disabled>합성·편집하기</button>
+    <p class="hint plain">사진 두 장을 올리고 하고 싶은 것을 말로 적으면, AI 가 사진들을 함께 보고 한 장으로 만들어요. 어느 사진이 바탕인지 정하지 않아도 돼요 — 지시문에 적은 대로 해요.</p>
+    <div id="fu-status"></div>
+    <div class="fu-slots" id="fu-slots"></div>
+    <button type="button" class="ghost wide" id="fu-add" hidden>사진 추가</button>
+    <input type="file" id="fu-file" accept="image/*" hidden>
+    <label class="f fu-prompt"><span>지시문 <span class="mute">두 사진을 어떻게 합성하거나 편집할지 자유롭게 설명하세요.</span></span>
+      <textarea id="fu-prompt" rows="7" placeholder="예: 첫 번째 사진의 인물을 두 번째 사진의 해변에 배치해 줘. 얼굴과 체형은 최대한 유지하고 햇빛과 그림자를 자연스럽게 맞춰 줘."></textarea></label>
+    <p class="mute">사진은 '첫 번째 사진', '두 번째 사진'처럼 올린 순서로 가리키면 돼요. 정해진 종류를 고를 필요 없이 하고 싶은 것을 그대로 적으세요.</p>
+    <details class="fu-adv"><summary>고급 설정 <span class="mute">비율 · 크기 · 장수 · Seed · 단계 · 메모리</span></summary>
+      <div class="row"><label class="f">출력 비율<select id="fu-ratio"><option value="auto">자동 — 사진 1 의 비율</option></select></label>
+        <label class="f" title="결과 그림의 크기. 클수록 그래픽 메모리와 시간이 더 들어요">해상도<select id="fu-size"><option value="" selected>자동</option><option value="save">작게 (약 0.6백만 화소)</option><option value="normal">기본 (약 1백만 화소)</option><option value="high">크게 (약 1.5백만 화소)</option></select></label></div>
+      <div class="row"><label class="f">만들 장수<select id="fu-count"><option value="1" selected>1장</option><option value="2">2장</option><option value="3">3장</option><option value="4">4장</option></select></label>
+        <label class="f" title="비워 두면 매번 다른 결과가 나와요. 같은 숫자를 넣으면 같은 결과를 다시 만들 수 있어요">Seed<input id="fu-seed" inputmode="numeric" placeholder="자동"></label>
+        <label class="f" title="비워 두면 모델에 맞는 값(보통 25)을 써요. 많을수록 느리고 조금 더 정교해요">생성 단계<input type="number" id="fu-steps" min="1" max="100" placeholder="자동"></label></div>
+      <label class="f" title="메모리 절약: 결과를 조금 작게 그리고(자동 크기일 때), 가벼운 텍스트 인코더가 있으면 그것을 써요. 그래픽 메모리가 12GB 아래이거나 '메모리가 모자라요' 오류가 날 때 고르세요">성능·메모리<select id="fu-mem"><option value="normal" selected>기본 (고품질)</option><option value="save">메모리 절약</option></select></label>
+      <label class="chk" id="fu-fastrow" hidden title="4~8단계로 빨리 그려요. 디테일은 조금 덜해요"><input type="checkbox" id="fu-fast"> 빠르게 만들기 <span class="mute">품질은 조금 낮아요</span></label>
+      <label class="chk" title="Qwen-Image 는 영어 지시문을 가장 잘 따라요. 켜 두면 대화 모델이 한국어 지시문을 문장마다 그대로 영어로 옮겨 보내요(요약하거나 덧붙이지 않아요). 결과 아래에서 실제로 보낸 글을 확인할 수 있어요. 끄면 한국어 그대로 보내요."><input type="checkbox" id="fu-tr" checked> 한국어 지시문을 영어로 옮겨 보내기<span class="mute" id="fu-trnote"></span></label>
+      <p class="mute">출력 형식은 PNG 예요.</p>
+    </details>
+  </form>
+  <div class="gutter" role="separator" aria-orientation="vertical" tabindex="0" title="드래그해서 설정 칸 너비를 조절해요"></div>
+  <div class="col">
+    <div class="vstat"><p class="st" id="fu-st" hidden></p><progress id="fu-pg" max="100" hidden></progress><button type="button" class="ghost sm" id="fu-stop" hidden>중단</button></div>
+    <div id="fu-out"><p class="vempty">사진 두 장과 지시문을 넣고 [합성·편집하기]를 누르면 결과가 여기에 나와요.</p></div>
   </div>
 </section>
 

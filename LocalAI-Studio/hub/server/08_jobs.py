@@ -150,7 +150,7 @@ def job_thread(J, p):
         else:
             wait_comfy()
             claim("image")
-        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora, "vrestore": do_vrestore, "audio": do_audio, "m3d": do_m3d}[p["kind"]](p, J)
+        items = {"edit": do_edit, "gen": do_gen, "up": do_up, "wf": do_wf, "feat": do_feat, "vid": do_vid, "vpost": do_vpost, "vmix": do_vmix, "vedit": do_vedit, "music": do_music, "tts": do_tts, "batch": do_batch, "vana": do_vana, "lora": do_lora, "vrestore": do_vrestore, "audio": do_audio, "m3d": do_m3d, "fusion": do_fusion}[p["kind"]](p, J)
         sub = OUT_SUB["vid"] if p["kind"] in ("vpost", "vmix", "vedit", "vana") else OUT_SUB.get(p["kind"], "기타")
         stamp, embed = time.strftime("%Y%m%d-%H%M%S"), bool(p.get("embed"))
         jdir = job_dir_name(stamp, J.get("out_label") or "")         # 작업 한 번 = 폴더 하나(사용자 요청 — 결과 폴더가 너무 어지러워서)

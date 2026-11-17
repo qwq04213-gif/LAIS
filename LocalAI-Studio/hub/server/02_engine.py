@@ -178,7 +178,9 @@ def translate(text, style):
     if llm_needs_room(names[0]):
         free_comfy()  # 번역용 LLM 이 쓸 VRAM 확보 (이미지 모델은 작업 때 다시 올라옵니다)
     what = {"sentence": "an image editing instruction. Write one clear imperative sentence.",
-            "caption": "an image generation prompt written as natural, descriptive English sentences."
+            "caption": "an image generation prompt written as natural, descriptive English sentences.",
+            "fusion": "an instruction for combining or editing several reference photos. Translate sentence by sentence: keep every sentence, every condition "
+                      "and every mention of the first / second / third photo (write them as image 1 / image 2 / image 3). Do not summarize, do not add anything."
             }.get(style, "an image generation prompt. Output comma-separated Danbooru-style tags.")
     sysmsg = f"Translate the user's Korean text into English as {what} Keep every detail. Output only the result."
     try:

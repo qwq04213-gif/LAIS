@@ -360,7 +360,8 @@ def wf_kontext(q, img):
 def wf_qwen21(q, imgs=(), size=None, key=None):
     """Qwen-Image 2.1: UNET(+LoRA·Lightning) + Qwen3-VL 8B(CLIPLoader type=qwen_image) + 2.1 VAE.
     TextEncodeQwenImage21 이 프롬프트·부정 프롬프트·참고 사진(최대 16장)을 한 번에 조건으로 만들어요.
-    imgs 가 있으면 편집(잠재 = 첫 사진 크기, denoise<1 이면 첫 사진을 인코딩해 일부만 다시 그리기), 없으면 size(w, h) 로 새로 그려요."""
+    imgs 가 있으면 편집(잠재 = 첫 사진 크기, denoise<1 이면 첫 사진을 인코딩해 일부만 다시 그리기), 없으면 size(w, h) 로 새로 그려요.
+    imgs 와 size 를 함께 주면 참고 사진들은 그대로 참고하고 결과만 size 크기로 그려요(AI 사진 합성 — 어느 사진도 바탕으로 정하지 않을 때)."""
     f, w = q["files"], WF()
     key = key or (lambda i: f"images.image_{i}")
     unet = w.add("UNETLoader", unet_name=f["unet"], weight_dtype="default")
@@ -373,7 +374,7 @@ def wf_qwen21(q, imgs=(), size=None, key=None):
     enc = w.add("TextEncodeQwenImage21", clip=[clip, 0], prompt=q["prompt"], negative_prompt=q.get("negative") or "", vae=[vae, 0],
                 resolution=int(q.get("resolution", 1024)), **{key(i + 1): [li, 0] for i, li in enumerate(lis)})
     den = float(q.get("denoise", 1.0))
-    if not lis:
+    if not lis or (size and den >= 1.0):
         lat = [w.add("EmptySD3LatentImage", width=size[0], height=size[1], batch_size=1), 0]
     elif den < 1.0:
         lat = [w.add("VAEEncode", pixels=[lis[0], 0], vae=[vae, 0]), 0]

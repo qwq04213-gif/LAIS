@@ -111,6 +111,18 @@ python3 release-tools/build_update.py --tree LocalAI-Studio --out outputs --note
   `test_m3d_geofit.py`(여성, 포트 17959)·`test_m3d_geofit2.py`(남성·정렬 켬·화면, 17960). 시험에서는 `hub.M3D_HEAD_MIN = 1024`. 가짜 ComfyUI 는 `STATE["lm_fn"]`.
   결과(가짜 3D): 랜드마크 차이 0.056 → 0.012(여) / 0.052 → 0.016(남), 엔진이 틀렸던 곳의 깊이 차이 45°에서 3.3 → 1.0mm. 실제 엔진·GPU 는 미검증
 
+### 4.12 AI 사진 합성·편집 — `server/30_fusion.py` · `web/js/72-fusion.js` (브랜치 `feature/photo-fusion-edit`)
+
+- **브랜치 주의**: 사용자가 3D 개발을 멈추고 보존하라고 해서, 이 브랜치는 사용자 PC 에 깔린 **4.11(커밋 `v4.11`)에서 시작**했어요(3D 는 4.11 그대로 — 얼굴 형상 보정 실험도 그대로 들어 있음).
+  3D 뒷면 작업(`feature/back-quality`: 실험 삭제 + 뒷면 보존 + 뒷면 진단, 거기서는 4.12 라고 적었지만 **빌드한 적 없음**)은 여기 없어요. 나중에 합칠 때 판 번호를 다시 매겨요.
+- 모델: 지시서는 Qwen-Image-Edit-2511 을 먼저 보라고 했지만 LAIS 에는 이미 뒤에 나온 **Qwen-Image 2.1**(생성·편집 겸용, int8)이 있고, 공식 노드 `TextEncodeQwenImage21` 이 참고 사진을 한 장씩 따로 16장까지 받아요
+  (ComfyUI 소스 `comfy_extras/nodes_qwen.py` 로 확인) → 새 모델·노드 없이 그걸 써요. 화면은 4장까지(`FUSION_MAX`).
+- `do_fusion`(작업 종류 `fusion`): 사진들을 올린 순서대로 `image1…` → 각자 비율로 `qsize32` → `flows.wf_qwen21(q, names, size=…)`. 결과 크기가 사진 1 과 같으면 노드가 주는 잠재, 다르면 `EmptySD3LatentImage`(wf_qwen21 에 'imgs + size' 경우 추가).
+  지시문 = `fusion_guide(n)`(올린 순서만 알려 주고 '어느 사진도 바탕으로 정하지 말 것') + 사용자 글 그대로. 번역은 선택(`translate`, 화면 기본 켜짐): `translate(…, "fusion")`(02_engine 에 문장별·덧붙이지 않기 방식 추가),
+  옮긴 글이 원문 글자 수의 0.8 배보다 짧으면 버리고 한국어 그대로. `J["fusion"]`(보낸 글·크기·시간·`FusionWatch` 의 VRAM/RAM 최대) → `/api/job` 에 내보냄. `OUT_SUB["fusion"] = "사진 합성"`.
+- `/api/fusion/status`: 엔진·노드·파일·GPU·번역 모델, 없으면 `card`(이름·GB·경로·라이선스)·`need`. 화면: 사진 칸(고르기·끌어다 놓기·붙여넣기), 큰 지시문 칸, 접힌 고급 설정, 결과 단추들.
+- 시험 `test/test_fusion.py`(포트 17948). **실제 모델로는 한 번도 못 돌림** — 지시서의 시험 A~F(품질)는 사용자 PC 에서 해야 해요. 결과를 받으면: 한국어 그대로 vs 영어로 옮김, 안내문(`fusion_guide`)이 방해되는지, 비율을 바꿨을 때 품질을 볼 것.
+
 ### 다음 할 일
 
 0. 사용자가 4.5 로 실제 3D(전신 사진)를 만들어 결과 zip 을 보내 주면, 앞·45°·옆·뒤와 옷·손·머리카락·이음새를 그려서 점검하기(시험 도구: 가짜 3D 대신 실제 GLB 를 `photoproj`·렌더러로)

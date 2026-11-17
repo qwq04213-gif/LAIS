@@ -160,6 +160,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(model_tidy())
         if u == "/api/h3clean":
             return self.send_json(h3c_scan())
+        if u == "/api/fusion/status":
+            return self.send_json(fusion_status())
         if u == "/api/disk":
             return self.send_json(disk_report())
         if u == "/api/faceswap/model":
@@ -323,7 +325,7 @@ class Handler(BaseHTTPRequestHandler):
             J = JOBS.get(u[9:])
             if not J:
                 return self.send_json({"state": "error", "error": "작업을 찾을 수 없습니다."})
-            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss", "report", "verify", "tracks", "orig", "loud", "m3d", "m3d_stats") if k in J}
+            out = {k: J[k] for k in ("state", "msg", "elapsed", "images", "error", "used", "warn", "progress", "pest", "phase", "batch", "pymod", "oom", "models", "eta", "need", "vana", "lora_file", "samples", "step", "loss", "report", "verify", "tracks", "orig", "loud", "m3d", "m3d_stats", "fusion") if k in J}
             if J.get("kind") == "batch":      # 수백 장이어도 응답이 무거워지지 않게 최근 24장만 보내요
                 out["n_images"], out["images"] = len(J["images"]), J["images"][-24:]
             if J.get("state") == "queued":
@@ -422,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
         if u == "/api/agent/cancel":
             return self.send_json(agent_cancel(str(p.get("id"))))
         if u == "/api/job":
-            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora", "vrestore", "audio", "m3d"):
+            if p.get("kind") not in ("edit", "gen", "up", "wf", "feat", "vid", "vpost", "vmix", "vedit", "music", "tts", "batch", "vana", "lora", "vrestore", "audio", "m3d", "fusion"):
                 return self.send_json({"error": "unknown kind"}, 400)
             if p["kind"] == "batch":
                 try:
