@@ -17,7 +17,7 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
     pg.goto(B + "/"); pg.wait_for_timeout(600); None
     # 사이드바
-    assert pg.locator("#rail nav button svg.ico").count() == 41 and pg.locator("#rail nav .ngt").count() == 9; groups = pg.eval_on_selector_all("#rail nav .ngt", "e=>e.map(x=>x.textContent)"); assert groups == ["처음", "대화", "내 작업", "이미지", "이미지 기능", "영상", "소리", "자동화", "관리"], groups; ok("sidebar: icons on all items, 9 labelled groups in the planned order")
+    assert pg.locator("#rail nav button svg.ico").count() == 42 and pg.locator("#rail nav .ngt").count() == 9; groups = pg.eval_on_selector_all("#rail nav .ngt", "e=>e.map(x=>x.textContent)"); assert groups == ["처음", "대화", "내 작업", "이미지", "이미지 기능", "영상", "소리", "자동화", "관리"], groups; ok("sidebar: icons on all items, 9 labelled groups in the planned order")
     # 일괄 처리: 폴더 크기 변경
     pg.click("nav button[data-v=batch]"); pg.wait_for_selector("#v-batch.on"); pg.wait_for_selector("#f-batch")
     pg.fill("#f-batch input[name=folder]", str(SRC)); pg.click("#bt-scan"); pg.wait_for_function("document.querySelector('#bt-info').textContent.includes('3장')"); ok("folder scan shows the photo count")
